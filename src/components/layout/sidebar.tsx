@@ -1,61 +1,45 @@
-"use client";
+'use client'
 
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import {
-  BarChart3,
-  KanbanSquare,
-  LayoutDashboard,
-  Settings,
-  Sparkles,
-  Sun,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+  LayoutDashboard, Sun, Users, KanbanSquare,
+  BarChart2, Sparkles, Settings
+} from 'lucide-react'
+import { type NavItem } from '@/lib/auth/nav'
 
-import type { NavIconKey, NavItem } from "@/lib/auth/nav";
-import { cn } from "@/lib/utils";
-
-/**
- * Icon components are not serialisable across the Server -> Client
- * Component boundary, so NavItem only carries an iconKey string. This map
- * — owned entirely by this client component — is where that key gets
- * resolved back to an actual icon.
- */
-const ICON_MAP: Record<NavIconKey, LucideIcon> = {
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   dashboard: LayoutDashboard,
-  "my-day": Sun,
+  'my-day': Sun,
   leads: Users,
   pipeline: KanbanSquare,
-  reports: BarChart3,
+  reports: BarChart2,
   ask: Sparkles,
   settings: Settings,
-};
+}
 
 export function Sidebar({ items }: { items: NavItem[] }) {
-  const pathname = usePathname();
-
+  const pathname = usePathname()
   return (
-    <nav className="flex flex-col gap-1 p-3">
+    <nav className="flex flex-col gap-1 p-4">
       {items.map((item) => {
-        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-        const Icon = ICON_MAP[item.iconKey];
+        const Icon = ICON_MAP[item.iconKey] ?? LayoutDashboard
+        const active = pathname.startsWith(item.href)
         return (
           <Link
             key={item.href}
             href={item.href}
-            className={cn(
-              "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              isActive
-                ? "bg-secondary text-secondary-foreground"
-                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-            )}
+            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+              active
+                ? 'bg-primary text-primary-foreground'
+                : 'hover:bg-muted'
+            }`}
           >
-            <Icon className="size-4" />
+            <Icon className="h-4 w-4" />
             {item.label}
           </Link>
-        );
+        )
       })}
     </nav>
-  );
+  )
 }
