@@ -237,4 +237,84 @@ a centre picker — they list every centre on one page, fine at 2, worth revisit
 
 ---
 
+## Session 3 — tests/rls.spec.ts — 2026-08-27
+
+**Shipped:** `tests/rls.spec.ts` on `claude/phase-2-rls-tests`, 28 tests (26 run, 2 skipped —
+see below). It connects directly to `DATABASE_URL` and simulates exactly what PostgREST does
+per request — `SET LOCAL ROLE authenticated` + `select set_config('request.jwt.claims', ...)`
+inside a transaction that's always rolled back — so it exercises the real policies and
+triggers with no live Supabase Auth calls needed. See `docs/DECISIONS.md` for why this
+approach was chosen over signing in real users via `@supabase/supabase-js`.
+
+Covers everything the Session 3 prompt asks for that has a real table to test against:
+- **Per-role visibility**, for one fixture profile per seeded role: the 14 config tables with
+  a bare `select using (true))` policy are asserted to show the *same* row count to every
+  role as an unrestricted query (nothing accidentally over- or under-scoped); `profiles` and
+  `user_centers` are asserted against exact IN/OUT membership (not brittle hardcoded counts,
+  since this suite may run against a dev database with real data already in it) — admin/
+  co_admin see every fixture, `center_head` sees itself plus only the fixture sharing its
+  centre, roles with no `users.manage` see only themselves; `audit_log` is asserted the same
+  way against `audit.read`.
+- **A role created at runtime** with only `report.read=own`, then a user assigned to it: its
+  `auth_scope()` results, that it can still read config tables, and that it cannot write
+  `org_settings`, insert a `centers` row, or edit its own `role_id` — the exact "dynamic roles
+  that only work for the seeded six aren't dynamic" check the prompt calls for.
+- **Lockout triggers**: the protected `admin` role can't be deleted, un-protected, or stripped
+  of a permission; deactivating the last active `settings.manage='all'` holder is rejected,
+  and so is stripping the grant itself from the last role that carries it — both run in an
+  owner-level transaction that's unconditionally rolled back, so the real seeded admin/
+  co_admin are never actually at risk even though the test deliberately drives every *other*
+  active holder down to zero mid-transaction.
+- **`audit_log`** accepts INSERT from every role regardless of `audit.read`, and rejects
+  UPDATE and DELETE for every role, including admin (0 rows affected, not an error — matches
+  the "no matching policy" behaviour documented in Session 1).
+
+**Skipped, not done:** `payments`/`receipts` reject UPDATE/DELETE — those tables are Phase 4
+and don't exist yet. Written as `describe.skip` with the real assertions commented in against
+`01-DATA-MODEL.md`'s actual column names, ready to unskip with no rewrite once that ledger
+ships. See `docs/DECISIONS.md`.
+
+**Bugs caught and fixed while building this** (i.e. the suite did its job before it even
+shipped):
+- My own local test shim's `auth.uid()` (a stand-in for Supabase's real function, used only
+  to validate this suite against local Postgres) didn't match Supabase's actual production
+  definition, and Postgres's `current_setting(x, true)` returns `''` rather than `NULL` for a
+  custom GUC that's been referenced before but isn't currently set — every "log in as" test
+  failed until both were fixed. This only affected local verification, not the suite itself
+  or the real Supabase project it's meant to run against.
+- The first version of the cleanup could delete the real seeded admin/co_admin as a side
+  effect of a blanket "delete every fixture-tagged row" — on a database with no other admin,
+  that's exactly the lockout scenario the suite tests, so cleanup tripped its own target.
+  Fixed with `safeDeleteFixtureUsers()`, which never deletes a profile that would become the
+  last active `settings.manage='all'` holder — see the `[tests/rls.spec.ts]` entries in
+  `docs/DECISIONS.md` for what that means for a fresh local database (short version: one
+  fixture admin profile is deliberately left behind, and cleans up on a later run once a real
+  admin exists).
+- An INSERT test that chained `.returning()` for a role without `audit.read` hit the exact
+  RETURNING-vs-SELECT-policy gotcha documented in Session 1 — fixed by not chaining it.
+
+**Verify by:**
+1. `npm run db:migrate && npm run db:seed` against your Supabase project (or a local Postgres
+   with the same migrations applied).
+2. `npm test` — expect `Tests  26 passed | 2 skipped (28)`.
+3. Re-run `npm test` immediately again — still 26/2, no accumulating fixture rows (aside from
+   the one deliberately-preserved admin fixture on a database with no other admin — see
+   above; it will not multiply on repeated runs).
+
+**How to make it fail on purpose** (both verified against a real local Postgres — each broke
+*only* the test that names the mechanism, nothing else):
+- **Break an RLS policy:** `drop policy profiles_select on profiles;` then `npm test` — the
+  3 tests in "profiles and user_centers are scoped by users.manage" fail (everyone sees zero
+  profiles once the only permissive SELECT policy is gone). Recreate the policy from
+  `src/lib/db/migrations/0001_functions_and_rls.sql` to fix it.
+- **Break a lockout trigger:** `alter table profiles disable trigger settings_admin_invariant_profiles;`
+  then `npm test` — exactly "deactivating the last active settings.manage=all holder is
+  rejected" fails (the deactivation silently succeeds instead of being rejected). Re-enable
+  with `alter table profiles enable trigger settings_admin_invariant_profiles;`.
+
+**Next:** Sessions 4+ per `docs/02-BUILD-PHASES.md` § Session plan — identity module, then the
+assignment engine (both need the `leads` table from Phase 1, which hasn't started yet).
+
+---
+
 <!-- Sessions append below -->
