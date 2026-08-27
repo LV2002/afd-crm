@@ -1,36 +1,35 @@
-import { redirect } from "next/navigation";
+import { getCurrentUser } from '@/lib/auth/session'
+import { navItemsFor } from '@/lib/auth/nav'
+import { Sidebar } from '@/components/sidebar'
+import { redirect } from 'next/navigation'
 
-import { Sidebar } from "@/components/layout/sidebar";
-import { UserMenu } from "@/components/layout/user-menu";
-import { navItemsFor } from "@/lib/auth/nav";
-import { getCurrentUser } from "@/lib/auth/session";
+export default async function AppLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const user = await getCurrentUser()
+  if (!user) redirect('/login')
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await getCurrentUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  const navItems = navItemsFor(user);
+  const navItems = navItemsFor(user).map(({ href, label, iconKey }) => ({
+    href,
+    label,
+    iconKey,
+  }))
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="hidden w-56 shrink-0 border-r bg-background md:flex md:flex-col">
-        <div className="border-b px-4 py-4">
+    <div className="flex h-screen">
+      <aside className="w-64 border-r flex flex-col">
+        <div className="p-4 border-b">
           <span className="text-sm font-semibold">AFD India CRM</span>
         </div>
         <Sidebar items={navItems} />
       </aside>
       <div className="flex flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between border-b px-4">
-          <span className="text-sm font-medium md:hidden">AFD India CRM</span>
-          <div className="ml-auto">
-            <UserMenu user={user} />
-          </div>
-        </header>
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 overflow-auto p-6">
+          {children}
+        </main>
       </div>
     </div>
-  );
+  )
 }
