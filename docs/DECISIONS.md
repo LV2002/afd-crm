@@ -134,3 +134,47 @@ everyone — Postgres checks the table's SELECT policies against rows returned b
 `INSERT ... RETURNING`. Confirmed against a local Postgres instance during this session.
 Whatever helper writes audit rows in Phase 1 (e.g. `writeAuditLog()`) must not chain
 `.select()` on the insert unless it also holds `audit.read`.
+
+2026-08-27 · [settings nav] Each settings screen is gated on the specific RLS-relevant
+permission its mutations actually need (`settings.manage` for org/terminology/centres/
+pipeline-stages/dropdowns/fields, `users.manage` for Users, `roles.manage` for Roles &
+Permissions, `rules.manage` for SLA Policies, `settings.manage` OR `rules.manage` for
+Temperatures since it has both a values section and a rules section) rather than one
+blanket permission for the whole /settings section · the Session 2 prompt says "each
+permission-gated" without naming which permission per screen, and gating everything on
+`settings.manage` alone would hide the Users screen from a `center_head`-shaped role that
+holds `users.manage` at `center` scope but not `settings.manage` · reverse by collapsing
+`SETTINGS_NAV`'s per-item `permissions` arrays in `src/lib/settings/nav.ts` back to a single
+shared permission if a simpler model is preferred later.
+
+2026-08-27 · [users] `createUser` (`src/app/(app)/settings/users/actions.ts`) is the one
+deliberate, narrow exception to CLAUDE.md non-negotiable #3 in this codebase — it calls
+`createServiceRoleClient()` to provision the Supabase Auth user (there is no
+RLS-scoped/anon-key equivalent to "create another user with a password, as an admin";
+`auth.admin.createUser` inherently requires the service role). The exception is bounded
+three ways: the caller's own RLS-bound session is checked for `users.manage` *before*
+service-role is touched; service-role is used for exactly that one call; the profile row,
+centre assignments and audit log entry all go back through the normal RLS-bound client.
+Every other settings mutation in this session uses the anon/authenticated client. Reverse
+by moving user provisioning to a queued/reviewed flow if even this narrow exception turns
+out to be too much surface area.
+
+2026-08-27 · [pipeline stages] "Reorder by drag" implemented as up/down move buttons
+(`moveStage` swaps `sort_order` with the adjacent row) instead of a drag-and-drop UI · same
+functional outcome (an admin can reorder stages) without adding a drag-and-drop library
+this pass · reverse/upgrade by swapping `StageRowActions`' buttons for a drag handle backed
+by a library like `@dnd-kit/sortable`, calling the same `moveStage`-style persistence.
+
+2026-08-27 · [SLA] `sla_policies.applies_to`/`escalations` and `temperature_rules.conditions`
+are edited as raw JSON textareas, not a visual condition builder · the visual builder with
+"dry-run preview: this rule would have matched 43 of the last 200 leads" described in
+`01-DATA-MODEL.md` § Assignment rules engine needs a `leads` table to preview against, which
+doesn't exist until Phase 1, and assignment_rules (the third consumer of this same condition
+grammar) is explicitly Phase 1 work · the JSON textarea stores the identical shape the
+future builder would write, so nothing needs to migrate later, just a better editor on top ·
+revisit once Phase 1's lead core and assignment engine ship.
+
+2026-08-27 · [SLA] Business hours and holidays render as one block per centre, stacked
+vertically on a single page, rather than behind a centre picker · fine at 2 centres; will
+want a picker/tabs once there are enough centres that the page gets unwieldy — not a data
+model concern, purely a `src/app/(app)/settings/sla/page.tsx` layout change.
