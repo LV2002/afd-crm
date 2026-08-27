@@ -178,3 +178,39 @@ revisit once Phase 1's lead core and assignment engine ship.
 vertically on a single page, rather than behind a centre picker · fine at 2 centres; will
 want a picker/tabs once there are enough centres that the page gets unwieldy — not a data
 model concern, purely a `src/app/(app)/settings/sla/page.tsx` layout change.
+
+2026-08-27 · [tests/rls.spec.ts] The suite drives RLS/triggers directly over a Postgres
+connection (`SET LOCAL ROLE authenticated` + `select set_config('request.jwt.claims', ...)`
+inside a transaction that's always rolled back) rather than signing in real users through
+`@supabase/supabase-js` · this is exactly the role-switch + JWT claim PostgREST performs per
+request — same policies, same triggers — but needs no live network calls, no provisioned
+Supabase Auth users, and no service-role key in CI, and every write-boundary assertion is
+provably non-destructive by construction (rollback, not "remember to clean up"). Confirmed
+against a real local Postgres 16 instance, including two deliberately-broken runs (dropped
+`profiles_select`, disabled `settings_admin_invariant_profiles`) that each failed exactly the
+tests that name the mechanism they broke, and nothing else · reverse by rewriting `asUser()`
+to `supabase.auth.signInWithPassword()` against real seeded/created test accounts if a future
+maintainer wants the test to exercise PostgREST/Supabase Auth itself, not just Postgres.
+
+2026-08-27 · [tests/rls.spec.ts] The suite creates its own fixture profiles (one per seeded
+role, inserted straight into `auth.users`/`profiles` via the DATABASE_URL connection) rather
+than depending on the seed script's optional auth-user step · `npm run db:seed` only creates
+real Supabase Auth users when `SUPABASE_SERVICE_ROLE_KEY` is set, so a self-contained test
+that only needs `npm run db:migrate && npm run db:seed` to pass was worth the extra fixture
+code. A consequence: on a database with **no** real active `settings.manage='all'` holder
+(a fresh local Postgres where that optional step never ran), `safeDeleteFixtureUsers()`
+deliberately leaves exactly one fixture admin profile behind after the suite finishes —
+deleting it would trip the very lockout invariant being tested. It's tagged
+`...@rls-spec.afd-crm.test` and gets swept away automatically by the next run once a real
+admin exists (e.g. after running the seed's auth-user step, or on a real Supabase project
+that already has one). Not a bug — the lockout protection working exactly as designed.
+
+2026-08-27 · [payments/receipts test] `docs/02-BUILD-PHASES.md`'s Session 3 prompt asks the
+suite to assert "payments and receipts reject UPDATE and DELETE for every role including
+admin," but those tables are Phase 4 ("Fees, enrolment, payments, handoff") and don't exist
+in this schema · written as a `describe.skip` block with the real assertions commented in
+against the exact column names `01-DATA-MODEL.md` § Financial ledger specifies, so unskipping
+it once migration + RLS for `payments`/`receipts` land should need no rewrite, just deleting
+`.skip`. This is the same category of doc/reality mismatch as Session 2's Temperatures/SLA
+tables — documented and proceeded, per the working-style note in CLAUDE.md, rather than
+building a financial ledger subsystem to satisfy one test assertion.
