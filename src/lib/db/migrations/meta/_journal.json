@@ -29,6 +29,20 @@
       "when": 1787842682202,
       "tag": "0003_rules_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787868531701,
+      "tag": "0004_luxuriant_mongu",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787868549593,
+      "tag": "0005_leads_rls_and_stage_history_trigger",
+      "breakpoints": true
     }
   ]
 }

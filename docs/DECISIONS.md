@@ -214,3 +214,45 @@ it once migration + RLS for `payments`/`receipts` land should need no rewrite, j
 `.skip`. This is the same category of doc/reality mismatch as Session 2's Temperatures/SLA
 tables — documented and proceeded, per the working-style note in CLAUDE.md, rather than
 building a financial ledger subsystem to satisfy one test assertion.
+
+2026-08-27 · [identity] `resolveOrCreateLead()` (`src/lib/identity/`) runs against the direct
+Drizzle `db` client, not an RLS-bound Supabase client · Session 4 explicitly says not to wire
+it to a real ingestion path yet — there is no real caller to decide "which client" for.
+Webhooks (Phase 2) will call it under the service-role client per CLAUDE.md non-negotiable
+#3; UI-triggered manual creation (a later Lead core session) will call it under the caller's
+own RLS-bound session. Deciding that now, with no real caller, would be speculative. RLS on
+`leads`/`enquiries`/etc. is still fully enforced regardless (verified against a local
+Postgres instance — see docs/PROGRESS.md) — this only affects which connection the identity
+service itself uses internally. Revisit when Phase 2 wiring gives it a real caller.
+
+2026-08-27 · [identity] "Ambiguous match → merge_review_queue" is scoped narrowly to one
+concrete case: the incoming phone matches lead A and the incoming email matches a
+*different* lead B. `01-DATA-MODEL.md` doesn't fully specify the matching grammar beyond
+"normalise → match → attach or create → flag for merge review," and a fuzzy name+district
+heuristic (the kind that needs a real scoring/threshold design and a `leads` table full of
+real data to tune against) is out of scope for the session that's laying down the schema.
+The phone-vs-email cross-match case is well-defined, testable, and covers a real scenario
+(a parent's phone reused across siblings, a shared family email) · extend
+`resolveOrCreateLead()`'s matching step when fuzzy matching is actually needed — the
+`merge_review_queue` table and its RLS already support arbitrary future match sources.
+
+2026-08-27 · [identity] "Notify the owner" (docs/01-DATA-MODEL.md § Identity, and CLAUDE.md
+non-negotiable #2) isn't implemented — there is no `notifications` table yet (it's later in
+Phase 1's table list, not part of Session 4's identity-module scope). Attaching a new
+enquiry to an existing lead updates `last_touch_source`/`last_activity_at` only; no
+notification is sent. Wire this in once the notifications table + delivery mechanism exist.
+
+2026-08-27 · [identity] A newly-created lead gets `stage_id` set to the `pipeline_stages` row
+with `stage_type = 'new'` (lowest `sort_order` if more than one is somehow marked `new`), and
+`temperature`/`score` are left null · stage assignment is a reasonable, low-risk default
+(a lead needs to land somewhere in the funnel); temperature/score are explicitly Phase 2
+work ("Temperature recompute job driven by temperature_rules... lead scoring from
+scoring_rules") and computing them here would duplicate logic that job will own.
+
+2026-08-27 · [identity] `leads`/`enquiries`/etc.'s RLS was verified manually against a local
+Postgres instance this session (own/center/all visibility, the create-as-own-scope
+ownership check, the stage_history trigger's insert-only enforcement, the
+`lead_identifiers` uniqueness constraint) with the same rigor as Sessions 1-2, but — unlike
+those sessions — wasn't added to the automated `tests/rls.spec.ts` suite. That suite's scope
+was Session 3's; extending it to cover the Lead core tables as they land is worth doing in a
+future pass rather than growing that file unboundedly in every subsequent session.

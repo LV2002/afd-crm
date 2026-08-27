@@ -416,4 +416,93 @@ only that one database was behind.
 
 ---
 
+## Session 4 — the identity module — 2026-08-27
+
+**Shipped**, on `claude/phase-3-identity`, built on top of `main` (which now has everything
+through Session 3 after resolving the `origin/main` divergence):
+
+- **Schema** (`src/lib/db/schema/leads.ts`, migrations `0004`/`0005`): `leads` (64 columns —
+  the full list from `01-DATA-MODEL.md` § Identity), `lead_identifiers`, `enquiries`,
+  `lead_merges`, `merge_review_queue`, `stage_history`. `leads.center_id`/`stage_id` are
+  `ON DELETE RESTRICT` — a centre or stage with leads in it can't be deleted out from under
+  them (the v1 audit's O5: "deleting a pipeline stage orphaned every lead in it").
+- **`stage_history` is written only by a trigger** (`write_stage_history()`, `security
+  definer`) on `leads` INSERT/UPDATE, firing whenever `stage_id` is set or changes and
+  computing `duration_in_previous_seconds` from the prior row. No INSERT policy exists for
+  authenticated users at all — verified directly (see below) that a manual insert attempt is
+  rejected even for admin.
+- **RLS** on all six new tables, reusing `can_access_center()` from migration 0001 exactly as
+  `01-DATA-MODEL.md` § Row Level Security prescribes ("one implementation, dozens of
+  policies, no drift") — `leads` itself branches on `lead.read`/`create`/`update`/`delete`;
+  the five child tables inherit visibility via `exists (select 1 from leads ...)`.
+  `enquiries` is select+insert only (append-only attribution log, same enforcement shape as
+  `audit_log`).
+- **`normalizePhone()`** (`src/lib/identity/normalize-phone.ts`) — the one E.164 normaliser,
+  fixing docs/03-V1-AUDIT.md D5 (three disagreeing ad hoc implementations in v1). Handles
+  bare 10-digit, `0`-prefixed, `91`-prefixed and `0091`-prefixed Indian numbers, and leaves
+  a already-`+`-prefixed non-Indian number alone. Returns `null` rather than guessing for
+  unparseable input.
+- **`resolveOrCreateLead()`** (`src/lib/identity/resolve-or-create-lead.ts`) — the one
+  function allowed to create a lead (non-negotiable #8). Matches on normalised phone and/or
+  email against `lead_identifiers`; attaches a new `enquiries` row to an existing match
+  (never drops, never rejects — non-negotiable #2, fixing D1); creates a new lead + first
+  identifier(s) + first enquiry when nothing matches; when phone matches one lead and email
+  matches a *different* one, attaches to the phone match and writes a (de-duplicated)
+  `merge_review_queue` row instead of guessing. New leads default to the `pipeline_stages`
+  row with `stage_type='new'`.
+
+**Stubbed / deferred, documented in `docs/DECISIONS.md`:** `resolveOrCreateLead()` runs on
+the direct db client (no real caller to decide an RLS-bound-vs-service-role client for yet);
+"notify the owner" isn't implemented (no `notifications` table until later in Phase 1);
+temperature/score are left null on creation (explicitly Phase 2's job); the ambiguous-match
+case is scoped to phone-matches-A/email-matches-B, not fuzzy name+district matching.
+
+**Tests** (`tests/identity-normalize.spec.ts`, pure unit; `tests/identity-resolve.spec.ts`,
+integration against a real database): the exact three-formats-one-number case from the v1
+audit; strips spaces/hyphens/parens; domestic (`0…`) and international (`0091…`) dialing
+prefixes; leaves a foreign number alone; same phone submitted twice → one lead, two
+enquiries, second `was_duplicate=true`; five repeats → one lead, five enquiries (never
+rejects); `first_touch_source` survives a second enquiry from a different source while
+`last_touch_source` updates; the phone-vs-email ambiguous case produces exactly one
+(de-duplicated across repeats) `merge_review_queue` row and still attaches the enquiry;
+rejects an unparseable phone outright rather than creating a bad lead.
+
+Also had to add a Vitest path-alias config (`vitest.config.mts` `resolve.alias`) so
+`src/lib/identity/*.ts` could use the same `@/` imports as the rest of the app instead of
+special-casing relative imports just for the test runner.
+
+**Verified against a real local Postgres 16 instance**, not just typed and reasoned about:
+- Applied all 6 migrations cleanly (`drizzle-kit migrate`), confirmed against the seeded
+  centres/roles/pipeline-stages.
+- As simulated counsellor/center_head/admin users: a counsellor creating a lead assigned to
+  themselves succeeds, assigning it to someone else is rejected (own-scope `lead.create`);
+  counsellor sees only their own lead, centre head sees every lead in their centre, admin
+  sees all.
+- Updating `leads.stage_id` twice produced two correct `stage_history` rows (first with
+  `from_stage` null, second with a computed `duration_in_previous_seconds`); a direct
+  `INSERT` into `stage_history` was rejected outright, even for admin.
+- The `lead_identifiers` unique-phone-per-lead constraint rejected a duplicate phone across
+  two different leads; `enquiries` accepted an insert and rejected an `UPDATE` (0 rows
+  affected, matching the audit_log precedent from Session 1).
+- `npm test` — including the new identity suites — passes clean:
+  `Tests  40 passed | 2 skipped (42)`. Re-ran the whole suite twice back-to-back: still
+  green, zero leftover fixture rows (`select count(*) from leads where student_name like
+  'IdentityTest%'` → 0).
+- `npx tsc --noEmit`, `npx eslint .`, and a full `npm run build` (still 28 routes — no new UI
+  this session) all pass clean.
+
+**Verify by:**
+1. `npm run db:migrate` (applies migrations `0004`/`0005` on top of what you already have).
+2. `npm test` — expect `Tests  40 passed | 2 skipped (42)`.
+3. There's no UI for any of this yet (Lead core's list/detail/kanban screens are Sessions
+   6-8). To see it work by hand: open a Node REPL or scratch script that imports
+   `resolveOrCreateLead` from `src/lib/identity/resolve-or-create-lead.ts`, call it twice
+   with the same phone in two different formats, and confirm (via `db:studio` or a query)
+   one `leads` row and two `enquiries` rows.
+
+**Next:** Session 5 — the assignment engine (`assignment_rules` table, JSONB evaluator,
+`assignment_history`) — per `docs/02-BUILD-PHASES.md` § Session plan.
+
+---
+
 <!-- Sessions append below -->
