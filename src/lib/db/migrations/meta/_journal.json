@@ -50,6 +50,20 @@
       "when": 1787869589767,
       "tag": "0006_fix_protect_admin_role_permissions_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787872482090,
+      "tag": "0007_assignment_rules_and_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787872521340,
+      "tag": "0008_assignment_rls",
+      "breakpoints": true
     }
   ]
 }

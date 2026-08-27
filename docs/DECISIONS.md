@@ -281,3 +281,52 @@ deleting it outright are all still rejected once a real admin profile exists (al
 the updated/added tests in `tests/rls.spec.ts`'s "lockout protection triggers" group).
 `tests/rls.spec.ts`'s old "removed or narrowed" combined-message assertion was split to match
 the two distinct error messages the fixed trigger now raises.
+
+2026-08-28 · [assignment] `applyAssignment()` takes a `DbExecutor` (either the top-level `db`
+or a `tx` from inside a `db.transaction()`) rather than opening its own transaction, and
+`src/lib/db/client.ts` now exports that type for reuse. `db`'s postgres.js connection pool is
+`max: 1`; a nested `db.transaction()` call from inside `resolveOrCreateLead()`'s own
+transaction would try to acquire a second connection from the same one-connection pool that
+the outer transaction is already holding, and deadlock forever. Passing the caller's `tx`
+through keeps everything on the one connection and one transaction, so a lead's creation and
+its auto-assignment commit or roll back together. A standalone caller (a future webhook, a
+test) is expected to wrap its own call in `db.transaction(tx => applyAssignment(tx, leadId))`.
+
+2026-08-28 · [assignment] "source" in a rule's `conditions` resolves to `leads.last_touch_source`,
+not `first_touch_source`. The data model doc's example condition just says `"field": "source"`
+without specifying which; last-touch is the more currently-accurate attribution value, and for
+a brand-new lead (the only trigger actually wired up this session) first-touch and last-touch
+are identical anyway, so today's behavior is unaffected either way. Revisit if `applies_on:
+['update']` (reassignment triggers) is ever wired to a real call site — a re-evaluation on
+lead update is exactly the case where first-touch vs last-touch stops being the same value.
+
+2026-08-28 · [assignment] Round-robin availability is `profiles.is_active` only. The data
+model doc's assignment section says round-robin should skip "inactive/on-leave" users, but
+there is no separate "on leave" concept anywhere in the schema — no such column, no
+lightweight leave-request table, nothing Phase 0-1 defined. Modeling one now, with no caller
+that sets it, would be speculative. `is_active` is the one real signal that exists; extend
+`pickRoundRobinUser()`'s query when an actual on-leave mechanism gets built.
+
+2026-08-28 · [assignment] Priority order is ascending (lower number evaluated first, first
+match wins) — the data model doc says rules are "evaluated in priority order, first match
+wins" without stating the direction. Ascending matches the convention already used for
+`pipeline_stages.sort_order` elsewhere in this codebase, so a lower number reads as "comes
+first" consistently across the app rather than assignment rules being the one place a bigger
+number means higher precedence.
+
+2026-08-28 · [assignment] No settings UI for assignment rules this session — same call Session
+4 made for the identity module, and for the same reason: the session-plan table's own "you
+verify by" column for this row is "Rule fires, dry-run preview counts match," which is
+backend-testable, not a UI-clickable criterion like the settings-screen rows in Phase 0.
+CLAUDE.md's configurability table does list assignment rules as admin-editable, so a rule
+builder screen is still owed — `assignment_rules`/`assignment_history` and the RLS gating
+them exist now specifically so that screen is additive, not a migration, whenever it lands.
+
+2026-08-28 · [assignment] `applies_on: ['update']` (reassignment triggers, per the data model
+doc) has full schema and evaluator support — `applyAssignment()` takes a `trigger` option and
+filters rules on it — but nothing calls it with `trigger: 'update'` yet. There is no lead-edit
+call site to trigger a reassignment from in this session's scope (lead detail/edit is Session
+7+), and Phase 2's SLA cron (`reassign_sla` is already a value in the `assignment_reason`
+enum) is the other obvious future caller. Wiring either up now, with no real caller, would be
+speculative — the enum value and the `applies_on` filter exist so neither needs a migration
+when that caller shows up.

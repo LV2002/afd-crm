@@ -132,6 +132,7 @@ const FIXTURE_ROLE_OF: Record<FixtureKey, (typeof ROLE_CODES)[number]> = {
 };
 
 let auditFixtureId: string;
+let assignmentRuleFixtureId: string;
 
 /**
  * Deletes auth.users rows matching `emailPattern`, EXCEPT one that would
@@ -238,10 +239,22 @@ beforeAll(async () => {
     returning id
   `;
   auditFixtureId = auditRow.id;
+
+  const [assignmentRuleRow] = await owner<Array<{ id: string }>>`
+    insert into assignment_rules (name, conditions, action)
+    values (
+      'rls_test.marker',
+      '{}'::jsonb,
+      '{"strategy":"fixed","assignTo":"00000000-0000-0000-0000-000000000000"}'::jsonb
+    )
+    returning id
+  `;
+  assignmentRuleFixtureId = assignmentRuleRow.id;
 });
 
 afterAll(async () => {
   await owner`delete from audit_log where entity_type = 'rls_test'`;
+  await owner`delete from assignment_rules where name = 'rls_test.marker'`;
   await safeDeleteFixtureUsers("%@" + FIXTURE_MARK);
   await owner`delete from roles where code like 'rls\\_test\\_%' escape '\\'`;
   await owner.end();
@@ -367,6 +380,55 @@ describe("audit_log is scoped by audit.read, and rejects UPDATE/DELETE outright"
       tx<Array<{ id: string }>>`delete from audit_log where id = ${auditFixtureId} returning id`,
     );
     expect(deleted).toHaveLength(0);
+  });
+});
+
+describe("assignment_rules is scoped to rules.manage='all' (admin/co_admin only)", () => {
+  it("admin and co_admin (rules.manage=all) can see the fixture rule", async () => {
+    for (const key of ["admin_a", "coadmin_a"] as const) {
+      const rows = await asUser(fx[key], (tx) =>
+        tx<Array<{ id: string }>>`select id from assignment_rules where id = ${assignmentRuleFixtureId}`,
+      );
+      expect(rows, key).toHaveLength(1);
+    }
+  });
+
+  it("every other role, including center_head, cannot see it", async () => {
+    for (const key of [
+      "centerhead_kochi",
+      "counsellor_kochi",
+      "accounts_a",
+      "academics_a",
+    ] as const) {
+      const rows = await asUser(fx[key], (tx) =>
+        tx<Array<{ id: string }>>`select id from assignment_rules where id = ${assignmentRuleFixtureId}`,
+      );
+      expect(rows, key).toHaveLength(0);
+    }
+  });
+
+  it("a counsellor cannot insert a rule", async () => {
+    await expect(
+      asUser(
+        fx.counsellor_kochi,
+        (tx) => tx`
+          insert into assignment_rules (name, conditions, action)
+          values ('rls_test.should_reject', '{}'::jsonb, '{"strategy":"fixed","assignTo":"00000000-0000-0000-0000-000000000000"}'::jsonb)
+        `,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("admin can insert and update a rule", async () => {
+    const inserted = await asUser(
+      fx.admin_a,
+      (tx) => tx<Array<{ id: string }>>`
+        insert into assignment_rules (name, conditions, action)
+        values ('rls_test.admin_insert', '{}'::jsonb, '{"strategy":"fixed","assignTo":"00000000-0000-0000-0000-000000000000"}'::jsonb)
+        returning id
+      `,
+    );
+    expect(inserted).toHaveLength(1);
   });
 });
 

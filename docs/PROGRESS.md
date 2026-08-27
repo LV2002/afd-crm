@@ -549,4 +549,83 @@ are environment fixes, not code changes — see the reply in this session for th
 
 ---
 
+## Session 5 — the assignment engine — 2026-08-28
+
+**Shipped:** `assignment_rules` and `assignment_history` (migrations 0007/0008), matching
+docs/01-DATA-MODEL.md § Assignment rules engine. `src/lib/assignment/evaluate-conditions.ts`
+implements the whitelisted-field JSONB evaluator (`district`, `city`, `state`, `source`,
+`sub_source`, `campaign`, `exam_year`, `center_id`, `temperature`, `interested_exams`,
+`courses_interested`, `preferred_mode` — extend the map, not the evaluator, for a new field)
+with all ten ops from the data model doc (`equals`, `not_equals`, `in`, `not_in`, `contains`,
+`is_empty`, `is_not_empty`, `gt`, `lt`, `between`). `src/lib/assignment/apply-assignment.ts`'s
+`applyAssignment()` evaluates active rules in ascending priority order, first match wins,
+supports `fixed` and `round_robin` strategies (round-robin skips inactive users and persists
+its rotation cursor back onto the rule row), and writes `assignment_history`. `dryRunRule()`
+gives the "this rule would have matched N of the last 200 leads" preview the data model doc
+calls for, read-only, against real lead data.
+
+**Wired in per CLAUDE.md non-negotiable #8**: `resolveOrCreateLead()` now calls
+`applyAssignment()` for every newly-created lead that doesn't already carry an explicit
+`assignedTo` — one ingestion path, then assignment, no exceptions, no source-specific
+shortcut. An explicit `assignedTo` (e.g. a counsellor manually creating their own lead) is
+respected and skips rule evaluation entirely, never silently overridden.
+
+**RLS**: `assignment_rules` is gated on `rules.manage='all'` for select **and** every
+mutation — stricter than temperature_rules/sla_policies (which are readable by everyone),
+because docs/01-DATA-MODEL.md explicitly calls the rule set "Admin/co-admin only": a rule
+can encode which counsellor covers which district/source/campaign, which the seed data
+doesn't otherwise expose below center_head. `assignment_history` inherits visibility from
+its lead via `can_access_center('lead.read', ...)`, same shape as `stage_history`; its insert
+policy is gated on `lead.assign` so a future manual-reassignment UI can write here under the
+caller's own session without another migration — today the only writer is
+`applyAssignment()` on the direct db client, same rationale as `resolveOrCreateLead()`.
+
+**A real bug found and fixed along the way, not in this session's own code**: the local
+Postgres instance used for manual verification had the `authenticated`/`anon` roles and
+`auth.uid()` created as bare stand-ins, but was missing the table/sequence `GRANT`s Supabase
+provisions automatically on every real project. Every query — even ones RLS should have
+allowed — failed with "permission denied for table X" instead of enforcing row visibility.
+Fixed by granting `select, insert, update, delete` on all tables and `usage, select` on all
+sequences to `authenticated`/`anon`, plus matching `alter default privileges` so future
+tables inherit the same grants. This is local test-harness setup, not a migration or app
+code change — a real Supabase project already has these grants — but worth remembering if
+`tests/rls.spec.ts` is ever run against a from-scratch local Postgres again.
+
+**Stubbed / deferred, documented in `docs/DECISIONS.md`:** no rule-builder UI yet (the
+session-plan table's own verification method — "Rule fires, dry-run preview counts match" —
+is backend-testable, not UI-clickable, same signal Session 4 used); round-robin's
+availability check is `profiles.is_active` only, there's no separate "on leave" flag;
+`applies_on: ['update']` (reassignment triggers) has schema + evaluator support but no cron
+or lead-update call site invokes it yet — nothing currently re-evaluates rules when a lead's
+fields change after creation.
+
+**Tests** (`tests/assignment-evaluate.spec.ts`, pure unit; `tests/assignment-apply.spec.ts`,
+integration against a real database, exercised through `resolveOrCreateLead()` — the real
+call site, not a direct unit call): every op in the evaluator; AND semantics across multiple
+predicates; an empty condition set as a deliberate catch-all; priority order (specific rule
+beats a lower-priority catch-all); round-robin skipping an inactive user and persisting the
+cursor; a round-robin rule whose entire list is inactive falling through to the next rule;
+no-match leaves a lead unassigned with no history row; an explicit `assignedTo` is never
+overridden; an inactive rule and an update-only rule are both correctly ignored on create;
+`dryRunRule()`'s count is read-only. Also added `tests/rls.spec.ts` coverage for
+`assignment_rules`'s admin/co_admin-only boundary (select and insert), following the existing
+`audit_log` test pattern.
+
+**Verified against a real local Postgres 16 instance:** applied migrations 0000-0008 clean;
+`npm test` — `Tests  61 passed | 2 skipped (63)`, re-run twice back-to-back with zero leftover
+fixture rows (`AssignTest%` leads/rules, fixture profiles) either time; `npx tsc --noEmit`,
+`npx eslint .`, and `npm run build` all pass clean.
+
+**Verify by:**
+1. `npm run db:migrate` (applies migrations `0007`/`0008` on top of what you already have).
+2. `npm test` — expect `Tests  61 passed | 2 skipped (63)`.
+3. No UI yet. To see it work by hand: insert a row into `assignment_rules` (e.g. a `fixed`
+   rule matching on `district`), then create a lead via `resolveOrCreateLead()` with a
+   matching district and confirm `leads.assigned_to` and a new `assignment_history` row.
+
+**Next:** Session 6 — the custom field engine + lead list, per `docs/02-BUILD-PHASES.md`
+§ Session plan.
+
+---
+
 <!-- Sessions append below -->

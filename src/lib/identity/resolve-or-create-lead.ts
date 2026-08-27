@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 
+import { applyAssignment } from "@/lib/assignment/apply-assignment";
 import { db } from "@/lib/db/client";
 import { enquiries, leadIdentifiers, leads, mergeReviewQueue, pipelineStages } from "@/lib/db/schema";
 
@@ -50,9 +51,10 @@ export interface ResolveLeadResult {
 
 /**
  * The one entry point allowed to create a lead (CLAUDE.md non-negotiable
- * #8 — one ingestion path). Never rejects a duplicate (non-negotiable #2):
- * a repeat phone number always gets a new `enquiries` row on the existing
- * `leads` row, never a dropped submission and never a second lead.
+ * #8 — one ingestion path, then applyAssignment(), no exceptions). Never
+ * rejects a duplicate (non-negotiable #2): a repeat phone number always
+ * gets a new `enquiries` row on the existing `leads` row, never a dropped
+ * submission and never a second lead.
  *
  * Not wired to a real ingestion path yet — webhooks are Phase 2 and will
  * call this under the service-role client (per CLAUDE.md non-negotiable
@@ -242,6 +244,15 @@ export async function resolveOrCreateLead(input: ResolveLeadInput): Promise<Reso
       await tx
         .insert(leadIdentifiers)
         .values({ leadId: lead.id, kind: "email", valueNormalised: normalizedEmail });
+    }
+
+    // Non-negotiable #8: every lead goes through resolveOrCreateLead() then
+    // applyAssignment() — no source gets a shortcut. Skipped only when the
+    // caller already made an explicit assignment (e.g. a counsellor
+    // manually creating a lead for themselves); that choice is respected,
+    // not overridden by a rule.
+    if (!input.assignedTo) {
+      await applyAssignment(tx, lead.id, { trigger: "create" });
     }
 
     const [enquiry] = await tx
