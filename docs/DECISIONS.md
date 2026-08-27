@@ -256,3 +256,28 @@ ownership check, the stage_history trigger's insert-only enforcement, the
 those sessions — wasn't added to the automated `tests/rls.spec.ts` suite. That suite's scope
 was Session 3's; extending it to cover the Lead core tables as they land is worth doing in a
 future pass rather than growing that file unboundedly in every subsequent session.
+
+2026-08-27 · [lockout triggers] Found while actually running `npm run db:seed` twice in a
+row on a real local database (not caught by the automated suite, which only ever seeds
+once per run): `protect_admin_role_permissions()` rejected *any* UPDATE or DELETE on a
+protected role's `role_permissions` row, including a no-op re-upsert that sets the scope to
+the value it already has. Since `seed.ts`'s `onConflictDoUpdate` re-asserts every seeded
+role's permissions on every run — that's what "safe to re-run" means — this broke re-seeding
+the moment a database already had the admin role's permissions seeded once. Separately,
+`check_settings_admin_invariant()` (a deferred AFTER trigger) fires on *any*
+`role_permissions` UPDATE, including other roles' idempotent re-upserts, and its check
+("at least one active user must hold `settings.manage` at scope `all`") is unsatisfiable by
+construction on a database with zero profiles — the common case when config is seeded before
+any real auth user exists. That blocked re-seeding forever on a freshly migrated database,
+before the system had ever been bootstrapped with an admin.
+
+Fixed in `migrations/0006_fix_protect_admin_role_permissions_idempotency.sql`:
+`protect_admin_role_permissions()` now only raises on DELETE, or on an UPDATE that actually
+changes `scope` — re-asserting the same scope is a no-op, not a violation.
+`check_settings_admin_invariant()` now early-exits (no-op) when `profiles` is empty — there's
+nothing to lock anyone out of yet. Neither fix weakens the real protections: verified by hand
+that deactivating the sole real admin, narrowing `admin`'s `settings.manage` scope, and
+deleting it outright are all still rejected once a real admin profile exists (also covered by
+the updated/added tests in `tests/rls.spec.ts`'s "lockout protection triggers" group).
+`tests/rls.spec.ts`'s old "removed or narrowed" combined-message assertion was split to match
+the two distinct error messages the fixed trigger now raises.

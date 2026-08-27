@@ -505,4 +505,48 @@ special-casing relative imports just for the test runner.
 
 ---
 
+## Post-Session-4 fix: `db:seed` idempotency (migration 0006)
+
+Found by actually running the local verification steps end-to-end on a fresh machine
+(rather than against an already-migrated-and-seeded database, which is all the automated
+suite exercises): `npm run db:seed` failed on its **second** run with
+`lockout protection: permissions cannot be removed or narrowed on the protected role`, and —
+on a database that had never had a real admin profile created — failed on its **first** run
+too, with the `settings.manage` invariant error.
+
+Root cause and fix are written up in full in `docs/DECISIONS.md` (search "lockout
+triggers"). Short version: two of Session 1's lockout-protection triggers were stricter than
+they needed to be — one treated a no-op re-upsert the same as an actual removal, the other
+assumed at least one profile already existed. `migrations/0006_fix_protect_admin_role_permissions_idempotency.sql`
+fixes both without weakening the actual protections.
+
+**Verified:**
+- Reproduced the exact failure on a fresh local Postgres 16 database: seed once (succeeds),
+  seed again (fails with the reported error).
+- Applied migration 0006, re-ran `db:seed` 4 consecutive times against a database with zero
+  profiles — all succeeded.
+- Inserted a real active admin profile by hand, re-ran `db:seed` again — still succeeds
+  (idempotency holds with real users present too).
+- Confirmed the real safety net is intact: deactivating the sole active admin, narrowing
+  `admin`'s `settings.manage` scope to `center`, and deleting it outright are all still
+  rejected with the expected lockout errors.
+- Updated `tests/rls.spec.ts`'s "lockout protection triggers" group to match: split the old
+  combined "removed or narrowed" assertion (the DELETE and UPDATE-that-narrows cases now
+  raise distinct messages) and added a test that a same-scope no-op UPDATE is allowed while an
+  actual narrowing UPDATE is still rejected.
+- `npm test` after the fix: `Tests  41 passed | 2 skipped (43)` — clean, including the
+  Session 4 identity suites.
+
+**Verify by:** `npm run db:migrate && npm run db:seed && npm run db:seed` (the second seed
+call is the regression check) `&& npm test`.
+
+**Still open, on the user's machine, not a repo bug:** local git couldn't `fetch`/`pull`
+(broken `git-remote-https` helper, most likely from a conda base-environment git install
+shadowing the system git) so the branch being tested was stale; and `npm test`'s
+`ECONNREFUSED :54322` strongly suggests `.env.local`'s `DATABASE_URL` still has the
+`.env.example` placeholder value rather than the real local/Supabase connection string. Both
+are environment fixes, not code changes — see the reply in this session for the walkthrough.
+
+---
+
 <!-- Sessions append below -->

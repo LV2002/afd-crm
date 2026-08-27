@@ -463,7 +463,27 @@ describe("lockout protection triggers", () => {
           where role_id = (select id from roles where code = 'admin') and permission_code = 'settings.manage'
         `,
       ),
-    ).rejects.toThrow(/cannot be removed or narrowed/);
+    ).rejects.toThrow(/cannot be removed/);
+  });
+
+  it("permissions cannot be narrowed on the protected admin role, but a no-op re-assert of the same scope is allowed", async () => {
+    await expect(
+      ownerTx(
+        (tx) => tx`
+          update role_permissions set scope = 'center'
+          where role_id = (select id from roles where code = 'admin') and permission_code = 'settings.manage'
+        `,
+      ),
+    ).rejects.toThrow(/cannot be narrowed/);
+
+    // A no-op re-upsert (same scope) must NOT be rejected -- this is what
+    // makes db:seed idempotent. See migrations/0006_fix_protect_admin_role_permissions_idempotency.sql.
+    await ownerTx(
+      (tx) => tx`
+        update role_permissions set scope = 'all'
+        where role_id = (select id from roles where code = 'admin') and permission_code = 'settings.manage'
+      `,
+    );
   });
 
   it("deactivating the last active settings.manage=all holder is rejected", async () => {
