@@ -123,4 +123,28 @@ verification above) is Session 3's job per `docs/02-BUILD-PHASES.md`, not this o
 
 ---
 
+## Session 1 fix — sidebar Server→Client prop serialization — 2026-08-27
+
+**Shipped:** `NAV_ITEMS` (`src/lib/auth/nav.ts`) carried a `LucideIcon` component reference
+per item. `(app)/layout.tsx` (a Server Component) computed the filtered nav list and passed
+it as the `items` prop into `<Sidebar>` (`'use client'`) — React rejects component/function
+values crossing that boundary ("Only plain objects can be passed to Client Components",
+"Functions cannot be passed directly to Client Components"), so the sidebar broke at
+runtime. Fixed by making `NavItem.iconKey` a plain string union (`NavIconKey`) instead of a
+component, and moving the icon imports + an `ICON_MAP: Record<NavIconKey, LucideIcon>` into
+`sidebar.tsx` itself, which resolves `item.iconKey` to a component locally, inside the
+client boundary. `nav.ts` no longer imports `lucide-react` at all. No `render` function ever
+existed on `NavItem` — the item shape was already `{ href, label, permission? }` plus the
+one non-serialisable field, which is what got replaced.
+
+**Verify by:** `npx tsc --noEmit`, `npx eslint .`, and `npm run build` all pass clean
+(re-checked after this fix, not just before it). `grep -rn "icon:" src/lib/auth/nav.ts` →
+no matches. Full functional re-check (logging in as admin vs. counsellor and confirming the
+sidebar renders with no console error) needs a real Supabase project and is still on you —
+this environment has no live Supabase project to authenticate against.
+
+**Next:** unchanged — Session 2.
+
+---
+
 <!-- Sessions append below -->

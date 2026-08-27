@@ -1,10 +1,36 @@
 "use client";
 
+import {
+  BarChart3,
+  KanbanSquare,
+  LayoutDashboard,
+  Settings,
+  Sparkles,
+  Sun,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import type { NavItem } from "@/lib/auth/nav";
+import type { NavIconKey, NavItem } from "@/lib/auth/nav";
 import { cn } from "@/lib/utils";
+
+/**
+ * Icon components are not serialisable across the Server -> Client
+ * Component boundary, so NavItem only carries an iconKey string. This map
+ * — owned entirely by this client component — is where that key gets
+ * resolved back to an actual icon.
+ */
+const ICON_MAP: Record<NavIconKey, LucideIcon> = {
+  dashboard: LayoutDashboard,
+  "my-day": Sun,
+  leads: Users,
+  pipeline: KanbanSquare,
+  reports: BarChart3,
+  ask: Sparkles,
+  settings: Settings,
+};
 
 export function Sidebar({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
@@ -13,7 +39,7 @@ export function Sidebar({ items }: { items: NavItem[] }) {
     <nav className="flex flex-col gap-1 p-3">
       {items.map((item) => {
         const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-        const Icon = item.icon;
+        const Icon = ICON_MAP[item.iconKey];
         return (
           <Link
             key={item.href}
