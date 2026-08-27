@@ -317,4 +317,51 @@ assignment engine (both need the `leads` table from Phase 1, which hasn't starte
 
 ---
 
+## Session 3 follow-up — "temperature_rules does not exist" triaged — 2026-08-27
+
+**Not a code bug — a migration-application gap.** `npm test` failed with
+`PostgresError: relation "temperature_rules" does not exist` (and the same for
+`sla_policies`/`business_hours`/`holidays`) against a database that had only ever run
+migrations `0000`/`0001`. These four tables are real, already-shipped Phase 0 tables — added
+in Session 2 (`0002_sour_joseph.sql`, `0003_rules_rls.sql`) to back the Temperatures and SLA
+Policies settings screens — not Phase 2 work, and not something the test suite should treat
+as optional. The request to make `tests/rls.spec.ts` skip them the way `payments`/`receipts`
+are skipped was **not applied**: `payments`/`receipts` are skipped because they don't exist
+in *any* migration yet (Phase 4); these four exist in migrations already committed to this
+branch, so skipping them would hide a real gap and quietly undo the RLS coverage documented
+in Session 3.
+
+**Fix: run the migrations, not the test.** `npm run db:migrate` (i.e. `drizzle-kit migrate`)
+applies whichever of the four migration files haven't been recorded against the target
+database yet — it does not need to be told which ones are new, and re-running it against an
+already-fully-migrated database is a safe no-op.
+
+**Verified against a real local Postgres 16 instance**, not just asserted:
+1. Ran `drizzle-kit migrate` from empty — all 4 migrations apply cleanly (`[✓] migrations
+   applied successfully!`), all 17 tables exist including the four in question.
+2. Reproduced the reported failure exactly: dropped `temperature_rules`/`sla_policies`/
+   `business_hours`/`holidays` (plus the `sla_measure` enum) and removed their two
+   corresponding rows from `drizzle.__drizzle_migrations`, simulating "this database's last
+   migrate ran before Session 2 shipped." `select count(*) from temperature_rules;` then
+   fails with the exact reported error.
+3. Ran `drizzle-kit migrate` again on that rolled-back database — it detects and applies only
+   the two missing migrations (harmless NOTICEs about `drizzle` schema/tracking table already
+   existing, `[✓] migrations applied successfully!`, exit code 0). All 17 tables present
+   again.
+4. Ran `npm run db:seed` then `npm test` against that now-fully-migrated database:
+   `Tests  26 passed | 2 skipped (28)` — the exact same result as Session 3's original
+   verification, with **zero changes to `tests/rls.spec.ts`**.
+
+**No files changed this round** — `nav.ts`, `sidebar.tsx`, `layout.tsx`, and
+`tests/rls.spec.ts` are all untouched, per the request's own constraint and because the
+investigation showed no code change was the correct fix.
+
+**If you hit this again:** it means whatever `DATABASE_URL` you're running against is behind
+the migrations in this repo. `npm run db:migrate` closes the gap; it's always safe to re-run.
+
+**Next:** unchanged — Sessions 4+ (identity module, assignment engine) once Phase 1's `leads`
+table work starts.
+
+---
+
 <!-- Sessions append below -->
