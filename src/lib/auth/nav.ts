@@ -15,14 +15,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/settings', label: 'Settings', iconKey: 'settings', permission: 'settings.manage' },
 ]
 
-export function navItemsFor(
-  user: { permissions?: Record<string, string> },
-  terms?: Record<string, string>
-): NavItem[] {
+export function navItemsFor(user: { permissions?: Record<string, string> }, terms?: unknown): NavItem[] {
   return NAV_ITEMS.filter(item =>
     user.permissions?.[item.permission]
-  ).map(item => ({
-    ...item,
-    label: terms?.[item.iconKey] ?? item.label
-  }))
+  )
 }
