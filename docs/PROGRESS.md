@@ -364,4 +364,56 @@ table work starts.
 
 ---
 
+## Session 3 follow-up #2 — same report, re-confirmed, still not a code change — 2026-08-27
+
+Asked again to comment `temperature_rules`/`sla_policies`/`business_hours`/`holidays` out of
+`UNIVERSALLY_READABLE_TABLES` in `tests/rls.spec.ts`, with instructions to run the suite
+myself and show the output. Did exactly that, from scratch, against this exact commit
+(`2008e78`, current HEAD of `claude/phase-2-rls-tests`):
+
+```
+$ npx vitest run tests/rls.spec.ts        # no DATABASE_URL set in this environment
+ ❯ tests/rls.spec.ts (0 test)
+Error: DATABASE_URL is not set. …
+Test Files  1 failed (1)
+     Tests  no tests
+```
+
+```
+$ # fresh local Postgres 16, all 4 migrations applied via `npx drizzle-kit migrate`,
+$ # seeded via `npm run db:seed`, then:
+$ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/afd_verify \
+    npx vitest run tests/rls.spec.ts
+ Test Files  1 passed (1)
+      Tests  26 passed | 2 skipped (28)
+```
+
+Neither run reproduces "7 fail because the tables don't exist." The first fails for an
+unrelated reason (no `DATABASE_URL` at all, a different error than reported). The second —
+a database migrated from the migration files actually committed on this branch — passes
+clean, because `temperature_rules`/`sla_policies`/`business_hours`/`holidays` **do** exist
+in those migrations (`0002_sour_joseph.sql`, `0003_rules_rls.sql`, Session 2). This is the
+same finding as the first follow-up above, re-verified from a clean environment rather than
+assumed from memory.
+
+**Did not comment the tables out.** Doing so would misdescribe four real, shipped tables as
+Phase 2 work that "doesn't exist yet," directly contradict the fresh green run above, and
+undo real RLS coverage for tables backing live settings screens — and it would reverse the
+resolution already chosen (via `AskUserQuestion`) in the first follow-up: run the migrations,
+don't weaken the test. `nav.ts`, `sidebar.tsx`, `layout.tsx`, and `tests/rls.spec.ts` are all
+untouched again.
+
+**If your own run still fails with "relation ... does not exist":** the suite is reading
+whatever `DATABASE_URL` resolves to in your shell/`.env.local` — that specific database is
+missing migrations `0002`/`0003`. Run `npm run db:migrate` against *that* connection string
+(not a different one) and re-run `npm test`. If it still fails after that, the useful next
+report is the output of `npm run db:migrate` itself (does it list 0002/0003 as applied?) and
+`echo $DATABASE_URL` / the relevant line of `.env.local`, not another attempt to skip the
+tables — there's no evidence so far that the tables are actually missing from the codebase,
+only that one database was behind.
+
+**Next:** unchanged.
+
+---
+
 <!-- Sessions append below -->
