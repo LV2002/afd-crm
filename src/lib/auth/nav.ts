@@ -1,7 +1,9 @@
+export type NavIconKey = 'dashboard' | 'my-day' | 'leads' | 'pipeline' | 'reports' | 'ask' | 'settings'
+
 export type NavItem = {
   href: string
   label: string
-  iconKey: string
+  iconKey: NavIconKey
   permission: string
 }
 
