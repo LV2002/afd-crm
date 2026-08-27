@@ -240,10 +240,18 @@ beforeAll(async () => {
   `;
   auditFixtureId = auditRow.id;
 
+  // is_active: false is deliberate and load-bearing, not incidental: this
+  // row exists only to test table-level RLS visibility, but Vitest runs
+  // test files in parallel against the same live database. An *active*
+  // rule with empty conditions matches every lead any other file's
+  // resolveOrCreateLead() call creates for as long as this file's fixtures
+  // are alive, and its dummy assignTo isn't a real profiles row — every
+  // concurrent lead creation elsewhere would fail its FK constraint.
   const [assignmentRuleRow] = await owner<Array<{ id: string }>>`
-    insert into assignment_rules (name, conditions, action)
+    insert into assignment_rules (name, is_active, conditions, action)
     values (
       'rls_test.marker',
+      false,
       '{}'::jsonb,
       '{"strategy":"fixed","assignTo":"00000000-0000-0000-0000-000000000000"}'::jsonb
     )

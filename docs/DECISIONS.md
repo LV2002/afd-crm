@@ -330,3 +330,22 @@ call site to trigger a reassignment from in this session's scope (lead detail/ed
 enum) is the other obvious future caller. Wiring either up now, with no real caller, would be
 speculative — the enum value and the `applies_on` filter exist so neither needs a migration
 when that caller shows up.
+
+2026-08-28 · [assignment] Found by actually running `npm test` against a real Supabase
+project (not caught by my own sandbox verification, which happened to run the test files
+sequentially): `tests/rls.spec.ts`'s `beforeAll` inserts a real, persistent `assignment_rules`
+fixture row (`rls_test.marker`) to test table-level RLS visibility. It was left `is_active`
+(the column's default) with empty conditions and a dummy, non-existent `assignTo` UUID.
+Vitest runs test files in parallel by default, all against the same live database — so for
+the whole window that file's fixtures were alive, that row was a real, active, priority-0,
+matches-everything assignment rule, and every lead any *other* test file created via
+`resolveOrCreateLead()` (now that Session 5 wires `applyAssignment()` into it) tried to get
+assigned to that nonexistent user and failed its foreign key constraint. 11 unrelated tests
+in `tests/identity-resolve.spec.ts` and `tests/assignment-apply.spec.ts` failed as a result.
+
+This was a test-fixture bug, not a production code gap — a real rule's `assignTo` will always
+be a real profile, authored through the eventual rule-builder UI. Fixed by inserting the
+fixture row with `is_active: false` explicitly; it still exists for the visibility check
+(select/insert policies don't look at `is_active`) but `applyAssignment()`'s `WHERE
+is_active = true` filter never picks it up. Re-verified 4 consecutive full `npm test` runs
+against a fresh local Postgres with all 5 spec files present — clean every time.
