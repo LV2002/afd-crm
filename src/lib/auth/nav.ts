@@ -1,5 +1,3 @@
-import { type User } from './session'
-
 export type NavItem = {
   href: string
   label: string
@@ -17,7 +15,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/settings', label: 'Settings', iconKey: 'settings', permission: 'settings.manage' },
 ]
 
-export function navItemsFor(user: User): NavItem[] {
+export function navItemsFor(user: { permissions?: Record<string, string> }): NavItem[] {
   return NAV_ITEMS.filter(item =>
     user.permissions?.[item.permission]
   )
