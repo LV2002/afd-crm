@@ -15,6 +15,20 @@
       "when": 1787829400794,
       "tag": "0001_functions_and_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787842668624,
+      "tag": "0002_sour_joseph",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787842682202,
+      "tag": "0003_rules_rls",
+      "breakpoints": true
     }
   ]
 }

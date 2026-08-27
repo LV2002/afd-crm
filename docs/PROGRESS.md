@@ -147,4 +147,94 @@ this environment has no live Supabase project to authenticate against.
 
 ---
 
+## Session 2 — the settings layer — 2026-08-27
+
+**Shipped:** all ten settings screens from `docs/02-BUILD-PHASES.md` § Session 2, on
+`claude/phase-1-settings`, each with real create/edit/(delete or deactivate) wired to the
+database through the RLS-bound server Supabase client — nothing here reads or writes through
+service-role except the one documented exception below.
+
+- **Organisation** (`/settings/organization`): name, logo URL, primary colour, timezone,
+  currency, locale — a form over the `org_settings` singleton.
+- **Terminology** (`/settings/terminology`): bulk-edit the 6 terminology rows in one form.
+  Wired end to end: `t()` (`src/lib/terminology/`) resolves entity-word labels — currently
+  just the sidebar's "Leads" nav item and the Leads stub page's title — server-side, before
+  they're ever passed to a client component. Renaming "Lead" to "Enquiry" here changes both
+  without a code change.
+- **Centres** (`/settings/centers`): create, edit, deactivate; each centre's detail page
+  lists every user with a toggle to assign/unassign them.
+- **Users** (`/settings/users`): create (see the service-role note below), deactivate,
+  change role, toggle centre assignments from the user's own detail page (same underlying
+  action as the centre's toggle list, called from either direction).
+- **Roles & Permissions** (`/settings/roles`): create a role, delete a non-protected one, and
+  — the "done when" screen — a permission×scope grid (34 permissions × none/own/centre/all)
+  that bulk-upserts/deletes `role_permissions` on save. Protected roles render the grid
+  read-only and hide the delete button; the DB triggers from Session 1 back this up
+  regardless of what the UI shows.
+- **Pipeline Stages** (`/settings/pipeline-stages`): add, edit (name/type/colour/probability/
+  SLA hours/required fields/requires-reason), reorder via up/down buttons (see
+  docs/DECISIONS.md re: drag), toggle active, delete.
+- **Temperatures** (`/settings/temperatures`): reuses the Dropdowns screen's option editor
+  for the `temperature` category (values/colours/order) plus a `temperature_rules` CRUD
+  (JSON condition textarea — see docs/DECISIONS.md). Each half is independently gated:
+  values need `settings.manage`, rules need `rules.manage`.
+- **SLA Policies** (`/settings/sla`, new schema this session — see below): policies with
+  measure/target-hours/business-hours-only/JSON applies-to and escalation ladder; a weekly
+  business-hours grid and a holiday list per centre.
+- **Dropdowns** (`/settings/dropdowns`): category list + a per-category option editor
+  (add/edit/reorder/deactivate/delete) shared with the Temperatures screen; new-category
+  form.
+- **Custom Fields** (`/settings/fields`): add a field to lead/student/enrolment, pick type,
+  options (for select/multiselect), required/show-in-list/show-in-filters, visible-to-roles
+  and editable-by-roles checkboxes. Core fields (`is_core`) lock entity/key/type and hide the
+  delete button — the Session 1 DB trigger blocks the delete either way.
+
+**New schema this session** (`src/lib/db/migrations/0002_*.sql`, `0003_rules_rls.sql`):
+`temperature_rules`, `sla_policies`, `business_hours`, `holidays` — all four gated on
+`rules.manage`, matching the primitive's stated scope in `src/lib/auth/permissions.ts`
+("assignment rules, SLA policies, temperature rules, scoring"). Not in the original Phase 0
+table list, but the Session 2 prompt calls for their settings screens now, and the columns
+were already fully specified in `docs/01-DATA-MODEL.md`.
+
+**Every settings screen is permission-gated per-section, not on one blanket permission** —
+see the `[settings nav]` entry in `docs/DECISIONS.md` for why (short version: a role holding
+only `users.manage` should still see the Users screen). Every mutation writes an
+`audit_log` row via `src/lib/audit/log.ts` (built in Session 1, reused here).
+
+**The one deliberate exception to "service-role only in webhooks/cron":**
+`createUser` (`settings/users/actions.ts`) calls `createServiceRoleClient()` to provision
+the Supabase Auth account — there's no anon-key equivalent to "create another user with a
+password, as an admin." The caller's own session is checked for `users.manage` *first*,
+service-role touches exactly that one call, and the profile row / centre assignments /
+audit entry all go back through the normal RLS-bound client. See `docs/DECISIONS.md`.
+`grep -rln "SERVICE_ROLE\|createServiceRoleClient" src/` → three files: the client module
+itself, `db/seed.ts` (a script, not a route), and this one documented exception.
+
+**Stubbed / not done:** `tests/rls.spec.ts` is still Session 3. No drag-and-drop reordering
+(buttons instead, see DECISIONS.md). No visual condition builder for SLA/temperature rules
+(raw JSON, same shape a future builder would write). Business hours/holidays don't yet have
+a centre picker — they list every centre on one page, fine at 2, worth revisiting later.
+
+**Verify by:**
+1. `npx tsc --noEmit`, `npx eslint .`, `npm run build` — all pass clean (28 routes built).
+2. Apply the two new migrations: `npm run db:migrate`.
+3. In the running app, log in as `admin@afd-crm.test`, go to Settings → Roles & Permissions →
+   New role. Create one (e.g. "Front Desk"), set only `report.read` = Own on the grid, save.
+   Go to Settings → Users → New user, create a user with that role. Log out, log in as the
+   new user: sidebar should show only Dashboard and Reports (no Leads/Pipeline/Ask AI/
+   Settings, since those need permissions this role doesn't have) — this is the literal
+   "done when" from the Session 2 prompt.
+4. **This exact flow was also run at the SQL level against a real local Postgres 16
+   instance** (not just read for correctness): created a role at runtime, granted it
+   `report.read=own` only, created a user with it, then as that user confirmed
+   `auth_scope('report.read')` = `'own'` while `settings.manage`/`roles.manage` came back
+   null; confirmed it can read config tables (centres, pipeline stages) like everyone else;
+   confirmed inserts into `org_settings`/`centers`/`role_permissions` and a self-role-change
+   were all rejected by RLS. The database was dropped after.
+5. `grep -rn "role === 'admin'\|role ==" src/` → no matches (unchanged from Session 1).
+
+**Next:** Session 3 — `tests/rls.spec.ts`, per `docs/02-BUILD-PHASES.md` § Session 3 prompt.
+
+---
+
 <!-- Sessions append below -->

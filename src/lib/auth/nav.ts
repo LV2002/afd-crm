@@ -1,3 +1,5 @@
+import { formatTerm, type TerminologyMap } from "@/lib/terminology/terms";
+
 import type { PermissionCode } from "./permissions";
 import type { SessionUser } from "./session";
 import { can } from "./session";
@@ -20,26 +22,48 @@ export interface NavItem {
   permission?: PermissionCode;
 }
 
+interface NavItemDef {
+  href: string;
+  iconKey: NavIconKey;
+  permission?: PermissionCode;
+  /** Either a fixed screen name, or an entity word resolved via terminology. */
+  label: string | { term: "lead"; form: "plural" };
+}
+
 /**
  * The sidebar is built from this list filtered by the caller's permission
- * map — never from a hardcoded role check. A brand new role automatically
- * gets the right nav the moment it holds the matching permission.
+ * map — never from a hardcoded role check — and every entity-named label
+ * is resolved through the terminology table, never a literal string.
  *
- * Only plain, serialisable values live here (this module is imported from
- * a Server Component and passed as props into the client Sidebar) — icon
- * *components* are not serialisable across that boundary, so each item
- * carries an iconKey string instead and the Sidebar resolves it locally.
+ * Only plain, serialisable values ever reach the client Sidebar (this
+ * module is imported from a Server Component): icon *components* aren't
+ * serialisable across that boundary, so each item carries an iconKey
+ * string instead, and labels are resolved to plain strings here, in
+ * `navItemsFor`, before the array is passed as a prop.
  */
-export const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", iconKey: "dashboard" },
-  { href: "/my-day", label: "My Day", iconKey: "my-day", permission: "lead.read" },
-  { href: "/leads", label: "Leads", iconKey: "leads", permission: "lead.read" },
-  { href: "/pipeline", label: "Pipeline", iconKey: "pipeline", permission: "lead.read" },
-  { href: "/reports", label: "Reports", iconKey: "reports", permission: "report.read" },
-  { href: "/ask", label: "Ask AI", iconKey: "ask", permission: "ai.query" },
-  { href: "/settings", label: "Settings", iconKey: "settings", permission: "settings.manage" },
+const NAV_ITEM_DEFS: NavItemDef[] = [
+  { href: "/dashboard", iconKey: "dashboard", label: "Dashboard" },
+  { href: "/my-day", iconKey: "my-day", permission: "lead.read", label: "My Day" },
+  {
+    href: "/leads",
+    iconKey: "leads",
+    permission: "lead.read",
+    label: { term: "lead", form: "plural" },
+  },
+  { href: "/pipeline", iconKey: "pipeline", permission: "lead.read", label: "Pipeline" },
+  { href: "/reports", iconKey: "reports", permission: "report.read", label: "Reports" },
+  { href: "/ask", iconKey: "ask", permission: "ai.query", label: "Ask AI" },
+  { href: "/settings", iconKey: "settings", permission: "settings.manage", label: "Settings" },
 ];
 
-export function navItemsFor(user: SessionUser): NavItem[] {
-  return NAV_ITEMS.filter((item) => !item.permission || can(user, item.permission));
+export function navItemsFor(user: SessionUser, terms: TerminologyMap): NavItem[] {
+  return NAV_ITEM_DEFS.filter((item) => !item.permission || can(user, item.permission)).map(
+    (item) => ({
+      href: item.href,
+      iconKey: item.iconKey,
+      permission: item.permission,
+      label:
+        typeof item.label === "string" ? item.label : formatTerm(terms, item.label.term, item.label.form),
+    }),
+  );
 }

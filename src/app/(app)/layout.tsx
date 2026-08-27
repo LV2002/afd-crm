@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { UserMenu } from "@/components/layout/user-menu";
 import { navItemsFor } from "@/lib/auth/nav";
 import { getCurrentUser } from "@/lib/auth/session";
+import { getTerminologyMap } from "@/lib/terminology/get-terminology";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -12,7 +13,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect("/login");
   }
 
-  const navItems = navItemsFor(user);
+  const terms = await getTerminologyMap();
+  const navItems = navItemsFor(user, terms);
 
   return (
     <div className="flex min-h-screen">
