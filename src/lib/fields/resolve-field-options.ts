@@ -90,16 +90,21 @@ export async function resolveFieldOptions(
 
   const category = CORE_KEY_TO_DROPDOWN_CATEGORY[field.key];
   if (category) {
-    const { data } = await supabase
-      .from("dropdown_options")
-      .select("value, label")
-      .eq("category", category)
-      .eq("is_active", true)
-      .order("sort_order")
-      .returns<FieldOption[]>();
-    return data ?? [];
+    return getDropdownOptions(supabase, category);
   }
 
   // A genuinely custom field: its own freeform options.
   return field.rawOptions ?? [];
+}
+
+/** A plain dropdown_options category lookup, for UI that isn't backed by a field_definitions row (e.g. the interaction-log form's Type/Outcome selects). */
+export async function getDropdownOptions(supabase: SupabaseClient, category: string): Promise<FieldOption[]> {
+  const { data } = await supabase
+    .from("dropdown_options")
+    .select("value, label")
+    .eq("category", category)
+    .eq("is_active", true)
+    .order("sort_order")
+    .returns<FieldOption[]>();
+  return data ?? [];
 }

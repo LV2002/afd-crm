@@ -438,6 +438,46 @@ const DROPDOWN_SEEDS: DropdownSeed[] = [
       { value: "other", label: "Other" },
     ],
   },
+  {
+    key: "interaction_type",
+    label: "Interaction type",
+    isSystem: true,
+    options: [
+      { value: "call", label: "Call" },
+      { value: "whatsapp", label: "WhatsApp" },
+      { value: "email", label: "Email" },
+      { value: "sms", label: "SMS" },
+      { value: "walk_in", label: "Walk-in" },
+      { value: "meeting", label: "Meeting" },
+      { value: "note", label: "Note" },
+    ],
+  },
+  {
+    key: "interaction_outcome",
+    label: "Interaction outcome",
+    isSystem: true,
+    options: [
+      { value: "connected", label: "Connected" },
+      { value: "not_reachable", label: "Not Reachable" },
+      { value: "call_back_later", label: "Call Back Later" },
+      { value: "interested", label: "Interested" },
+      { value: "not_interested", label: "Not Interested" },
+      { value: "demo_scheduled", label: "Demo Scheduled" },
+      { value: "converted", label: "Converted" },
+    ],
+  },
+  {
+    key: "task_type",
+    label: "Task type",
+    isSystem: true,
+    options: [
+      { value: "follow_up_call", label: "Follow-up Call" },
+      { value: "send_brochure", label: "Send Brochure" },
+      { value: "document_collection", label: "Document Collection" },
+      { value: "demo", label: "Demo" },
+      { value: "other", label: "Other" },
+    ],
+  },
 ];
 
 async function seedDropdowns() {

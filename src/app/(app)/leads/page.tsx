@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Button } from "@/components/ui/button";
@@ -123,7 +124,16 @@ export default async function LeadsPage({
             {total} {total === 1 ? leadPlural.toLowerCase().replace(/s$/, "") : leadPlural.toLowerCase()}
           </p>
         </div>
-        {can(user, "lead.export") && <ExportButton filterValues={filterValues} />}
+        <div className="flex gap-2">
+          {can(user, "lead.create") && (
+            <Button asChild size="sm">
+              <Link href="/leads/new">
+                <Plus /> New {leadPlural.toLowerCase().replace(/s$/, "")}
+              </Link>
+            </Button>
+          )}
+          {can(user, "lead.export") && <ExportButton filterValues={filterValues} />}
+        </div>
       </div>
 
       <LeadFilters filterFields={filterFieldsWithOptions} searchValue={search} />
@@ -182,6 +192,14 @@ function renderCell(
   canRevealPhone: boolean,
 ) {
   const value = getRawFieldValue(field, row);
+
+  if (field.isCore && field.key === "student_name") {
+    return (
+      <Link href={`/leads/${row.id}`} className="font-medium hover:underline">
+        {String(value ?? "—")}
+      </Link>
+    );
+  }
 
   if (field.type === "phone") {
     return (

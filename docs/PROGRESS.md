@@ -717,4 +717,86 @@ That session's create/edit form is also where the real state→district cascade 
 
 ---
 
+## Session 7 — lead detail + timeline — 2026-08-28
+
+**Shipped:** `interactions` and `tasks` tables (migrations 0009/0010) per docs/01-DATA-MODEL.md
+§ Activity, with RLS: `interactions` select is gated on the dedicated `interaction.read`
+primitive (not `lead.read` — see the "why" below), mutations on both tables use
+`interaction.create`; both inherit their lead's own/center/all boundary the same way
+`stage_history`/`assignment_history` already do. "Mandatory next action on every interaction
+log" (docs/02-BUILD-PHASES.md) is enforced with a real CHECK constraint
+(`source = 'system' or next_action is not null`), not just client-side validation.
+
+`/leads/[id]` is a real lead detail page: header with stage/temperature/assigned
+counsellor/centre badges; an edit form whose tabs are generated from the field schema's
+distinct `section` values (docs/02-BUILD-PHASES.md's own phrasing) — one `<form>` for every
+tab, CSS-toggled so switching tabs never drops what you typed elsewhere; a timeline merging
+`stage_history` and `interactions` chronologically; a "log an interaction" panel with a
+required Next Action field; a tasks panel (add/complete). Phone fields are always rendered
+via the same masked/audited-reveal control as the list (`RevealPhoneButton`, reused directly)
+regardless of their `is_editable` flag — editing a phone number needs to also update
+`lead_identifiers`, a dedicated flow this session doesn't build (see docs/DECISIONS.md).
+
+`/leads/new` is the first real UI caller of `resolveOrCreateLead()` — manual entry is one of
+CLAUDE.md's named ingestion paths, so it goes through the same function every other source
+will, not a shortcut. Ported the actual state->district cascade (deferred from Session 6's
+list-filter version) into `StateDistrictFields`, used by both the create and edit forms.
+
+**A real authorization design point, not a shortcut:** `resolveOrCreateLead()` runs on the
+direct Drizzle client and bypasses RLS by design (Session 4's decision — there was no real
+caller yet). Now there is one, and it's the ONE place in this codebase where RLS is not the
+backstop for a write. `leads/new/actions.ts`'s `createLeadManually()` re-implements the same
+own/center/all scope semantics `can_access_center()` would apply — before ever calling
+`resolveOrCreateLead()` — so this bypass has exactly one enforcement point, clearly marked,
+rather than being an unguarded hole. Documented in full in docs/DECISIONS.md; the same
+pattern will apply to Phase 2's webhook handlers.
+
+**Stubbed / deferred, documented in `docs/DECISIONS.md`:** editing a lead's phone number
+(needs a dedicated flow that also updates `lead_identifiers`); `lead_ref`/`file` field types
+render read-only (no picker/upload UI yet); the create form only covers core fields (custom
+field values are added afterward via the edit page); task assignment beyond
+"defaults to the creator."
+
+**Tests:** `tests/group-by-section.spec.ts` (pure unit) — section grouping, ordering, and a
+brand-new custom field's section becoming its own group. `tests/interactions-constraint.spec.ts`
+(integration, direct Drizzle client, same technique as Sessions 4-5) — the CHECK constraint
+rejects a manual-source interaction with no `next_action`, accepts one that has it, and
+exempts `source = 'system'`. Manually verified the RLS boundary by hand (same technique as
+`tests/rls.spec.ts`, not added to that file per Session 4's precedent of not growing it for
+every lead-adjacent table): a counsellor sees interactions on their own centre's lead: 1 row;
+a counsellor in a different centre: 0 rows; a role without `interaction.read` (accounts): 0
+rows even though the same lead exists.
+
+**Verified:** `npx tsc --noEmit`, `npx eslint .`, `npm run build` all pass clean (`/leads/[id]`
+and `/leads/new` both compile as real routes). `npm test` — `Tests  91 passed | 2 skipped (93)`,
+run twice back-to-back, clean both times. The mandatory-next-action CHECK constraint and the
+interactions/tasks RLS policies were also confirmed by hand against a real local Postgres
+instance (not just read for correctness).
+
+**Not yet verified in a browser** — same gap as Session 6, for the same reason: the new pages
+read through the RLS-bound Supabase JS client (PostgREST), which a local Postgres instance
+can't serve, so the actual page rendering, the tabbed edit form, the interaction/task forms,
+and the create-lead flow haven't been exercised end-to-end by me. `resolveOrCreateLead()`
+itself (the part `createLeadManually()` calls) IS the same Drizzle-direct code Session 4
+already verified thoroughly — the untested part is specifically the new UI layer and the
+scope-authorization branch in `createLeadManually()`.
+
+**Verify by:**
+1. `npm run db:migrate` — applies migrations 0009/0010.
+2. `npm run db:seed` — adds the three new dropdown categories (`interaction_type`,
+   `interaction_outcome`, `task_type`); safe to re-run per Session 4's idempotency fix.
+3. `npm test` — expect `Tests  91 passed | 2 skipped (93)`.
+4. **Required:** `npm run dev`, log in, click **New Lead** on `/leads`, fill in the form,
+   submit — confirm it redirects to the new lead's detail page and that a fresh lead was
+   actually assigned (via the assignment engine, unless you're a counsellor creating your
+   own). On the detail page: switch tabs and confirm nothing you typed is lost; edit a field
+   and save; log an interaction — confirm it's rejected if you leave Next Action blank; add
+   and complete a task; confirm the timeline shows both the interaction and the lead's
+   original stage-history entry. Then go back to `/leads` and confirm the student name now
+   links to the detail page you were just on.
+
+**Next:** Session 8 — kanban + lost reason, per `docs/02-BUILD-PHASES.md` § Session plan.
+
+---
+
 <!-- Sessions append below -->

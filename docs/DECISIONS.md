@@ -451,3 +451,50 @@ core array field uses Postgres array containment on its own column, a custom one
 containment against the whole `custom` column with a matching nested shape. Added unit tests
 (`tests/field-column.spec.ts`) pinning down both the core and custom paths for
 `fieldFilterExpression`/`getRawFieldValue` so this can't silently regress.
+
+2026-08-28 · [activity] `interactions` select is gated on the dedicated `interaction.read`
+permission primitive, not `lead.read` like `tasks`/`stage_history`/`assignment_history` are.
+`src/lib/auth/permissions.ts` already defines `interaction.read` ("See call/WhatsApp/note
+history on a lead") as its own primitive, distinct from `lead.read` — using `lead.read`
+instead would make that primitive mean nothing (every role holding `lead.read` would see
+interactions regardless of whether they hold `interaction.read`). Checked the seed data:
+admin/co_admin/center_head/counsellor hold both; accounts/academics hold neither — so this
+is a real, currently-meaningful distinction, not a hypothetical one. `tasks` has no equivalent
+dedicated primitive, so it stays on `lead.read`, same as the other lead-adjacent tables.
+
+2026-08-28 · [activity] Editing a lead's phone number is out of scope this session — the
+lead-detail edit form renders every phone-type field (however `is_editable` is set) through
+the same masked/audited-reveal control the list uses, never as an editable input. A phone
+number is duplicated into `lead_identifiers` for dedup matching (`resolveOrCreateLead()`'s
+whole reason for existing); editing `leads.primary_phone` directly through the generic field
+editor without also updating/re-normalising the matching `lead_identifiers` row would silently
+desync the dedup index — the exact kind of split-brain state the identity module exists to
+prevent. A dedicated "change phone number" flow (re-normalise, update the identifier row,
+probably re-check for a resulting collision) is real work belonging to its own pass, not a
+side effect of the generic editor.
+
+2026-08-28 · [activity] `resolveOrCreateLead()` is invoked from a real user-facing UI for the
+first time this session (`/leads/new`). It runs on the direct Drizzle client and bypasses RLS
+by design (Session 4's decision, made when there was no real caller yet to decide otherwise)
+— which means, uniquely among this codebase's mutations, RLS is NOT the backstop for this
+write. `createLeadManually()` (`src/app/(app)/leads/new/actions.ts`) is the deliberate,
+single enforcement point instead: it reads the caller's `lead.create` scope
+(`own`/`center`/`all`) and re-implements the same rule `can_access_center()` would apply in
+SQL — forcing self-assignment and skipping the assignment engine for `own` scope (matching
+resolveOrCreateLead's own "an explicit assignedTo is never overridden" behavior), rejecting a
+centre outside the caller's own centres for `center` scope. This is the same pattern Phase
+2's webhook handlers will need for the same reason (they also call resolveOrCreateLead()
+under the service-role client, bypassing RLS) — this session establishes what that pattern
+looks like.
+
+2026-08-28 · [activity] The manual lead-creation form only renders core fields — a brand-new
+custom field's value has no meaningful default at creation time anyway, and requiring every
+admin-added field to be filled in (or explicitly skippable) at the moment of first contact
+would make the form grow unpredictably as the field list grows. A custom field's value is
+added afterward via the edit page, which does render every editable field regardless of
+core/custom, once the lead actually exists.
+
+2026-08-28 · [activity] `lead_ref` and `file` field types render read-only in the edit form —
+no lead-picker UI and no file upload/storage flow exist yet (the latter is explicitly
+Supabase Storage + private buckets work, out of scope here). Showing the raw stored value
+disabled beats hiding the field entirely; revisit once either UI exists for real.
