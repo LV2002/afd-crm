@@ -926,4 +926,88 @@ output should be `injected env (N) from .env.local,.env`.
 
 ---
 
+## Session 8 — Kanban + lost reason — 2026-08-28
+
+**Shipped:**
+- `/pipeline` is now a real kanban board, not a stub: one column per active `pipeline_stages`
+  row (ordered by `sort_order`, coloured by the stage's own `color`), plus a synthetic "No
+  stage" column that only appears if a lead genuinely has `stage_id = null` — nothing silently
+  disappears just because it fell outside the configured pipeline.
+- Cards are native-HTML5 drag-and-drop (`draggable`, `onDragStart`/`onDragOver`/`onDrop`) — no
+  new drag-and-drop library. Dropping a card onto a column moves that lead to that stage via a
+  new Server Action, `moveLeadStage()` (`src/app/(app)/pipeline/actions.ts`). A card is also a
+  plain link to `/leads/[id]` — click to open, drag to move, same combo as Trello.
+- **"Can't reach Lost without a reason"**, enforced twice on purpose:
+  1. The kanban UI: dropping a card onto any stage where `requires_reason = true` opens a modal
+     (a new `Dialog` primitive, `src/components/ui/dialog.tsx`, hand-built from
+     `@radix-ui/react-dialog` — the one new dependency this session, matching every other UI
+     primitive in this codebase) asking for a `lost_reason` (from the already-seeded
+     `dropdown_options` category of the same name) before the move is submitted at all.
+  2. The database: `enforce_lost_reason()`, a `before insert or update on leads` trigger
+     (migration 0012), rejects the write outright if the target stage's `requires_reason` is
+     true and `lost_reason` is null/blank — the real backstop, since it covers every write path
+     to `leads`, not just this UI (CSV import, a future bulk tool, direct SQL), same rationale
+     as the `interactions_next_action_required` CHECK constraint (migration 0009). A CHECK
+     constraint can't reference another table, so this needed a trigger instead.
+  The same trigger also clears `lost_reason`/`lost_reason_detail`/`lost_at` automatically
+  whenever a lead moves OUT of a `requires_reason` stage — re-opening a previously-lost lead
+  never leaves a stale reason lying around in the row — and stamps `lost_at = now()` the moment
+  a lead actually enters one.
+- No RLS changes needed: `leads_update` (migration 0005) already scopes the UPDATE this action
+  performs to `lead.update`'s own/center/all scope, the same policy `updateLead()` (the detail
+  page's edit form) already runs under — `moveLeadStage()` doesn't re-implement any scope logic
+  itself, unlike `createLeadManually()`, because there's no service-role bypass here to cover
+  for.
+- Phone numbers on cards are masked unconditionally (`maskPhone()`, no reveal affordance) — the
+  kanban board is a list/bulk view under CLAUDE.md non-negotiable #6, same as the leads list.
+- Every move writes an `audit_log` row (`action: "lead.stage_change"`), same pattern as every
+  other mutation in this codebase.
+
+**Schema:** none needed — `pipeline_stages.requires_reason` and
+`leads.lost_reason`/`lost_reason_detail`/`lost_at` already existed from Session 1/4. This
+session is purely the enforcement (migration 0012) and the UI; `drizzle-kit generate` confirms
+zero schema drift after the migration, same pattern as migration 0006 (a functions-only
+migration still gets its own snapshot file, byte-identical to the prior one except `id`/`prevId`).
+
+**Tests:** `tests/lost-reason-enforcement.spec.ts` (integration, direct Drizzle client, same
+technique as `interactions-constraint.spec.ts`) — rejects a move into a `requires_reason` stage
+with no `lost_reason`; accepts one with a reason and confirms `lost_at` gets stamped; confirms
+`lost_reason`/`lost_reason_detail`/`lost_at` are all cleared when a lead moves back out. Also
+manually verified the same three cases by hand against a real local Postgres instance before
+writing the automated test, using a lead created directly in the `new`-type stage and moved
+through `lost` and back.
+
+**Verified:** `npx tsc --noEmit`, `npx eslint .`, `npm run build` all pass clean (`/pipeline`
+compiles as a real dynamic route). `npm test` — `Tests 94 passed | 2 skipped (96)`, migrations
+0000-0012 applied clean to a real local Postgres instance, `drizzle-kit generate` confirms no
+drift.
+
+**Not yet verified in a browser** — same gap as Sessions 6/7, for the same reason: `/pipeline`
+reads and writes through the RLS-bound Supabase JS client, which a local Postgres instance
+can't serve. The drag-and-drop interaction itself, the lost-reason modal's UX, and the
+kanban's visual layout haven't been exercised in an actual browser by me.
+
+**Stubbed / deferred, documented in `docs/DECISIONS.md`:** no pagination or lead count cap on
+the board (fine at ~200 leads/month scale; revisit if a column's card count becomes unwieldy);
+no per-column "load more"; no keyboard-accessible alternative to drag-and-drop for moving a
+card (a card can still be opened and its stage changed some other way once a stage-editing
+control exists on the detail page — out of scope this session).
+
+**Verify by:**
+1. `npm run db:migrate` — applies migration 0012.
+2. `npm run db:seed` — no changes here, safe to re-run.
+3. `npm install` — picks up the new `@radix-ui/react-dialog` dependency.
+4. `npm test` — expect `Tests 94 passed | 2 skipped (96)`.
+5. **Required:** `npm run dev`, log in, open `/pipeline`. Confirm every active stage shows as a
+   column with the right leads in it. Drag a card to a different normal stage — confirm it
+   moves and the change survives a page reload. Drag a card onto "Lost" — confirm the reason
+   modal appears and the card does NOT move until you pick a reason and confirm; cancel the
+   modal and confirm the card stays put. After confirming a Lost move, open that lead's detail
+   page and confirm its lost reason is visible; then drag it back to a normal stage and confirm
+   the lost reason clears.
+
+**Next:** Session 9 — CSV import + column mapper, per `docs/02-BUILD-PHASES.md` § Session plan.
+
+---
+
 <!-- Sessions append below -->

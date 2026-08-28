@@ -536,3 +536,31 @@ already changes on every real save via the existing `set_updated_at` trigger, so
 one-line fix that forces exactly the remount needed, without rewriting a large uncontrolled
 form (17+ field types across `DynamicFieldInput`) into controlled state management it doesn't
 otherwise need.
+
+2026-08-28 · [kanban] Drag-and-drop on the pipeline board uses the native HTML5 drag events
+(`draggable`, `onDragStart`/`onDragOver`/`onDrop`), not a library — no `dnd-kit`,
+`react-beautiful-dnd`, or similar. The interaction is one flat list of columns with no nesting,
+no virtualization, no touch-reordering-with-animation requirement; native events cover that
+completely, and CLAUDE.md's own working style ("Don't add features, refactor, or introduce
+abstractions beyond what the task requires") argues against a dependency whose extra
+capabilities (sortable lists, keyboard reordering, animated transitions) aren't asked for here.
+Revisit only if a real requirement shows up that native events can't reasonably cover — e.g.
+drag reordering *within* a column, which this session doesn't need.
+
+2026-08-28 · [kanban] `enforce_lost_reason` (migration 0012) also auto-clears
+`lost_reason`/`lost_reason_detail`/`lost_at` whenever a lead moves out of a `requires_reason`
+stage, not just enforces the requirement going in. Without this, re-opening a mistakenly-lost
+lead (drag it back to "Contacted") would leave a stale "Budget Constraint" reason sitting on an
+active lead — a small but real data-integrity gap a naive CHECK-constraint-shaped trigger
+(reject-only) wouldn't have caught. Since this can't be a CHECK constraint anyway (it needs to
+look up `pipeline_stages.requires_reason`), doing the clear in the same trigger costs nothing
+extra and closes a gap the "just enforce it" version would have left open.
+
+2026-08-28 · [kanban] The kanban board's own Server Action (`moveLeadStage`) does not
+re-implement own/center/all scope logic the way `createLeadManually()` (Session 7) had to.
+That was only necessary because `resolveOrCreateLead()` runs on the direct Drizzle client and
+bypasses RLS by design. `moveLeadStage()` runs a plain `.update()` through the normal
+RLS-bound Supabase client, so `leads_update`'s existing `can_access_center('lead.update', ...)`
+policy is the only authorization check that needs to exist — adding a second, app-level copy
+of the same scope logic here would be exactly the kind of drift CLAUDE.md's RLS non-negotiable
+(#3) is meant to prevent.
