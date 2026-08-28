@@ -414,3 +414,21 @@ of pure logic (masking, formatting, the states/districts dataset) — but the ac
 rendering, filtering, phone reveal and CSV export have only been verified by reading the code,
 not by running it against real data. Flagged explicitly in docs/PROGRESS.md as unverified;
 this needs the user's own Supabase project and a browser before being called done.
+
+2026-08-28 · [fields] Found while the user was actually trying Session 6's own acceptance
+test (add a field in Settings, confirm it shows up in the list): creating ANY new custom
+field whose type wasn't `select`/`multiselect` failed with a bare "Invalid input", form
+values discarded. Root cause was in Session 2's `settings/fields/actions.ts`, not this
+session's code: the "Options" textarea only renders in the form for `select`/`multiselect`
+types (`field-form.tsx`), so for every other type — `text`, the one both the user and I
+tried — that input doesn't exist in the DOM, the browser submits nothing for it, and
+`FormData.get("options")` returns `null`. The schema (`z.string().trim().optional().or(z.literal(""))`)
+only accepted a string or the literal `""`, never `null`, and a zod union failure's own
+top-level message is literally the string "Invalid input" — exactly what showed on screen.
+Confirmed by extracting the exact schema and running it against `null`/`""`/`undefined`
+outside the app before touching anything. Fixed by changing `.optional()` to `.nullish()`
+so the schema accepts `null` the same as `undefined`; `parseOptionLines()` already treated
+falsy input as "no options" so no other change was needed. This bug predates Session 6 —
+it would have blocked creating a plain text/number/date/etc. custom field since Session 2
+shipped — but it surfaced now because this was the first time anyone actually tried to add
+a non-select field through the UI after Session 2 built the form.

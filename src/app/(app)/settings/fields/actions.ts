@@ -15,9 +15,13 @@ export interface FieldFormState {
   success?: string;
 }
 
-const optionsLineSchema = z.string().trim().optional().or(z.literal(""));
+// The Options textarea only renders in the form when type is select/multiselect
+// (see field-form.tsx) — for every other type the field is absent from the
+// DOM entirely, so the browser submits nothing and FormData.get("options")
+// comes back `null`, not `""` or `undefined`. `.nullish()` accepts both.
+const optionsLineSchema = z.string().trim().nullish().or(z.literal(""));
 
-function parseOptionLines(raw: string | undefined) {
+function parseOptionLines(raw: string | null | undefined) {
   if (!raw) return null;
   const options = raw
     .split("\n")
