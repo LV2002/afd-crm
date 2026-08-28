@@ -349,3 +349,68 @@ fixture row with `is_active: false` explicitly; it still exists for the visibili
 (select/insert policies don't look at `is_active`) but `applyAssignment()`'s `WHERE
 is_active = true` filter never picks it up. Re-verified 4 consecutive full `npm test` runs
 against a fresh local Postgres with all 5 spec files present — clean every time.
+
+2026-08-28 · [fields] `indian-states-districts.ts` is a freshly-assembled reference dataset,
+not a byte-for-byte port of v1's `frontend/src/data/indianStatesDistricts.js`
+(docs/03-V1-AUDIT.md) — that file wasn't available to read in this environment. Blocking the
+whole session on recovering a file from an abandoned codebase would have cost more than the
+gap is worth: India's states and districts are public geographic fact, so a fresh, carefully
+assembled 28-states + 8-UTs dataset serves the same purpose (a state->district cascade
+source) that a literal port would have. Revisit only if the original file turns up and its
+exact district list/spelling matters for matching historical v1 data.
+
+2026-08-28 · [fields] Saved views (listed in the same Phase 1 bullet as the lead list) are
+deferred, not built this session. It's a real feature, not a nice-to-have — but it needs its
+own table (a saved view is per-user state: name, filter values, maybe column selection) and
+its own save/list/apply/delete UI, which is a distinct unit of work from "make the existing
+filters schema-driven." Squeezing it in would have meant either a rushed schema or a rushed
+UI. `docs/02-BUILD-PHASES.md`'s own verification method for this session's row — "Add a field
+in Settings, it appears everywhere" — doesn't depend on saved views existing, so nothing about
+proving this session's actual deliverable required it.
+
+2026-08-28 · [fields] The `district` filter is a flat, non-cascading dropdown (every Indian
+district, alphabetical, regardless of the `state` filter's value) rather than the real
+state->district cascade. The cascade is inherently a *form* interaction (pick a state, the
+district list narrows) — there is no lead create/edit form yet for it to belong to (that's
+Session 7). Building the cascade widget now, with nowhere real to use it, would have meant
+either wiring it into the filter bar in a way the actual form will need to duplicate, or
+building UI Session 7 would immediately have to touch again. The full dataset
+(`indian-states-districts.ts`) is already in place either way — Session 7's form is additive,
+not a rework.
+
+2026-08-28 · [fields] CSV export masks phone numbers unless the exporter holds
+`lead.reveal_phone`, even though CLAUDE.md's non-negotiable #6 only explicitly names "list
+view" and "detail page" as the two display contexts. A bulk export is closer to "list view at
+scale" than to a single detail page a counsellor is actively working — the harm of a leaked
+phone-number column in an export file (which can leave the building, get forwarded, sit in a
+Downloads folder) is exactly the "counsellors leave and take databases with them" scenario the
+non-negotiable exists to prevent, arguably more so than an on-screen list. Treating export as
+requiring the same permission as an individual reveal, rather than inventing a third
+permission primitive, keeps the enforcement points to the ones CLAUDE.md's permission table
+already lists.
+
+2026-08-28 · [fields] Two seeded core `lead` field_definitions rows (`lead_source`,
+`sub_source`) don't correspond to any real `leads` column of the same name — see
+`src/lib/fields/field-column.ts` and the matching docs/PROGRESS.md entry. This is a latent
+inconsistency in Session 1's seed data (the field was seeded as if a plain `source` column
+existed, but the schema only ever had `first_touch_source`/`last_touch_source`), not something
+introduced this session. Worked around with an explicit key->column override map rather than
+adding the columns or renaming the seed, since renaming would touch Session 1's already-shipped
+seed contract and adding a redundant `source` column would duplicate data the first/last-touch
+columns already hold accurately.
+
+2026-08-28 · [fields] This session's actual data-fetching code (`getFieldSchema`,
+`resolveFieldOptions`, the `/leads` page) could not be run end-to-end in the sandbox it was
+built in, unlike Sessions 4-5. Those sessions' core logic (`resolveOrCreateLead`,
+`applyAssignment`) runs on Drizzle's direct Postgres connection, which a local Postgres
+instance serves just fine. Everything in this session instead goes through the RLS-bound
+Supabase JS client (the established pattern from Session 2's settings pages,
+`createClient()` from `@/lib/supabase/server`), which requires Supabase's actual hosted REST
+API (PostgREST) and Auth service (GoTrue) — infrastructure a raw local Postgres instance
+doesn't provide, and installing/configuring a local PostgREST+GoTrue stack just for this one
+session's verification was judged not worth the added scope. Verification for this session is
+therefore: full typecheck/lint/build (structural correctness) plus unit tests for every piece
+of pure logic (masking, formatting, the states/districts dataset) — but the actual list
+rendering, filtering, phone reveal and CSV export have only been verified by reading the code,
+not by running it against real data. Flagged explicitly in docs/PROGRESS.md as unverified;
+this needs the user's own Supabase project and a browser before being called done.

@@ -628,4 +628,83 @@ fixture rows (`AssignTest%` leads/rules, fixture profiles) either time; `npx tsc
 
 ---
 
+## Session 6 — the custom field engine + lead list — 2026-08-28
+
+**Shipped:** `getFieldSchema(supabase, 'lead', user)` (`src/lib/fields/get-field-schema.ts`)
+— the one schema source docs/02-BUILD-PHASES.md calls for: reads `field_definitions`,
+filters to active fields the caller's role may see (`visible_to_roles`), sorted by
+`sort_order`. `/leads` (previously a Phase-1 stub) is now a real, working list: dynamic
+columns from `show_in_list` fields, a dynamic filter bar from `show_in_filters` fields (the
+control — dropdown vs. free text — is chosen by field *type*, not hardcoded per key, so a
+new custom field filters correctly with zero code change), full pagination, and a free-text
+search box across name/phone. Phone numbers are masked in the list
+(`src/lib/leads/mask-phone.ts`, the exact `+91 98••••3456` shape from CLAUDE.md
+non-negotiable #6) with a per-row reveal button gated on `lead.reveal_phone` that writes an
+`audit_log` row on every click. CSV export (`src/app/(app)/leads/actions.ts`) is gated on
+`lead.export`, exports every schema field honoring the same filters currently applied to the
+list, masks phone numbers unless the exporter also holds `lead.reveal_phone`, and writes one
+summary `audit_log` row per export (non-negotiable #5). Ported an Indian
+states/districts reference dataset (`src/lib/geo/indian-states-districts.ts`) — 28 states +
+8 union territories — for the `state` filter/future form field.
+
+**A real seed-data gap found and worked around, not fixed in the seed itself:** two of the
+core `lead` field_definitions rows — `lead_source` and `sub_source` — don't have a matching
+`leads` column of the same name (the table only has `first_touch_source`/`last_touch_source`
+and their `_sub_source` counterparts). `src/lib/fields/field-column.ts` maps these two keys
+to `last_touch_source`/`last_touch_sub_source` explicitly, matching the same "source resolves
+to last-touch" call already made for the assignment engine's rule conditions in Session 5.
+Every other core field's key is already the literal column name.
+
+**Stubbed / deferred, documented in `docs/DECISIONS.md`:** saved views (listed in the same
+Phase 1 bullet as this session, but a big enough feature — a new table, save/apply/delete UI
+— to warrant its own pass rather than being squeezed in); the `district` filter is a flat,
+non-cascading list (the real state→district cascade is a lead *form* concern, and there's no
+lead create/edit form yet — that's Session 7); richer filter operators (contains/between/date
+ranges) beyond exact-match and substring — the assignment engine already has a full JSONB
+condition evaluator for a different purpose, but this filter bar's first cut is intentionally
+simple.
+
+**A real verification gap, not a code problem:** unlike Sessions 4-5 (whose core logic ran on
+Drizzle's direct Postgres connection and was fully testable against a local Postgres
+instance), everything this session touches — `getFieldSchema`, `resolveFieldOptions`, the
+`/leads` page itself — goes through the RLS-bound Supabase JS client (`createClient()` from
+`@/lib/supabase/server`), which talks to Supabase's hosted REST API (PostgREST + GoTrue), not
+raw Postgres. A local Postgres instance has no PostgREST layer, so none of this session's
+actual data-fetching code could be exercised end-to-end in the sandbox this was built in —
+only type-checked, linted, built, and unit-tested at the pure-function level (masking,
+formatting, the states/districts dataset). **This session has not been verified in a
+browser against real data and should not be treated as done until it has been.**
+
+**Tests** (`tests/mask-phone.spec.ts`, `tests/format-field-value.spec.ts`,
+`tests/field-column.spec.ts`, `tests/indian-states-districts.spec.ts` — all pure unit, no
+database): every masking case including the CLAUDE.md example and a non-Indian number;
+boolean/date/select/multiselect/default formatting, including the select-option-not-found
+fallback; both field-key overrides plus the identity case; dataset shape (36 states/UTs, no
+duplicates, every entry non-empty) and Kerala's exact 14 districts.
+
+**Verified:** `npx tsc --noEmit`, `npx eslint .`, and `npm run build` all pass clean (`/leads`
+now compiles as a real 3.15 kB route, up from a stub). `npm test` —
+`Tests  80 passed | 2 skipped (82)`, re-run three times back-to-back, clean every time.
+**Not verified:** the lead list rendering, filtering, phone reveal, or CSV export against
+real data in an actual browser — see the gap above.
+
+**Verify by:**
+1. `npm run db:migrate` — no new migrations this session, this just confirms nothing else changed.
+2. `npm test` — expect `Tests  80 passed | 2 skipped (82)`.
+3. **Required, not optional this time:** `npm run dev`, log in, create at least one lead
+   (there's still no create-lead UI — use a Node script calling `resolveOrCreateLead()`, or
+   insert directly), and open `/leads`. Confirm: the columns shown match what's marked
+   `show_in_list` in Settings → Custom Fields; the filter bar's controls match each filterable
+   field's type; the phone number is masked until you click reveal (and that a row appears in
+   Settings → (a future audit log viewer, or query `audit_log` directly) for that reveal);
+   CSV export downloads and the phone column is masked unless you're logged in as a
+   `lead.reveal_phone` holder. Then add a brand-new custom field to `lead` in Settings with
+   `show_in_list`/`show_in_filters` on, and confirm it appears in both without a code change —
+   that's this session's actual "done" criterion per docs/02-BUILD-PHASES.md.
+
+**Next:** Session 7 — lead detail + timeline, per `docs/02-BUILD-PHASES.md` § Session plan.
+That session's create/edit form is also where the real state→district cascade UX belongs.
+
+---
+
 <!-- Sessions append below -->
