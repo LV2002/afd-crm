@@ -1,4 +1,4 @@
-import { boolean, integer, jsonb, pgTable, text } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
 
 import { idColumn, softDelete, timestamps } from "./_helpers";
 
@@ -29,14 +29,18 @@ export const terminology = pgTable("terminology", {
   ...timestamps(),
 });
 
-export const centers = pgTable("centers", {
-  id: idColumn(),
-  name: text("name").notNull(),
-  city: text("city").notNull(),
-  address: text("address"),
-  isActive: boolean("is_active").notNull().default(true),
-  timezone: text("timezone").notNull().default("Asia/Kolkata"),
-  catchment: jsonb("catchment").$type<{ districts?: string[] }>(),
-  ...timestamps(),
-  ...softDelete(),
-});
+export const centers = pgTable(
+  "centers",
+  {
+    id: idColumn(),
+    name: text("name").notNull(),
+    city: text("city").notNull(),
+    address: text("address"),
+    isActive: boolean("is_active").notNull().default(true),
+    timezone: text("timezone").notNull().default("Asia/Kolkata"),
+    catchment: jsonb("catchment").$type<{ districts?: string[] }>(),
+    ...timestamps(),
+    ...softDelete(),
+  },
+  (t) => [uniqueIndex("centers_name_uq").on(t.name)],
+);

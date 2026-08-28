@@ -498,3 +498,32 @@ core/custom, once the lead actually exists.
 no lead-picker UI and no file upload/storage flow exist yet (the latter is explicitly
 Supabase Storage + private buckets work, out of scope here). Showing the raw stored value
 disabled beats hiding the field entirely; revisit once either UI exists for real.
+
+2026-08-28 · [activity] "Who can be assigned to a lead" (`user_ref` field options) is resolved
+as "whoever holds `lead.read` at scope `'own'`", not "whoever holds a permission literally
+named `lead.assign`" or similar — because no such primitive exists, and inventing one just for
+this list would duplicate the meaning `lead.read`/`'own'` already carries ("this role works its
+own leads"). Deliberately a `role_permissions` lookup, never a role-code comparison, so an
+admin can grant a new or renamed role that same scope and it becomes assignable with no code
+change — this resolves to `counsellor` today purely as a consequence of the seed data, not
+because the code knows the word "counsellor".
+
+2026-08-28 · [centers] The oldest row (by `created_at`) is treated as canonical when merging
+duplicate-named centres in migration 0011, not the newest. Every real reference accumulated
+against a centre — leads, business hours, holidays, user assignments — was almost certainly
+written against whichever row existed first (a second seed run's duplicate is typically
+untouched dead weight), so keeping the oldest row preserves the most existing state and moves
+the least data. This can't be proven in general (nothing timestamps *when a reference was
+created relative to which duplicate*), but it's the safer default, and the migration is
+run once, not a mechanism an admin will ever invoke themselves.
+
+2026-08-28 · [activity] The Preferences-tab "Saved, but shows the old value" report turned out
+not to be a data-loss bug at all — the write always succeeded. It's a React uncontrolled-input
+remount gotcha: `defaultValue`/`defaultChecked` only apply once, at mount, and a Server
+Component re-render after `revalidatePath()` doesn't remount an already-mounted client
+component just because its props changed. Fixed with `key={String(row.updated_at)}` on
+`<LeadEditForm>` rather than converting the form to controlled inputs — `leads.updated_at`
+already changes on every real save via the existing `set_updated_at` trigger, so this is a
+one-line fix that forces exactly the remount needed, without rewriting a large uncontrolled
+form (17+ field types across `DynamicFieldInput`) into controlled state management it doesn't
+otherwise need.

@@ -79,13 +79,7 @@ export async function resolveFieldOptions(
   }
 
   if (field.type === "user_ref") {
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, full_name")
-      .eq("is_active", true)
-      .order("full_name")
-      .returns<Array<{ id: string; full_name: string }>>();
-    return (data ?? []).map((r) => ({ value: r.id, label: r.full_name }));
+    return getAssignableUsers(supabase);
   }
 
   const category = CORE_KEY_TO_DROPDOWN_CATEGORY[field.key];
@@ -95,6 +89,33 @@ export async function resolveFieldOptions(
 
   // A genuinely custom field: its own freeform options.
   return field.rawOptions ?? [];
+}
+
+/**
+ * Users a lead can be assigned to: whoever holds `lead.read` at scope
+ * `'own'` — the "works my own leads" shape, today only the counsellor role,
+ * resolved dynamically through role_permissions rather than a hardcoded
+ * role code/name (roles are admin-editable data, per CLAUDE.md).
+ */
+async function getAssignableUsers(supabase: SupabaseClient): Promise<FieldOption[]> {
+  const { data: rolePerms } = await supabase
+    .from("role_permissions")
+    .select("role_id")
+    .eq("permission_code", "lead.read")
+    .eq("scope", "own")
+    .returns<Array<{ role_id: string }>>();
+
+  const roleIds = (rolePerms ?? []).map((r) => r.role_id);
+  if (roleIds.length === 0) return [];
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .eq("is_active", true)
+    .in("role_id", roleIds)
+    .order("full_name")
+    .returns<Array<{ id: string; full_name: string }>>();
+  return (data ?? []).map((r) => ({ value: r.id, label: r.full_name }));
 }
 
 /** A plain dropdown_options category lookup, for UI that isn't backed by a field_definitions row (e.g. the interaction-log form's Type/Outcome selects). */

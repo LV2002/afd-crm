@@ -799,4 +799,85 @@ scope-authorization branch in `createLeadManually()`.
 
 ---
 
+## Post-Session-7 fixes: counsellor-only assignment, duplicate centres, stale form after save
+
+Found during the user's first live walkthrough of Session 7 against their real Supabase
+project. Three separate bugs, all fixed on the same branch before merge:
+
+**1. Every active user, not just counsellors, could be assigned to a lead.**
+`resolveFieldOptions()`'s `user_ref` branch (`src/lib/fields/resolve-field-options.ts`) queried
+`profiles` filtered only on `is_active`, with no role filter — every field of type `user_ref`
+(today, `assigned_to` on leads) offered every active user in the org, including accounts and
+academics staff. Fixed by adding `getAssignableUsers()`: a two-step query — first find every
+`role_id` in `role_permissions` holding `lead.read` at scope `'own'`, then filter `profiles` to
+those roles — rather than comparing against a hardcoded role code, per CLAUDE.md's non-negotiable
+against `role === 'x'`-style checks. This resolves to exactly `counsellor` in the seed data today,
+but an admin renaming or duplicating that role, or granting `lead.read`/`'own'` to a new role,
+changes who's assignable with zero code change. Confirmed against a real Postgres instance: with
+the seeded roles, `role_permissions` holding `lead.read`/`'own'` is exactly one row (`counsellor`).
+
+**2. Every centre appeared twice (or more) in every centre dropdown.** Root cause: `centers` had
+no unique constraint on `name`, so `seedCenters()`'s `.onConflictDoNothing()` had nothing to
+conflict against — it was a silent no-op, and every `npm run db:seed` run across the project's
+history (this session's included) inserted a fresh duplicate "Kochi"/"Kannur" row into whichever
+database it ran against, including the user's real Supabase project. Fixed in two parts:
+- `src/lib/db/schema/org.ts`: added `uniqueIndex("centers_name_uq").on(t.name)` to `centers`.
+- `migrations/0011_centers_dedupe_and_unique_name.sql`: a `DO $$ ... $$` block that runs once,
+  before the index is created, merging any existing duplicate-named centres — oldest row per
+  name becomes canonical, every FK reference on every newer duplicate is repointed to it
+  (`leads.center_id`, `assignment_history.from_center`/`to_center`), and every duplicate row is
+  then deleted. Three tables have their own extra uniqueness that a blind repoint could violate
+  (`user_centers` on `(user_id, center_id)`, `business_hours` on `(center_id, day_of_week)`,
+  `holidays` on `(center_id, date)`) — for those, the migration deletes the now-redundant link on
+  the duplicate wherever the canonical row already has an equivalent row, then repoints the rest.
+  This means "merge centres" isn't a new admin feature (out of scope for this fix); it's how the
+  duplicate rows this project itself created get cleaned up on next migrate.
+
+  Verified by hand against a real local Postgres: seeded twice to reproduce four duplicate
+  centre rows exactly as the user saw, then hand-built fixtures against them exercising every
+  edge case — a lead pointed at a duplicate row, a user linked to *both* the canonical and
+  duplicate row (must collapse to one link, not two), business-hours/holiday rows on the
+  duplicate that collide with the canonical's existing day/date (must be dropped, not
+  duplicated) and rows that don't collide (must survive, repointed), and an assignment-history
+  row pointing at the duplicate. Ran the migration: exactly one Kochi and one Kannur remained,
+  every reference repointed correctly, no data lost, no constraint violation. Confirmed
+  `drizzle-kit generate` sees zero drift between `schema/org.ts` and the migration history after
+  hand-syncing `meta/0011_snapshot.json`/`_journal.json`. Confirmed `npm run db:seed` run twice
+  back-to-back on a fresh database now produces exactly one row per centre name.
+
+**3. Saving the Preferences tab (or any tab) showed "Saved." but the form appeared to revert.**
+Not a persistence bug — the write to `leads` always succeeded. `LeadEditForm`/
+`DynamicFieldInput` use uncontrolled inputs (`defaultValue`/`defaultChecked`), which React only
+applies at initial mount. After a successful save, `updateLead()`'s `revalidatePath()` re-renders
+the Server Component with fresh `values`, but the already-mounted `<LeadEditForm>` client
+component instance doesn't remount just because its props changed — so the visible input values
+stayed whatever they were before the save, not the newly-saved ones (they weren't lost in the
+database, just not reflected on screen without a hard refresh). Fixed by giving `<LeadEditForm>`
+a `key={String(row.updated_at)}` in `src/app/(app)/leads/[id]/page.tsx` — `leads` has a
+`set_updated_at` trigger (migration 0005) that changes this column on every successful update, so
+a real save now forces React to unmount and remount the form with the freshly-saved values as its
+new initial `defaultValue`s.
+
+**Verified:** `npx tsc --noEmit`, `npx eslint .`, `npm run build` all pass clean. `npm test` —
+`Tests  91 passed | 2 skipped (93)` against a real local Postgres instance with migrations
+0000-0011 applied and freshly seeded, run twice back-to-back. The centres-dedup migration and the
+counsellor-only role resolution were both verified directly against real data as described above,
+not just read for correctness.
+
+**Verify by:**
+1. `npm run db:migrate` — applies migration 0011. If your Supabase project already has duplicate
+   Kochi/Kannur rows (it does, if you've run `db:seed` more than once before this fix), this is
+   the migration that merges them — check `select name, count(*) from centers group by name;`
+   before and after to see it collapse to one row per name.
+2. `npm run db:seed` — re-run it once or twice; confirm the centre count stays at one per name
+   this time.
+3. In the app: open a lead, confirm the Assigned Counsellor dropdown only lists counsellor-role
+   users (not accounts/academics/admin staff); confirm the Centre dropdown shows no duplicates;
+   edit a field on any tab (e.g. Preferences), save, and confirm the field's displayed value
+   updates immediately to match what you saved, with no reload needed.
+
+**Next:** Session 8 — kanban + lost reason, per `docs/02-BUILD-PHASES.md` § Session plan.
+
+---
+
 <!-- Sessions append below -->
