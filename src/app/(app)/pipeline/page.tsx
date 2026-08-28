@@ -24,6 +24,7 @@ interface LeadRow {
   temperature: string | null;
   center_id: string | null;
   assigned_to: string | null;
+  lost_reason: string | null;
 }
 
 export default async function PipelinePage() {
@@ -45,7 +46,9 @@ export default async function PipelinePage() {
       .returns<StageRow[]>(),
     supabase
       .from("leads")
-      .select("id, lead_number, student_name, primary_phone, stage_id, temperature, center_id, assigned_to")
+      .select(
+        "id, lead_number, student_name, primary_phone, stage_id, temperature, center_id, assigned_to, lost_reason",
+      )
       .is("deleted_at", null)
       .order("updated_at", { ascending: false })
       .returns<LeadRow[]>(),
@@ -67,6 +70,8 @@ export default async function PipelinePage() {
     batchNameLookup(supabase, "profiles", "full_name", assignedIds),
   ]);
 
+  const lostReasonLabelByValue = new Map(lostReasonOptions.map((o) => [o.value, o.label]));
+
   const leads: KanbanLead[] = (leadRows ?? []).map((l) => ({
     id: l.id,
     leadNumber: l.lead_number,
@@ -76,6 +81,7 @@ export default async function PipelinePage() {
     temperature: l.temperature,
     centerName: l.center_id ? (centerNameById.get(l.center_id) ?? null) : null,
     assignedToName: l.assigned_to ? (assigneeNameById.get(l.assigned_to) ?? null) : null,
+    lostReasonLabel: l.lost_reason ? (lostReasonLabelByValue.get(l.lost_reason) ?? l.lost_reason) : null,
   }));
 
   return (

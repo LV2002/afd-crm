@@ -34,6 +34,7 @@ export interface KanbanLead {
   temperature: string | null;
   centerName: string | null;
   assignedToName: string | null;
+  lostReasonLabel: string | null;
 }
 
 interface LostReasonOption {
@@ -214,6 +215,15 @@ function LeadCard({
           </Badge>
         )}
       </div>
+      {/* Only leads currently sitting in a requires_reason stage (Lost)
+          carry a lost_reason at all — enforce_lost_reason clears it the
+          moment a lead moves anywhere else, so this only ever shows up in
+          the Lost column, which is exactly where it's useful at a glance. */}
+      {lead.lostReasonLabel && (
+        <Badge variant="destructive" className="w-fit text-xs">
+          {lead.lostReasonLabel}
+        </Badge>
+      )}
       {lead.assignedToName && (
         <span className="text-xs text-muted-foreground">{lead.assignedToName}</span>
       )}
