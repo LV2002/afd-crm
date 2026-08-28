@@ -11,10 +11,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { can, getCurrentUser } from "@/lib/auth/session";
-import { fieldColumn } from "@/lib/fields/field-column";
+import { fieldColumn, getRawFieldValue } from "@/lib/fields/field-column";
 import { formatFieldValue } from "@/lib/fields/format-field-value";
 import { getFieldSchema, type FieldSchemaEntry } from "@/lib/fields/get-field-schema";
-import { resolveFieldOptions, type FieldOption } from "@/lib/fields/resolve-field-options";
+import {
+  OPTION_BEARING_TYPES,
+  resolveFieldOptions,
+  type FieldOption,
+} from "@/lib/fields/resolve-field-options";
 import { applyLeadFilters, readFilterValues } from "@/lib/leads/apply-filters";
 import { createClient } from "@/lib/supabase/server";
 import { formatTerm } from "@/lib/terminology/terms";
@@ -25,7 +29,6 @@ import { LeadFilters, type FilterFieldWithOptions } from "./lead-filters";
 import { RevealPhoneButton } from "./reveal-phone-button";
 
 const PAGE_SIZE = 25;
-const OPTION_BEARING_TYPES = new Set(["select", "multiselect", "user_ref"]);
 
 export default async function LeadsPage({
   searchParams,
@@ -62,8 +65,19 @@ export default async function LeadsPage({
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
+  // A core field is a real leads column; a non-core (custom) field's value
+  // lives inside the `custom` jsonb blob instead — select that once rather
+  // than trying to select a column named after the custom key, which
+  // doesn't exist (see src/lib/fields/field-column.ts).
+  const coreListColumns = listFields.filter((f) => f.isCore).map((f) => fieldColumn(f.key));
+  const needsCustomColumn = listFields.some((f) => !f.isCore);
   const selectColumns = Array.from(
-    new Set(["id", "primary_phone", ...listFields.map((f) => fieldColumn(f.key))]),
+    new Set([
+      "id",
+      "primary_phone",
+      ...coreListColumns,
+      ...(needsCustomColumn ? ["custom"] : []),
+    ]),
   ).join(", ");
 
   let query = supabase
@@ -167,8 +181,7 @@ function renderCell(
   optionsByKey: Record<string, FieldOption[]>,
   canRevealPhone: boolean,
 ) {
-  const column = fieldColumn(field.key);
-  const value = row[column];
+  const value = getRawFieldValue(field, row);
 
   if (field.type === "phone") {
     return (

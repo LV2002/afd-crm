@@ -1,4 +1,4 @@
-import { fieldColumn } from "@/lib/fields/field-column";
+import { fieldFilterExpression } from "@/lib/fields/field-column";
 import type { FieldSchemaEntry } from "@/lib/fields/get-field-schema";
 
 export type LeadFilterValues = Record<string, string>;
@@ -50,14 +50,19 @@ export function applyLeadFilters<Q extends FilterableQuery>(
   for (const field of filterableFields) {
     const value = values[field.key];
     if (!value) continue;
-    const column = fieldColumn(field.key);
 
     if (field.type === "multiselect") {
-      next = next.contains(column, [value]);
+      // A core field's array lives in a real text[] column (Postgres array
+      // containment); a custom field's array lives inside the `custom`
+      // jsonb blob, where containment is checked against the whole column
+      // with a matching nested shape instead.
+      next = field.isCore
+        ? next.contains(fieldFilterExpression(field), [value])
+        : next.contains("custom", { [field.key]: [value] });
     } else if (field.type === "select" || field.type === "user_ref") {
-      next = next.eq(column, value);
+      next = next.eq(fieldFilterExpression(field), value);
     } else {
-      next = next.ilike(column, `%${value}%`);
+      next = next.ilike(fieldFilterExpression(field), `%${value}%`);
     }
   }
   return next;

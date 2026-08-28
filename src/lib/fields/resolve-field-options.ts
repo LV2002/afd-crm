@@ -11,6 +11,9 @@ export interface FieldOption {
   label: string;
 }
 
+/** Field types whose raw stored value is an id/code that needs resolving to a human label. */
+export const OPTION_BEARING_TYPES = new Set(["select", "multiselect", "user_ref"]);
+
 /**
  * Core select/multiselect fields that are backed by a real relationship
  * (a dropdown category, or another table) rather than the field

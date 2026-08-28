@@ -2,10 +2,14 @@
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
-import { fieldColumn } from "@/lib/fields/field-column";
+import { fieldColumn, getRawFieldValue } from "@/lib/fields/field-column";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import { formatFieldValue } from "@/lib/fields/format-field-value";
-import { resolveFieldOptions, type FieldOption } from "@/lib/fields/resolve-field-options";
+import {
+  OPTION_BEARING_TYPES,
+  resolveFieldOptions,
+  type FieldOption,
+} from "@/lib/fields/resolve-field-options";
 import { applyLeadFilters, type LeadFilterValues } from "@/lib/leads/apply-filters";
 import { maskPhone } from "@/lib/leads/mask-phone";
 import { createClient } from "@/lib/supabase/server";
@@ -93,14 +97,23 @@ export async function exportLeadsCsv(filterValues: LeadFilterValues): Promise<Ex
 
   const optionsByKey: Record<string, FieldOption[]> = {};
   for (const field of fields) {
-    if (field.type === "select" || field.type === "multiselect") {
+    if (OPTION_BEARING_TYPES.has(field.type)) {
       optionsByKey[field.key] = await resolveFieldOptions(supabase, field);
     }
   }
 
+  // Core fields are real columns; any custom field (is_core: false) lives
+  // inside the `custom` jsonb blob instead — see field-column.ts. Selecting
+  // a column literally named after a custom key would fail outright.
+  const coreColumns = fields.filter((f) => f.isCore).map((f) => fieldColumn(f.key));
+  const needsCustomColumn = fields.some((f) => !f.isCore);
+  const selectColumns = Array.from(
+    new Set(["id", ...coreColumns, ...(needsCustomColumn ? ["custom"] : [])]),
+  ).join(", ");
+
   let query = supabase
     .from("leads")
-    .select(fields.map((f) => fieldColumn(f.key)).join(", "))
+    .select(selectColumns)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(EXPORT_ROW_LIMIT);
@@ -115,8 +128,7 @@ export async function exportLeadsCsv(filterValues: LeadFilterValues): Promise<Ex
   const lines = (rows ?? []).map((row) =>
     fields
       .map((field) => {
-        const column = fieldColumn(field.key);
-        const value = row[column];
+        const value = getRawFieldValue(field, row);
         if (field.type === "phone" && !canRevealPhone) {
           return csvEscape(maskPhone(value as string | null));
         }

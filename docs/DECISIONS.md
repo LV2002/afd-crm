@@ -432,3 +432,22 @@ falsy input as "no options" so no other change was needed. This bug predates Ses
 it would have blocked creating a plain text/number/date/etc. custom field since Session 2
 shipped — but it surfaced now because this was the first time anyone actually tried to add
 a non-select field through the UI after Session 2 built the form.
+
+2026-08-28 · [fields] A real Session 6 bug, found the moment the user actually added a
+custom field through the (now-fixed) form and visited `/leads`: "column leads.leon_test does
+not exist". `fieldColumn()`/the list and export queries assumed every `field_definitions` row
+is a real `leads` column, which is only true for `is_core: true` rows — a genuinely custom
+field (anything an admin adds through Settings, always `is_core: false`) has no column of its
+own at all; its value lives inside `leads.custom` jsonb, keyed by the field's `key`
+(`schema/leads.ts`'s own comment already said as much: "escape hatch for custom fields ...
+no migration needed" — I read that and still wrote the query as if every field had a column).
+Fixed in `src/lib/fields/field-column.ts`: `fieldFilterExpression()` returns the real column
+for a core field or `custom->>key` for a non-core one (PostgREST supports jsonb-path filter
+expressions directly), and `getRawFieldValue()` reads a core field off the row or a non-core
+one out of `row.custom`. The list page and CSV export both select `custom` once whenever any
+field they're showing is non-core, instead of trying to select a column named after the
+custom key. `apply-filters.ts`'s multiselect branch also had to split by core/non-core: a
+core array field uses Postgres array containment on its own column, a custom one uses jsonb
+containment against the whole `custom` column with a matching nested shape. Added unit tests
+(`tests/field-column.spec.ts`) pinning down both the core and custom paths for
+`fieldFilterExpression`/`getRawFieldValue` so this can't silently regress.
