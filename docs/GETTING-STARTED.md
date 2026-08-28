@@ -65,9 +65,19 @@ git add . && git commit -m "spec" && git push
 The service-role key bypasses every RLS policy you are about to write. If it reaches
 GitHub, rotate it immediately in Supabase.
 
+**`DATABASE_URL` on Vercel must be the pooled connection string, not the direct one.**
+Supabase's direct connection host (`db.xxxxx.supabase.co:5432`, the one above) resolves to an
+IPv6-only address in many regions — fine from your own machine, but Vercel's serverless
+functions can't reach it at all, and every write that goes through Drizzle directly
+(`resolveOrCreateLead()`, cron jobs, CSV import, ...) fails with `getaddrinfo ENOTFOUND`. In
+Supabase's dashboard → Project Settings → Database → Connection string, copy the **"Transaction"
+pooler** string instead (port `6543`, host like `aws-0-<region>.pooler.supabase.com`) and set
+that as `DATABASE_URL` in Vercel's own Project Settings → Environment Variables. Your local
+`.env.local` can keep the direct connection string — this only matters for the deployed app.
+
 ### 6. Export your current data
 Sheets → CSV, into `data/` (add `data/` to `.gitignore`). You won't import until
-Session 8, but having it ready stops you stalling then.
+Session 9, but having it ready stops you stalling then.
 
 ---
 

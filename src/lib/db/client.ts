@@ -20,9 +20,20 @@ function getConnectionString() {
  * route handlers. Never import this into client components — it bypasses
  * Supabase Auth entirely and has no RLS-friendly JWT attached, so callers
  * must run under the service-role connection string only.
+ *
+ * `prepare: false` because DATABASE_URL in a deployed (serverless)
+ * environment must point at Supabase's connection pooler (Session or
+ * Transaction mode) rather than the direct connection — the direct
+ * hostname resolves IPv6-only in many Supabase regions, which Vercel's
+ * functions can't reach at all ("getaddrinfo ENOTFOUND"). Supavisor's
+ * transaction-mode pooling doesn't support prepared statements (a
+ * transaction can land on a different physical connection each time), so
+ * this is required for pooled connections and a no-op against a direct
+ * one — safe either way. See docs/GETTING-STARTED.md for which
+ * connection string to use where.
  */
 const client =
-  globalThis.__afdDbClient ?? postgres(getConnectionString(), { max: 1 });
+  globalThis.__afdDbClient ?? postgres(getConnectionString(), { max: 1, prepare: false });
 
 if (process.env.NODE_ENV !== "production") {
   globalThis.__afdDbClient = client;
