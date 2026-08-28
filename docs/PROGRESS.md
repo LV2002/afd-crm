@@ -1010,4 +1010,110 @@ control exists on the detail page — out of scope this session).
 
 ---
 
+## Session 9 — CSV import + column mapper — 2026-08-28
+
+Read `docs/03-V1-AUDIT.md` first, per CLAUDE.md — this is an ingestion path. The audit's D1/D2/D5
+(duplicates silently dropped, the highest-volume source bypassing assignment, three
+disagreeing phone-normalisation implementations) are exactly the failure modes this session
+had to not repeat, and the existing `resolveOrCreateLead()`/`applyAssignment()`/`normalizePhone()`
+machinery from Sessions 4-5 already exists specifically so a new ingestion path doesn't have to
+reinvent any of it — this session is almost entirely wiring, not new dedup/assignment logic.
+
+**Shipped:**
+- `/leads/import`, gated on the new `lead.import` permission (already seeded in Session 1,
+  granted to `center_head`/`co_admin`/`admin` — never `counsellor`, matching bulk operations
+  being a step up from ordinary lead-list access).
+- A 4-step wizard (`ImportWizard`, client component): upload a CSV (parsed client-side with
+  `papaparse` — the one new dependency this session; hand-rolling a CSV parser correctly
+  handles quoted commas/embedded newlines/escaping, exactly the kind of "don't reinvent it"
+  case `@radix-ui/react-dialog` was last session) → map each detected column to a lead field or
+  Skip, with a best-guess auto-suggestion per column → preview the first 5 rows → import, then
+  see a results summary.
+- **The column mapper never offers `assigned_to` or `stage_id` as a target** — this is the
+  session's one real design decision, not just UI taste (`importable-fields.ts` documents why):
+  mapping `assigned_to` from a spreadsheet column would let bulk import quietly skip
+  `applyAssignment()`, the exact "one source gets a shortcut" mistake non-negotiable #8 exists
+  to prevent; mapping `stage_id` would let a CSV plant a lead pre-staged at, say, "Payment
+  Pending" — funnel data that never actually happened. Every imported lead enters at the
+  pipeline's `stage_type = 'new'` stage and goes through the assignment rules engine, same as
+  every other ingestion path, with zero exceptions carved out for bulk import specifically.
+- **The dedupe report is real, not cosmetic**: each row's outcome is `created` / `matched` (an
+  existing lead by phone or email got a new enquiry attached, `resolveOrCreateLead()`'s own
+  "never drop a duplicate" behaviour) / `skipped` (missing student name, unparseable phone, or a
+  centre outside the importer's own scope) — never a silently-dropped row, the exact failure
+  mode docs/03-V1-AUDIT.md's D1 calls "the single most damaging bug in v1." One `ingestBatchId`
+  (a fresh UUID) ties every enquiry from one import together, and one `audit_log` row per
+  import summarises `{batchId, total, created, matched, skipped}`.
+- **Value coercion per field type** (`coerce-import-value.ts`, pure, unit-tested): phone through
+  the same `normalizePhone()` every other path uses; select/multiselect matched against the
+  field's real resolved options (case-insensitive, by value or label — reuses
+  `resolveFieldOptions()`, so `center_id`'s special-cased centres-table lookup and `state`'s
+  India states/districts list Just Work here too, no new code); number/boolean/date parsed
+  leniently. An unparseable cell never fails the row — it becomes "not provided" plus a
+  human-readable warning surfaced in the results table, so one bad cell costs a field, not the
+  whole lead.
+- **Scope enforcement**: `importLeads()` (`src/app/(app)/leads/import/actions.ts`) runs
+  `resolveOrCreateLead()` on the direct db client, same RLS-bypass-by-design as Session 4 —
+  this action is the re-implemented own/center/all enforcement point, exactly
+  `createLeadManually()`'s pattern (Session 7): a `center`-scope importer's chosen default
+  centre, and every per-row mapped centre, must be inside their own `user.centerIds`, checked
+  before ever calling `resolveOrCreateLead()`, with a per-row skip (not a silent override) if a
+  mapped centre resolves outside their access. `own` scope (unused by any seeded role today,
+  handled anyway for whichever role an admin might grant it to later) forces self-assignment,
+  matching `createLeadManually()`'s existing precedent for that scope value.
+- **Anything beyond `resolveOrCreateLead()`'s own fields** (temperature, next_followup_at, a
+  custom field, ...) — written in a follow-up call through the *normal RLS-bound Supabase
+  client*, same `fieldColumn()`/custom-jsonb shape `updateLead()` already uses, and only onto a
+  brand-new lead, never onto one an existing enquiry just attached to (a duplicate's profile
+  belongs to the person, not to whichever row happened to match them — same rule
+  `resolveOrCreateLead()` already applies to the fields it owns directly). This is the only part
+  of the whole feature that runs under RLS rather than the direct-client bypass, precisely
+  because it's an ordinary single-row update, not identity resolution.
+
+**Tests**: `tests/coerce-import-value.spec.ts` (22 cases, pure unit) — every field type's happy
+path and its lenient-failure path (warning + "not provided", never a thrown error).
+`tests/suggest-column-mapping.spec.ts` (pure unit) — exact key/label match, partial match in
+either direction, no-match-returns-empty. `tests/importable-fields.spec.ts` (pure unit) —
+`assigned_to`/`stage_id` excluded regardless of type, `user_ref`/`lead_ref`/`file` excluded
+regardless of key. Also manually verified the dedup path end-to-end against a real local
+Postgres instance with CSV-import-shaped input (two different phone formats for the same
+number correctly attach to one lead; a genuinely different number correctly creates a second
+lead) — see the "Verified" note below for what that check covered.
+
+**Verified**: `npx tsc --noEmit`, `npx eslint .`, `npm run build` all pass clean (`/leads/import`
+compiles as a real route). `npm test` — `Tests 125 passed | 2 skipped (127)`. The Server Action
+itself (`importLeads()`) — its auth/scope checks, the per-row loop, and the RLS-bound
+extra-fields follow-up write — could NOT be integration-tested here, same limitation as
+`createLeadManually()` in Session 7: it depends on `getCurrentUser()`/the RLS-bound Supabase
+client, which need a real Supabase Auth session this sandbox can't provide. What COULD be
+verified directly against Postgres — calling `resolveOrCreateLead()` with CSV-import-shaped
+input, including a duplicate — was, by hand, and confirmed correct.
+
+**Stubbed / deferred, documented in `docs/DECISIONS.md`:** no styled `.xlsx` export template
+with a guidelines sheet (docs/03-V1-AUDIT.md calls this out as a v1 feature worth keeping —
+deferred here, plain CSV column-name matching covers the same job for now); no download of the
+skipped-rows report as a file (shown inline instead — fine at the row counts a single small
+institute's CSV imports actually reach); a "Default Centre" selection is offered but not
+required — a CSV that maps its own Centre column, or a deliberate centre-less historical
+import, are both legitimate without one.
+
+**Verify by:**
+1. `npm install` — picks up the new `papaparse`/`@types/papaparse` dependency.
+2. `npm test` — expect `Tests 125 passed | 2 skipped (127)`.
+3. **Required:** `npm run dev`, log in as a role holding `lead.import` (admin, co_admin, or
+   center_head — not counsellor), go to `/leads` → **Import**. Build a small CSV (5-10 rows)
+   with at least Student Name and Primary Phone columns, plus a couple of others (Email, Centre,
+   Lead Source, Temperature). Include one row whose phone number matches an existing lead's,
+   one row with a missing student name, and one row with a garbled phone number. Upload, confirm
+   the column mapper auto-suggests sensible targets, map anything it missed, pick a default
+   centre, preview, then import. Confirm the results summary shows the right created/matched/
+   skipped counts and readable reasons for the skips; open one of the newly-created leads and
+   confirm its mapped fields (including anything beyond the core identity fields, e.g.
+   Temperature) actually landed; confirm the matched row attached as a new enquiry rather than
+   creating a second lead.
+
+**Next:** Session 10 — config export/import, per `docs/02-BUILD-PHASES.md` § Session plan.
+
+---
+
 <!-- Sessions append below -->

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Button } from "@/components/ui/button";
@@ -129,6 +129,13 @@ export default async function LeadsPage({
             <Button asChild size="sm">
               <Link href="/leads/new">
                 <Plus /> New {leadPlural.toLowerCase().replace(/s$/, "")}
+              </Link>
+            </Button>
+          )}
+          {can(user, "lead.import") && (
+            <Button asChild size="sm" variant="outline">
+              <Link href="/leads/import">
+                <Upload /> Import
               </Link>
             </Button>
           )}

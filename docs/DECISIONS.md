@@ -564,3 +564,39 @@ RLS-bound Supabase client, so `leads_update`'s existing `can_access_center('lead
 policy is the only authorization check that needs to exist — adding a second, app-level copy
 of the same scope logic here would be exactly the kind of drift CLAUDE.md's RLS non-negotiable
 (#3) is meant to prevent.
+
+2026-08-28 · [import] The CSV column mapper deliberately never offers `assigned_to` or
+`stage_id` as a mapping target, even though both are ordinary `field_definitions` rows the
+generic field engine otherwise treats like any other. Offering them would let a spreadsheet
+column silently opt a bulk import out of two things every other ingestion path goes through
+without exception: `applyAssignment()` (non-negotiable #8) and entering the funnel at
+`stage_type = 'new'`. This isn't a gap to fill in later — allowing either would be reintroducing
+docs/03-V1-AUDIT.md's D2 ("the highest-volume source bypassed the assignment engine") on
+purpose, just through a different door (a spreadsheet column instead of a webhook shortcut).
+
+2026-08-28 · [import] `lead_source`/`sub_source` are mappable, but route into
+`resolveOrCreateLead()`'s `source`/`subSource` parameters, not the generic post-creation field
+update every other mapped field goes through. `field-column.ts` already establishes that
+`lead_source` has no column of its own — it's an alias for `last_touch_source` — and
+`resolveOrCreateLead()` sets both first- and last-touch source from `source` on every write,
+new lead or existing. Routing it through the generic path instead would silently update
+`last_touch_source` while never touching `first_touch_source`, corrupting first-touch
+attribution on brand-new leads for no reason.
+
+2026-08-28 · [import] An unmapped or unrecognised value never fails a row outright — only a
+missing/unparseable `student_name` or `primary_phone` does. Every other field's coercion
+failure becomes "field not provided" plus a warning surfaced in the results table. This mirrors
+`resolveOrCreateLead()`'s own philosophy (never reject a duplicate) at the field level: a
+messy "Temperature" column full of typos shouldn't cost you 40 real leads just because their
+temperature couldn't be parsed — it should cost you 40 rows with a blank temperature and a
+visible note, which a human can go fix in five minutes from the lead list instead of re-running
+the whole import.
+
+2026-08-28 · [import] The styled `.xlsx` export-with-guidelines-sheet + downloadable import
+template docs/03-V1-AUDIT.md calls out as worth keeping from v1 is deliberately NOT built this
+session. Plain CSV with a column mapper that auto-suggests matches does the same underlying
+job (get the institute's existing spreadsheet into the system) without committing to a styling
+library (`exceljs` or similar) for a nice-to-have. Revisit if real usage shows the column
+mapper's auto-suggestion isn't good enough on its own — the v1 audit's instinct that this
+"materially reduces support load" is worth taking seriously, just not worth the added
+dependency before there's evidence the mapper alone doesn't already cover it.
