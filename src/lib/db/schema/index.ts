@@ -7,3 +7,4 @@ export * from "./rules";
 export * from "./leads";
 export * from "./assignment";
 export * from "./activity";
+export * from "./config";

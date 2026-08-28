@@ -246,6 +246,12 @@ export const PERMISSIONS = [
     description: "Export the config bundle for the plug-and-play test.",
   },
   {
+    code: "config.import",
+    label: "Import configuration",
+    category: "Administration",
+    description: "Import a config bundle into a fresh instance. Refuses to run on one that already has data.",
+  },
+  {
     code: "audit.read",
     label: "View audit log",
     category: "Administration",

@@ -600,3 +600,56 @@ library (`exceljs` or similar) for a nice-to-have. Revisit if real usage shows t
 mapper's auto-suggestion isn't good enough on its own — the v1 audit's instinct that this
 "materially reduces support load" is worth taking seriously, just not worth the added
 dependency before there's evidence the mapper alone doesn't already cover it.
+
+2026-08-28 · [config] Config import is a CLI tool (`npm run db:config-import`), not a web
+Server Action, even though export is. The reason is structural, not a time-boxing shortcut:
+`profiles.role_id` is `onDelete: restrict`, so an already-authenticated admin's own profile
+always references the very `roles` row an import would need to remove before inserting the
+bundle's version. There is no logged-in web caller this could ever succeed for — the emptiness
+guard (`GUARD_TABLES`, checking every target table has zero rows) will always reject them, by
+construction, since being authenticated with `config.import` in the first place already proves
+`roles`/`role_permissions` aren't empty. A CLI script run before anyone has logged in (same
+trust model as `npm run db:seed` — no permission check, shell access is the trust boundary)
+sidesteps the paradox entirely rather than working around it with special-casing.
+
+2026-08-28 · [config] `permissions` and `assignment_rules` are the two real exclusions from the
+bundle beyond docs/01-DATA-MODEL.md's own example list (which also predates `centers`,
+`business_hours`, and `holidays` existing as tables — those three ARE included here, since
+they're plainly admin-editable configuration per CLAUDE.md's "What is configurable" table, and
+their absence from the doc's list looks like it just predates them, not a deliberate call).
+`permissions` is fixed in code (CLAUDE.md's own "Fixed in code" list) — never a company's
+config, always re-seeded from the `PERMISSIONS` constant regardless of which company's bundle
+gets imported. `assignment_rules` is excluded because its `action` payload
+(`assignTo: uuid`/`userIds: uuid[]`) and `created_by` name specific PEOPLE — data, not
+configuration, and people don't transfer between companies or Supabase projects. Carrying those
+rows over as-is would either dangle (the referenced person doesn't exist in the target instance)
+or, worse, silently succeed by pointing at whatever unrelated person happens to hold that same
+UUID in the target instance. A future version could export a rule's portable shape (name,
+priority, conditions) while dropping/re-prompting for its action target; this session doesn't
+attempt that.
+
+2026-08-28 · [config] Import refuses to run unless every target table is completely empty,
+rather than something more permissive like "unless `leads` has rows" or an upsert-by-id merge.
+Read CLAUDE.md's own words literally — "Import into an empty instance" — rather than trying to
+also solve the harder "push my staging config onto an already-live production instance" half of
+the same paragraph's framing. That harder case needs real conflict resolution (what happens
+when both sides have a role named "Counsellor" with different permissions? which one wins, and
+what happens to profiles already pointing at the losing one?) that's genuinely separate,
+larger work — see the CLI-vs-web-action decision above for why the two problems compound rather
+than one subsuming the other. Building a convincing "merge" story without solving that honestly
+would be worse than not building it at all.
+
+2026-08-28 · [tooling] Found by actually running `npm run db:seed` after refactoring its
+permission-seeding logic into a shared `ensurePermissionsSeeded()` (used by both `seed.ts` and
+config import): the extracted module had `import "server-only"` at the top, copying the
+convention from everything else in `src/lib/auth/`. That package's real (non-browser) module
+entry throws unconditionally under plain `require()` — the no-op version only exists via
+webpack's package.json "browser" field swap, which only applies inside an actual Next.js
+bundle. Both `seed.ts` and the new `db:config-import` CLI script run via plain `tsx`, so this
+broke `db:seed` outright — a real regression `tsc --noEmit` and `eslint` both passed cleanly
+through, since it's a runtime-only failure mode neither static check catches. The fix
+(`seed-permissions.ts` and `import-config.ts` both drop the `server-only` import, with a
+comment explaining why) is narrow, but the lesson is broader: any module intended to be
+imported from a plain-Node script must never carry `import "server-only"`, no matter how
+consistent that looks with its neighbours — and the only way this class of bug surfaces at all
+is actually running the script, not just type-checking and linting it.

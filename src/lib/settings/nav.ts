@@ -77,6 +77,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     description: "Add fields to lead / student / enrolment",
     permissions: ["settings.manage"],
   },
+  {
+    href: "/settings/config",
+    label: "Config Export/Import",
+    description: "Export configuration as a bundle, or bootstrap a fresh instance from one",
+    permissions: ["config.export", "config.import"],
+  },
 ];
 
 export function settingsNavFor(user: SessionUser): SettingsNavItem[] {

@@ -11,6 +11,7 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import { eq } from "drizzle-orm";
 
 import { PERMISSIONS, type PermissionCode, type PermissionScope } from "../auth/permissions";
+import { ensurePermissionsSeeded } from "../auth/seed-permissions";
 import { db } from "./client";
 import {
   centers,
@@ -18,7 +19,6 @@ import {
   dropdownOptions,
   fieldDefinitions,
   orgSettings,
-  permissions,
   pipelineStages,
   profiles,
   roles,
@@ -96,19 +96,7 @@ async function seedCenters() {
 }
 
 async function seedPermissions() {
-  for (const perm of PERMISSIONS) {
-    await db
-      .insert(permissions)
-      .values(perm)
-      .onConflictDoUpdate({
-        target: permissions.code,
-        set: {
-          label: perm.label,
-          category: perm.category,
-          description: perm.description,
-        },
-      });
-  }
+  await ensurePermissionsSeeded(db);
   console.log(`seeded ${PERMISSIONS.length} permissions`);
 }
 

@@ -1116,4 +1116,112 @@ import, are both legitimate without one.
 
 ---
 
+## Session 10 — Config export/import — 2026-08-28
+
+**Shipped:**
+- `/settings/config`, gated on `config.export`/`config.import` (the former already seeded in
+  Session 1 with no consumer until now; the latter added this session). Two halves:
+  - **Export** (web action): dumps `org_settings`, `terminology`, `centers`,
+    `dropdown_categories`, `dropdown_options`, `pipeline_stages`, `field_definitions`, `roles`,
+    `role_permissions`, `temperature_rules`, `sla_policies`, `business_hours`, `holidays` to one
+    JSON bundle, downloads it client-side, and records it in a new `config_snapshots` table (so
+    there's a re-visible history of every export/import, who did it, and when — same append-only
+    shape as `stage_history`/`assignment_history`: select-only RLS, no update/delete policy for
+    anyone, the only writer is the trusted server-side path).
+  - **Import**: a CLI tool (`npm run db:config-import -- path/to/bundle.json`,
+    `src/lib/db/import-config-cli.ts`), not a web button. See the DECISIONS.md entry below for
+    why — the short version: an already-logged-in admin's own `profiles` row always references
+    the very `roles` row an import would need to replace, so there's no authenticated web caller
+    this could ever work for without either that paradox or real conflict-resolution logic this
+    session doesn't attempt. Same trust model as `npm run db:seed`: whoever has shell access is
+    trusted, no permission check needed.
+- **Every uploaded/imported bundle is validated with zod** (`src/lib/config/bundle-schema.ts`)
+  before anything touches the database — a config bundle is untrusted input (an uploaded file),
+  same as any other boundary per CLAUDE.md's conventions. Also gives `ConfigBundle` a real
+  TypeScript type derived from the schema (`z.infer`), so export/import stay fully typed with
+  zero `any`.
+- **Import refuses to run unless every target table is already empty** — "Import into an empty
+  instance" (CLAUDE.md) taken literally: this is a fresh-instance bootstrap tool, not a merge
+  onto an instance that's already diverged. The whole import runs in one transaction (only
+  possible on the direct db client) so a failure partway through can't leave a half-configured
+  instance.
+- **`permissions` is deliberately excluded from the bundle** — fixed in code
+  (CLAUDE.md's "Fixed in code" list), not a company's configuration. `ensurePermissionsSeeded()`
+  (extracted from `seed.ts`'s inline logic into `src/lib/auth/seed-permissions.ts`, shared by both
+  `seed.ts` and config import) re-seeds the fixed primitives from the `PERMISSIONS` constant as
+  the first step of import, so `role_permissions` rows always have a real `permissions.code` to
+  reference even though `permissions` itself was never in the bundle.
+- **`assignment_rules` is also deliberately excluded** — its `action` payload
+  (`assignTo`/`userIds`) and `created_by` name specific people, who are data, not configuration,
+  and don't transfer between companies/instances. See docs/DECISIONS.md.
+
+**A real bug found and fixed along the way, not related to config import's own logic**: two
+migration `_journal.json` entries from earlier sessions (`0011`, `0012`) had hand-picked
+`"when"` timestamps that weren't in increasing order relative to each other and this session's
+new entries — and `drizzle-kit migrate` fails on that **silently**: no error text, just exit
+code 1. This is almost certainly the same failure the user hit repeatedly against their real
+Supabase database earlier this session (empty-error, exit-1 `db:migrate` runs) — though that
+couldn't be confirmed with certainty, since their instance had different migrations already
+applied by the time it started happening. Fixed by renumbering every hand-picked `"when"` value
+from migration `0011` onward to be strictly increasing. **Worth remembering for every future
+hand-written migration**: always pick a `"when"` larger than the previous entry's, or better,
+just use the real `Date.now()` at the time of writing it.
+
+**A second real bug found via actual runtime testing, not caught by `tsc`/`eslint`**: the new
+`seed-permissions.ts` and `import-config.ts` modules both started with `import "server-only"`,
+copying the convention used throughout `src/lib/auth/` and `src/lib/config/`'s export half —
+but `seed-permissions.ts` is imported by `seed.ts`, and `import-config.ts` is imported by the
+new CLI script, both plain-Node scripts run via `tsx`, never bundled by webpack. The
+`server-only` package's real (non-browser) entry point **throws unconditionally under plain
+`require()`** — its no-op behaviour only exists via webpack's browser-field swap for an actual
+Next.js bundle. This silently broke `npm run db:seed` entirely (a real regression, not merely
+untested code) until caught by actually running it, not just `tsc --noEmit`/`eslint` (both
+passed clean throughout — this is a runtime-only failure mode neither catches). Fixed by
+dropping `server-only` from both files, since neither currently has a real Next.js-bundled
+caller — `export-config.ts` keeps it, since its only caller is a real Server Action.
+
+**Tests**: `tests/config-bundle-schema.spec.ts` (pure unit) — valid/invalid bundle shapes,
+version mismatch, missing required fields, completely malformed uploads (a string, `null`, an
+array). `tests/config-import-guard.spec.ts` (integration, direct Drizzle client) — the
+emptiness guard correctly refuses to run against this suite's own already-seeded database.
+The successful full round-trip (export from a seeded instance → `npm run db:config-import`
+into a genuinely separate, freshly-migrated database) needed a second real database to spin up
+cleanly, which the automated suite's fixtures don't provide — verified **by hand** instead:
+exported the seeded scratch database's config, imported it into a brand-new database with only
+migrations applied (no seed), and confirmed identical roles (6, same codes), centres (2, same
+names), and role→permission grants (123 rows) — plus confirmed a second import attempt against
+that now-configured instance is correctly refused, and that the whole failed/refused attempt
+left no partial writes (transaction rollback).
+
+**Verified**: `npx tsc --noEmit`, `npx eslint .`, `npm run build` all pass clean
+(`/settings/config` compiles as a real route). `npm test` — `Tests 131 passed | 2 skipped
+(133)`. The full export→import→fresh-instance round trip was verified directly against real
+Postgres, not just read for correctness — see above.
+
+**Stubbed / deferred, documented in `docs/DECISIONS.md`:** no web-based "replace this
+instance's live configuration" import (the harder, real "staging→production" half of
+CLAUDE.md's framing) — needs actual conflict-resolution/reference-reassignment logic, not
+attempted this session; no per-snapshot "re-download this historical export" button in the
+history table (the list itself — name, kind, when, who — is there; only the payload re-fetch is
+missing); `scoring_rules`/`notification_rules`/`dashboard_layouts`/`enrolment_forms`/
+`fee_structures`/`promos` aren't in the bundle since none of those tables exist yet (later-phase
+features per `docs/02-BUILD-PHASES.md`) — the table list here is a plain array
+(`GUARD_TABLES`/the explicit field list in `bundle-schema.ts`), trivial to extend once they do.
+
+**Verify by:**
+1. `npm test` — expect `Tests 131 passed | 2 skipped (133)`.
+2. **Required:** `npm run dev`, log in as admin, go to Settings → Config Export/Import, click
+   **Export configuration** — confirm a `.json` file downloads and a new row appears in the
+   History table below. Then, from a terminal: point `DATABASE_URL` at a **different**,
+   freshly-migrated (`npm run db:migrate`, no seed) Supabase project or local Postgres instance,
+   and run `npm run db:config-import -- path/to/that/file.json`. Confirm it prints a per-table
+   success summary, then confirm in that fresh instance's own Settings screens that centres,
+   roles, pipeline stages, dropdowns and custom fields all match the source instance. Run the
+   same import command a second time against that now-configured instance and confirm it's
+   refused with a clear "already configured" message.
+
+**Next:** Session 11 — deploy + import real data, per `docs/02-BUILD-PHASES.md` § Session plan.
+
+---
+
 <!-- Sessions append below -->
