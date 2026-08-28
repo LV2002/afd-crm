@@ -664,43 +664,53 @@ ranges) beyond exact-match and substring — the assignment engine already has a
 condition evaluator for a different purpose, but this filter bar's first cut is intentionally
 simple.
 
-**A real verification gap, not a code problem:** unlike Sessions 4-5 (whose core logic ran on
-Drizzle's direct Postgres connection and was fully testable against a local Postgres
-instance), everything this session touches — `getFieldSchema`, `resolveFieldOptions`, the
-`/leads` page itself — goes through the RLS-bound Supabase JS client (`createClient()` from
-`@/lib/supabase/server`), which talks to Supabase's hosted REST API (PostgREST + GoTrue), not
-raw Postgres. A local Postgres instance has no PostgREST layer, so none of this session's
-actual data-fetching code could be exercised end-to-end in the sandbox this was built in —
-only type-checked, linted, built, and unit-tested at the pure-function level (masking,
-formatting, the states/districts dataset). **This session has not been verified in a
-browser against real data and should not be treated as done until it has been.**
+**A real verification gap, closed by testing against the user's real Supabase project:**
+unlike Sessions 4-5 (whose core logic ran on Drizzle's direct Postgres connection and was
+fully testable against a local Postgres instance), everything this session touches —
+`getFieldSchema`, `resolveFieldOptions`, the `/leads` page itself — goes through the
+RLS-bound Supabase JS client (`createClient()` from `@/lib/supabase/server`), which talks to
+Supabase's hosted REST API (PostgREST + GoTrue), not raw Postgres. A local Postgres instance
+has no PostgREST layer, so none of this session's data-fetching code could be exercised
+end-to-end in the sandbox it was built in — only type-checked, linted, built, and
+unit-tested at the pure-function level. The user then ran it for real against their own
+Supabase project, which is what actually caught the two bugs below — neither would have been
+found by typecheck/lint/build/unit tests alone.
+
+**Two real bugs found and fixed during that live verification (see docs/DECISIONS.md for
+full write-ups):**
+1. Creating any custom field whose type wasn't `select`/`multiselect` failed with a bare
+   "Invalid input" — a pre-existing bug in Session 2's field-creation form (the Options
+   textarea only renders for select/multiselect types, so for every other type the browser
+   submits nothing for it, and the validation schema only accepted a string or `""`, never
+   the `null` that produces). Fixed by accepting `null` too.
+2. Once a real custom field existed, `/leads` crashed with "column leads.leon_test does not
+   exist" — this session's own bug. The list/export queries assumed every `field_definitions`
+   row is a real `leads` column, true only for core fields; a genuinely custom field's value
+   lives in `leads.custom` jsonb instead. Fixed with `fieldFilterExpression()`/
+   `getRawFieldValue()` branching on `is_core`, now covered by unit tests.
 
 **Tests** (`tests/mask-phone.spec.ts`, `tests/format-field-value.spec.ts`,
 `tests/field-column.spec.ts`, `tests/indian-states-districts.spec.ts` — all pure unit, no
 database): every masking case including the CLAUDE.md example and a non-Indian number;
 boolean/date/select/multiselect/default formatting, including the select-option-not-found
-fallback; both field-key overrides plus the identity case; dataset shape (36 states/UTs, no
-duplicates, every entry non-empty) and Kerala's exact 14 districts.
+fallback; both field-key overrides plus the identity case; the core-vs-custom routing for
+`fieldFilterExpression`/`getRawFieldValue`; dataset shape (36 states/UTs, no duplicates,
+every entry non-empty) and Kerala's exact 14 districts.
 
 **Verified:** `npx tsc --noEmit`, `npx eslint .`, and `npm run build` all pass clean (`/leads`
-now compiles as a real 3.15 kB route, up from a stub). `npm test` —
-`Tests  80 passed | 2 skipped (82)`, re-run three times back-to-back, clean every time.
-**Not verified:** the lead list rendering, filtering, phone reveal, or CSV export against
-real data in an actual browser — see the gap above.
+now compiles as a real route, up from a stub). `npm test` — `Tests  85 passed | 2 skipped (87)`.
+**And, this time, in a real browser against the user's own Supabase project:** the list
+renders dynamic columns and a dynamic filter bar; phone masking and audited reveal both work;
+filtering by Temperature narrows correctly; CSV export downloads with the full field set;
+adding a brand-new custom field (`t_shirt_size`/`leon_test`) in Settings made it appear as
+both a list column and a filter control with zero code change — the actual "done" criterion
+per docs/02-BUILD-PHASES.md — confirmed working by the user.
 
 **Verify by:**
 1. `npm run db:migrate` — no new migrations this session, this just confirms nothing else changed.
-2. `npm test` — expect `Tests  80 passed | 2 skipped (82)`.
-3. **Required, not optional this time:** `npm run dev`, log in, create at least one lead
-   (there's still no create-lead UI — use a Node script calling `resolveOrCreateLead()`, or
-   insert directly), and open `/leads`. Confirm: the columns shown match what's marked
-   `show_in_list` in Settings → Custom Fields; the filter bar's controls match each filterable
-   field's type; the phone number is masked until you click reveal (and that a row appears in
-   Settings → (a future audit log viewer, or query `audit_log` directly) for that reveal);
-   CSV export downloads and the phone column is masked unless you're logged in as a
-   `lead.reveal_phone` holder. Then add a brand-new custom field to `lead` in Settings with
-   `show_in_list`/`show_in_filters` on, and confirm it appears in both without a code change —
-   that's this session's actual "done" criterion per docs/02-BUILD-PHASES.md.
+2. `npm test` — expect `Tests  85 passed | 2 skipped (87)`.
+3. `npm run dev`, log in, open `/leads` — confirm the list, filters, phone masking/reveal, and
+   CSV export all work against your own data.
 
 **Next:** Session 7 — lead detail + timeline, per `docs/02-BUILD-PHASES.md` § Session plan.
 That session's create/edit form is also where the real state→district cascade UX belongs.
