@@ -653,3 +653,17 @@ comment explaining why) is narrow, but the lesson is broader: any module intende
 imported from a plain-Node script must never carry `import "server-only"`, no matter how
 consistent that looks with its neighbours — and the only way this class of bug surfaces at all
 is actually running the script, not just type-checking and linting it.
+
+2026-08-28 · [ops] `package.json` gained a `vercel-build` script
+(`drizzle-kit migrate && next build`) so Vercel runs pending migrations automatically on every
+deploy, instead of `npm run db:migrate` being a separate manual step someone has to remember to
+run from a local terminal against production. Vercel uses `vercel-build` in place of `build`
+when it's present, so local `npm run build` (and this sandbox's own verification runs) are
+completely unaffected — only real Vercel deploys pick this up. `drizzle-kit migrate` already
+tracks which migrations are applied and skips the rest, so this is safe to run on every deploy
+even when nothing changed, and a broken migration now fails the deploy outright rather than
+shipping code the database can't yet support. Adopted after the user's local git/Xcode Command
+Line Tools installation turned out to be broken in a way that silently prevented `git pull` (and
+therefore every "pull latest and re-run the migration" instruction) from ever taking effect —
+removing the manual local step removes that whole failure class, not just this one instance of
+it.
