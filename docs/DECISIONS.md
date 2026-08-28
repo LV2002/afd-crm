@@ -517,6 +517,15 @@ the least data. This can't be proven in general (nothing timestamps *when a refe
 created relative to which duplicate*), but it's the safer default, and the migration is
 run once, not a mechanism an admin will ever invoke themselves.
 
+2026-08-28 · [tooling] `src/lib/db/load-env.ts` exists as its own file, rather than inlining a
+`loadEnv()` call at the top of `seed.ts`, specifically so it can be imported (not called) as
+`seed.ts`'s first import statement. This matters because esbuild hoists every `require()` from
+an `import` above ordinary top-level statements, in declaration order — so a `loadEnv()`
+function call sitting after other code in `seed.ts` would run *after* a sibling import like
+`./client` has already evaluated (and already thrown, if `DATABASE_URL` wasn't loaded yet). A
+side-effecting module, imported first, participates in that same hoisted-and-ordered
+require() sequence instead of losing the race.
+
 2026-08-28 · [activity] The Preferences-tab "Saved, but shows the old value" report turned out
 not to be a data-loss bug at all — the write always succeeded. It's a React uncontrolled-input
 remount gotcha: `defaultValue`/`defaultChecked` only apply once, at mount, and a Server

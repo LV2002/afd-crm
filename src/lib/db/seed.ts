@@ -5,7 +5,8 @@
  * Requires DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL and
  * SUPABASE_SERVICE_ROLE_KEY in the environment (.env.local is loaded).
  */
-import "dotenv/config";
+import "./load-env";
+
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { eq } from "drizzle-orm";
 
