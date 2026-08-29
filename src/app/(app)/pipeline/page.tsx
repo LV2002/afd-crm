@@ -1,6 +1,7 @@
 import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { getDropdownOptions } from "@/lib/fields/resolve-field-options";
+import { batchNameLookup } from "@/lib/leads/batch-name-lookup";
 import { createClient } from "@/lib/supabase/server";
 import { formatTerm } from "@/lib/terminology/terms";
 import { getTerminologyMap } from "@/lib/terminology/get-terminology";
@@ -103,25 +104,4 @@ export default async function PipelinePage() {
       />
     </div>
   );
-}
-
-async function batchNameLookup(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  table: "centers" | "profiles",
-  nameColumn: "name" | "full_name",
-  ids: string[],
-): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
-  if (ids.length === 0) return map;
-
-  const { data } = await supabase
-    .from(table)
-    .select(`id, ${nameColumn}`)
-    .in("id", ids)
-    .returns<Array<{ id: string } & Record<string, string>>>();
-
-  for (const row of data ?? []) {
-    map.set(row.id, row[nameColumn]);
-  }
-  return map;
 }

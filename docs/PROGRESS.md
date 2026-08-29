@@ -1297,3 +1297,67 @@ deleted stage are unaffected (their own stage name still resolves on their detai
 **Next:** create the 3 real accounts (1 admin, 2 counsellors — Kochi/Kannur) via
 `/settings/users/new` if not already done, then historical lead-data import whenever Leon is
 ready for it (deliberately deferred, not part of this session).
+
+---
+
+## Session 12 — My Day (Phase 2) — 2026-08-29
+
+**Shipped:** the real My Day screen (`/my-day`), replacing the Phase 0 stub. It's a personal
+work queue — every lead assigned to the signed-in user, not yet won/lost, bucketed into four
+sections in priority order (docs/02-BUILD-PHASES.md § Phase 2), each lead landing in exactly
+one:
+
+- **Overdue** — the lead's own `next_followup_at` (set by logging an interaction — Session 7)
+  or an open task's `due_at` is in the past. Whichever of the two is earlier drives the reason
+  shown.
+- **Due today** — same, but due before the end of today in **IST**, not UTC — the boundary is
+  computed with two new helpers, `startOfDayIST()`/`startOfTomorrowIST()`
+  (`lib/format/date.ts`), so a Vercel function running in UTC still buckets "today" the way a
+  counsellor in Kochi or Kannur means it.
+- **New assignments** — assigned to the user, zero `interactions` rows ever logged, regardless
+  of whether a task happens to already exist for it (creating a task isn't "contact" — the
+  mandatory next-action lives on interactions, not tasks).
+- **At risk** — `sla_breached` (not yet computed by anything real — see Known broken) or a
+  **hot** lead with no `next_followup_at` scheduled at all, i.e. genuinely stalled with no next
+  step planned.
+
+The bucketing itself is a pure function, `buildMyDayQueue()` (`lib/my-day/build-queue.ts`) —
+the page component does all the Supabase fetching, then hands it plain data. Phone numbers are
+masked server-side before reaching the (reused) `RevealPhoneButton` client component, same
+fix as the leads list earlier this session. Extracted `batchNameLookup()`
+(`lib/leads/batch-name-lookup.ts`) out of `pipeline/page.tsx`, which had it as a private
+function, since My Day needed the exact same centre-name lookup — one shared helper instead of
+a second copy.
+
+**Known broken / stubbed:** the "at risk" bucket's `sla_breached` branch has nothing to trigger
+it yet — no SLA cron exists (that's later in Phase 2, `docs/02-BUILD-PHASES.md`). The
+hot-and-stalled check is the honest proxy available today with the columns that already exist;
+see docs/DECISIONS.md for why. `last_activity_at`/`first_response_at` (schema already has both
+columns) are still never written by anything — not used by My Day's logic, but worth knowing
+before building anything else that assumes they're populated.
+
+**Tests:** `tests/my-day-queue.spec.ts` — 18 cases, pure logic, no DB: each bucket's trigger
+condition, bucket-exclusivity/priority ordering, task-vs-followup tie-breaking (earlier wins,
+and a task doesn't suppress "new assignment" the way a followup does), sort order within a
+bucket, and the IST day-boundary helpers themselves (including the exact UTC offset for IST
+midnight, since getting that wrong would silently shift every "today" by 5.5 hours).
+
+**Verified:** `npx tsc --noEmit` and `npx eslint` clean. `npm run build` succeeds (`/my-day`
+now a real 1.81 kB route, down from the stub). Full suite green against a real local Postgres
+16 instance: `Tests 149 passed | 2 skipped (151)` across 18 files, run single-threaded (see
+the cross-file race note in docs/DECISIONS.md from the previous session). Also hand-verified
+the exact SQL shapes the page's Supabase queries compile to (this project's `SupabaseClient`
+isn't typed against generated DB types, so `tsc` can't catch a wrong table/column name in a
+`.from()`/`.select()` string — same limitation every other page already has) — all four
+queries run clean against the seeded schema.
+
+**Verify by:** `npm test` — expect `149 passed | 2 skipped`. In the live app: log in as a
+counsellor with at least one assigned lead, go to My Day, and confirm a lead with a
+past-`next_followup_at` shows under Overdue, a brand-new never-contacted assignment shows
+under New assignments, and a hot lead with nothing scheduled shows under At risk. Confirm
+phone numbers stay masked until you click reveal, same as the leads list.
+
+**Next:** the rest of Phase 2 — the Meta Lead Ads webhook (highest-value ingestion path, but
+needs Meta app review + a verified domain first, so it can run in parallel with more app work)
+and the SLA cron (which would make the "at risk" bucket's `sla_breached` branch real instead of
+dormant).
