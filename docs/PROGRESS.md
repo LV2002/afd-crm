@@ -2141,3 +2141,76 @@ within seconds with `source = google`.
 **Next:** WhatsApp — per-counsellor Business API numbers (Leon's confirmed model), inbound/
 outbound chat on the lead profile, centre-head/admin visibility, and a marketing broadcast
 frontend for admin. Then telephony, last in the confirmed build order.
+
+## Session 23 — WhatsApp: per-counsellor chat + marketing broadcasts
+
+Continues the confirmed integration build order (Meta → Google → WhatsApp → telephony) into
+WhatsApp, the third integration. This turned out to lean heavily on scaffolding a much
+earlier session had already put in place without building on it yet: the `whatsapp` source in
+`webhook_events`, the `whatsapp`/`telephony` rows in `integration_provider`, the dedicated
+`whatsapp.read`/`whatsapp.send`/`whatsapp.campaign` permission primitives (already seeded
+onto counsellor/center_head at own/center scope), and `profiles.whatsapp_display_name` were
+all Phase 1 placeholders this session finally gave a real purpose.
+
+- **`whatsapp_messages`** (`src/lib/db/schema/whatsapp.ts`) — one row per inbound/outbound
+  message, RLS-gated on `whatsapp.read`/`whatsapp.send` (not `interaction.read`/`create` —
+  a role can hold one without the other) using the same `can_access_center()` shape as
+  `interactions`. Unlike `interactions`, it has a real UPDATE policy: a human-initiated send
+  is a two-step RLS-bound write (insert 'queued', call the Cloud API, update with the real
+  `wa_message_id` and final status) — see migration 0026's own comment for why that's
+  correct instead of falling back to the direct db client.
+- **`/api/webhooks/whatsapp`** — same webhook product as Meta Lead Ads (WhatsApp Cloud API
+  webhooks share `X-Hub-Signature-256`, so `verifyMetaSignature()` is reused unmodified), but
+  handles two kinds of delivery under one field subscription: an inbound message (through
+  `resolveOrCreateLead()`, explicitly assigned to the counsellor who owns the receiving
+  number — a customer messaging a specific person is a stronger signal than any assignment
+  rule) and a delivery-status callback (updates an existing outbound message's
+  sent/delivered/read/failed status by `wa_message_id`). No follow-up API call needed either
+  way — the full message is inline in the payload, same as Google's webhook.
+- **Outbound send** (`src/lib/integrations/whatsapp/client.ts`,
+  `src/app/(app)/leads/[id]/whatsapp-actions.ts`) — free-form text only within Meta's
+  24-hour customer service window (checked against the lead's last inbound message);
+  outside it, a template send is required to reopen the conversation. The chat panel on the
+  lead detail page (`whatsapp-panel.tsx`) shows both paths and switches based on the window.
+- **`/settings/integrations/whatsapp`** — org-wide credentials (app secret, verify token, one
+  shared access token) plus a per-counsellor table assigning each `whatsapp.send` holder
+  their own `phone_number_id`, with a per-number "Test connection" check
+  (`GET /{phone_number_id}` — confirms the number is real and reachable without ever sending
+  a message).
+- **Marketing broadcasts** (`whatsapp_broadcasts`/`whatsapp_broadcast_recipients`,
+  `/settings/whatsapp-broadcasts`, `/api/cron/whatsapp-broadcast-sweep`) — reuses the lead
+  tagging feature (Session 19) as the audience filter rather than inventing a second one: an
+  admin picks a tag and a pre-approved template, the recipient list is snapshotted
+  immediately (excluding `do_not_contact` leads), and an hourly cron sends a batch at a time
+  from each recipient's own assigned counsellor's number — never synchronously from the
+  create action, and never from a separate "marketing number" that doesn't exist in this
+  model. A lead with no assigned counsellor fails clearly rather than silently.
+
+**Verified:** `npx tsc --noEmit` clean. `npx eslint` clean on every new/touched file.
+`npm run build` succeeds — `/api/webhooks/whatsapp`, `/api/cron/whatsapp-broadcast-sweep`,
+and both new settings sections all compile. Full suite green against real local Postgres 16:
+**330 tests passed across 42 files** (up from 305/39 at the end of Session 22) — new coverage:
+`tests/whatsapp-map-inbound.spec.ts` (pure), `tests/whatsapp-webhook.spec.ts` (7 end-to-end
+tests against real Postgres, no network mocking needed at all — same reason as Google's
+webhook, the full message is inline), `tests/whatsapp-broadcast-sweep.spec.ts` (5 end-to-end
+tests mocking only `sendTemplateMessage`), and a new `whatsapp_messages` RLS block in
+`tests/rls.spec.ts` proving the dedicated `whatsapp.read`/`whatsapp.send` primitives are what
+gate visibility, not `lead.read`/`interaction.read`.
+
+**Stubbed / deliberately out of scope for this pass (all documented in docs/DECISIONS.md):**
+inbound media is recorded by Meta media id/mime type only, not downloaded into Supabase
+Storage; the template-send UI takes a typed-in template name rather than a picker fetched
+from Meta's Message Templates API; broadcasts have no draft/review step before sending;
+broadcast audience filtering checks `do_not_contact` only, not the ad-retargeting consent
+fields. Telephony — last in the confirmed build order — is still untouched.
+
+**Verify by:** `npm run db:migrate && DATABASE_URL=... npm test` — expect `330 passed`. Then
+`npm run build`. Against a real WhatsApp Business Account (once credentials are entered in
+Settings → Integrations → WhatsApp and at least one counsellor has a number assigned):
+message that counsellor's number from a phone and confirm a new lead appears in `/leads`
+with `source = whatsapp`, assigned to that counsellor, with the message visible in the
+WhatsApp panel on its detail page; then reply from the CRM and confirm it's delivered.
+
+**Next:** Telephony (click-to-call, call logging) — the last integration in the confirmed
+build order — or the accounts system Leon asked to leave for last, once he shares the
+finance sheet.

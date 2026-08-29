@@ -15,12 +15,14 @@ import { getLeadDetail } from "@/lib/leads/get-lead-detail";
 import { formatDateIST } from "@/lib/format/date";
 import { formatINR } from "@/lib/format/currency";
 import { createClient } from "@/lib/supabase/server";
+import { getWhatsAppThread, isWithinCustomerServiceWindow } from "@/lib/whatsapp/get-thread";
 
 import { ConfirmAdmissionForm } from "./confirm-admission-form";
 import { InteractionForm } from "./interaction-form";
 import { LeadEditForm } from "./lead-edit-form";
 import { LeadTagsPanel, type TagOption } from "./lead-tags-panel";
 import { TasksPanel, type TaskRow } from "./tasks-panel";
+import { WhatsAppPanel } from "./whatsapp-panel";
 
 interface EnrolmentRow {
   id: string;
@@ -99,6 +101,11 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   const timeline = await getTimeline(supabase, id);
 
+  const canReadWhatsApp = can(user, "whatsapp.read");
+  const [whatsappMessages, withinWhatsAppWindow] = canReadWhatsApp
+    ? await Promise.all([getWhatsAppThread(supabase, id), isWithinCustomerServiceWindow(supabase, id)])
+    : [[], false];
+
   const { data: taskRows } = await supabase
     .from("tasks")
     .select("id, title, type, due_at, status")
@@ -165,6 +172,16 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           <TasksPanel leadId={id} tasks={taskRows ?? []} />
         </div>
       </div>
+
+      {canReadWhatsApp && (
+        <WhatsAppPanel
+          leadId={id}
+          toPhone={row.primary_phone}
+          messages={whatsappMessages}
+          canSend={can(user, "whatsapp.send")}
+          withinWindow={withinWhatsAppWindow}
+        />
+      )}
 
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Timeline</h2>

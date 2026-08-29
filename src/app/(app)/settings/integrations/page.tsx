@@ -18,6 +18,7 @@ export default async function IntegrationsPage() {
 
   const metaConnected = await hasIntegrationCredential("meta", "page_access_token");
   const googleConnected = await hasIntegrationCredential("google", "refresh_token");
+  const whatsappConnected = await hasIntegrationCredential("whatsapp", "access_token");
 
   const cards: IntegrationCard[] = [
     {
@@ -32,7 +33,12 @@ export default async function IntegrationsPage() {
       description: "Lead form ingestion + daily ad spend sync + Customer Match retargeting.",
       connected: googleConnected,
     },
-    { href: null, name: "WhatsApp", description: "Per-counsellor chat and marketing broadcasts. Coming soon.", connected: false },
+    {
+      href: "/settings/integrations/whatsapp",
+      name: "WhatsApp",
+      description: "Per-counsellor chat on the lead profile, sent and received from the CRM.",
+      connected: whatsappConnected,
+    },
     { href: null, name: "Telephony", description: "Click-to-call and call logging. Coming soon.", connected: false },
   ];
 

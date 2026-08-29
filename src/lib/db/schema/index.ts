@@ -14,3 +14,5 @@ export * from "./integrations";
 export * from "./webhooks";
 export * from "./ad-spend";
 export * from "./retargeting";
+export * from "./whatsapp";
+export * from "./whatsapp-broadcasts";

@@ -176,6 +176,34 @@
       "when": 1788015750852,
       "tag": "0024_ad_audience_members_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788029217529,
+      "tag": "0025_whatsapp_messages",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788029218529,
+      "tag": "0026_whatsapp_messages_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788029839578,
+      "tag": "0027_whatsapp_broadcasts",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788029840578,
+      "tag": "0028_whatsapp_broadcasts_rls",
+      "breakpoints": true
     }
   ]
 }

@@ -23,6 +23,10 @@
     {
       "path": "/api/cron/retargeting-sync/google",
       "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/whatsapp-broadcast-sweep",
+      "schedule": "0 * * * *"
     }
   ]
 }

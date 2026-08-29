@@ -1279,3 +1279,82 @@ it shipped. `testMetaConnection` now checks each token independently against Met
 `/debug_token` and reports both, since "the Meta integration is connected" isn't a single
 yes/no when the two halves (lead ingestion vs. spend/retargeting) can be configured, valid,
 or broken independently of each other.
+
+2026-08-29 · [whatsapp] "One number per counsellor" (Leon's confirmed decision, overriding
+this session's own shared-number-with-attribution recommendation) is implemented as ONE
+org-wide `access_token` credential plus a PER-COUNSELLOR `phone_number_id` credential
+(`scope_id` = the counsellor's profile id) — not N separate access tokens. This is how Meta's
+WhatsApp Cloud API actually works: a single System User token with
+`whatsapp_business_messaging` can act on any phone number in the WhatsApp Business Account,
+so "one number per counsellor" only requires N distinct `phone_number_id`s, not N distinct
+credentials of every kind. Routing (which counsellor "owns" an inbound message, which number
+an outbound send goes out from) is entirely about which `phone_number_id` is used per call —
+`findScopeIdByCredentialValue()` (new in `credentials.ts`) does the reverse lookup for the
+inbound direction.
+
+2026-08-29 · [whatsapp] An inbound WhatsApp message to a specific counsellor's number sets
+`assignedTo` explicitly on `resolveOrCreateLead()`'s input, bypassing `applyAssignment()`
+entirely (same short-circuit `resolveOrCreateLead()` already documents for "a counsellor
+manually creating a lead for themselves"). Reasoning: a customer messaging one specific
+counsellor's personal WhatsApp number is a stronger, more specific routing signal than any
+generic assignment rule (source/centre/exam) could produce — the customer already has (or
+found) a relationship with that person. If this ever needs to be overridable per-rule, that's
+a real future ask, not assumed here.
+
+2026-08-29 · [whatsapp] WhatsApp's Lead Form-equivalent has no HMAC signature to check before
+parsing at all for the *handshake* concern Meta's Lead Ads/Google both have, but it DOES have
+one for message delivery: `X-Hub-Signature-256`, verified with `verifyMetaSignature()` reused
+directly, unmodified — WhatsApp Business webhooks are the same Meta Graph webhooks product as
+Lead Ads, just a different field subscription. This is different from the Google Lead Form
+webhook (Session 22), which has no signature header at all and authenticates via a plain
+`google_key` field inside the JSON body — worth noting since it would be easy to assume "no
+signature header" is the norm for a non-Meta-Ads webhook, when actually it's WhatsApp that's
+the same Meta product family and Google that's the outlier here.
+
+2026-08-29 · [whatsapp] Inbound media (image/document/audio/video/sticker) is recorded by its
+Meta media id and mime type only — NOT downloaded into Supabase Storage this session. A real,
+deliberately deferred gap: nothing is lost (the raw webhook delivery is still in
+`webhook_events` and the message row still exists with its media id), a counsellor just can't
+view the attachment inline in the chat panel yet, and the media id itself expires eventually
+per Meta's own retention rules if never fetched. Downloading requires an additional Graph API
+call (`GET /{media_id}` for a temporary URL, then a fetch of that URL) plus a private Storage
+bucket and signed-URL viewer — real, scoped work for a future session, not attempted here to
+keep this session's already-large scope from growing further.
+
+2026-08-29 · [whatsapp] The 1:1 chat panel's template-send path (used to message a lead
+outside Meta's 24-hour customer service window) takes a template name/language/parameter
+typed in by the counsellor, not a picker fetched from Meta's Message Templates API. A real,
+documented gap for the same reason as media download above — fetching and caching the
+account's actually-approved templates is its own small feature, not attempted this session.
+The counsellor has to already know the exact approved template name; a wrong one is rejected
+by Meta with a clear error, not silently dropped.
+
+2026-08-29 · [whatsapp] The marketing broadcast feature sends each recipient from THEIR OWN
+LEAD'S assigned counsellor's WhatsApp number, not a separate dedicated "marketing" number —
+deliberate, not an oversight. No such credential exists (by design: "one number per
+counsellor" was Leon's whole model, and inventing a marketing-specific number would be a
+second, competing identity). Sending through the recipient's existing counsellor keeps the
+broadcast inside a thread the customer already recognises rather than arriving from a
+stranger number — arguably a better outcome for a template message than a generic company
+broadcast number would produce. The real cost: a lead with no assigned counsellor, or whose
+counsellor has no number configured, can't receive a broadcast at all — the sweep marks that
+one recipient `failed` with a clear reason rather than silently skipping it or attempting a
+fallback send from an arbitrary other number.
+
+2026-08-29 · [whatsapp] The broadcast audience is deliberately filtered to exclude
+`do_not_contact` leads (same as the retargeting sync) but does NOT check
+`consent_status`/`opted_out_channels` the way the ad-platform retargeting sync does — those
+fields govern ad-platform retargeting consent specifically, a different, narrower consent
+question than "can we message this person on WhatsApp at all." `do_not_contact` is the one
+flag clearly meant to be a blanket suppression regardless of channel, so it's the one checked
+here. Worth revisiting once (if) WhatsApp-specific opt-in/opt-out tracking exists as its own
+concept — flagged rather than conflated with the retargeting consent fields on a guess.
+
+2026-08-29 · [whatsapp] A WhatsApp broadcast is always template-based, with no "draft, review,
+then send" step — creating a broadcast immediately snapshots its recipient list and sets
+`status = 'sending'`, and the cron sweep starts draining it on its very next run. There is no
+in-between "queued but not yet sending" state a human reviews before commit. This was a
+scope call, not a considered design decision: a review/approval step is real, sensible future
+work (a broadcast reaching the wrong audience is hard to partially undo — Meta doesn't support
+recalling a sent WhatsApp message), flagged here so it doesn't get mistaken for "this is how
+it should stay."

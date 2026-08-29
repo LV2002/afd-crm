@@ -781,3 +781,94 @@ describe("phase 4 permission boundaries (accounts/academics both members of Koch
     });
   });
 });
+
+/**
+ * whatsapp_messages reuses can_access_center() exactly like interactions
+ * (migration 0026), but gated on the dedicated whatsapp.read/whatsapp.send
+ * primitives rather than interaction.read/create — this block exists to
+ * confirm that distinction is real: academics holds neither whatsapp
+ * primitive despite being a member of the same centre as the fixture
+ * lead, so seeing nothing here proves the permission check is what's
+ * missing, not a centre mismatch (same reasoning as the students block
+ * above).
+ */
+describe("whatsapp_messages is scoped by whatsapp.read/whatsapp.send, not lead.read", () => {
+  let waLeadId: string;
+  let waMessageFixtureId: string;
+
+  beforeAll(async () => {
+    await owner`insert into user_centers (user_id, center_id) values (${fx.academics_a}, ${centerIds.kochi})`;
+
+    const [leadRow] = await owner<Array<{ id: string }>>`
+      insert into leads (student_name, primary_phone, center_id, assigned_to)
+      values ('RlsSpecTest whatsapp fixture', '+919847100197', ${centerIds.kochi}, ${fx.counsellor_kochi})
+      returning id
+    `;
+    waLeadId = leadRow.id;
+
+    const [msgRow] = await owner<Array<{ id: string }>>`
+      insert into whatsapp_messages (lead_id, direction, from_phone, to_phone, status)
+      values (${waLeadId}, 'inbound', '+919847100197', '+911234567890', 'received')
+      returning id
+    `;
+    waMessageFixtureId = msgRow.id;
+  });
+
+  afterAll(async () => {
+    await owner`delete from user_centers where user_id = ${fx.academics_a} and center_id = ${centerIds.kochi}`;
+    await owner`delete from whatsapp_messages where lead_id = ${waLeadId}`;
+    await owner`delete from leads where id = ${waLeadId}`;
+  });
+
+  it("the assigned counsellor (whatsapp.read at own scope) sees the thread", async () => {
+    const rows = await asUser(fx.counsellor_kochi, (tx) =>
+      tx<Array<{ id: string }>>`select id from whatsapp_messages where id = ${waMessageFixtureId}`,
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("a different centre's counsellor, not assigned to this lead, sees nothing", async () => {
+    const rows = await asUser(fx.counsellor_kannur, (tx) =>
+      tx<Array<{ id: string }>>`select id from whatsapp_messages where id = ${waMessageFixtureId}`,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("the centre head (whatsapp.read at center scope) sees it", async () => {
+    const rows = await asUser(fx.centerhead_kochi, (tx) =>
+      tx<Array<{ id: string }>>`select id from whatsapp_messages where id = ${waMessageFixtureId}`,
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("academics (same centre, holds neither whatsapp primitive) sees nothing", async () => {
+    const rows = await asUser(fx.academics_a, (tx) =>
+      tx<Array<{ id: string }>>`select id from whatsapp_messages where id = ${waMessageFixtureId}`,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("the assigned counsellor can insert a new message on their own lead", async () => {
+    const inserted = await asUser(fx.counsellor_kochi, (tx) =>
+      tx<Array<{ id: string }>>`
+        insert into whatsapp_messages (lead_id, direction, from_phone, to_phone, status)
+        values (${waLeadId}, 'outbound', '+911234567890', '+919847100197', 'queued')
+        returning id
+      `,
+    );
+    expect(inserted).toHaveLength(1);
+    await owner`delete from whatsapp_messages where id = ${inserted[0].id}`;
+  });
+
+  it("a counsellor with no access to this lead cannot insert a message on it", async () => {
+    await expect(
+      asUser(
+        fx.counsellor_kannur,
+        (tx) => tx`
+          insert into whatsapp_messages (lead_id, direction, from_phone, to_phone, status)
+          values (${waLeadId}, 'outbound', '+911234567890', '+919847100197', 'queued')
+        `,
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+});
