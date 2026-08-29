@@ -8,6 +8,7 @@ import {
   centers,
   dropdownCategories,
   dropdownOptions,
+  feeStructures,
   fieldDefinitions,
   holidays,
   orgSettings,
@@ -48,6 +49,7 @@ export async function exportConfig(): Promise<ConfigBundle> {
     slaPolicyRows,
     businessHoursRows,
     holidayRows,
+    feeStructureRows,
   ] = await Promise.all([
     db.select().from(orgSettings),
     db.select().from(terminology),
@@ -62,6 +64,7 @@ export async function exportConfig(): Promise<ConfigBundle> {
     db.select().from(slaPolicies).where(isNull(slaPolicies.deletedAt)),
     db.select().from(businessHours),
     db.select().from(holidays),
+    db.select().from(feeStructures).where(isNull(feeStructures.deletedAt)),
   ]);
 
   return {
@@ -80,5 +83,6 @@ export async function exportConfig(): Promise<ConfigBundle> {
     slaPolicies: slaPolicyRows,
     businessHours: businessHoursRows,
     holidays: holidayRows,
+    feeStructures: feeStructureRows,
   };
 }

@@ -5,6 +5,7 @@ import {
   centers,
   dropdownCategories,
   dropdownOptions,
+  feeStructures,
   fieldDefinitions,
   holidays,
   orgSettings,
@@ -37,6 +38,7 @@ const GUARD_TABLES = [
   { name: "sla_policies", table: slaPolicies },
   { name: "business_hours", table: businessHours },
   { name: "holidays", table: holidays },
+  { name: "fee_structures", table: feeStructures },
 ] as const;
 
 /**
@@ -99,6 +101,7 @@ export async function importConfig(bundle: ConfigBundle): Promise<ImportConfigRe
     if (bundle.slaPolicies.length > 0) await tx.insert(slaPolicies).values(bundle.slaPolicies);
     if (bundle.businessHours.length > 0) await tx.insert(businessHours).values(bundle.businessHours);
     if (bundle.holidays.length > 0) await tx.insert(holidays).values(bundle.holidays);
+    if (bundle.feeStructures.length > 0) await tx.insert(feeStructures).values(bundle.feeStructures);
 
     return {
       counts: {
@@ -115,6 +118,7 @@ export async function importConfig(bundle: ConfigBundle): Promise<ImportConfigRe
         slaPolicies: bundle.slaPolicies.length,
         businessHours: bundle.businessHours.length,
         holidays: bundle.holidays.length,
+        feeStructures: bundle.feeStructures.length,
       },
     };
   });

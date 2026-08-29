@@ -13,11 +13,21 @@ import {
 } from "@/lib/fields/resolve-field-options";
 import { getLeadDetail } from "@/lib/leads/get-lead-detail";
 import { formatDateIST } from "@/lib/format/date";
+import { formatINR } from "@/lib/format/currency";
 import { createClient } from "@/lib/supabase/server";
 
+import { ConfirmAdmissionForm } from "./confirm-admission-form";
 import { InteractionForm } from "./interaction-form";
 import { LeadEditForm } from "./lead-edit-form";
 import { TasksPanel, type TaskRow } from "./tasks-panel";
+
+interface EnrolmentRow {
+  id: string;
+  course: string;
+  net_fee_paise: number;
+  status: string;
+  sales_to_accounts_at: string | null;
+}
 
 interface TimelineEntry {
   id: string;
@@ -54,9 +64,19 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     values[field.key] = field.isCore ? row[field.key] : (row.custom ?? {})[field.key];
   }
 
-  const [interactionTypes, interactionOutcomes] = await Promise.all([
+  const canCreateEnrolment = can(user, "enrolment.create");
+
+  const [interactionTypes, interactionOutcomes, courseOptions, modeOptions, { data: enrolment }] = await Promise.all([
     getDropdownOptions(supabase, "interaction_type"),
     getDropdownOptions(supabase, "interaction_outcome"),
+    canCreateEnrolment ? getDropdownOptions(supabase, "course") : Promise.resolve([]),
+    canCreateEnrolment ? getDropdownOptions(supabase, "preferred_mode") : Promise.resolve([]),
+    supabase
+      .from("enrolments")
+      .select("id, course, net_fee_paise, status, sales_to_accounts_at")
+      .eq("lead_id", id)
+      .is("deleted_at", null)
+      .maybeSingle<EnrolmentRow>(),
   ]);
 
   const timeline = await getTimeline(supabase, id);
@@ -101,6 +121,19 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         </div>
 
         <div className="flex flex-col gap-4">
+          {canCreateEnrolment &&
+            (enrolment ? (
+              <div className="flex flex-col gap-1 rounded-lg border p-4">
+                <h3 className="text-sm font-semibold">Admission confirmed</h3>
+                <p className="text-sm text-muted-foreground">{enrolment.course}</p>
+                <p className="text-sm">{formatINR(enrolment.net_fee_paise)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatDateIST(enrolment.sales_to_accounts_at, "d MMM yyyy, h:mm a")}
+                </p>
+              </div>
+            ) : (
+              <ConfirmAdmissionForm leadId={id} courses={courseOptions} modes={modeOptions} />
+            ))}
           {can(user, "interaction.create") && (
             <InteractionForm leadId={id} types={interactionTypes} outcomes={interactionOutcomes} />
           )}

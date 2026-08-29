@@ -21,6 +21,7 @@ function emptyBundle() {
     slaPolicies: [],
     businessHours: [],
     holidays: [],
+    feeStructures: [],
   };
 }
 
@@ -42,6 +43,24 @@ describe("configBundleSchema", () => {
         createdAt: new Date().toISOString(),
       },
     ] as unknown as (typeof bundle)["centers"];
+    const result = configBundleSchema.safeParse(bundle);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a bundle with a real-shaped fee structure row", () => {
+    const bundle = emptyBundle();
+    bundle.feeStructures = [
+      {
+        id: randomUUID(),
+        course: "Foundation",
+        centerId: randomUUID(),
+        mode: "offline",
+        academicYear: "2026-27",
+        baseFeePaise: 20000000,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      },
+    ] as unknown as (typeof bundle)["feeStructures"];
     const result = configBundleSchema.safeParse(bundle);
     expect(result.success).toBe(true);
   });

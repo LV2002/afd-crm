@@ -8,6 +8,7 @@ import {
   Sparkles,
   Sun,
   Users,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -27,6 +28,7 @@ const ICON_MAP: Record<NavIconKey, LucideIcon> = {
   "my-day": Sun,
   leads: Users,
   pipeline: KanbanSquare,
+  accounts: Wallet,
   reports: BarChart3,
   ask: Sparkles,
   settings: Settings,

@@ -934,3 +934,94 @@ dedicated Claim button, but not blocked). Left broad deliberately for a first pa
 centre's real membership list is small and human-reviewed at assignment time, so the practical
 risk of picking the "wrong" role from the dropdown is low; tighten later if it turns out to
 matter in practice.
+
+2026-08-29 · [phase4] Phase 4's foundation pass deliberately scopes down from the full doc.
+Built for real: `fee_structures`, `enrolments`, `payments`, `receipts`, `students`, both named
+gates, the accounts queue, and a fee structures settings screen. Deferred, not built at all
+this session: promos/`lead_promos`, `discount_approvals` (the `discount.approve` permission
+exists and is enforced nowhere — a counsellor can set any discount at Gate 1 today, there is
+no approval-authority-limit check), instalment templates/tracking/ageing (an enrolment's
+balance is computed live from summing the ledger on the detail page, not tracked as scheduled
+due dates), documents/enrolment agreements, the registration/enrolment form builder
+(`enrolment_forms`/`form_tokens`/`form_submissions`), refunds (`payment.refund` exists and is
+unused — a correction today would be a manually-inserted reversal payment row via direct DB
+access, not a UI action), and batch management (the `batches`/`student_batches` tables exist
+with full RLS, but no screen creates a batch, so `batch_id` stays null on every enrolment/
+student). Revisit in the order Leon actually needs them, not necessarily this order.
+
+2026-08-29 · [phase4] "Lead work stops" after Gate 1 (CLAUDE.md non-negotiable) is implemented
+by moving the lead into the seeded `stage_type='won'` pipeline stage, not by adding a check to
+the `leads_update` RLS policy. That stage was already excluded from My Day's queue, the SLA
+sweep, the temperature recompute cron, and the reports page (all four already special-case won/
+lost stages) — so this reuses an existing exclusion rather than adding a new one to the most
+security-sensitive policy in the schema. Consequence worth knowing: a counsellor with
+`lead.update` can still technically edit a won-stage lead's fields through the normal lead
+edit form — nothing in RLS blocks it. Revisit if that turns out to matter in practice; the
+safer fix (a genuine `leads_update` policy carve-out for won/lost stages) was judged too risky
+to add in the same pass as everything else in this session.
+
+2026-08-29 · [phase4] Gate 1's fee lookup key is (course, centre, mode, academic year) against
+`fee_structures`, with a manual total-fee override accepted when no row matches — deliberately,
+since `fee_structures` coverage is entirely admin-maintained and won't have a row for every
+combination from day one. `confirmAdmission()` throws rather than silently defaulting to zero
+or refusing the admission outright; the calling Server Action surfaces that error to the
+counsellor as "provide totalFeePaiseOverride" (rendered as the "Manual fee override" field).
+No UI currently distinguishes "used the fee structure" from "used a manual override" on the
+resulting enrolment — both look identical afterward. Add an `enrolments.fee_source` column
+if that distinction ever needs to be reportable.
+
+2026-08-29 · [phase4] `recordPayment()`'s Gate 2 trigger is "this is the first CREDIT payment
+with no `reverses_payment_id`, for this enrolment" — checked by counting matching `payments`
+rows after the insert, not by any flag on the enrolment. A debit (reversal) recorded before any
+credit would not itself trigger Gate 2 (a reversal only exists to correct a prior credit, so
+this case shouldn't arise in practice, but the guard is written to require a credit
+specifically rather than "any payment row exists" to be safe against it). Chose "first
+payment, however small" as the Gate 2 trigger — not "payment covers the full fee" or "payment
+meets some configurable minimum" — because CLAUDE.md's own lifecycle description says the gate
+fires on "first payment cleared," and instalment plans aren't built yet to define what a
+"first instalment amount" would even mean. Revisit once instalment templates exist.
+
+2026-08-29 · [phase4] `students` profile fields (name, phone, parent phone, email, DOB, target
+exams, target exam year) are copied from the lead at Gate 2 and never synced again — a
+deliberate one-time copy, not a live reference. This is CLAUDE.md's own instruction taken
+literally: "academics must never have to query the sales table." A phone number corrected on
+the lead after Gate 2 does NOT propagate to the student record; whoever notices the mismatch
+has to fix both records by hand. No reconciliation tooling built for this — flag as real,
+scoped follow-up work if it turns out to matter operationally (most students won't have their
+lead record touched again after admission anyway, since "lead work stops" at Gate 1).
+
+2026-08-29 · [phase4] Real migration-authoring bug, caught and fixed before it shipped: hand-
+writing an RLS-only migration's snapshot by literally `cp`-ing the previous migration's
+snapshot file (as this session initially did for 0016→0017) copies that file's `id` AND
+`prevId` verbatim, producing two snapshots that claim the identical migration-history node.
+`drizzle-kit migrate` never validates this and applies the SQL fine regardless — the corruption
+is silent until the next `drizzle-kit generate` call, which refused outright with "pointing to
+a parent snapshot ... which is a collision." The correct way to hand-write an RLS-only
+snapshot (confirmed against how Sessions 3–7's own migrations 0005/0008/0010/0012/0014 did it):
+copy the file's contents for the table/policy shape, but always mint a fresh `id` and set
+`prevId` to the immediately-prior migration's `id` — never copy both fields verbatim. Anyone
+hand-writing a future RLS-only migration should check this specifically, since nothing short
+of running `generate` again will reveal the mistake.
+
+2026-08-29 · [phase4] `students.student_code`'s default (`'STU' || lpad(nextval(...), 6, '0')`)
+is a raw SQL expression set directly in the RLS migration (0017), not something Drizzle's
+column builders (unlike `bigserial`, used for `leads.lead_number`/`receipts.receipt_no`) can
+express natively — so it was initially left off the Drizzle schema definition entirely, which
+made `tsc` correctly reject every `.insert(students, {...})` call for missing a required field.
+Fixed by adding the identical default expression to the schema column via
+`.default(sql\`...\`)` (migration 0018 — a genuine no-op against the database, which already
+had this default from 0017; it exists only so `drizzle-kit`'s own migration history matches
+what schema.ts now declares). Pattern worth remembering: any column whose default is a raw SQL
+expression needs that expression mirrored in the Drizzle schema too, or every caller gets a
+spurious "required field" type error despite the column being genuinely optional at the
+database level.
+
+2026-08-29 · [phase4] `fee_structures` was added to the config export/import bundle
+(`bundle-schema.ts`/`export-config.ts`/`import-config.ts`), bumping `CONFIG_BUNDLE_VERSION`
+from `1` to `2` — the first real version bump this bundle has had. Justification: CLAUDE.md's
+own "What is configurable" table lists "Fees: Structures ..." explicitly, so per the doc's own
+plug-and-play test this table has to travel with the rest of an instance's configuration, not
+be left to re-enter by hand on every new deployment. `center_id` carries over unchanged on
+import — no remapping needed — because `importConfig()` re-inserts `centers` rows with their
+original ids into what must be a freshly-migrated, empty instance; the same reasoning already
+applied to `business_hours`/`holidays`, which also carry a bare `center_id`.

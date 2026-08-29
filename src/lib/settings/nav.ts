@@ -66,6 +66,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["rules.manage"],
   },
   {
+    href: "/settings/fee-structures",
+    label: "Fee Structures",
+    description: "Base fee by course, centre, mode and academic year",
+    permissions: ["settings.manage"],
+  },
+  {
     href: "/settings/dropdowns",
     label: "Dropdowns",
     description: "Manage categories and options",

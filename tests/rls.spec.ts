@@ -133,6 +133,8 @@ const FIXTURE_ROLE_OF: Record<FixtureKey, (typeof ROLE_CODES)[number]> = {
 
 let auditFixtureId: string;
 let assignmentRuleFixtureId: string;
+let paymentFixtureId: string;
+let receiptFixtureId: string;
 
 /**
  * Deletes auth.users rows matching `emailPattern`, EXCEPT one that would
@@ -258,11 +260,44 @@ beforeAll(async () => {
     returning id
   `;
   assignmentRuleFixtureId = assignmentRuleRow.id;
+
+  // Phase 4 foundation: a minimal lead -> enrolment -> payment -> receipt
+  // chain, purely so the append-only-ledger test below has a real row to
+  // attempt UPDATE/DELETE against — a statement with no matching row would
+  // "pass" trivially regardless of RLS.
+  const [leadRow] = await owner<Array<{ id: string }>>`
+    insert into leads (student_name, primary_phone, center_id)
+    values ('RlsSpecTest ledger fixture', '+919847100199', ${centerIds.kochi})
+    returning id
+  `;
+  const [enrolmentRow] = await owner<Array<{ id: string }>>`
+    insert into enrolments (lead_id, course, center_id, mode, academic_year, total_fee_paise, net_fee_paise)
+    values (${leadRow.id}, 'Foundation', ${centerIds.kochi}, 'offline', '2026-27', 10000000, 10000000)
+    returning id
+  `;
+  const [paymentRow] = await owner<Array<{ id: string }>>`
+    insert into payments (enrolment_id, amount_paise, direction, method)
+    values (${enrolmentRow.id}, 1000000, 'credit', 'upi')
+    returning id
+  `;
+  paymentFixtureId = paymentRow.id;
+  const [receiptRow] = await owner<Array<{ id: string }>>`
+    insert into receipts (payment_id, enrolment_id)
+    values (${paymentFixtureId}, ${enrolmentRow.id})
+    returning id
+  `;
+  receiptFixtureId = receiptRow.id;
 });
 
 afterAll(async () => {
   await owner`delete from audit_log where entity_type = 'rls_test'`;
   await owner`delete from assignment_rules where name = 'rls_test.marker'`;
+  // Children before parents — enrolments/payments/receipts are all
+  // onDelete:'restrict' against each other and against leads.
+  await owner`delete from receipts where id = ${receiptFixtureId}`;
+  await owner`delete from payments where id = ${paymentFixtureId}`;
+  await owner`delete from enrolments where lead_id in (select id from leads where student_name = 'RlsSpecTest ledger fixture')`;
+  await owner`delete from leads where student_name = 'RlsSpecTest ledger fixture'`;
   await safeDeleteFixtureUsers("%@" + FIXTURE_MARK);
   await owner`delete from roles where code like 'rls\\_test\\_%' escape '\\'`;
   await owner.end();
@@ -620,27 +655,49 @@ describe("lockout protection triggers", () => {
 });
 
 /**
- * Phase 4 ("Fees, enrolment, payments, handoff") hasn't shipped — the
- * `payments`/`receipts` append-only-ledger tables described in
- * docs/01-DATA-MODEL.md § Financial ledger don't exist in this schema yet,
- * so "reject UPDATE and DELETE for every role including admin" can't be
- * asserted against a real table. See docs/DECISIONS.md.
- *
- * The shape below is written against the exact columns the data model doc
- * specifies, so unskipping it once migration + RLS for those tables land
- * should need no rewrite — just delete `.skip`.
+ * CLAUDE.md non-negotiable #7 / docs/01-DATA-MODEL.md § Financial ledger:
+ * payments and receipts are insert-only — no UPDATE or DELETE policy for
+ * any role, including admin. This was `describe.skip`'d before Phase 4's
+ * foundation existed (see docs/PROGRESS.md, Session 3) since there was no
+ * real table to assert against; the schema and RLS now exist (Session 18).
  */
-describe.skip("payments and receipts are an append-only ledger (Phase 4 — not built yet)", () => {
-  it("rejects UPDATE for every role, including admin", async () => {
-    // const updated = await asUser(fx.admin_a, (tx) =>
-    //   tx`update payments set amount_paise = 0 returning id`,
-    // );
-    // expect(updated).toHaveLength(0);
+describe("payments and receipts are an append-only ledger", () => {
+  it("rejects UPDATE on payments for every role, including admin", async () => {
+    const updated = await asUser(fx.admin_a, (tx) =>
+      tx<Array<{ id: string }>>`
+        update payments set amount_paise = 0 where id = ${paymentFixtureId} returning id
+      `,
+    );
+    expect(updated).toHaveLength(0);
   });
 
-  it("rejects DELETE for every role, including admin", async () => {
-    // const deleted = await asUser(fx.admin_a, (tx) => tx`delete from payments returning id`);
-    // expect(deleted).toHaveLength(0);
-    // same shape again for `receipts`.
+  it("rejects DELETE on payments for every role, including admin", async () => {
+    const deleted = await asUser(fx.admin_a, (tx) =>
+      tx<Array<{ id: string }>>`delete from payments where id = ${paymentFixtureId} returning id`,
+    );
+    expect(deleted).toHaveLength(0);
+  });
+
+  it("rejects UPDATE on receipts for every role, including admin", async () => {
+    const updated = await asUser(fx.admin_a, (tx) =>
+      tx<Array<{ id: string }>>`
+        update receipts set issued_by = null where id = ${receiptFixtureId} returning id
+      `,
+    );
+    expect(updated).toHaveLength(0);
+  });
+
+  it("rejects DELETE on receipts for every role, including admin", async () => {
+    const deleted = await asUser(fx.admin_a, (tx) =>
+      tx<Array<{ id: string }>>`delete from receipts where id = ${receiptFixtureId} returning id`,
+    );
+    expect(deleted).toHaveLength(0);
+  });
+
+  it("a holder of payment.read can still SELECT the fixture payment (RLS isn't blocking everything, just writes)", async () => {
+    const rows = await asUser(fx.admin_a, (tx) =>
+      tx<Array<{ id: string }>>`select id from payments where id = ${paymentFixtureId}`,
+    );
+    expect(rows).toHaveLength(1);
   });
 });

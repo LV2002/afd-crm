@@ -22,8 +22,11 @@ Keep it short. This is a handoff note, not a changelog — git has the changelog
 
 ## Current state
 
-Session 1 shipped: Phase 0 scaffold, schema, dynamic permissions, RLS, auth and app shell.
-Next task: **Session 2 — Settings UI**.
+Session 18 shipped: Phase 4 foundation — enrolments/payments/receipts/students schema,
+Gate 1 (confirm admission) and Gate 2 (record payment, first-payment student creation),
+the accounts queue, and a fee structures settings screen.
+Next task: **Session 19 — Phase 4 depth** (promos/discounts, instalment tracking, batch
+management UI, gate-lag reporting) or Phase 5, at Leon's direction.
 
 ---
 
@@ -1706,3 +1709,108 @@ and now shows up in that counsellor's My Day / leads list.
 **Next:** genuinely out of pure-CRM Phase 2 work for now — everything left (Meta webhook,
 website/Google Sheets ingestion, the bulk-database staging area) is integration work Leon
 explicitly asked to defer to a later conversation (docs/DECISIONS.md § A10).
+
+---
+
+## Session 18 — Phase 4 foundation: enrolment, fees, payments, both gates — 2026-08-29
+
+**Shipped:** the object model CLAUDE.md lists as "Fixed in code" — lead → enrolment →
+student, and the two named gates between them — built for real, not stubbed. Deliberately
+scoped down from the full Phase 4 doc to a working foundation; see "Stubbed" below for
+exactly what's deferred.
+
+- **Schema** (`src/lib/db/schema/finance.ts`, migrations 0016–0018): `fee_structures`,
+  `enrolments`, `payments`, `receipts`, `students`, `batches`, `student_batches`.
+  `payments`/`receipts` have no UPDATE/DELETE RLS policy for any role, including admin —
+  CLAUDE.md non-negotiable #7's append-only ledger, enforced at the database, not by
+  convention. `receipts.receipt_no` is a `bigserial`; `students.student_code` gets
+  `'STU' || lpad(nextval('student_code_seq'), 6, '0')` from a dedicated sequence — same
+  gapless-via-DB-sequence approach as `leads.lead_number`, no app-computed numbers anywhere.
+- **Gate 1** (`src/lib/enrolment/confirm-admission.ts`, `confirmAdmission()`): sales confirms
+  an admission. Looks up `fee_structures` by (course, centre, mode, academic year), or takes
+  a manual override when no row matches; computes `net_fee_paise`; refuses a second
+  enrolment on the same lead; stamps `sales_to_accounts_at`/`by` at creation. "Lead work
+  stops" (CLAUDE.md non-negotiable) is implemented by moving the lead into the seeded
+  `stage_type='won'` stage rather than touching the core `leads_update` RLS policy — that
+  stage is already excluded from My Day, the SLA sweep, the temperature cron and reports, so
+  this reuses that exclusion instead of adding a new one. UI: a "Confirm admission" panel on
+  the lead detail page, gated on `enrolment.create`.
+- **Gate 2** (`src/lib/enrolment/record-payment.ts`, `recordPayment()`): accounts records a
+  payment. Always inserts a `payments` row and its `receipts` row. On the enrolment's FIRST
+  credit payment only, also creates the `students` row (profile fields copied once from the
+  lead, then independent — academics never queries the sales table) and stamps
+  `accounts_to_academics_at`/`by`. A later instalment against the same enrolment doesn't
+  re-fire the gate or create a second student. UI: `/accounts` (a queue of every enrolment,
+  oldest-awaiting-first-payment first) and `/accounts/[id]` (ledger + payment form), both
+  gated on `payment.read`/`payment.record`. New sidebar entry.
+- Both gate functions run on the direct db client inside the caller's own transaction — same
+  bypass pattern as `resolveOrCreateLead()`/`mergeLeads()`/`applyAssignment()` — because each
+  is a deliberate one-time state transition writing across tables no single RLS policy could
+  express. The calling Server Action (`confirmAdmissionAction`, `recordPaymentAction`)
+  re-implements the own/center/all scope check before ever calling in, exactly like
+  `confirmMerge()` already does for merges.
+- `src/lib/format/currency.ts` — the `formatINR()` helper CLAUDE.md's conventions call for;
+  Phase 4 is the first feature to put money in front of a user, so it didn't exist until now.
+- **Fee structures settings screen** (`/settings/fee-structures`): admin CRUD (course/centre/
+  mode/academic year/base fee), same list+new+`[id]`+active-toggle shape as the Centres
+  screen. Course and mode are selected from the existing `course`/`preferred_mode` dropdown
+  categories, never freeform.
+- **Config export/import**: `fee_structures` added to the config bundle (CLAUDE.md's own
+  "What is configurable" table lists "Fees: Structures" explicitly) — `bundle-schema.ts`,
+  `export-config.ts`, `import-config.ts`, bundle version bumped `1` → `2` since this is a
+  genuine shape change. `centerId` carries over as-is on import, same as
+  `business_hours`/`holidays` — `importConfig()` re-inserts `centers` with their original
+  ids, so no remapping is needed.
+
+**A real bug caught and fixed during this session, not after:** the 0017 RLS migration's
+snapshot file was created by copying `0016_snapshot.json` verbatim, which left its `id` and
+`prevId` identical to 0016's — an invalid migration-history chain that `drizzle-kit migrate`
+never validates but `drizzle-kit generate` does, so it would have silently corrupted the next
+migration's ancestry the first time anyone ran `generate` again. Caught by running `generate`
+for the `students.student_code` fix below, before it ever reached `main`. Fixed by giving
+0017 its own new id chained onto 0016's — the correct way to hand-write a snapshot copy,
+confirmed against how Sessions 3–7's own hand-written RLS migrations (0005, 0008, 0010, 0012,
+0014) actually did it.
+
+**Also caught by `tsc`, not a live-DB surprise this time:** `students.student_code`'s default
+is a raw SQL expression set in migration 0017, not something drizzle-kit's `bigserial`/etc.
+column builders can express — so it wasn't reflected in `finance.ts`, and `tsc` correctly
+flagged every `.insert(students)` call as missing a required field. Fixed by adding the exact
+same default expression to the schema column via `.default(sql\`...\`)`, generating migration
+0018 to confirm it (a genuine no-op against the already-correct database), and applying it.
+
+**Stubbed / deliberately out of scope for this pass** (see docs/DECISIONS.md for the reasoning
+behind each): promos, `lead_promos`, `discount_approvals` (the `discount.approve` permission
+exists and is enforced nowhere yet — a counsellor can apply any discount at Gate 1 today);
+instalment templates/tracking and ageing (an enrolment's balance is computed live from the
+ledger, not tracked as due dates); documents/enrolment agreements; the registration/enrolment
+form builder (`enrolment_forms`/`form_tokens`/`form_submissions`); refunds (the `payment.refund`
+permission exists but nothing calls it — a correction today would be a manual reversal
+payment row, not yet wired to a UI); batch management UI (`batches`/`student_batches` schema
+only, no screen creates a batch yet, so `batchId` stays null everywhere); gate-lag reporting
+(sales→accounts→academics timing isn't in the reports page yet). No live browser testing —
+this environment has no real Supabase project configured (`DATABASE_URL` only, no
+`NEXT_PUBLIC_SUPABASE_URL`), same limitation as every prior session; verified instead by
+`tsc`, `eslint`, a full `next build`, and integration tests against real local Postgres,
+including one true end-to-end test that runs a lead through both gates in sequence.
+
+**Verified:** `npx tsc --noEmit` and `npx eslint` clean across every new/changed file.
+`npm run build` succeeds — `/accounts`, `/accounts/[id]`, `/settings/fee-structures` and its
+`new`/`[id]` routes all compile. Full suite green against real local Postgres 16:
+**203 tests passed** across 26 files (up from 196/24 at the end of Session 17) — 5 new
+`confirm-admission.spec.ts` tests, 5 new `record-payment.spec.ts` tests, 1 new
+`phase4-gates-e2e.spec.ts` end-to-end test, and 1 new config-bundle-schema shape test.
+Migrations 0016–0018 applied cleanly to `afd_verify`; direct `psql` confirmed `payments`/
+`receipts` carry only `_select`/`_insert` policies (no update/delete at all) and the
+`student_code` sequence default produces `STU000001`-shaped codes.
+
+**Verify by:** `npm run db:migrate && DATABASE_URL=... npm test` — expect `203 passed`. Then
+`npm run build`. In the live app (once a real Supabase project is connected): as a counsellor
+on a lead's detail page, use "Confirm admission" — the lead should move to the "Admission
+Confirmed" pipeline stage and vanish from My Day/SLA sweeps; as an accounts user, open
+`/accounts`, record a payment against that enrolment, and confirm a student record appears
+(check via `/settings` → nothing yet, there's no students screen this session — verify via
+the enrolment detail page's "Student created" date instead).
+
+**Next:** Phase 4 depth (promos/discount approvals, instalment tracking, batch management UI,
+gate-lag reporting) or moving on to Phase 5, whichever Leon prefers.
