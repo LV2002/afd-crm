@@ -85,9 +85,31 @@ export default async function LeadsPage({
 
   const search = typeof params.search === "string" ? params.search : "";
   const filterValues = readFilterValues(params, filterableFields);
+  const tagFilter = typeof params.tag === "string" ? params.tag : "";
   const page = Math.max(1, Number(params.page) || 1);
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
+
+  const { data: tagRows } = await supabase
+    .from("tags")
+    .select("id, name")
+    .eq("is_active", true)
+    .order("name")
+    .returns<Array<{ id: string; name: string }>>();
+  const tagOptions: FieldOption[] = (tagRows ?? []).map((t) => ({ value: t.id, label: t.name }));
+
+  // Tags are a many-to-many join, not a lead_tags-backed field_definitions
+  // column, so this filter doesn't fit applyLeadFilters()'s field-schema
+  // shape — resolved to a plain id list instead, same as search's ilike.
+  let taggedLeadIds: string[] | null = null;
+  if (tagFilter) {
+    const { data: matchRows } = await supabase
+      .from("lead_tags")
+      .select("lead_id")
+      .eq("tag_id", tagFilter)
+      .returns<Array<{ lead_id: string }>>();
+    taggedLeadIds = (matchRows ?? []).map((r) => r.lead_id);
+  }
 
   // A core field is a real leads column; a non-core (custom) field's value
   // lives inside the `custom` jsonb blob instead — select that once rather
@@ -111,6 +133,9 @@ export default async function LeadsPage({
   query = applyLeadFilters(query, filterableFields, filterValues);
   if (search) {
     query = query.or(`student_name.ilike.%${search}%,primary_phone.ilike.%${search}%`);
+  }
+  if (taggedLeadIds !== null) {
+    query = query.in("id", taggedLeadIds);
   }
 
   const {
@@ -182,7 +207,12 @@ export default async function LeadsPage({
         </div>
       </div>
 
-      <LeadFilters filterFields={filterFieldsWithOptions} searchValue={search} />
+      <LeadFilters
+        filterFields={filterFieldsWithOptions}
+        searchValue={search}
+        tagOptions={tagOptions}
+        tagValue={tagFilter}
+      />
 
       <Table>
         <TableHeader>

@@ -13,6 +13,7 @@ import {
   roles,
   rolePermissions,
   slaPolicies,
+  tags,
   temperatureRules,
   terminology,
 } from "@/lib/db/schema";
@@ -39,6 +40,7 @@ const GUARD_TABLES = [
   { name: "business_hours", table: businessHours },
   { name: "holidays", table: holidays },
   { name: "fee_structures", table: feeStructures },
+  { name: "tags", table: tags },
 ] as const;
 
 /**
@@ -102,6 +104,7 @@ export async function importConfig(bundle: ConfigBundle): Promise<ImportConfigRe
     if (bundle.businessHours.length > 0) await tx.insert(businessHours).values(bundle.businessHours);
     if (bundle.holidays.length > 0) await tx.insert(holidays).values(bundle.holidays);
     if (bundle.feeStructures.length > 0) await tx.insert(feeStructures).values(bundle.feeStructures);
+    if (bundle.tags.length > 0) await tx.insert(tags).values(bundle.tags);
 
     return {
       counts: {
@@ -119,6 +122,7 @@ export async function importConfig(bundle: ConfigBundle): Promise<ImportConfigRe
         businessHours: bundle.businessHours.length,
         holidays: bundle.holidays.length,
         feeStructures: bundle.feeStructures.length,
+        tags: bundle.tags.length,
       },
     };
   });

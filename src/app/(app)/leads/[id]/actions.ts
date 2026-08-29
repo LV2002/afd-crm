@@ -331,3 +331,47 @@ export async function confirmAdmissionAction(
   revalidatePath(`/leads/${leadId}`);
   return { success: "Admission confirmed." };
 }
+
+/**
+ * Applying/removing a tag is treated as a lead edit — gated on lead.update,
+ * same permission the rest of this file's mutations use, rather than a new
+ * primitive (lead_tags' own RLS insert/delete policies check the same
+ * thing, so this is defence in depth, not the only check).
+ */
+export async function addLeadTag(leadId: string, tagId: string): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "lead.update")) return;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("lead_tags").insert({ lead_id: leadId, tag_id: tagId, tagged_by: user.id });
+  if (error) return;
+
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "lead.tag_add",
+    entityType: "leads",
+    entityId: leadId,
+    after: { tagId },
+  });
+
+  revalidatePath(`/leads/${leadId}`);
+}
+
+export async function removeLeadTag(leadId: string, tagId: string): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "lead.update")) return;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("lead_tags").delete().eq("lead_id", leadId).eq("tag_id", tagId);
+  if (error) return;
+
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "lead.tag_remove",
+    entityType: "leads",
+    entityId: leadId,
+    after: { tagId },
+  });
+
+  revalidatePath(`/leads/${leadId}`);
+}

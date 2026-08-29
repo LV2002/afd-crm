@@ -204,6 +204,9 @@ const ROLE_SEEDS: RoleSeed[] = [
     grants: [
       ...grant(
         [
+          "lead.read",
+          "lead.reveal_phone",
+          "interaction.read",
           "payment.read",
           "payment.record",
           "payment.refund",

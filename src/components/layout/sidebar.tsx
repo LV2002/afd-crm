@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  GraduationCap,
   KanbanSquare,
   LayoutDashboard,
   Settings,
@@ -29,6 +30,7 @@ const ICON_MAP: Record<NavIconKey, LucideIcon> = {
   leads: Users,
   pipeline: KanbanSquare,
   accounts: Wallet,
+  students: GraduationCap,
   reports: BarChart3,
   ask: Sparkles,
   settings: Settings,

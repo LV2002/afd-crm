@@ -27,3 +27,9 @@ export function startOfDayIST(instant: Date): Date {
 export function startOfTomorrowIST(instant: Date): Date {
   return addDays(startOfDayIST(instant), 1);
 }
+
+/** The UTC instant of the 1st of the current month, midnight IST — for "this month" dashboard counters. */
+export function startOfMonthIST(instant: Date): Date {
+  const monthStr = formatInTimeZone(instant, DISPLAY_TIMEZONE, "yyyy-MM");
+  return fromZonedTime(`${monthStr}-01T00:00:00`, DISPLAY_TIMEZONE);
+}

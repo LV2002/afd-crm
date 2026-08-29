@@ -104,6 +104,8 @@ const UNIVERSALLY_READABLE_TABLES = [
   "sla_policies",
   "business_hours",
   "holidays",
+  "fee_structures",
+  "tags",
 ] as const;
 
 let roleIds: Record<(typeof ROLE_CODES)[number], string>;
@@ -135,6 +137,7 @@ let auditFixtureId: string;
 let assignmentRuleFixtureId: string;
 let paymentFixtureId: string;
 let receiptFixtureId: string;
+let studentFixtureId: string;
 
 /**
  * Deletes auth.users rows matching `emailPattern`, EXCEPT one that would
@@ -287,6 +290,13 @@ beforeAll(async () => {
     returning id
   `;
   receiptFixtureId = receiptRow.id;
+
+  const [studentRow] = await owner<Array<{ id: string }>>`
+    insert into students (full_name, phone, center_id)
+    values ('RlsSpecTest student fixture', '+919847100198', ${centerIds.kochi})
+    returning id
+  `;
+  studentFixtureId = studentRow.id;
 });
 
 afterAll(async () => {
@@ -296,6 +306,7 @@ afterAll(async () => {
   // onDelete:'restrict' against each other and against leads.
   await owner`delete from receipts where id = ${receiptFixtureId}`;
   await owner`delete from payments where id = ${paymentFixtureId}`;
+  await owner`delete from students where id = ${studentFixtureId}`;
   await owner`delete from enrolments where lead_id in (select id from leads where student_name = 'RlsSpecTest ledger fixture')`;
   await owner`delete from leads where student_name = 'RlsSpecTest ledger fixture'`;
   await safeDeleteFixtureUsers("%@" + FIXTURE_MARK);
@@ -655,13 +666,31 @@ describe("lockout protection triggers", () => {
 });
 
 /**
- * CLAUDE.md non-negotiable #7 / docs/01-DATA-MODEL.md § Financial ledger:
- * payments and receipts are insert-only — no UPDATE or DELETE policy for
- * any role, including admin. This was `describe.skip`'d before Phase 4's
- * foundation existed (see docs/PROGRESS.md, Session 3) since there was no
- * real table to assert against; the schema and RLS now exist (Session 18).
+ * Local to this describe (not the file's global fixture setup): accounts
+ * and academics are given Kochi membership only for the tests below, so
+ * the assertions that a role sees/doesn't see a Kochi row prove the
+ * permission is what matters, not centre membership — without leaking
+ * that membership into the earlier `users.manage` tests, which rely on
+ * accounts/academics having none.
  */
-describe("payments and receipts are an append-only ledger", () => {
+describe("phase 4 permission boundaries (accounts/academics both members of Kochi)", () => {
+  beforeAll(async () => {
+    await owner`insert into user_centers (user_id, center_id) values (${fx.accounts_a}, ${centerIds.kochi})`;
+    await owner`insert into user_centers (user_id, center_id) values (${fx.academics_a}, ${centerIds.kochi})`;
+  });
+
+  afterAll(async () => {
+    await owner`delete from user_centers where user_id in (${fx.accounts_a}, ${fx.academics_a})`;
+  });
+
+  /**
+   * CLAUDE.md non-negotiable #7 / docs/01-DATA-MODEL.md § Financial ledger:
+   * payments and receipts are insert-only — no UPDATE or DELETE policy for
+   * any role, including admin. This was `describe.skip`'d before Phase 4's
+   * foundation existed (see docs/PROGRESS.md, Session 3) since there was no
+   * real table to assert against; the schema and RLS now exist (Session 18).
+   */
+  describe("payments and receipts are an append-only ledger", () => {
   it("rejects UPDATE on payments for every role, including admin", async () => {
     const updated = await asUser(fx.admin_a, (tx) =>
       tx<Array<{ id: string }>>`
@@ -699,5 +728,56 @@ describe("payments and receipts are an append-only ledger", () => {
       tx<Array<{ id: string }>>`select id from payments where id = ${paymentFixtureId}`,
     );
     expect(rows).toHaveLength(1);
+  });
+
+  it("accounts (payment.read at Kochi) sees the Kochi fixture payment", async () => {
+    const rows = await asUser(fx.accounts_a, (tx) =>
+      tx<Array<{ id: string }>>`select id from payments where id = ${paymentFixtureId}`,
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  /**
+   * The actual boundary this session's dashboards/UI rely on: academics is
+   * a member of the SAME centre as the fixture payment (see the
+   * user_centers insert above) so this can only be the permission
+   * (academics never holds payment.read), not a centre mismatch.
+   */
+  it("academics (no payment.read, same centre) sees none of the ledger", async () => {
+    const payments = await asUser(fx.academics_a, (tx) =>
+      tx<Array<{ id: string }>>`select id from payments where id = ${paymentFixtureId}`,
+    );
+    expect(payments).toHaveLength(0);
+
+    const receipts = await asUser(fx.academics_a, (tx) =>
+      tx<Array<{ id: string }>>`select id from receipts where id = ${receiptFixtureId}`,
+    );
+    expect(receipts).toHaveLength(0);
+  });
+  });
+
+  /**
+   * `students` has its own center_id (no join through leads — see
+   * finance.ts's own comment: "academics must never have to query the sales
+   * table"), scoped on student.read. Both fixture users here are members of
+   * the SAME centre as the fixture student, so a mismatch proves the
+   * permission is what's missing, not the centre.
+   */
+  describe("students are scoped by student.read, independent of the sales table", () => {
+    it("academics and accounts (both hold student.read at Kochi) can see the fixture student", async () => {
+      for (const key of ["academics_a", "accounts_a"] as const) {
+        const rows = await asUser(fx[key], (tx) =>
+          tx<Array<{ id: string }>>`select id from students where id = ${studentFixtureId}`,
+        );
+        expect(rows, key).toHaveLength(1);
+      }
+    });
+
+    it("counsellor (same centre, no student.read) cannot see the fixture student", async () => {
+      const rows = await asUser(fx.counsellor_kochi, (tx) =>
+        tx<Array<{ id: string }>>`select id from students where id = ${studentFixtureId}`,
+      );
+      expect(rows).toHaveLength(0);
+    });
   });
 });

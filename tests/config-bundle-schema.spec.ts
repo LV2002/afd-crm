@@ -22,6 +22,7 @@ function emptyBundle() {
     businessHours: [],
     holidays: [],
     feeStructures: [],
+    tags: [],
   };
 }
 
@@ -61,6 +62,21 @@ describe("configBundleSchema", () => {
         createdAt: new Date().toISOString(),
       },
     ] as unknown as (typeof bundle)["feeStructures"];
+    const result = configBundleSchema.safeParse(bundle);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a bundle with a real-shaped tag row", () => {
+    const bundle = emptyBundle();
+    bundle.tags = [
+      {
+        id: randomUUID(),
+        name: "High intent",
+        color: "#22c55e",
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      },
+    ] as unknown as (typeof bundle)["tags"];
     const result = configBundleSchema.safeParse(bundle);
     expect(result.success).toBe(true);
   });

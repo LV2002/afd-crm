@@ -72,6 +72,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage"],
   },
   {
+    href: "/settings/tags",
+    label: "Tags",
+    description: "Labels a lead can carry, for segmentation and retargeting audiences",
+    permissions: ["settings.manage"],
+  },
+  {
     href: "/settings/dropdowns",
     label: "Dropdowns",
     description: "Manage categories and options",

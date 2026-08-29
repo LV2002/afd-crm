@@ -1025,3 +1025,115 @@ be left to re-enter by hand on every new deployment. `center_id` carries over un
 import — no remapping needed — because `importConfig()` re-inserts `centers` rows with their
 original ids into what must be a freshly-migrated, empty instance; the same reasoning already
 applied to `business_hours`/`holidays`, which also carry a bare `center_id`.
+
+2026-08-29 · [departments] Leon asked for "a whole different experience" per department
+(sales/accounts/academics), each seeing only what they should of each other's leads. Decision:
+one app, one codebase, department-shaped *screens and permissions*, not three separate
+front ends — a role-aware `/dashboard` plus each department's own workspace (`/accounts`,
+now `/students`), gated on the permission primitives that already exist, never a role name.
+Three real front ends would mean three places to fix the same bug; this gets the same felt
+separation (a counsellor never sees an accounts screen, an academics user never sees a payment
+number) for a fraction of the build and maintenance cost. Revisit only if a department's needs
+genuinely diverge in ways that don't fit the shared shell — nothing so far has.
+
+2026-08-29 · [departments] Fixed a real Session 18 gap: the `accounts` role never held
+`lead.read`, so `/accounts/[id]`'s `leads(student_name, primary_phone)` embed was silently
+returning `null` for every accounts user (RLS enforces each embedded table's own SELECT
+policy — `leads_select` needs `lead.read`, and `enrolments`'/`payments`' own policies don't
+substitute for it). Granted `accounts` `lead.read` + `lead.reveal_phone` + `interaction.read`
+at scope `center` — matches Leon's explicit ask that "accounts and sales should see everything
+about each other's leads." Side effect worth knowing: this also puts `/leads` and `/my-day` in
+an accounts user's sidebar (both nav items are gated on the bare `lead.read` permission, with
+no finer-grained "lead.read but only via an enrolment" primitive). Left as-is rather than
+inventing role-specific nav suppression — `/leads` filtered to their own centre is genuinely
+useful for cross-referencing before an enrolment exists, and My Day just shows an empty queue
+for a role nothing gets assigned to, which is harmless. Did NOT make the equivalent change for
+`academics` — CLAUDE.md already gives academics everything the phrase "core lead details"
+promises via the `students` table itself (name, phone, course, exams targeted, all copied at
+Gate 2), which is the entire point of that denormalisation; adding `lead.read` for academics
+would let them browse the sales pipeline, which is the thing being scoped away, not toward.
+
+2026-08-29 · [dashboard] `/dashboard`'s five widgets are gated on the permission each actually
+needs (`lead.read` at scope `own` for "Your day", `lead.assign` for "Pipeline",
+`payment.read`/`student.read`/`settings.manage` for the other three) rather than checked
+against a role code — a role holding several of these bundles (center_head; admin/co_admin)
+sees several widgets, which is correct: CLAUDE.md describes center_head as running their
+centre end to end, not just its sales pipeline, so seeing accounts+academics summaries too is
+the intended behaviour, not scope creep to fix later. "Your day" specifically checks
+`scopeFor(user, 'lead.read') === 'own'`, not `can(user, 'lead.read')` — at scope
+`center`/`all` the underlying query (`assigned_to = user.id`) would only ever return zero
+rows, since nothing gets assigned directly to accounts/center_head/admin, so gating on scope
+avoids shipping a widget that would always render empty for those roles.
+
+2026-08-29 · [my-day] Factored the My Day page's fetch-and-build logic out into
+`getMyDayQueueForUser()` (`src/lib/my-day/get-queue.ts`) so the dashboard's "Your day" widget
+and the full `/my-day` page share one query instead of two copies drifting apart. The full
+page still owns its own `batchNameLookup()` call (the widget only needs counts, not centre
+names), so the split is at "fetch + bucket the queue," not the whole page.
+
+2026-08-29 · [students] The students list (`/students`) masks phone numbers the same way the
+leads list does (CLAUDE.md non-negotiable #6's "list view... in bulk" concern applies to any
+scrollable list of contact numbers, not specifically to leads) — but the student *detail*
+page shows the phone in full immediately, with no reveal-audit step, unlike a lead's. Reasons
+this is a deliberate difference rather than an oversight: (1) there's no
+`lead.reveal_phone`-equivalent primitive for students, and inventing one plus its audit
+plumbing wasn't asked for and wasn't built; (2) the underlying risk `lead.reveal_phone` exists
+for — a counsellor building a personal database of prospects to poach — doesn't really apply
+to an already-enrolled, already-paying student academics is delivering a course to. Revisit if
+this turns out to matter in practice; the fix would be a `student.reveal_phone` primitive
+mirroring the lead one exactly.
+
+2026-08-29 · [students] No edit capability on the student detail page this pass — Leon's ask
+was specifically "should be able to see," and `student.update` (already held by the academics
+role since Phase 4's seed) stays unused by any UI until a future session builds it. Batch
+assignment specifically can't be built yet regardless, since there's still no batch-management
+screen (Session 18 deferred it; `batches`/`student_batches` are schema-only).
+
+2026-08-29 · [tags] Lead tagging is `tags` (admin-configurable definitions, same
+list/new/`[id]`/active-toggle shape as Centres/Fee Structures, gated on `settings.manage`) +
+`lead_tags` (the many-to-many join). Deliberately did NOT add a new permission primitive for
+applying/removing a tag — it reuses `lead.update`, since tagging a lead is a lightweight edit
+of that lead, not a distinct capability CLAUDE.md's "each primitive is an enforcement point"
+principle would justify a new one for. `lead_tags` has no UPDATE policy at all (only
+SELECT/INSERT/DELETE) — a tag application is either present or absent, never edited in place;
+removing and re-adding is the only "change" that makes sense. Deactivating a tag definition
+hides it from the "+ Add tag" picker on new tagging but does NOT retroactively strip it from
+leads that already carry it — same "deactivate ≠ remove usages" precedent already established
+for pipeline stages and dropdown options.
+
+2026-08-29 · [tags] The leads list's tag filter is a bespoke `tag` query param resolved to a
+plain lead-id list (`leads.page.tsx` queries `lead_tags` directly, then `.in("id", ...)`),
+NOT wired into the generic field-schema-driven filter engine (`applyLeadFilters`/
+`readFilterValues`/`filterParamKey`) every other lead filter uses. Reason: that engine is
+built around `field_definitions` — one column, one value — and a tag is a many-to-many
+relationship with no backing column on `leads` at all. Forcing tags through that engine would
+mean either inventing a fake field_definitions row for something that isn't a field, or
+teaching the engine about join-table filters generally; neither was worth it for one filter.
+Revisit if a second non-column filter shows up and the duplication starts to hurt.
+
+2026-08-29 · [tags] `tags` was added to the config export/import bundle
+(`CONFIG_BUNDLE_VERSION` bumped `2` → `3`), same reasoning as `fee_structures` in Session 18:
+an admin-editable label list is configuration, and CLAUDE.md's plug-and-play test says
+configuration travels with the instance. `lead_tags` (which leads carry which tags) is
+correctly excluded — it's data, same bucket as leads/students/payments themselves, never
+exported. No retargeting sync exists yet to consume these tags (Meta/Google/WhatsApp audience
+sync is the integration work in docs/DECISIONS.md § A10, still deferred) — this session only
+builds the tag itself and the ability to apply it; where a tagged segment goes is future work.
+
+2026-08-29 · [testing] Adding RLS test coverage for a permission boundary sometimes requires
+giving a fixture user real centre membership it doesn't have by default (`accounts_a`/
+`academics_a` start with none, specifically so other tests can assert "sees nothing, not even
+its own profile's centre"). Giving them global membership in the outer `beforeAll` to test
+Phase 4 boundaries broke an earlier, unrelated `users.manage` visibility assertion that
+depends on those two fixtures having zero centres. Fixed by scoping the membership to a local
+`beforeAll`/`afterAll` on a wrapping `describe` around just the tests that need it, instead of
+the file's global fixture setup — the correct pattern for "this fixture needs different state
+for just this group of tests" going forward, rather than mutating shared fixture state and
+hoping nothing downstream depends on its old shape.
+
+2026-08-29 · [testing] `fee_structures` was missing from `tests/rls.spec.ts`'s
+`UNIVERSALLY_READABLE_TABLES` list despite being select-all-authenticated (Session 18 added
+the RLS policy but not the corresponding test-suite entry) — added it alongside the new
+`tags` entry while touching that list for this session's work. A small, easy-to-miss class of
+gap worth watching for: adding a new select-all config table needs both the migration AND this
+list updated, and nothing currently forces the second half to happen.

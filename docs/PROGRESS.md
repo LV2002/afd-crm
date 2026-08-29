@@ -22,11 +22,12 @@ Keep it short. This is a handoff note, not a changelog — git has the changelog
 
 ## Current state
 
-Session 18 shipped: Phase 4 foundation — enrolments/payments/receipts/students schema,
-Gate 1 (confirm admission) and Gate 2 (record payment, first-payment student creation),
-the accounts queue, and a fee structures settings screen.
-Next task: **Session 19 — Phase 4 depth** (promos/discounts, instalment tracking, batch
-management UI, gate-lag reporting) or Phase 5, at Leon's direction.
+Session 19 shipped: role-aware dashboards for every department, the academics workspace
+(students list/detail + a printable 1-page profile), and lead tagging (schema, settings
+screen, lead-detail control, list filter) — plus fixing a real gap where accounts couldn't
+see lead details at all.
+Next task: **Session 20 — accounts ledgers** (bank/cash/petty-cash per centre — Leon is
+sending the current finance sheet first) or further Phase 4 depth, at Leon's direction.
 
 ---
 
@@ -1814,3 +1815,108 @@ the enrolment detail page's "Student created" date instead).
 
 **Next:** Phase 4 depth (promos/discount approvals, instalment tracking, batch management UI,
 gate-lag reporting) or moving on to Phase 5, whichever Leon prefers.
+
+---
+
+## Session 19 — Role-aware dashboards, academics workspace, lead tagging — 2026-08-29
+
+**Shipped:** the three pieces of the "separate department experiences" ask that don't need
+the accounts ledger work Leon is sending finance-sheet context for first (that's queued as
+Session 20).
+
+- **Fixed a real bug from Session 18**, found while scoping this work: the `accounts` role
+  never held `lead.read`, so the `/accounts/[id]` page's `leads(student_name, primary_phone)`
+  embed was silently returning `null` for every accounts user — RLS enforces each embedded
+  table's own SELECT policy independently, and `leads_select` is gated on `lead.read`. Fixed
+  by granting `accounts` `lead.read` + `lead.reveal_phone` + `interaction.read` at scope
+  `center` in `seed.ts` — accounts can now see full lead context (source, history) for leads
+  at their own centre(s), matching Leon's "accounts and sales should see everything about
+  each other's leads" ask. Deliberately did NOT add the equivalent for `academics`: they
+  already get everything CLAUDE.md says they need ("core lead details" — name, phone, course,
+  exams targeted) via the `students` table itself, which is the whole point of copying those
+  fields at Gate 2 rather than having academics query leads.
+- **Role-aware dashboards** (`/dashboard`, previously the untouched Phase 0 placeholder):
+  five widgets, each gated on the specific permission it needs, never a role name — "Your
+  day" (`scopeFor(lead.read) === 'own'`, i.e. counsellor-shaped: reuses the new
+  `getMyDayQueueForUser()` helper, factored out of the My Day page itself so the count-only
+  widget and the full page share one query), "Pipeline" (`lead.assign`, i.e. centre-head-
+  shaped), "Accounts" (`payment.read`), "Academics" (`student.read`), "Organisation"
+  (`settings.manage`). A role holding several of these bundles (center_head; admin/co_admin)
+  correctly sees several widgets — that's not a bug, CLAUDE.md describes center_head as
+  running their centre end to end, not just its sales pipeline.
+- **Academics workspace**: `/students` (list, masked phone — same bulk-exposure reasoning as
+  the leads list, search + status filter) and `/students/[id]` (detail, full personal details,
+  course, exams targeted — **zero fee/payment fields anywhere in the query**, the boundary
+  CLAUDE.md draws between accounts and academics). New sidebar entry gated on `student.read`.
+- **Printable 1-page student profile** (`/students/[id]/print`): its own route, not a print
+  stylesheet bolted onto the detail page, since the detail page carries sidebar chrome and
+  interactive controls that don't belong on a physical form. Org name/logo header, every
+  personal/academic field, signature lines. The app shell (`(app)/layout.tsx`) now hides the
+  sidebar/header under `print:hidden` so any future print route gets a clean page for free.
+  Layout/fields are a reasonable first pass — Leon is sending a reference form to match later.
+- **Lead tagging**: `tags` (admin-configurable, `/settings/tags` — same list/new/`[id]`/
+  active-toggle shape as Centres/Fee Structures) and `lead_tags` (the many-to-many join, no
+  new permission primitive — applying/removing a tag reuses `lead.update`). A tags control on
+  the lead detail page (badges with remove, an "+ Add tag" select) and a tag filter on the
+  leads list (resolved to a lead-id list outside the generic field-schema filter engine, since
+  tags aren't a `field_definitions`-backed column). Added to the config export/import bundle
+  (`CONFIG_BUNDLE_VERSION` bumped `2` → `3`) — tags are configuration, same reasoning as
+  `fee_structures` last session. No retargeting sync yet (that's the Meta/Google/WhatsApp
+  integration work Leon explicitly deferred, docs/DECISIONS.md § A10) — this session only
+  builds the tag itself; a tagged segment doesn't go anywhere yet.
+- Also closed a small pre-existing gap while touching `UNIVERSALLY_READABLE_TABLES` in
+  `tests/rls.spec.ts`: `fee_structures` (Session 18) had never been added to that list despite
+  being a select-all-authenticated config table — added alongside the new `tags` entry.
+- **New RLS coverage that didn't exist before**: `tests/rls.spec.ts` had zero assertions on
+  the `students` table, and nothing proving academics is actually blocked from payments
+  end-to-end (as opposed to just "the seed doesn't grant it," which a future seed edit could
+  quietly break). Added a scoped sub-suite that gives `accounts_a`/`academics_a` real Kochi
+  membership *only for those tests* (a local `beforeAll`/`afterAll`, not the global fixture
+  setup — doing it globally broke an earlier, unrelated `users.manage` visibility test that
+  depends on those two fixtures having no centre) and asserts: accounts sees the ledger,
+  academics doesn't, both see the `students` row, a same-centre counsellor (no `student.read`)
+  doesn't. Proves the boundary is the held permission, not an accident of centre membership.
+
+**A real migration-authoring mistake caught immediately, not shipped:** the `students` list
+page's initial `.select(...)` used an explicit PostgREST FK-hint
+(`batches!students_current_batch_id_batches_id_fk(name)`) copied from habit — unnecessary
+since `students` has only one FK to `batches`, and the hint's constraint name wasn't even
+verified against what drizzle-kit actually generated. Simplified to a plain `batches(name)`
+before this ever ran against real Postgres.
+
+**Stubbed / deliberately out of scope for this pass:** no edit capability on the student
+detail page (Leon's ask was "should be able to see" — `student.update`, held by academics,
+is still unused by any UI; batch assignment specifically needs the batch-management screen
+Session 18 already deferred). No audited phone-reveal step on the student detail page — its
+phone is shown in full directly, unlike a lead's (see the page's own comment: these are
+already-enrolled customers with a fundamentally different bulk-exposure risk than
+leads-a-counsellor-could-poach, and there's no existing `lead.reveal_phone`-equivalent
+primitive for students to reuse). No way to delete/deactivate a lead_tags row from the tags
+settings screen once created elsewhere — deactivating a *tag definition* hides it from the
+"+ Add" picker for new tagging but doesn't retroactively strip it off leads that already
+carry it, same "deactivate ≠ remove usages" precedent as pipeline stages and dropdown
+options. Accounts ledgers (bank/cash/petty-cash per centre) explicitly punted to next session
+pending Leon's finance sheet, per his own instruction this turn.
+
+**Verified:** `npx tsc --noEmit` and `npx eslint` clean across every new/changed file.
+`npm run build` succeeds — `/students`, `/students/[id]`, `/students/[id]/print`,
+`/settings/tags` and its `new`/`[id]` routes, and the rebuilt `/dashboard` all compile. Full
+suite green against real local Postgres 16: **208 tests passed** across 26 files (up from
+203/26 at the end of Session 18) — 4 new RLS boundary assertions (accounts sees the ledger,
+academics doesn't, students visibility, counsellor exclusion) and 1 new config-bundle shape
+test for `tags`. Migrations 0019–0020 applied cleanly; direct `psql` confirmed `tags`/
+`lead_tags` carry exactly the policies the migration declares. Also caught and fixed, mid-
+session: local Postgres had stopped across a container restart — restarted the cluster,
+re-ran `db:migrate` (no-op, already current) and `db:seed` (idempotent upsert, picked up the
+new `accounts` grants) before any of this session's verification ran.
+
+**Verify by:** `npm run db:migrate && npm run db:seed && DATABASE_URL=... npm test` — expect
+`208 passed`. Then `npm run build`. In the live app (once a real Supabase project is
+connected): log in as each role and confirm the dashboard shows only the widgets that role's
+permissions justify; as academics, open `/students`, pick one, confirm no fee data appears
+anywhere, and use "Print profile"; as any role with `lead.update`, open a lead and add/remove
+a tag, then filter `/leads` by that tag.
+
+**Next:** accounts ledgers (bank/cash/petty-cash per centre, fee payment logging against
+them) once Leon's finance sheet is in hand — see docs/DECISIONS.md for why this is real,
+harder work that shouldn't be rushed. Otherwise, the same Phase 4 depth list as Session 18.

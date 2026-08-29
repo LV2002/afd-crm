@@ -19,6 +19,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ConfirmAdmissionForm } from "./confirm-admission-form";
 import { InteractionForm } from "./interaction-form";
 import { LeadEditForm } from "./lead-edit-form";
+import { LeadTagsPanel, type TagOption } from "./lead-tags-panel";
 import { TasksPanel, type TaskRow } from "./tasks-panel";
 
 interface EnrolmentRow {
@@ -79,6 +80,23 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       .maybeSingle<EnrolmentRow>(),
   ]);
 
+  const [{ data: leadTagRows }, { data: allTagRows }] = await Promise.all([
+    supabase
+      .from("lead_tags")
+      .select("tag_id, tags(id, name, color)")
+      .eq("lead_id", id)
+      .returns<Array<{ tag_id: string; tags: TagOption | null }>>(),
+    supabase
+      .from("tags")
+      .select("id, name, color")
+      .eq("is_active", true)
+      .order("name")
+      .returns<TagOption[]>(),
+  ]);
+  const currentTags = (leadTagRows ?? []).map((r) => r.tags).filter((t): t is TagOption => t !== null);
+  const currentTagIds = new Set(currentTags.map((t) => t.id));
+  const availableTags = (allTagRows ?? []).filter((t) => !currentTagIds.has(t.id));
+
   const timeline = await getTimeline(supabase, id);
 
   const { data: taskRows } = await supabase
@@ -103,6 +121,13 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           {centerName && <Badge variant="outline">{centerName}</Badge>}
         </div>
       </div>
+
+      <LeadTagsPanel
+        leadId={id}
+        currentTags={currentTags}
+        availableTags={availableTags}
+        canEdit={can(user, "lead.update")}
+      />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">

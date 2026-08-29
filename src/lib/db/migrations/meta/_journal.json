@@ -134,6 +134,20 @@
       "when": 1787998728507,
       "tag": "0018_phase4_student_code_default_in_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788011834764,
+      "tag": "0019_lead_tags_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788011835764,
+      "tag": "0020_lead_tags_rls",
+      "breakpoints": true
     }
   ]
 }
