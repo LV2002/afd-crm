@@ -738,3 +738,41 @@ counsellor's own logged follow-up plan). My Day treats whichever is earlier as t
 reason for showing up — never shows both, never picks the follow-up over an equally-relevant
 overdue task. Only tasks assigned to the viewing user are considered (not every open task on
 the lead), matching "my queue," not "everything happening on this lead."
+
+2026-08-29 · [sla] The SLA sweep cron implements `sla_breached` (measures, business hours,
+priority-ordered policy matching) but deliberately stops there — it does not run the
+`escalations` array's `notify_roles`/`notify_owner`/`unassign`/`requeue` side effects. There is
+still no `notifications` table (the same gap already noted against the assignment engine's
+"notify the owner" action), so "notify" has nowhere real to go yet; `unassign`/`requeue` are
+real behavioural changes to a lead's ownership that deserve their own audit-logged, deliberately
+reviewed implementation rather than being bolted onto this session's cron as an afterthought.
+`flag_breach` is the one escalation action delivered for real, since it's exactly what setting
+`sla_breached` already is. Extending this sweep to walk the full `escalations` array once
+notifications exist is additive — the per-lead evaluation this session built doesn't need to
+change, only what happens after a breach is detected.
+
+2026-08-29 · [sla] `first_response_at` is stamped by `logInteraction()` on ANY interaction
+logged for a lead — not filtered to `direction = 'outbound'` or a specific `type`. The column
+and the SLA measure it drives are both named after "the first time someone worked this lead,"
+and the first interaction of any kind logged (even one entered as a record of an inbound call)
+is real, honest evidence of that. Splitting hairs over direction would need a call server-side
+before there's ever a real telephony integration (Phase 6) generating inbound-vs-outbound data
+worth splitting on.
+
+2026-08-29 · [sla] `in_stage` measures from the most recent `stage_history` row for a lead,
+falling back to `leads.created_at` when none exists yet. A lead can theoretically have zero
+`stage_history` rows (the trigger writing that table fires on a stage *change*, not the initial
+insert — see migration 0005) even though it already has a `stage_id` from creation; treating
+"no history yet" as "has been in its current stage since creation" is the only sensible
+baseline, and matches what's actually true for a brand-new, never-moved lead.
+
+2026-08-29 · [sla] `/api/cron/sla-sweep` fetches every non-deleted, non-terminal lead and every
+active policy/business-hours/holiday row in a handful of queries, then evaluates and batches
+the updates in application code, rather than pushing the per-lead measure computation into SQL.
+Same reasoning already applied to the CSV export row cap and the stage_history "keep the first
+occurrence per lead" lookup: AFD's real volume (~200 leads/month, so a few thousand active
+leads at any one time for years to come) fits comfortably in one function's memory, and a plain
+TypeScript loop calling the same `evaluateConditions()`/`evaluateLeadSla()` the rest of the app
+already uses (and already unit-tests) is far easier to get right and to keep right than a
+hand-written SQL translation of the same business-hours-aware logic. Revisit if lead volume
+ever grows by an order of magnitude.

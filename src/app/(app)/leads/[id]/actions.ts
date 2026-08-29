@@ -155,6 +155,17 @@ export async function logInteraction(leadId: string, _prevState: FormState, form
     await supabase.from("leads").update({ next_followup_at: nextFollowupAtRaw }).eq("id", leadId);
   }
 
+  // Stamp first_response_at the first time any interaction is logged for
+  // this lead — the SLA sweep's `first_response` measure has nothing to
+  // count from until this exists (docs/01-DATA-MODEL.md § SLA policies).
+  // The `.is(...)` filter makes this a no-op on every later interaction:
+  // once responded, this is set for good.
+  await supabase
+    .from("leads")
+    .update({ first_response_at: new Date().toISOString() })
+    .eq("id", leadId)
+    .is("first_response_at", null);
+
   await writeAuditLog(supabase, {
     actorId: user.id,
     action: "interaction.create",

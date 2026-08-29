@@ -52,7 +52,14 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // `/api/*` is excluded entirely rather than added to PUBLIC_PATHS: a
+  // cron route (CRON_SECRET) or a future webhook (HMAC signature, CLAUDE.md
+  // non-negotiable #9) authenticates itself, and neither has a Supabase
+  // session cookie to check in the first place — Vercel's own cron
+  // invocation of /api/cron/sla-sweep has no such cookie, so leaving `/api`
+  // inside this matcher would redirect it to /login before the route
+  // handler's own auth ever runs, silently breaking every cron/webhook.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
