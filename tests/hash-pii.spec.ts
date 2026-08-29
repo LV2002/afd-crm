@@ -2,7 +2,15 @@ import { createHash } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
-import { hashEmail, hashPhone, normalizeEmailForHash, normalizePhoneForHash, sha256Hex } from "../src/lib/integrations/hash-pii";
+import {
+  hashEmail,
+  hashPhone,
+  hashPhoneE164,
+  normalizeEmailForHash,
+  normalizePhoneE164ForHash,
+  normalizePhoneForHash,
+  sha256Hex,
+} from "../src/lib/integrations/hash-pii";
 
 describe("sha256Hex", () => {
   it("matches a known SHA-256 digest", () => {
@@ -46,5 +54,30 @@ describe("hashPhone / hashEmail", () => {
   it("cross-checked against Node's own crypto module directly", () => {
     const expected = createHash("sha256").update("919847100100", "utf8").digest("hex");
     expect(hashPhone("+919847100100")).toBe(expected);
+  });
+});
+
+describe("normalizePhoneE164ForHash (Google Customer Match)", () => {
+  it("keeps the leading + intact, unlike Meta's digits-only form", () => {
+    expect(normalizePhoneE164ForHash("+91 98471-00100")).toBe("+919847100100");
+  });
+
+  it("trims whitespace without dropping the +", () => {
+    expect(normalizePhoneE164ForHash("  +919847100100  ")).toBe("+919847100100");
+  });
+
+  it("does not invent a + for a value that never had one", () => {
+    expect(normalizePhoneE164ForHash("919847100100")).toBe("919847100100");
+  });
+});
+
+describe("hashPhoneE164", () => {
+  it("hashes the E.164 form, not the digits-only Meta form — the two differ", () => {
+    expect(hashPhoneE164("+919847100100")).toBe(sha256Hex("+919847100100"));
+    expect(hashPhoneE164("+919847100100")).not.toBe(hashPhone("+919847100100"));
+  });
+
+  it("produces the same hash for values that normalise to the same E.164 form", () => {
+    expect(hashPhoneE164("+919847100100")).toBe(hashPhoneE164(" +91 98471 00100 "));
   });
 });

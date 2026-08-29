@@ -2067,3 +2067,77 @@ consenting leads' hashed phone numbers.
 **Next:** Google Ads — Lead Form webhook, ad spend sync, Customer Match retargeting sync, and
 `/settings/integrations/google` credentials UI, mirroring this session and Session 20's shape
 as closely as Google's actual API allows.
+
+## Session 22 — Google Ads integration (webhook, ad spend, retargeting, settings)
+
+Continues straight from Session 21's "Next" — builds the entire Google Ads integration in
+one pass, mirroring the Meta integration's shape end to end. Verified Google's actual API
+contracts (webhook payload shape, response requirements, Customer Match hashing rules)
+against current documentation before writing code, rather than assuming they matched Meta's.
+
+- **`/api/webhooks/google-leads`** — Google's Lead Form webhook delivers the full lead
+  payload inline (unlike Meta, which only sends a `leadgen_id` requiring a follow-up Graph
+  API call), so there's no second network hop needed to ingest a lead. Verifies a `google_key`
+  field embedded in the JSON body itself (Google has no HMAC signature header, unlike Meta's
+  `X-Hub-Signature-256`) via constant-time comparison, persists to `webhook_events`
+  (`source = google_leads`) regardless of outcome, and calls `resolveOrCreateLead()` for a
+  real (non-test) lead. A `is_test: true` delivery (Google Ads' "Send test lead" button) is
+  persisted and marked done but never reaches `resolveOrCreateLead()` — see
+  docs/DECISIONS.md for why.
+- **`src/lib/integrations/google/map-lead-fields.ts`** — maps Google's standard
+  `user_column_data` column ids (`FULL_NAME`/`FIRST_NAME`/`LAST_NAME`/`PHONE_NUMBER`/
+  `EMAIL`/`CITY`) onto the same `ResolveLeadInput` shape as the Meta mapper, including
+  `gclid` for click-level attribution.
+- **Google Ads API client** (`src/lib/integrations/google/ads-client.ts`) — OAuth2 refresh
+  token → access token exchange, plus a generic paginated `googleAds:search` (GAQL) caller
+  used by both the spend sync and the settings "Test connection" check.
+- **Ad spend sync** (`src/lib/integrations/google/insights-client.ts`,
+  `/api/cron/ad-spend-sync/google`) — a GAQL query against `ad_group_ad` for yesterday's
+  per-ad cost/impressions/clicks/conversions, upserted into the same shared `ad_spend_daily`
+  table Meta writes to (`platform = google`). `cost_micros` → paise conversion, same
+  INR-assumption caveat as Meta's mapper.
+- **Customer Match retargeting sync** (`src/lib/integrations/google/audience-client.ts`,
+  `/api/cron/retargeting-sync/google`) — reuses Session 21's `isRetargetingEligible()`/
+  `computeAudienceDiff()`/`ad_audience_members` unchanged (`platform = google`); auto-creates
+  a Customer Match user list on first run via `UserListService`, then adds/removes hashed
+  phone numbers via `uploadUserData` each run, same two-way-diff shape as the Meta sync.
+- **`src/lib/integrations/hash-pii.ts`** — added `normalizePhoneE164ForHash`/`hashPhoneE164`
+  for Google, since Google's Customer Match hashing spec keeps the phone's leading `+`
+  (verified against Google's own docs) where Meta's Custom Audience spec strips it — these
+  are NOT interchangeable, a distinction the file's own comment previously (and wrongly)
+  glossed over as "identical between the two platforms."
+- **`/settings/integrations/google`** — credentials form (webhook verify key, OAuth client
+  id/secret, refresh token, developer token, customer id, optional manager/login customer
+  id), a "Test connection" button that does a real token refresh + minimal GAQL query, and
+  the integrations index page now links to it with live connection status.
+
+**Verified:** `npx tsc --noEmit` clean. `npx eslint` clean on every new/touched file.
+`npm run build` succeeds — all three new routes (`/api/webhooks/google-leads`,
+`/api/cron/ad-spend-sync/google`, `/api/cron/retargeting-sync/google`) and the new settings
+page compile. Full suite green against real local Postgres 16: **305 tests passed across 39
+files** (up from 276/35 at the end of Session 21) — new coverage: `tests/google-map-lead-fields.spec.ts`
+(pure), `tests/google-webhook.spec.ts` (7 end-to-end tests against real Postgres — notably
+no network mocking needed at all, since Google's webhook has no follow-up API call),
+`tests/google-ad-spend-sync.spec.ts` and `tests/google-retargeting-sync.spec.ts` (mocking
+only the OAuth refresh and the Ads/Customer Match API calls), plus new `hashPhoneE164`/
+`normalizePhoneE164ForHash` cases in `tests/hash-pii.spec.ts` that explicitly assert the
+Google and Meta hashes of the same phone number differ.
+
+**Stubbed / deliberately out of scope for this pass:** WhatsApp (per-counsellor numbers,
+per Leon's confirmed decision) and telephony — next, per the confirmed build order. No UI
+for revoking/deleting a stored Google credential, same reasoning as the Meta settings page.
+Google's `login_customer_id` (for accounts under a manager/MCC) is supported but untested
+against a real MCC setup — AFD's Google Ads account structure will determine whether it's
+actually needed.
+
+**Verify by:** `npm run db:migrate && DATABASE_URL=... npm test` — expect `305 passed`. Then
+`npm run build`. Against a real Google Ads account (once credentials are entered in
+Settings → Integrations → Google): paste the webhook URL and verify key into Google Ads →
+Leads → Lead form assets → webhook delivery, click "Send test lead," and confirm a
+`webhook_events` row appears with `status = done` and no corresponding row in `leads`; then
+submit a real (non-test) lead through the connected form and confirm it appears in `/leads`
+within seconds with `source = google`.
+
+**Next:** WhatsApp — per-counsellor Business API numbers (Leon's confirmed model), inbound/
+outbound chat on the lead profile, centre-head/admin visibility, and a marketing broadcast
+frontend for admin. Then telephony, last in the confirmed build order.

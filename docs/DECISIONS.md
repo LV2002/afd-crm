@@ -1230,6 +1230,45 @@ Custom Audience indefinitely. Verified with a real test
 `"withdrawn"` and confirms `removeUsersFromAudience` is called and the `ad_audience_members`
 row is deleted in the same run.
 
+2026-08-29 · [integrations] Google's Lead Form webhook has no HMAC signature header at all
+— the shared secret (`google_key`) is a plain field inside the JSON body itself, verified by
+constant-time string comparison after parsing, not before. This is a real, documented
+deviation from CLAUDE.md non-negotiable #9's literal phrasing ("check the signature before
+parsing") — there is no signature to check pre-parse in Google's design, only a field inside
+the body. The underlying intent (never trust the body until its authenticity is checked, and
+persist it regardless) is preserved: the raw payload is stored in `webhook_events` whether or
+not `google_key` matches, exactly like a bad-signature Meta request. `JSON.parse` on an
+untrusted string is not itself a security boundary crossing (no code execution, no side
+effects) — the actual boundary crossed is "believe this payload enough to create a lead,"
+which still only happens after the key check passes.
+
+2026-08-29 · [integrations] A Google Lead Form webhook delivery with `is_test: true`
+(triggered by clicking "Send test lead" in Google Ads' own UI) is persisted to
+`webhook_events` and marked `done`, but deliberately never reaches `resolveOrCreateLead()`.
+Without this, every click of that button — something an admin might do repeatedly while
+verifying the webhook is wired up — would create a real fake lead in the live sales
+pipeline. Meta has no equivalent concept (its webhook only fires on genuine form
+submissions), so this branch has no Meta counterpart.
+
+2026-08-29 · [integrations] Google Ads' `metrics.conversions` (used as `leadsReported` in
+`ad_spend_daily` for the Google platform) counts every conversion action on the account, not
+specifically lead-form submissions — unlike Meta's Insights `actions` array, which lets the
+mapper filter to just the known lead action types. Isolating "only the lead-form conversion"
+on the Google side would need a specific conversion action id configured per-account ahead of
+time, which nothing in this system does yet. Treated as correct for AFD's actual accounts
+(single-purpose, lead-generation-only) and flagged rather than built around, per CLAUDE.md's
+steer against solving a hypothetical requirement — the day an account also tracks e.g.
+page-view conversions, this number silently overstates lead volume and needs revisiting.
+
+2026-08-29 · [integrations] Meta Custom Audiences and Google Customer Match hash phone
+numbers under genuinely different normalisation rules — Meta wants digits-only with country
+code and no leading `+`, Google wants strict E.164 with the `+` kept. Both platforms silently
+accept a wrongly-normalised hash rather than erroring; it just never matches anyone, so this
+would have been a silent no-op retargeting sync rather than a visible bug if shipped wrong.
+Kept as two separate functions (`hashPhone`/`normalizePhoneForHash` for Meta,
+`hashPhoneE164`/`normalizePhoneE164ForHash` for Google) rather than one shared "normalize
+phone for retargeting" that would necessarily be wrong for one of the two platforms.
+
 2026-08-29 · [integrations] `ads_access_token` (Marketing API — Insights, Custom Audiences)
 and `page_access_token` (Graph API — fetching a submitted lead's own answers) are stored and
 tested as two separate credentials, not one. They require different Meta permission scopes

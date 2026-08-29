@@ -17,6 +17,7 @@ export default async function IntegrationsPage() {
   if (!user || !can(user, "settings.manage")) return <AccessDenied />;
 
   const metaConnected = await hasIntegrationCredential("meta", "page_access_token");
+  const googleConnected = await hasIntegrationCredential("google", "refresh_token");
 
   const cards: IntegrationCard[] = [
     {
@@ -25,7 +26,12 @@ export default async function IntegrationsPage() {
       description: "Lead Ads ingestion + daily ad spend sync.",
       connected: metaConnected,
     },
-    { href: null, name: "Google", description: "Lead form ingestion + daily ad spend sync. Coming soon.", connected: false },
+    {
+      href: "/settings/integrations/google",
+      name: "Google",
+      description: "Lead form ingestion + daily ad spend sync + Customer Match retargeting.",
+      connected: googleConnected,
+    },
     { href: null, name: "WhatsApp", description: "Per-counsellor chat and marketing broadcasts. Coming soon.", connected: false },
     { href: null, name: "Telephony", description: "Click-to-call and call logging. Coming soon.", connected: false },
   ];
