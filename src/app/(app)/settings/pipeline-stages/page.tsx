@@ -30,6 +30,7 @@ export default async function PipelineStagesSettingsPage() {
   const { data: stages } = await supabase
     .from("pipeline_stages")
     .select("id, name, color, stage_type, probability, sla_hours, is_active")
+    .is("deleted_at", null)
     .order("sort_order")
     .returns<StageRow[]>();
 

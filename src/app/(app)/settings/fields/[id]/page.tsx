@@ -15,6 +15,7 @@ export default async function EditFieldPage({ params }: { params: Promise<{ id: 
       "id, entity, key, label, help_text, type, section, is_required, show_in_list, show_in_filters, options, visible_to_roles, editable_by_roles, is_core",
     )
     .eq("id", id)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (!field) notFound();

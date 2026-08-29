@@ -37,11 +37,17 @@ export async function createLeadManually(_prevState: FormState, formData: FormDa
     return { error: "Primary phone is required." };
   }
 
+  // 'center' scope always shows the picker (lead-create-form.tsx) so a
+  // centerId is required; 'own' scope hides it entirely (ownership already
+  // comes from assignedTo below) so a centerId is optional there — but if
+  // one is present anyway (e.g. a tampered request), it must still be one
+  // of the caller's own centres, same check importLeads() applies per row.
   const centerId = (formData.get("centerId") as string) || null;
-  if (scope === "center") {
-    if (!centerId || !user.centerIds.includes(centerId)) {
-      return { error: "Choose one of your own centres." };
-    }
+  if (scope === "center" && (!centerId || !user.centerIds.includes(centerId))) {
+    return { error: "Choose one of your own centres." };
+  }
+  if (scope === "own" && centerId && !user.centerIds.includes(centerId)) {
+    return { error: "Choose one of your own centres." };
   }
 
   // 'own' scope means "only leads assigned to me": force self-assignment

@@ -667,3 +667,48 @@ Line Tools installation turned out to be broken in a way that silently prevented
 therefore every "pull latest and re-run the migration" instruction) from ever taking effect —
 removing the manual local step removes that whole failure class, not just this one instance of
 it.
+
+2026-08-29 · [settings] `deleteStage()`/`deleteOption()`/`deleteField()` now soft-delete
+(`deleted_at = now()`, `is_active = false`) instead of issuing a real `DELETE`, closing a real
+gap against CLAUDE.md non-negotiable #5: `pipeline_stages`, `dropdown_options`, and
+`field_definitions` already carried a `deleted_at` column via the shared `softDelete()`
+helper, but nothing ever wrote to it — the "delete" action a user actually triggers was a hard
+delete the whole time. No new migration: the existing `*_delete` RLS policies and the
+`protect_core_field_definitions` DELETE trigger are simply no longer exercised by any code
+path (left in place rather than dropped — removing an unused, already-correctly-scoped policy
+isn't worth a migration on a live database for this pass). `deleteField()` re-implements the
+core-field guard in its `UPDATE`'s `WHERE is_core = false` clause instead, since the DB trigger
+only fires on a real `DELETE`. Functional read paths (kanban columns, filter/option lists,
+`getFieldSchema`) needed no changes — they already filtered `is_active = true`, so a
+soft-deleted row (which also gets `is_active = false`) disappears from them automatically; only
+the settings screens that deliberately list inactive-but-not-yet-deleted rows needed an added
+`deleted_at is null` filter. Point-lookups by a lead's own already-stored `stage_id` (the lead
+detail page's current-stage display, `moveLeadStage`'s target-stage validation) are
+deliberately left unfiltered by `deleted_at` — a lead that already sits in a since-deleted
+stage should keep resolving that stage's name, same as it already did (with no guard at all)
+for a *deactivated* stage before this session.
+
+2026-08-29 · [testing] This sandbox's local Postgres 16 instance needed a hand-built stand-in
+for the pieces of a real Supabase project the migrations/RLS policies/`tests/rls.spec.ts`
+assume exist — schema `auth` with a `users(id uuid, email text)` table, an `auth.uid()`
+function reading `sub` out of the `request.jwt.claims` GUC (exactly what `tests/rls.spec.ts`'s
+`asUser()` sets before each simulated request), and the `authenticated`/`anon`/`service_role`
+roles with the broad default table grants Supabase provisions automatically on every real
+project (RLS policies are meant to be the only real gate on top of those grants, same as
+production). Never written into a migration file — a real Supabase project already has the
+genuine versions of all of this, and shipping a fake `auth` schema into a real project's
+migration history would be actively harmful. Purely a one-time local environment setup step,
+same as previous sessions' "verified against a real local Postgres 16 instance" runs.
+
+2026-08-29 · [testing] Running the full `npm test` suite with Vitest's default file
+parallelism against one shared database produced one flaky failure
+(`tests/identity-resolve.spec.ts`'s "never rejects a duplicate even across many repeats",
+an FK violation on `assignment_rules`) that did not reproduce when the same file ran alone,
+or when the full suite ran with `--no-file-parallelism`. Root cause: independent spec files
+share one physical database and at least one other file inserts/deletes an `assignment_rules`
+fixture row around the same window `applyAssignment()` (called from inside
+`resolveOrCreateLead()`) reads the table — a cross-file race, not a bug in the identity or
+assignment code itself. Pre-existing limitation of the current test setup (each spec file
+manages its own fixtures/cleanup independently, with no shared locking), not something this
+session's changes touch or fix. `npx vitest run --no-file-parallelism` is the reliable way to
+get a real full-suite signal locally until the suite's fixtures are made cross-file-safe.

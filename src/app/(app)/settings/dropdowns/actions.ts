@@ -150,7 +150,14 @@ export async function deleteOption(optionId: string, category: string): Promise<
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("dropdown_options").delete().eq("id", optionId);
+  // Soft delete (CLAUDE.md non-negotiable #5: nothing is hard-deleted) —
+  // dropdown_options has a deleted_at column for exactly this. Also clears
+  // is_active so the option stops appearing anywhere is_active=true is
+  // already filtered (getDropdownOptions, temperature rule forms, etc).
+  const { error } = await supabase
+    .from("dropdown_options")
+    .update({ deleted_at: new Date().toISOString(), is_active: false })
+    .eq("id", optionId);
   if (error) {
     return { error: error.message };
   }

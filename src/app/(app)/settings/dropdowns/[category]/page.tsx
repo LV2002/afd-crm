@@ -25,6 +25,7 @@ export default async function DropdownCategoryPage({
     .from("dropdown_options")
     .select("id, value, label, color, is_active")
     .eq("category", category)
+    .is("deleted_at", null)
     .order("sort_order")
     .returns<OptionRowData[]>();
 

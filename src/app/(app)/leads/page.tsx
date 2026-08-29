@@ -21,6 +21,7 @@ import {
   type FieldOption,
 } from "@/lib/fields/resolve-field-options";
 import { applyLeadFilters, readFilterValues } from "@/lib/leads/apply-filters";
+import { maskPhone } from "@/lib/leads/mask-phone";
 import { createClient } from "@/lib/supabase/server";
 import { formatTerm } from "@/lib/terminology/terms";
 import { getTerminologyMap } from "@/lib/terminology/get-terminology";
@@ -49,12 +50,13 @@ export default async function LeadsPage({
   const filterableFields = fields.filter((f) => f.showInFilters);
   const canRevealPhone = can(user, "lead.reveal_phone");
 
-  const optionsByKey: Record<string, FieldOption[]> = {};
-  for (const field of fields) {
-    if (OPTION_BEARING_TYPES.has(field.type)) {
-      optionsByKey[field.key] = await resolveFieldOptions(supabase, field);
-    }
-  }
+  const optionBearingFields = fields.filter((field) => OPTION_BEARING_TYPES.has(field.type));
+  const optionEntries = await Promise.all(
+    optionBearingFields.map(
+      async (field) => [field.key, await resolveFieldOptions(supabase, field)] as const,
+    ),
+  );
+  const optionsByKey: Record<string, FieldOption[]> = Object.fromEntries(optionEntries);
   const filterFieldsWithOptions: FilterFieldWithOptions[] = filterableFields.map((field) => ({
     field,
     options: optionsByKey[field.key] ?? [],
@@ -209,10 +211,15 @@ function renderCell(
   }
 
   if (field.type === "phone") {
+    // CLAUDE.md non-negotiable #6: mask before this ever leaves the server.
+    // A Client Component prop is serialized into the RSC flight payload
+    // regardless of how the component chooses to render it, so passing the
+    // raw number here and relying on RevealPhoneButton to display it masked
+    // would still ship the full number to the browser.
     return (
       <RevealPhoneButton
         leadId={String(row.id)}
-        masked={value as string | null}
+        masked={maskPhone(value as string | null)}
         canReveal={canRevealPhone}
       />
     );
