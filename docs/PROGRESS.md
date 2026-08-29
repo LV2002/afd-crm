@@ -1224,4 +1224,76 @@ features per `docs/02-BUILD-PHASES.md`) — the table list here is a plain array
 
 ---
 
-<!-- Sessions append below -->
+## Session 11 follow-up — code audit & cleanup — 2026-08-29
+
+**Shipped:** a full read-only code-review pass across `src/`, then fixes for every real
+finding it surfaced:
+
+- **Phone-masking RSC leak** (CLAUDE.md non-negotiable #6): the leads list passed the raw,
+  unmasked `primary_phone` value as a prop to the client `RevealPhoneButton` component. A
+  Client Component prop is serialized into the RSC flight payload regardless of how the
+  component chooses to *render* it, so the full number was reaching the browser for every row
+  on every page load, for every counsellor, whether or not they held `lead.reveal_phone` — the
+  masking only ever happened client-side. Fixed by masking in `leads/page.tsx`'s `renderCell`
+  before the value is ever passed to the client component. `revealLeadPhone()`'s existing
+  audited reveal flow is unaffected.
+- **Hard deletes on soft-delete-only tables** (CLAUDE.md non-negotiable #5): `deleteStage()`,
+  `deleteOption()`, and `deleteField()` all issued a real `DELETE` against tables
+  (`pipeline_stages`, `dropdown_options`, `field_definitions`) that already carry a
+  `deleted_at` column via the shared `softDelete()` schema helper — the column existed but
+  nothing wrote to it. A hard delete on an in-use pipeline stage also hit
+  `leads.stage_id`'s `onDelete: 'restrict'` FK with a raw Postgres error surfaced straight to
+  the settings UI. Fixed by switching all three to `UPDATE ... SET deleted_at = now(),
+  is_active = false`; every functional query that resolves these into forms/filters/kanban
+  columns already filtered `is_active = true` so they disappear from live use for free, and
+  the six settings list/edit pages that intentionally show inactive-but-not-deleted rows
+  (`pipeline-stages`, `dropdowns/[category]`, `fields`, `temperatures`, plus the two
+  edit-by-id pages) now additionally filter `deleted_at is null`. `deleteField()` also gained
+  an `is_core = false` guard in the update's `WHERE` clause — the app-level equivalent of the
+  `protect_core_field_definitions` trigger, which only fires on a real `DELETE` and would no
+  longer run now that this is an `UPDATE` (the UI already hides the delete action for core
+  fields; this covers a direct call bypassing it).
+- **Inconsistent scope check**: `createLeadManually()` only validated `centerId` against the
+  caller's own `centerIds` when `scopeFor(user, "lead.create") === "center"`, leaving
+  `"own"`-scope callers (counsellors) unchecked — a tampered request could attach a manually
+  created lead to a centre outside the counsellor's access. `importLeads()` already got this
+  right (`scope !== "all"`). Fixed to match: `"own"` scope still doesn't require a `centerId`
+  (the create form hides that field entirely for `"own"`-scope users — ownership already comes
+  from the forced self-`assignedTo`), but if one is present it must be one of the caller's own
+  centres.
+- **Silently discarded read error**: `updateLead()` read the lead's existing `custom` jsonb
+  to merge form edits into it, but discarded the Supabase `error` from that read. On a
+  transient failure, `existing` would be `undefined`, `?? {}` would silently substitute an
+  empty object, and the final `UPDATE` would overwrite the lead's entire `custom` column with
+  only this form submission's fields — permanently losing every other custom field value the
+  lead had. Fixed to return an error instead of proceeding on a failed read.
+- **Sequential instead of parallel option fetching**: `leads/page.tsx`, `exportLeadsCsv()`,
+  and `importLeads()` each `await`ed `resolveFieldOptions()` one field at a time in a `for`
+  loop. Fixed to `Promise.all` across the option-bearing fields in all three.
+- **Missing per-page permission gate**: `settings/users/page.tsx` rendered for anyone who
+  passed the `/settings` layout's "holds *some* settings permission" check, not specifically
+  `users.manage` — RLS on `profiles` already scopes what the query can return, so this was
+  defense-in-depth rather than a raw leak, but every other settings page's mutations already
+  gate on their specific permission and this page didn't. Added the matching
+  `can(user, "users.manage")` check.
+
+**Verified:** `npx tsc --noEmit` and `npx eslint` both clean. `npm run build` succeeds (all 31
+routes). Full test suite green against a real local Postgres 16 instance with all migrations
+and the seed applied: `Tests 131 passed | 2 skipped (133)` across all 17 files (run
+single-threaded — the suite has a known cross-file race when run concurrently against one
+shared database, see docs/DECISIONS.md; not something this session's changes touch).
+
+**Known broken:** none introduced. The pre-existing cross-file test race (see above) and the
+two skipped payments/receipts tests (not yet buildable — no payments/receipts tables exist
+yet) are unchanged from before this session.
+
+**Verify by:** `npm test` (or, to match this session's verification exactly, `npx vitest run
+--no-file-parallelism`) — expect `131 passed | 2 skipped`. In the live app: as a counsellor,
+confirm the leads list never shows a full phone number until you click reveal; as an admin,
+delete a pipeline stage/dropdown option/custom field and confirm it disappears from the
+settings list and from every form/filter, then confirm existing leads that referenced a
+deleted stage are unaffected (their own stage name still resolves on their detail page).
+
+**Next:** create the 3 real accounts (1 admin, 2 counsellors — Kochi/Kannur) via
+`/settings/users/new` if not already done, then historical lead-data import whenever Leon is
+ready for it (deliberately deferred, not part of this session).

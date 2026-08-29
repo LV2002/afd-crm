@@ -13,6 +13,7 @@ export default async function EditStagePage({ params }: { params: Promise<{ id: 
     .from("pipeline_stages")
     .select("id, name, color, stage_type, probability, sla_hours, requires_reason, required_fields")
     .eq("id", id)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (!stage) notFound();

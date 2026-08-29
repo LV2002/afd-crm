@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
+import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { can, getCurrentUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 interface UserListRow {
@@ -22,6 +24,15 @@ interface UserListRow {
 }
 
 export default async function UsersSettingsPage() {
+  // The settings layout only checks that the caller has *some* settings
+  // permission (settingsNavFor) before rendering any /settings/* page, not
+  // that they specifically hold users.manage — RLS on `profiles` already
+  // scopes what this query can return (own/center/all), but this is the
+  // same explicit per-page check every other settings mutation already
+  // requires, applied here too rather than relying on RLS alone.
+  const user = await getCurrentUser();
+  if (!user || !can(user, "users.manage")) return <AccessDenied />;
+
   const supabase = await createClient();
   const { data: users } = await supabase
     .from("profiles")

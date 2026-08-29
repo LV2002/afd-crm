@@ -206,10 +206,30 @@ export async function deleteField(fieldId: string): Promise<{ error?: string }> 
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("field_definitions").delete().eq("id", fieldId);
+  // Soft delete (CLAUDE.md non-negotiable #5: nothing is hard-deleted) —
+  // field_definitions has a deleted_at column for exactly this. Also
+  // clears is_active so the field stops appearing anywhere is_active=true
+  // is already filtered (getFieldSchema drives the form/list/filters/export).
+  //
+  // Filtering on is_core=false in the WHERE clause (rather than checking it
+  // in a separate read first) is the soft-delete equivalent of the
+  // protect_core_field_definitions DB trigger, which only fires on a real
+  // DELETE and would no longer run now that this is an UPDATE. The UI
+  // already hides the delete action for core fields (field-row-actions.tsx)
+  // — this is the same defense-in-depth the trigger used to provide against
+  // a direct call bypassing the UI.
+  const { data, error } = await supabase
+    .from("field_definitions")
+    .update({ deleted_at: new Date().toISOString(), is_active: false })
+    .eq("id", fieldId)
+    .eq("is_core", false)
+    .select("id")
+    .maybeSingle();
   if (error) {
-    // Covers the protect_core_field_definitions trigger for is_core rows.
     return { error: error.message };
+  }
+  if (!data) {
+    return { error: "Core field definitions cannot be deleted." };
   }
 
   await writeAuditLog(supabase, {

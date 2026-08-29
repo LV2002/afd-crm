@@ -31,6 +31,7 @@ export default async function FieldsSettingsPage() {
   const { data: fields } = await supabase
     .from("field_definitions")
     .select("id, entity, key, label, type, section, is_core, is_active")
+    .is("deleted_at", null)
     .order("entity")
     .order("sort_order")
     .returns<FieldRow[]>();

@@ -95,13 +95,16 @@ export async function importLeads(
   }
 
   // Only fetch options for fields actually in play — most imports use a handful of columns, not all ~29.
-  const optionsByKey = new Map<string, FieldOption[]>();
-  for (const key of mappedKeys) {
+  const optionBearingKeys = Array.from(mappedKeys).filter((key) => {
     const field = fieldByKey.get(key);
-    if (field && OPTION_BEARING_TYPES.has(field.type)) {
-      optionsByKey.set(key, await resolveFieldOptions(supabase, field));
-    }
-  }
+    return field && OPTION_BEARING_TYPES.has(field.type);
+  });
+  const optionEntries = await Promise.all(
+    optionBearingKeys.map(
+      async (key) => [key, await resolveFieldOptions(supabase, fieldByKey.get(key)!)] as const,
+    ),
+  );
+  const optionsByKey = new Map<string, FieldOption[]>(optionEntries);
 
   const batchId = randomUUID();
   const rowResults: ImportRowResult[] = [];

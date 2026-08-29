@@ -95,12 +95,13 @@ export async function exportLeadsCsv(filterValues: LeadFilterValues): Promise<Ex
   const fields = await getFieldSchema(supabase, "lead", user);
   const canRevealPhone = can(user, "lead.reveal_phone");
 
-  const optionsByKey: Record<string, FieldOption[]> = {};
-  for (const field of fields) {
-    if (OPTION_BEARING_TYPES.has(field.type)) {
-      optionsByKey[field.key] = await resolveFieldOptions(supabase, field);
-    }
-  }
+  const optionBearingFields = fields.filter((field) => OPTION_BEARING_TYPES.has(field.type));
+  const optionEntries = await Promise.all(
+    optionBearingFields.map(
+      async (field) => [field.key, await resolveFieldOptions(supabase, field)] as const,
+    ),
+  );
+  const optionsByKey: Record<string, FieldOption[]> = Object.fromEntries(optionEntries);
 
   // Core fields are real columns; any custom field (is_core: false) lives
   // inside the `custom` jsonb blob instead — see field-column.ts. Selecting

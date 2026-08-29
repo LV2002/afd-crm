@@ -30,11 +30,19 @@ export async function updateLead(leadId: string, _prevState: FormState, formData
   const supabase = await createClient();
   const fields = await getFieldSchema(supabase, "lead", user);
 
-  const { data: existing } = await supabase
+  const { data: existing, error: readError } = await supabase
     .from("leads")
     .select("custom")
     .eq("id", leadId)
     .maybeSingle<{ custom: Record<string, unknown> | null }>();
+
+  // A transient read failure here must not fall through to `?? {}` below —
+  // that would make the update at the end of this function overwrite the
+  // lead's entire `custom` jsonb with only this form's fields, silently
+  // discarding every other custom value the lead already had.
+  if (readError) {
+    return { error: `Could not load current field values: ${readError.message}` };
+  }
 
   const coreUpdates: Record<string, unknown> = {};
   const customUpdates: Record<string, unknown> = { ...(existing?.custom ?? {}) };

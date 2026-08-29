@@ -14,6 +14,7 @@ export default async function TemperaturesSettingsPage() {
     .from("dropdown_options")
     .select("id, value, label, color, is_active")
     .eq("category", "temperature")
+    .is("deleted_at", null)
     .order("sort_order")
     .returns<OptionRowData[]>();
 

@@ -215,7 +215,16 @@ export async function deleteStage(stageId: string): Promise<{ error?: string }> 
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("pipeline_stages").delete().eq("id", stageId);
+  // Soft delete (CLAUDE.md non-negotiable #5: nothing is hard-deleted) —
+  // pipeline_stages has a deleted_at column for exactly this. Also clears
+  // is_active so every existing is_active=true query (kanban columns, the
+  // stage_id filter/option list) stops surfacing it, same as deactivating.
+  // A hard DELETE here used to hit leads.stage_id's onDelete:'restrict' FK
+  // with a raw Postgres error whenever the stage still had leads in it.
+  const { error } = await supabase
+    .from("pipeline_stages")
+    .update({ deleted_at: new Date().toISOString(), is_active: false })
+    .eq("id", stageId);
   if (error) {
     return { error: error.message };
   }
