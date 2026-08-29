@@ -26,13 +26,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { ad_account_id: adAccountId, page_access_token: accessToken } = await getIntegrationCredentials("meta", [
+  // A Marketing API call (Insights, Custom Audiences) needs a token with
+  // ads_read/ads_management — a Page access token generally can't read ad
+  // account data, so this is deliberately a separate credential from
+  // `page_access_token` (which the Lead Ads webhook uses to fetch a
+  // submitted lead's own answers). See docs/DECISIONS.md.
+  const { ad_account_id: adAccountId, ads_access_token: accessToken } = await getIntegrationCredentials("meta", [
     "ad_account_id",
-    "page_access_token",
+    "ads_access_token",
   ]);
 
   if (!adAccountId || !accessToken) {
-    return NextResponse.json({ error: "Meta ad_account_id/page_access_token not configured" }, { status: 200 });
+    return NextResponse.json({ error: "Meta ad_account_id/ads_access_token not configured" }, { status: 200 });
   }
 
   const date = yesterdayDateStringIST(new Date());

@@ -2009,3 +2009,61 @@ it appears in `/leads` within seconds with `source = meta` and the right campaig
 
 **Next:** Google Ads (Lead Ads-equivalent ingestion + ad spend sync, mirroring this session),
 or WhatsApp (per-counsellor numbers, per Leon's decision) — whichever Leon wants next.
+
+## Session 21 — Meta Custom Audience retargeting sync
+
+Leon confirmed the open consent question from Session 20 ("yes everyone is consenting") and
+asked to proceed with the rest of the integration build order (Google next, then WhatsApp,
+then telephony). This session builds the retargeting half of the Meta integration that
+Session 20 deliberately left out.
+
+- **`ad_audience_members`** (`src/lib/db/schema/retargeting.ts`) — tracks current ad-platform
+  audience membership per `(platform, lead_id)`, so the sync knows what's already uploaded
+  and can compute an add/remove diff rather than only ever adding.
+- **Eligibility + diff logic** (`src/lib/integrations/audience-sync.ts`, pure functions,
+  fully unit tested) — `isRetargetingEligible()` excludes a lead with no recorded consent,
+  withdrawn consent, `doNotContact`, any opted-out channel, no phone/email, or soft-deleted;
+  `computeAudienceDiff()` takes the current eligible-lead-id set and the currently-synced set
+  and returns `{ toAdd, toRemove }`.
+- **PII hashing** (`src/lib/integrations/hash-pii.ts`) — SHA-256 hex of a normalised phone
+  (digits only) or email (trim+lowercase), per Meta/Google's shared Custom
+  Audience/Customer Match hashing spec.
+- **Meta Custom Audience client** (`src/lib/integrations/meta/audience-client.ts`) —
+  `createCustomAudience`, `addUsersToAudience`, `removeUsersFromAudience` against the
+  Marketing API.
+- **`/api/cron/retargeting-sync/meta`** — same `CRON_SECRET` pattern as the other crons.
+  Auto-creates the Custom Audience on first run and persists its id as an integration
+  credential; every run after that reuses it. Pulls all non-deleted leads, filters to
+  eligible ones, diffs against `ad_audience_members`, uploads/removes the difference, and
+  updates the bookkeeping table to match — verified end-to-end with a real test that flips a
+  synced lead's consent to `"withdrawn"` mid-test and confirms it's actually removed from the
+  platform audience, not just skipped on the next add.
+- **Fixed a real bug before it shipped**: the ad-spend-sync cron and the Meta settings
+  form/actions were using `page_access_token` for Marketing API calls (Insights, Custom
+  Audiences), which actually need a different token type (`ads_read`/`ads_management`).
+  Introduced a separate `ads_access_token` credential; the settings page now tests both
+  tokens independently since a Meta "connection" now has two independently-configurable
+  halves (lead ingestion vs. spend/retargeting).
+
+**Verified:** `npx tsc --noEmit` clean. `npx eslint` clean on every new/touched file.
+`npm run build` succeeds (`/api/cron/retargeting-sync/meta` compiles alongside everything
+else). Full suite green against real local Postgres 16: **276 tests passed across 35 files**
+(up from 248/32 at the end of Session 20) — new coverage is `tests/audience-sync.spec.ts`
+(14 pure tests), `tests/hash-pii.spec.ts` (9 pure tests), and
+`tests/meta-retargeting-sync.spec.ts` (5 end-to-end tests against real Postgres, mocking only
+the three outbound Meta Custom Audience API calls).
+
+**Stubbed / deliberately out of scope for this pass:** Google Ads (up next, same shape as
+Meta end-to-end: webhook, ad spend sync, Customer Match retargeting, settings UI). WhatsApp
+and telephony (later, per Leon's confirmed build order). No per-channel opt-out vocabulary
+yet, so `optedOutChannels` is all-or-nothing (see docs/DECISIONS.md).
+
+**Verify by:** `npm run db:migrate && DATABASE_URL=... npm test` — expect `276 passed`. Then
+`npm run build`. Against a real Meta Ad Account (once `ads_access_token`/`ad_account_id` are
+entered in Settings → Integrations → Meta): trigger `/api/cron/retargeting-sync/meta` and
+confirm a Custom Audience appears under Meta Ads Manager → Audiences populated with the
+consenting leads' hashed phone numbers.
+
+**Next:** Google Ads — Lead Form webhook, ad spend sync, Customer Match retargeting sync, and
+`/settings/integrations/google` credentials UI, mirroring this session and Session 20's shape
+as closely as Google's actual API allows.

@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/ad-spend-sync/meta",
       "schedule": "30 21 * * *"
+    },
+    {
+      "path": "/api/cron/retargeting-sync/meta",
+      "schedule": "30 22 * * *"
     }
   ]
 }

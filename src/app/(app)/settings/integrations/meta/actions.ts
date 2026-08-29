@@ -15,7 +15,14 @@ export interface MetaFormState {
   success?: string;
 }
 
-const META_KEYS = ["app_id", "app_secret", "verify_token", "page_access_token", "ad_account_id"] as const;
+const META_KEYS = [
+  "app_id",
+  "app_secret",
+  "verify_token",
+  "page_access_token",
+  "ads_access_token",
+  "ad_account_id",
+] as const;
 type MetaKey = (typeof META_KEYS)[number];
 
 const KEY_LABELS: Record<MetaKey, string> = {
@@ -23,6 +30,7 @@ const KEY_LABELS: Record<MetaKey, string> = {
   app_secret: "App Secret",
   verify_token: "Verify Token",
   page_access_token: "Page Access Token",
+  ads_access_token: "Ads Access Token",
   ad_account_id: "Ad Account ID",
 };
 
@@ -81,11 +89,22 @@ export interface TestConnectionResult {
   message: string;
 }
 
+/** Confirms one token is real, issued by this app, and not expired — never returns the token itself, only what Meta says about it. */
+async function checkToken(token: string, appId: string, appSecret: string, label: string): Promise<string> {
+  const info = await debugMetaToken(token, `${appId}|${appSecret}`);
+  if (!info.isValid) return `${label}: no longer valid — generate a new one.`;
+  if (info.appId && info.appId !== appId) return `${label}: issued by a different Meta app than the App ID configured here.`;
+  const expiry = info.expiresAt ? (info.expiresAt === 0 ? "never expires" : `expires ${new Date(info.expiresAt * 1000).toLocaleDateString()}`) : "expiry unknown";
+  return `${label}: valid, ${expiry}.`;
+}
+
 /**
- * Confirms the stored Page Access Token is real and was issued by this
- * app — the one check that's meaningful regardless of exactly which
- * permissions the token happens to carry. Never returns the token itself,
- * only what Meta says about it.
+ * Checks both tokens independently — Page Access Token (used by the Lead
+ * Ads webhook to fetch a submitted lead's answers) and Ads Access Token
+ * (used by the ad spend sync and retargeting sync, which need
+ * ads_read/ads_management rather than page permissions) are genuinely
+ * different tokens with different scopes, so "connected" isn't a single
+ * yes/no here.
  */
 export async function testMetaConnection(): Promise<TestConnectionResult> {
   const user = await getCurrentUser();
@@ -93,25 +112,23 @@ export async function testMetaConnection(): Promise<TestConnectionResult> {
     return { ok: false, message: "You don't have permission to do that." };
   }
 
-  const { app_id: appId, app_secret: appSecret, page_access_token: pageAccessToken } = await getIntegrationCredentials(
-    "meta",
-    ["app_id", "app_secret", "page_access_token"],
-  );
+  const {
+    app_id: appId,
+    app_secret: appSecret,
+    page_access_token: pageAccessToken,
+    ads_access_token: adsAccessToken,
+  } = await getIntegrationCredentials("meta", ["app_id", "app_secret", "page_access_token", "ads_access_token"]);
 
-  if (!appId || !appSecret || !pageAccessToken) {
-    return { ok: false, message: "Set App ID, App Secret and Page Access Token first." };
+  if (!appId || !appSecret || (!pageAccessToken && !adsAccessToken)) {
+    return { ok: false, message: "Set App ID, App Secret, and at least one of Page/Ads Access Token first." };
   }
 
   try {
-    const info = await debugMetaToken(pageAccessToken, `${appId}|${appSecret}`);
-    if (!info.isValid) {
-      return { ok: false, message: "Meta says this Page Access Token is no longer valid — generate a new one." };
-    }
-    if (info.appId && info.appId !== appId) {
-      return { ok: false, message: "This token was issued by a different Meta app than the App ID configured here." };
-    }
-    const expiry = info.expiresAt ? (info.expiresAt === 0 ? "never expires" : `expires ${new Date(info.expiresAt * 1000).toLocaleDateString()}`) : "expiry unknown";
-    return { ok: true, message: `Connected — token is valid, ${expiry}.` };
+    const messages: string[] = [];
+    if (pageAccessToken) messages.push(await checkToken(pageAccessToken, appId, appSecret, "Page Access Token"));
+    if (adsAccessToken) messages.push(await checkToken(adsAccessToken, appId, appSecret, "Ads Access Token"));
+    const ok = !messages.some((m) => m.includes("no longer valid") || m.includes("different Meta app"));
+    return { ok, message: messages.join(" ") };
   } catch (err) {
     const message = err instanceof MetaGraphApiError ? `Meta rejected the request: ${err.message}` : "Could not reach Meta's API.";
     return { ok: false, message };

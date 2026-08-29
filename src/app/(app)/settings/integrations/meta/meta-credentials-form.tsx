@@ -24,7 +24,13 @@ const FIELDS: Array<{ key: keyof MetaConnectionStatus["configured"]; label: stri
   {
     key: "page_access_token",
     label: "Page Access Token",
-    help: "A long-lived token for the Facebook Page your lead ads run on.",
+    help: "A long-lived token for the Facebook Page your lead ads run on — used to fetch a submitted lead's answers.",
+    secret: true,
+  },
+  {
+    key: "ads_access_token",
+    label: "Ads Access Token",
+    help: "A System User or Marketing API token with ads_read/ads_management — used for the spend and retargeting syncs. Usually different from the Page token above.",
     secret: true,
   },
   { key: "ad_account_id", label: "Ad Account ID", help: "Numeric id, without the act_ prefix.", secret: false },

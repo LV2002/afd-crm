@@ -16,8 +16,11 @@ export default async function MetaIntegrationPage() {
       <div>
         <h1 className="text-2xl font-semibold">Meta</h1>
         <p className="max-w-lg text-sm text-muted-foreground">
-          Connects Meta Lead Ads (a lead lands in the CRM the moment someone submits your form)
-          and the nightly ad spend sync (for cost-per-lead and ROAS reporting).
+          Connects Meta Lead Ads (a lead lands in the CRM the moment someone submits your form),
+          the nightly ad spend sync (for cost-per-lead and ROAS reporting), and the daily
+          retargeting sync (every consenting lead kept up to date in a Meta Custom Audience —
+          added when eligible, removed the moment consent is withdrawn or they&apos;re marked
+          do-not-contact).
         </p>
       </div>
 

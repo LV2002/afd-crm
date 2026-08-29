@@ -1205,3 +1205,38 @@ an automated daily upload of hashed phone numbers to an ad platform ships — st
 Whoever picks this up next should get that answer before writing the sync, not after,
 precisely because by then the rest of the Meta plumbing will already exist and make the
 upload job look like a trivial extension of it.
+
+2026-08-29 · [integrations] Leon confirmed explicitly ("yes everyone is consenting") that
+every lead in the CRM has given consent for retargeting — this is the answer the entry above
+said was required before building the Custom Audience upload, so it's built this session.
+Eligibility (`isRetargetingEligible` in `src/lib/integrations/audience-sync.ts`) still checks
+`consentStatus === "given"` per-lead rather than skipping the check organisation-wide: a lead
+with `consentStatus: null` (never asked) or `"withdrawn"` is excluded regardless of Leon's
+blanket confirmation, and `doNotContact`/any non-empty `optedOutChannels` also excludes. This
+is deliberate — Leon's answer establishes the *policy* (consent has been sought and given as
+a matter of practice), not a licence to upload leads whose own record says otherwise or who
+opt out later. No per-channel opt-out vocabulary is seeded yet, so `optedOutChannels` is
+treated as all-or-nothing (any entry excludes from every platform) until that's built out.
+
+2026-08-29 · [integrations] The retargeting sync is a genuine two-way diff, not an
+add-only job — `ad_audience_members` tracks current platform membership per
+`(platform, lead_id)`, and each run computes `eligibleLeadIds` vs
+`currentlySyncedLeadIds` and both adds and removes. This matters specifically because
+consent is revocable: a lead who withdraws consent (or gets marked do-not-contact) after
+already being uploaded must be actively removed from the ad platform's audience, not just
+excluded from future adds — an add-only sync would leave a withdrawn lead sitting in Meta's
+Custom Audience indefinitely. Verified with a real test
+(`tests/meta-retargeting-sync.spec.ts`) that flips a synced lead's `consentStatus` to
+`"withdrawn"` and confirms `removeUsersFromAudience` is called and the `ad_audience_members`
+row is deleted in the same run.
+
+2026-08-29 · [integrations] `ads_access_token` (Marketing API — Insights, Custom Audiences)
+and `page_access_token` (Graph API — fetching a submitted lead's own answers) are stored and
+tested as two separate credentials, not one. They require different Meta permission scopes
+(`ads_read`/`ads_management` vs page-scoped lead-retrieval permissions) and are typically
+issued to different token types (System User vs Page token) — conflating them was an actual
+bug caught mid-session (the ad-spend-sync cron originally reused `page_access_token`) before
+it shipped. `testMetaConnection` now checks each token independently against Meta's
+`/debug_token` and reports both, since "the Meta integration is connected" isn't a single
+yes/no when the two halves (lead ingestion vs. spend/retargeting) can be configured, valid,
+or broken independently of each other.

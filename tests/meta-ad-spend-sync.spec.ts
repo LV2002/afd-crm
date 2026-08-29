@@ -48,13 +48,13 @@ async function sweep() {
 beforeAll(async () => {
   await sweep();
   await setIntegrationCredential("meta", "ad_account_id", TEST_AD_ACCOUNT_ID);
-  await setIntegrationCredential("meta", "page_access_token", "fake-token");
+  await setIntegrationCredential("meta", "ads_access_token", "fake-token");
 });
 
 afterAll(async () => {
   await sweep();
   await deleteIntegrationCredential("meta", "ad_account_id");
-  await deleteIntegrationCredential("meta", "page_access_token");
+  await deleteIntegrationCredential("meta", "ads_access_token");
 });
 
 beforeEach(() => {
