@@ -32,9 +32,9 @@ export async function updateLead(leadId: string, _prevState: FormState, formData
 
   const { data: existing, error: readError } = await supabase
     .from("leads")
-    .select("custom")
+    .select("custom, temperature")
     .eq("id", leadId)
-    .maybeSingle<{ custom: Record<string, unknown> | null }>();
+    .maybeSingle<{ custom: Record<string, unknown> | null; temperature: string | null }>();
 
   // A transient read failure here must not fall through to `?? {}` below —
   // that would make the update at the end of this function overwrite the
@@ -78,6 +78,24 @@ export async function updateLead(leadId: string, _prevState: FormState, formData
       customUpdates[field.key] = value;
       touchedCustom = true;
     }
+  }
+
+  // A human changing `temperature` here is exactly the "counsellor's manual
+  // judgement" docs/01-DATA-MODEL.md § Temperature describes — it must beat
+  // the recompute cron for a configurable number of days, or the cron would
+  // silently overwrite this edit on its very next run. Only stamped on a
+  // genuine change (not a same-value re-submit of the whole form) so an
+  // unrelated field edit doesn't keep resetting the override window.
+  if ("temperature" in coreUpdates && coreUpdates.temperature !== existing?.temperature) {
+    const { data: org } = await supabase
+      .from("org_settings")
+      .select("temperature_override_days")
+      .maybeSingle<{ temperature_override_days: number }>();
+    const overrideDays = org?.temperature_override_days ?? 3;
+    coreUpdates.temperature_override_until = new Date(
+      Date.now() + overrideDays * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    coreUpdates.temperature_set_by = user.id;
   }
 
   const payload = touchedCustom ? { ...coreUpdates, custom: customUpdates } : coreUpdates;
@@ -155,6 +173,12 @@ export async function logInteraction(leadId: string, _prevState: FormState, form
     await supabase.from("leads").update({ next_followup_at: nextFollowupAtRaw }).eq("id", leadId);
   }
 
+  const nowIso = new Date().toISOString();
+
+  // last_activity_at updates on every interaction — unlike first_response_at
+  // below, there's no "only the first time" gate here.
+  await supabase.from("leads").update({ last_activity_at: nowIso }).eq("id", leadId);
+
   // Stamp first_response_at the first time any interaction is logged for
   // this lead — the SLA sweep's `first_response` measure has nothing to
   // count from until this exists (docs/01-DATA-MODEL.md § SLA policies).
@@ -162,7 +186,7 @@ export async function logInteraction(leadId: string, _prevState: FormState, form
   // once responded, this is set for good.
   await supabase
     .from("leads")
-    .update({ first_response_at: new Date().toISOString() })
+    .update({ first_response_at: nowIso })
     .eq("id", leadId)
     .is("first_response_at", null);
 

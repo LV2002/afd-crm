@@ -13,6 +13,8 @@ export const orgSettings = pgTable("org_settings", {
   locale: text("locale").notNull().default("en-IN"),
   fiscalYearStartMonth: integer("fiscal_year_start_month").notNull().default(4),
   dateFormat: text("date_format").notNull().default("dd/MM/yyyy"),
+  /** docs/01-DATA-MODEL.md § Temperature: how long a counsellor's manual temperature override beats the recompute cron. */
+  temperatureOverrideDays: integer("temperature_override_days").notNull().default(3),
   ...timestamps(),
 });
 

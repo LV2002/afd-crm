@@ -810,3 +810,48 @@ TypeScript loop calling the same `evaluateConditions()`/`evaluateLeadSla()` the 
 already uses (and already unit-tests) is far easier to get right and to keep right than a
 hand-written SQL translation of the same business-hours-aware logic. Revisit if lead volume
 ever grows by an order of magnitude.
+
+2026-08-29 · [sla] Corrected a real priority-direction bug in `evaluateLeadSla()` (shipped last
+session): it sorted `sla_policies` ascending (ties going to the lowest priority number first),
+but docs/01-DATA-MODEL.md § SLA policies states the opposite explicitly — "Highest `priority`
+whose `applies_to` matches wins." Both the SLA and temperature settings screens already order
+their policy/rule lists `priority DESC`, which was the signal that should have caught this the
+first time. Fixed the sort direction, and separately fixed the two tests in
+`tests/sla-evaluate.spec.ts` that encoded the same wrong assumption (a "specific" policy given
+a *lower* priority number than a catch-all, which happened to still pass under the bug — not
+because the test was checking the right thing, but because ascending-sort coincidentally picked
+the specific one first anyway at those exact numbers). Both temperature_rules and sla_policies
+now consistently use "highest number = highest priority" — the opposite of assignment_rules'
+"lowest number = highest priority" — documented directly in `evaluateLeadSla()`'s own comment
+this time, not just in the data model doc, so the next reader doesn't have to go find it.
+
+2026-08-29 · [temperature] The condition grammar `evaluateLeadTemperature()` reuses from the
+assignment engine (`evaluateConditions()`/`FIELD_MAP`) cannot express
+docs/01-DATA-MODEL.md § Temperature's own illustrative rule example — "replied within 48h AND
+stage rank >= 5 → hot" — since there's no whitelisted field for a *derived* value like "hours
+since last activity" or "current stage's rank/probability" in a straight `lead[column]`
+lookup. Shipping temperature_rules with only the fields already whitelisted (source, district,
+city, state, exam year, centre, temperature itself, interested exams/courses, preferred mode)
+is still real, useful capability — an admin can build genuine rules like "source=Referral →
+hot" or "district=Kannur AND exam_year=2027 → warm" today. Extending the grammar with
+time-based/derived comparisons (new condition ops, or precomputing derived fields onto a
+lead-like object before evaluation) is real additional engine work, not a quick add-on, and is
+deliberately left for when it's actually needed rather than guessed at now.
+
+2026-08-29 · [temperature] `org_settings.temperature_override_days` (migration 0015, default
+3) is the config column docs/01-DATA-MODEL.md § Temperature always referenced
+("`org_settings.temperature_override_days`") but that never actually existed in the schema —
+completing it now rather than hardcoding a number, since CLAUDE.md's own test ("would an admin
+ever want this different?") clearly answers yes, and the doc had already committed to this
+being configurable. `updateLead()` reads it fresh on every manual temperature change rather
+than caching it, matching this codebase's existing pattern of trusting a cheap singleton-row
+read over any caching layer.
+
+2026-08-29 · [temperature] The recompute cron only implements the nightly batch half of
+"evaluated nightly and on activity" (docs/01-DATA-MODEL.md § Temperature). An immediate
+recompute triggered by a specific activity (a new interaction, a stage move) would mean calling
+`evaluateLeadTemperature()` synchronously from inside those write paths (`logInteraction()`,
+`moveLeadStage()`, ...) — real additional wiring, and arguably needs its own decision about
+which activities should trigger it, rather than bolting it onto this session's cron as a
+guess. A lead's temperature is at most one nightly cycle stale in the meantime, which is a
+reasonable interim behaviour, not a broken one.

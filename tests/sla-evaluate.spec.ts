@@ -230,16 +230,16 @@ describe("evaluateLeadSla", () => {
     expect(result.elapsedHours).toBeCloseTo(9, 6);
   });
 
-  it("picks the highest-priority (lowest number) matching policy, ignoring a lower-priority match", () => {
+  it("picks the highest-priority-number matching policy, ignoring a lower-priority match", () => {
     const lead = baseLead({ district: "Kannur" });
     const specific = basePolicy({
       id: "specific",
-      priority: 0,
+      priority: 10,
       appliesTo: { all: [{ field: "district", op: "equals", value: "Kannur" }] },
       measure: "first_response",
       targetHours: 1000, // deliberately unreachable, to prove this policy (not the catch-all) is the one used
     });
-    const catchAll = basePolicy({ id: "catch-all", priority: 10, appliesTo: null, targetHours: 1 });
+    const catchAll = basePolicy({ id: "catch-all", priority: 0, appliesTo: null, targetHours: 1 });
     const result = evaluateLeadSla({
       lead,
       policies: [catchAll, specific], // deliberately out of order — sorting is the function's job
@@ -256,11 +256,11 @@ describe("evaluateLeadSla", () => {
   it("falls through to the next policy when the highest-priority match's measure doesn't currently apply", () => {
     const notYetOverdue = basePolicy({
       id: "followup-policy",
-      priority: 0,
+      priority: 5,
       measure: "next_followup",
       targetHours: 1,
     }); // no next_followup_at set on the lead -> doesn't apply, per measureBaseline
-    const fallback = basePolicy({ id: "fallback", priority: 5, measure: "first_response", targetHours: 1 });
+    const fallback = basePolicy({ id: "fallback", priority: 0, measure: "first_response", targetHours: 1 });
     const result = evaluateLeadSla({
       lead: baseLead(),
       policies: [notYetOverdue, fallback],
