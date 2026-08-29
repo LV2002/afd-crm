@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { GitMerge, Plus, Upload } from "lucide-react";
+import { GitMerge, Plus, Upload, UserX } from "lucide-react";
 
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
@@ -51,14 +51,25 @@ export default async function LeadsPage({
   const filterableFields = fields.filter((f) => f.showInFilters);
   const canRevealPhone = can(user, "lead.reveal_phone");
   const canMerge = can(user, "lead.merge");
-  const pendingMergeCount = canMerge
-    ? (
-        await supabase
-          .from("merge_review_queue")
+  const canAssign = can(user, "lead.assign");
+  const [pendingMergeResult, orphanResult] = await Promise.all([
+    canMerge
+      ? supabase.from("merge_review_queue").select("id", { count: "exact", head: true }).eq("status", "pending")
+      : Promise.resolve({ count: 0 }),
+    canAssign
+      ? supabase
+          .from("leads")
           .select("id", { count: "exact", head: true })
-          .eq("status", "pending")
-      ).count ?? 0
-    : 0;
+          .is("assigned_to", null)
+          .is("deleted_at", null)
+      : Promise.resolve({ count: 0 }),
+  ]);
+  const pendingMergeCount = pendingMergeResult.count ?? 0;
+  // A rough count — doesn't exclude won/lost-stage orphans the way the
+  // orphans page itself does, since that needs a second stage-type query
+  // just for a header badge. Good enough to decide whether to show the
+  // button at all; the page itself has the exact number.
+  const orphanCount = orphanResult.count ?? 0;
 
   const optionBearingFields = fields.filter((field) => OPTION_BEARING_TYPES.has(field.type));
   const optionEntries = await Promise.all(
@@ -157,6 +168,14 @@ export default async function LeadsPage({
               <Link href="/leads/merge-review">
                 <GitMerge /> Merge review
                 <Badge variant="secondary">{pendingMergeCount}</Badge>
+              </Link>
+            </Button>
+          )}
+          {canAssign && orphanCount > 0 && (
+            <Button asChild size="sm" variant="outline">
+              <Link href="/leads/orphans">
+                <UserX /> Orphan queue
+                <Badge variant="secondary">{orphanCount}</Badge>
               </Link>
             </Button>
           )}
