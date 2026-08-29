@@ -148,6 +148,20 @@
       "when": 1788011835764,
       "tag": "0020_lead_tags_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788013941344,
+      "tag": "0021_integrations_webhooks_ad_spend",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788013942344,
+      "tag": "0022_integrations_webhooks_rls",
+      "breakpoints": true
     }
   ]
 }

@@ -1137,3 +1137,71 @@ the RLS policy but not the corresponding test-suite entry) — added it alongsid
 `tags` entry while touching that list for this session's work. A small, easy-to-miss class of
 gap worth watching for: adding a new select-all config table needs both the migration AND this
 list updated, and nothing currently forces the second half to happen.
+
+2026-08-29 · [integrations] WhatsApp will be **one verified number per counsellor**, not the
+shared-number-with-per-message-attribution model this session recommended (cheaper, one
+business verification, one bill). Leon's explicit call, made after hearing the tradeoff —
+each counsellor already texts leads from what amounts to a personal WhatsApp identity today,
+so continuity mattered more than the cost/complexity difference. Consequence for the actual
+WhatsApp build (queued, not started): `whatsapp_accounts` (docs/01-DATA-MODEL.md) needs an
+`assigned_to` (profile id) column that doesn't exist in the doc's current sketch, and the
+onboarding flow is "add a counsellor → they go through Meta's WhatsApp Business number
+verification → paste their number's credentials into a per-counsellor Settings screen," not
+a single org-wide setup. `integration_credentials.scope_id` (this session) exists specifically
+so that per-counsellor credential storage doesn't need a schema change when this gets built.
+
+2026-08-29 · [integrations] "Plug and play" for Meta (and every integration after it) means
+every credential lives in `integration_credentials`, encrypted, entered through a Settings
+form — never an env var, since an env var needs a deploy and the whole point is that
+connecting a new ad account or WhatsApp number doesn't. The one deliberate exception:
+`INTEGRATION_ENCRYPTION_KEY` itself, which cannot be a database row without becoming
+circular (it's what the database rows are encrypted under). Generated once with
+`openssl rand -base64 32` and set in the deploy environment; rotating it means re-encrypting
+every stored credential, not attempted by any code this session — treat it as a one-time
+setup value, same category as `DATABASE_URL`.
+
+2026-08-29 · [integrations] `integration_credentials` has literally zero RLS policies for any
+authenticated role, on any command — not "settings.manage can read, nobody else can," zero.
+Same reasoning as the `permissions` table: a credential should never be readable through the
+browser at all, encrypted or not, so there's no RLS-bound path that should exist for it in
+the first place. Every read/write goes through `src/lib/integrations/credentials.ts` on the
+direct db client, and that module's own functions are the only enforcement point — the
+calling Server Action (gated on `settings.manage`) is what actually stands between a browser
+session and a credential ever being touched.
+
+2026-08-29 · [integrations] `src/lib/integrations/credentials.ts` deliberately has NO
+`import "server-only"`, for the same documented reason as `seed-permissions.ts`/
+`import-config.ts`: that package throws under a plain Node process (confirmed — both `tsx`
+and a bare Vitest run hit it), not just under webpack's client/server boundary check, and
+this module's own tests need to import it directly. The real security boundary is RLS (see
+above) plus always running on the direct db client, not the presence of this lint-time
+marker — so omitting it here costs nothing real and buys testability.
+
+2026-08-29 · [integrations] The Meta Lead Ads webhook fetches each lead's actual answers from
+the Graph API rather than trusting the webhook payload itself — Meta's `leadgen` webhook
+event carries only a `leadgen_id`, never the submitted name/phone/email, by design (their
+docs call this out explicitly: the webhook is a notification, not the data). This means
+every real lead requires one extra network call per webhook delivery, and that call can fail
+independently of signature verification — handled by giving each `leadgen_id` its own
+`webhook_events` row with its own status, so a Graph API outage marks exactly the affected
+leads `failed` (for Meta's own retry to pick up) without blocking or duplicate-processing
+anything else in the same delivery.
+
+2026-08-29 · [integrations] Ad spend sync assumes the Meta ad account is INR-denominated —
+`spend` comes back from the Insights API as a decimal string in whatever currency the ad
+account itself uses, and this session's mapper (`mapMetaInsightsRow`) multiplies it by 100
+and rounds, with no currency conversion. Correct today (AFD India's ad accounts are INR) and
+wrong the moment any ad account isn't — if that ever happens, `ad_spend_daily` needs its own
+currency column and the mapper needs to stop assuming. Not built defensively against that
+possibility now since it isn't a real scenario yet, per CLAUDE.md's own steer against
+building for hypothetical requirements.
+
+2026-08-29 · [integrations] The retargeting/Custom Audience upload — the actual "send every
+lead back to Meta for retargeting automatically" half of Leon's ask — is NOT built this
+session. Only inbound ingestion (the webhook) and ad spend reporting exist so far, neither of
+which uploads any lead's PII anywhere. Flagged once already (before this session started) as
+a real DPDP Act / consent question that needs an explicit answer, not an assumption, before
+an automated daily upload of hashed phone numbers to an ad platform ships — still open.
+Whoever picks this up next should get that answer before writing the sync, not after,
+precisely because by then the rest of the Meta plumbing will already exist and make the
+upload job look like a trivial extension of it.

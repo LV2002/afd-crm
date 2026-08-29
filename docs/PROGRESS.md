@@ -22,12 +22,13 @@ Keep it short. This is a handoff note, not a changelog — git has the changelog
 
 ## Current state
 
-Session 19 shipped: role-aware dashboards for every department, the academics workspace
-(students list/detail + a printable 1-page profile), and lead tagging (schema, settings
-screen, lead-detail control, list filter) — plus fixing a real gap where accounts couldn't
-see lead details at all.
-Next task: **Session 20 — accounts ledgers** (bank/cash/petty-cash per centre — Leon is
-sending the current finance sheet first) or further Phase 4 depth, at Leon's direction.
+Session 20 shipped: the Meta integration (Lead Ads webhook + daily ad spend sync) and the
+"plug and play" credential-storage foundation every future integration (Google, WhatsApp,
+telephony) will reuse — a real, working first slice of the four-integration ask in
+docs/DECISIONS.md § A10.
+Next task: **Session 21 — Google Ads** (mirrors this session's Meta shape) or WhatsApp
+(shared-vs-per-counsellor number decision made — see docs/DECISIONS.md), at Leon's direction.
+Accounts ledgers are still queued behind Leon sending the finance sheet.
 
 ---
 
@@ -1920,3 +1921,91 @@ a tag, then filter `/leads` by that tag.
 **Next:** accounts ledgers (bank/cash/petty-cash per centre, fee payment logging against
 them) once Leon's finance sheet is in hand — see docs/DECISIONS.md for why this is real,
 harder work that shouldn't be rushed. Otherwise, the same Phase 4 depth list as Session 18.
+
+---
+
+## Session 20 — Meta integration: Lead Ads webhook + ad spend sync — 2026-08-29
+
+**Shipped:** the first real slice of the four-integration ask (Meta, Google, WhatsApp,
+telephony — docs/DECISIONS.md § A10) Leon asked to pick back up this session, built to
+actually be "plug and play": an admin pastes credentials into Settings → Integrations → Meta
+and the webhook/sync starts working, no deploy.
+
+- **Credential storage foundation** (`integration_credentials`, `src/lib/integrations/
+  credentials.ts`) — every future integration (Google next session, then WhatsApp) reuses
+  this rather than each inventing its own. AES-256-GCM at rest, keyed by a new
+  `INTEGRATION_ENCRYPTION_KEY` env var — the one piece of this whole feature that genuinely
+  needs a deploy rather than a form, since it's what the database rows are encrypted under.
+  No RLS SELECT/INSERT/UPDATE policy for any authenticated role at all (same shape as
+  `permissions` — see docs/DECISIONS.md): nobody should ever read a secret back through the
+  browser, encrypted or not. `scope_id` (nullable, no FK) already supports a per-counsellor
+  credential — built now because Leon's WhatsApp decision this session (see below) means it's
+  needed soon, not because Meta needs it today.
+- **`webhook_events`** (docs/01-DATA-MODEL.md's own spec, never built until now) — every
+  webhook handler writes here before doing anything else (CLAUDE.md non-negotiable #9),
+  `UNIQUE(source, external_id)` as the idempotency key so a platform's retry-on-failure
+  behaviour can never create a duplicate lead.
+- **Meta Lead Ads webhook** (`/api/webhooks/meta-leads`): GET handles Meta's subscription
+  handshake; POST verifies `X-Hub-Signature-256` against the raw body (not the re-parsed
+  JSON — re-serialisation isn't guaranteed to byte-match), persists regardless of whether the
+  signature passed, then — only for a valid signature — fetches the lead's actual answers
+  from the Graph API (the webhook itself only carries a `leadgen_id`) and calls
+  `resolveOrCreateLead()`, the one ingestion path every source goes through (CLAUDE.md
+  non-negotiable #8). A batch of leads in one delivery is handled per-`leadgen_id`, each with
+  its own `onConflictDoNothing()` idempotency check, so a retry of a partially-failed
+  delivery only ever re-attempts the entries that actually failed.
+- **Ad spend sync** (`ad_spend_daily`, `/api/cron/ad-spend-sync/meta`, same `CRON_SECRET`
+  pattern as the existing crons) — pulls yesterday's per-ad spend/impressions/clicks/
+  lead-count from Meta's Insights API and upserts, always for "yesterday in IST" specifically
+  since ad platforms don't finalise a day's numbers until well after midnight.
+- **Settings → Integrations** (`/settings/integrations`, `/settings/integrations/meta`) — an
+  index card per provider (Meta live, Google/WhatsApp/Telephony marked "Coming soon") and a
+  credentials form that never echoes a stored secret back, only whether each field is set. A
+  "Test connection" button calls Meta's `/debug_token` to confirm the Page Access Token is
+  real, issued by the configured app, and not expired — without ever displaying the token.
+
+**Real decisions made this turn, not just carried over:**
+- **WhatsApp: one number per counsellor**, not the shared-number-with-attribution model this
+  session recommended. Leon's call — the WhatsApp build (queued for a future session) now
+  needs a genuine per-counsellor onboarding flow, not a single shared account. See
+  docs/DECISIONS.md for what that actually implies (N separate Meta business verifications,
+  N separate per-conversation bills) and why `integration_credentials.scope_id` exists
+  already in anticipation of it.
+- **Build order confirmed**: Meta first (this session), then Google (mirrors this session's
+  shape almost exactly), then WhatsApp, then telephony last.
+- **The consent/DPDP question for retargeting sync is still open** — this session only
+  builds inbound ingestion and ad spend reporting, neither of which uploads any lead's PII
+  anywhere. The Custom Audience/Customer Match upload (the actual "send every lead back to
+  Meta/Google for retargeting" ask) is real, separate work for a later session, and still
+  needs an explicit answer on the consent basis before it's built — flagged again here so it
+  doesn't get built on autopilot once the rest of the Meta/Google plumbing exists and makes
+  it look like "just one more sync job."
+
+**Verified:** `npx tsc --noEmit` and `npx eslint` clean across every new file. `npm run
+build` succeeds — the webhook, cron, and both new settings routes all compile. Full suite
+green against real local Postgres 16: **248 tests passed** across 32 files (up from 208/26
+at the end of Session 19) — new coverage includes a genuine end-to-end webhook test (mocking
+only the one real network call, the Graph API lookup) that exercises signature rejection,
+successful ingestion into a real lead row, replay-safety on a duplicate `leadgen_id`, and
+failure handling, plus pure unit tests for signature verification, Meta field mapping, and
+the credential encryption round-trip (including that a stored value is never plaintext).
+Manually verified the encryption round-trip against real Postgres before writing it up as a
+formal test. Also caught mid-session, again: local Postgres had stopped between tool calls —
+restarted the cluster before continuing.
+
+**Stubbed / deliberately out of scope for this pass:** Google Ads (next session, same
+shape). WhatsApp and telephony (later sessions; `integration_provider` enum already has rows
+reserved for both). Retargeting/Custom Audience uploads (the consent question above has to
+be answered first). No UI for revoking/deleting a stored Meta credential — rotating is
+supported (save a new value over an old one), but there's no "disconnect" button; not asked
+for, and deleting a live integration's credential by accident is worse than not offering the
+option yet.
+
+**Verify by:** `npm run db:migrate && DATABASE_URL=... npm test` — expect `248 passed`. Then
+`npm run build`. Against a real Meta App + Page (once credentials are entered in Settings →
+Integrations → Meta): subscribe the webhook URL in Meta's App Dashboard using the Verify
+Token shown on that page, submit a test lead through the connected Lead Ads form, and confirm
+it appears in `/leads` within seconds with `source = meta` and the right campaign/ad id.
+
+**Next:** Google Ads (Lead Ads-equivalent ingestion + ad spend sync, mirroring this session),
+or WhatsApp (per-counsellor numbers, per Leon's decision) — whichever Leon wants next.

@@ -95,6 +95,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     description: "Export configuration as a bundle, or bootstrap a fresh instance from one",
     permissions: ["config.export", "config.import"],
   },
+  {
+    href: "/settings/integrations",
+    label: "Integrations",
+    description: "Connect Meta, Google, WhatsApp and telephony — plug in credentials, no deploy",
+    permissions: ["settings.manage"],
+  },
 ];
 
 export function settingsNavFor(user: SessionUser): SettingsNavItem[] {
