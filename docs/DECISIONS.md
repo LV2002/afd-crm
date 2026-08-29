@@ -877,3 +877,36 @@ object directly (cast through `Record<string, unknown>`) rather than hand-pickin
 `lead_merges.snapshot` exists specifically so a wrong merge can be manually reversed by someone
 reading the JSON and re-entering what's needed — trimming it down to "the fields someone
 guessed might matter" would defeat that purpose the first time the guess was wrong.
+
+2026-08-29 · [reports] `/reports` reads `leads` through the direct db client and
+re-implements its own scope check, rather than the RLS-bound client every other page uses —
+the one deliberate exception to "RLS is the backstop" outside the already-documented identity/
+merge/config-import list. Reason: `leads`' RLS (`leads_select`) is gated on `lead.read`, but
+`report.read`/`report.center`/`report.org` are meant to grant *aggregate counts* to roles that
+don't hold `lead.read` at all — `accounts` and `academics` both have `report.read`+
+`report.center` without `lead.read`, per seed.ts. Going through the RLS-bound client would
+have silently shown these roles zero data on every widget (RLS quietly returning nothing,
+never an error) instead of the real aggregate counts they're supposed to see. The page only
+ever selects `id`/`assigned_to`/`center_id`/`stage_id`/`first_touch_source` — deliberately
+never a name, phone, or email — so the privacy boundary `lead.read` exists for (browsing
+individual records) still holds; only counts cross this door, same as every other permission
+primitive in this system is scoped to one specific thing.
+
+2026-08-29 · [reports] `report.read`/`report.center`/`report.org` are three independent
+permission codes, not one permission carrying an own/center/all `scope` value the way every
+other permission in this system does (each still has a `scope` column in `role_permissions`,
+but every seeded grant for these three sets it uniformly across the whole grant call, so it
+carries no extra information here — the code chosen tells you the tier). The reports page
+computes its effective scope by checking which of the three the caller holds, widest wins
+(`report.org` > `report.center` > `report.read`), not via `scopeFor()`. Worth knowing before
+adding a fourth report screen: don't call `scopeFor(user, "report.read")` expecting it to
+reflect the org/center tier — it won't.
+
+2026-08-29 · [reports] Charts use the theme's own `--primary` CSS variable as the single
+magnitude hue for both bar charts, rather than introducing a new brand colour. This app has no
+real brand hue chosen yet (`org_settings.primary_color` defaults to a dark slate,
+`--primary` in the shadcn theme is a neutral near-black/white) — inventing a colourful chart
+palette ahead of an actual brand decision would need re-doing once one exists. Revisit once
+Leon picks real brand colours in Settings → Organisation; at that point a real categorical
+palette (for a chart that needs one — none of the four dashboards here do, since none encode a
+second variable by colour) would go through the dataviz skill's validator, not get eyeballed.
