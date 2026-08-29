@@ -1647,3 +1647,62 @@ gap this session found and fixed.
 Lead Ads webhook and the wider integration/bulk-database ingestion scope Leon described and
 asked to defer (docs/DECISIONS.md § A10) — both still waiting on Leon's own next steps rather
 than CRM-side code.
+
+---
+
+## Session 17 — Orphan queue (Phase 2) — 2026-08-29
+
+**Shipped:** `/leads/orphans` — every lead the assignment engine matched no active rule for
+(CLAUDE.md non-negotiable #4: a lead nothing matches is left exactly as it was, not force-
+assigned to a default) sits with `assigned_to` null until now, invisible to anyone. Gated on
+`lead.assign`, held only by `center_head` (plus admin/co_admin's blanket grant) — this really
+is "for centre heads," per the Phase 2 doc's own wording. Each row shows the lead (masked
+phone, reveal button reused from the leads list), a dropdown of active counsellors at that
+lead's own centre, and — when the viewer themselves is one of that centre's members — a
+one-click "Claim" button. A pending-count badge mirrors the merge-review button pattern on the
+main leads list.
+
+**The RLS for this was already sitting there waiting, unused, since Session 7's assignment
+engine work** — migration 0008's own comment on `assignment_history_insert` says outright:
+"gated on `lead.assign` against the target lead so a future manual-reassignment UI (Session
+7+) can write here under the caller's own session without a new migration." This is that UI.
+Both writes (`leads.assigned_to`, the `assignment_history` row) go through the normal
+RLS-bound client with zero bypass — the only feature this session that needed none at all —
+since `lead.update`'s policy (which every `lead.assign` holder also has) covers the lead write,
+and this pre-built policy covers the history write.
+
+**A real bug caught before shipping, not after:** `assignment_history.reason` isn't a plain
+text column — it's a Postgres enum (`rule | manual | round_robin | reassign_sla`) — and the
+code was first written with an invented string (`'manual_orphan_assign'`) that isn't a member
+of it. `tsc`/`eslint` had nothing to say about it (the Supabase-JS `.insert()` call is an
+untyped string object, same recurring gap this whole session has run into — see the SLA
+priority-direction and temperature-value bugs). Caught only by actually running the insert
+against live Postgres before merging; fixed to the correct existing value, `'manual'`.
+
+**Known broken / stubbed:** the orphan-count badge on `/leads` is a rough count (every
+unassigned lead) rather than excluding won/lost-stage ones the way the orphans page itself
+does — a second query just for a header badge's exact number wasn't worth it. The "assignable
+counsellors" list is anyone with an active `user_centers` row at that centre, not filtered to
+roles whose `lead.read` scope is `own` (the semantically "does actual lead-working" set) — a
+center_head could technically assign a lead to another center_head at the same centre. Low
+practical risk (nobody's likely to do that by accident from a dropdown scoped to real people at
+the right centre) but worth knowing before this pattern gets reused elsewhere.
+
+**Verified:** `npx tsc --noEmit` and `npx eslint` clean. `npm run build` succeeds
+(`/leads/orphans` compiles as a real route). Full suite green against a real local Postgres 16
+instance: `Tests 186 passed | 2 skipped (188)` across 23 files (no new pure-logic test file
+this time — this feature is straightforward CRUD behind RLS, not an aggregation/evaluation
+engine like the crons or reports). The actual query and write pipeline was exercised end-to-end
+against live Postgres with a real fixture lead (this is what caught the enum bug above) before
+merging.
+
+**Verify by:** `npm test` — expect `186 passed | 2 skipped`. In the live app, once there's a
+lead with no rule match (or manually clear a lead's `assigned_to` in Settings — no UI does this
+directly today, so this is a "wait for a real orphan" or "ask Claude to make one for testing"
+situation): log in as a center_head, confirm the "Orphan queue" button with a badge appears on
+`/leads`, open it, assign the lead to a counsellor, and confirm it disappears from the queue
+and now shows up in that counsellor's My Day / leads list.
+
+**Next:** genuinely out of pure-CRM Phase 2 work for now — everything left (Meta webhook,
+website/Google Sheets ingestion, the bulk-database staging area) is integration work Leon
+explicitly asked to defer to a later conversation (docs/DECISIONS.md § A10).

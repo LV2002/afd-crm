@@ -910,3 +910,27 @@ palette ahead of an actual brand decision would need re-doing once one exists. R
 Leon picks real brand colours in Settings → Organisation; at that point a real categorical
 palette (for a chart that needs one — none of the four dashboards here do, since none encode a
 second variable by colour) would go through the dataviz skill's validator, not get eyeballed.
+
+2026-08-29 · [orphans] `assignment_history.reason` is a Postgres enum
+(`rule | manual | round_robin | reassign_sla`), not free text — the orphan queue's manual
+assignment uses the existing `'manual'` value rather than a new one like `'manual_orphan_assign'`
+would have been. Worth a wider note: this is the third bug this session where a Supabase-JS
+`.insert()`/`.update()` call — an untyped plain object, unlike Drizzle's schema-typed query
+builder — passed an invalid enum/wrong-direction value that neither `tsc` nor `eslint` could
+catch, only a real write against live Postgres. (The other two: the SLA priority-direction bug
+and, more mildly, the general pattern noted throughout this session of the Supabase client not
+being generated against a `Database` type.) If this keeps recurring, generating real Supabase
+types (`supabase gen types typescript`) and threading them through `createClient<Database>()`
+would close this whole class of bug at compile time — not attempted this session, but worth
+raising as real, scoped follow-up work rather than continuing to catch each instance by hand.
+
+2026-08-29 · [orphans] The orphan queue's "assignable counsellors" list is anyone with an
+active `user_centers` row at the lead's centre — not filtered to roles whose `lead.read` scope
+is `own` (`getAssignableUsers()` in `resolve-field-options.ts` does that narrower filter for a
+different purpose, the user_ref field type). Reusing that narrower helper would have meant a
+center_head could only assign to counsellor-shaped roles; not reusing it means they could
+technically pick another center_head or even themselves via the dropdown (redundant with the
+dedicated Claim button, but not blocked). Left broad deliberately for a first pass — a
+centre's real membership list is small and human-reviewed at assignment time, so the practical
+risk of picking the "wrong" role from the dropdown is low; tighten later if it turns out to
+matter in practice.
