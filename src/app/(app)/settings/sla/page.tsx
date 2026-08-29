@@ -32,8 +32,10 @@ export default async function SlaSettingsPage() {
         <h1 className="text-2xl font-semibold">SLA Policies</h1>
         <p className="text-sm text-muted-foreground">
           Measured from lead creation, not a voluntary follow-up date — the highest-value fix
-          over the previous system. Evaluated by the SLA sweep cron (Phase 2); this screen only
-          stores the configuration.
+          over the previous system. Evaluated hourly by the SLA sweep cron; this screen only
+          stores the configuration. The escalation ladder&apos;s notify/unassign/requeue steps
+          aren&apos;t wired up yet — see docs/DECISIONS.md — today the sweep only flags a
+          breach (<code>sla_breached</code>), which already drives My Day&apos;s At risk bucket.
         </p>
       </div>
 

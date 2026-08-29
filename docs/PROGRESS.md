@@ -1361,3 +1361,81 @@ phone numbers stay masked until you click reveal, same as the leads list.
 needs Meta app review + a verified domain first, so it can run in parallel with more app work)
 and the SLA cron (which would make the "at risk" bucket's `sla_breached` branch real instead of
 dormant).
+
+---
+
+## Session 13 — SLA sweep cron (Phase 2) — 2026-08-29
+
+**Shipped:** the SLA cron (`docs/02-BUILD-PHASES.md` § Phase 2), the first real `/api/*` route
+in the project — `/api/cron/sla-sweep`, on a schedule via the new `vercel.json` (hourly,
+`0 * * * *`; easy to tighten once real usage shows it's worth the extra invocations). Every
+active lead (not soft-deleted, not in a won/lost stage) is evaluated against active
+`sla_policies` in priority order — same condition grammar and evaluator
+(`evaluateConditions()`) as the assignment engine, reused rather than re-implemented — and
+`leads.sla_breached` is set or cleared to match. This is exactly the signal My Day's "At risk"
+bucket was written last session to pick up automatically the moment it became real — no My Day
+changes needed.
+
+The three `measure` types (docs/01-DATA-MODEL.md § SLA policies) each have a real baseline now:
+`first_response` (from lead creation, until first response — the SLA gap the previous system's
+"measured from a voluntary follow-up date" bug this table exists to fix), `next_followup`
+(from the scheduled time, once it's actually passed), `in_stage` (from the most recent
+`stage_history` row, falling back to lead creation for a lead that's never moved). Getting
+`first_response` off the ground needed one more small piece: `logInteraction()` now stamps
+`leads.first_response_at` the first time any interaction is logged for a lead — that column
+existed since Session 1 but nothing had ever written to it.
+
+`business_hours_only` policies route through a new pure calculator,
+`computeBusinessHoursElapsed()` (`lib/sla/business-hours.ts`) — it walks the affected local
+calendar days (in the lead's centre's own `timezone` column, not assumed IST) and sums only
+the overlap with each day's configured opening window, skipping holidays and closed days
+entirely, so a Friday-evening lead's clock correctly pauses over the weekend instead of
+breaching before Monday morning.
+
+**Also fixed in passing, and not optional:** `middleware.ts`'s matcher covered `/api/*` with no
+exception. With this cron route now real, that would have silently 307-redirected Vercel's own
+unauthenticated cron invocation to `/login` before the route handler's `CRON_SECRET` check ever
+ran — a completely dark failure (`sla_breached` would just never update, with nothing in any
+log to explain why). `/api/` is now excluded from the middleware's matcher entirely: a cron or
+future webhook route authenticates itself, and neither has a browser session cookie to check in
+the first place. This was flagged as a WARNING in the production-readiness pass two sessions
+ago and left for "once a webhook route exists" — this cron route is that trigger.
+
+**Known broken / stubbed:** the escalation ladder's `notify_roles`/`notify_owner`/`unassign`/
+`requeue` steps (docs/01-DATA-MODEL.md's `escalations` array) are not implemented — there's
+still no `notifications` table to notify through (same gap already noted against the
+assignment engine). `flag_breach` is the one escalation action this sweep already delivers,
+since that's exactly what setting `sla_breached` is — see docs/DECISIONS.md for why this is the
+honest scope for this session rather than a half-built notification path.
+
+**Required manual step:** set a `CRON_SECRET` environment variable in Vercel (any long random
+string) before this does anything live — the route returns 401 without it, by design, rather
+than running unauthenticated.
+
+**Tests:** `tests/sla-business-hours.spec.ts` (9 cases) — straight-through hours, clipping to
+the opening window, a fully closed weekend, pausing across a weekend gap, a holiday removing an
+otherwise-normal weekday, a day with no configured row at all (treated as closed), an explicit
+`isClosed` override. `tests/sla-evaluate.spec.ts` (10 cases) — each measure's baseline
+(including "never breaches once responded" and "not overdue until the scheduled time actually
+passes"), business-hours routing, priority ordering, and falling through to the next policy
+when the highest-priority match's measure doesn't currently apply.
+
+**Verified:** `npx tsc --noEmit` and `npx eslint` clean. `npm run build` succeeds
+(`/api/cron/sla-sweep` compiles as a real dynamic route). Full suite green against a real local
+Postgres 16 instance: `Tests 168 passed | 2 skipped (170)` across 20 files. Beyond the unit
+tests, the route handler itself was exercised for real — not just typed and reasoned about —
+by importing `GET()` directly and invoking it against a live local Postgres with a fixture lead
+(10 hours old, no response, a 2h `first_response` policy): confirmed a first run correctly sets
+`sla_breached`, a second run is idempotent (`newlyBreached: 0`), an unauthenticated request
+gets 401, and simulating a response on the fixture lead correctly clears the breach on the next
+run (`cleared: 1`).
+
+**Verify by:** `npm test` — expect `168 passed | 2 skipped`. In the live app, once
+`CRON_SECRET` is set in Vercel: wait for the top of the next hour (or trigger the route
+manually with the right bearer token) and confirm a stale, unresponded lead older than its
+matching policy's target picks up `sla_breached = true` and shows under My Day's At risk
+bucket.
+
+**Next:** the Meta Lead Ads webhook — the last major Phase 2 ingestion item, and the one that
+actually needs external setup (Meta app review + a verified domain) started before it can be
+finished, so worth kicking off soon even if the CRM-side work waits.
