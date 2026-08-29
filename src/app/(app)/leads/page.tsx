@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Plus, Upload } from "lucide-react";
+import { GitMerge, Plus, Upload } from "lucide-react";
 
 import { AccessDenied } from "@/components/layout/access-denied";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -49,6 +50,15 @@ export default async function LeadsPage({
   const listFields = fields.filter((f) => f.showInList);
   const filterableFields = fields.filter((f) => f.showInFilters);
   const canRevealPhone = can(user, "lead.reveal_phone");
+  const canMerge = can(user, "lead.merge");
+  const pendingMergeCount = canMerge
+    ? (
+        await supabase
+          .from("merge_review_queue")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending")
+      ).count ?? 0
+    : 0;
 
   const optionBearingFields = fields.filter((field) => OPTION_BEARING_TYPES.has(field.type));
   const optionEntries = await Promise.all(
@@ -142,6 +152,14 @@ export default async function LeadsPage({
             </Button>
           )}
           {can(user, "lead.export") && <ExportButton filterValues={filterValues} />}
+          {canMerge && pendingMergeCount > 0 && (
+            <Button asChild size="sm" variant="outline">
+              <Link href="/leads/merge-review">
+                <GitMerge /> Merge review
+                <Badge variant="secondary">{pendingMergeCount}</Badge>
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 

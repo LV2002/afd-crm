@@ -855,3 +855,25 @@ recompute triggered by a specific activity (a new interaction, a stage move) wou
 which activities should trigger it, rather than bolting it onto this session's cron as a
 guess. A lead's temperature is at most one nightly cycle stale in the meantime, which is a
 reasonable interim behaviour, not a broken one.
+
+2026-08-29 · [merge] `merge_review_queue.lead_id` is always treated as the survivor and
+`candidate_lead_id` as the one merged away, matching how `resolveOrCreateLead()` already
+creates the row: `lead_id` is the phone-matched lead (the identifier every lead is guaranteed
+to have), `candidate_lead_id` is the email-matched one. No UI choice to swap which side
+survives — if a reviewer determines the *candidate* is actually the "more real" record (more
+history, earlier creation, whatever), rejecting this pairing and doing the reverse merge
+manually via a second, deliberate action is the honest way to handle that, not a "flip
+survivor" toggle that would need its own careful reasoning about what "more real" even means.
+
+2026-08-29 · [merge] The merge-review screen only surfaces a link to itself when there's at
+least one pending pairing (a count badge on the leads list, gated on `lead.merge`) — no
+permanent sidebar entry for what should be, in steady state, an empty queue. A user with
+`lead.merge` but zero pending reviews can still navigate to `/leads/merge-review` directly
+(it's a real page, not hidden), they just won't see an entry point for it until there's
+something to act on. Revisit if that turns out to hide the page too well in practice.
+
+2026-08-29 · [merge] `mergeLeads()`'s snapshot column stores the merged lead's full Drizzle row
+object directly (cast through `Record<string, unknown>`) rather than hand-picking fields.
+`lead_merges.snapshot` exists specifically so a wrong merge can be manually reversed by someone
+reading the JSON and re-entering what's needed — trimming it down to "the fields someone
+guessed might matter" would defeat that purpose the first time the guess was wrong.

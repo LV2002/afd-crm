@@ -1516,3 +1516,69 @@ testing).
 **Next:** the merge review UI — `merge_review_queue` has been silently filling up with
 ambiguous-match rows since Session 4's identity resolution work, with no screen to review or
 act on any of them yet.
+
+---
+
+## Session 15 — Merge review UI (Phase 2) — 2026-08-29
+
+**Shipped:** `/leads/merge-review` — the first screen ever built against `merge_review_queue`,
+which has been silently accumulating ambiguous-match rows since Session 4's identity
+resolution work with nowhere for a human to act on them. A pending row shows the two leads
+side by side (name, masked phone, email, district, first-touch source, when it was flagged)
+with a free-text note field and two actions: **Confirm** (same person — merge) or **Reject**
+(different people — keep as two leads). A "Merge review" button with a pending-count badge
+appears on the main leads list, gated on the existing `lead.merge` permission, and only shows
+at all when there's something to review.
+
+**The real work here is `mergeLeads()`** (`lib/identity/merge-leads.ts`) — CLAUDE.md's "Fixed
+in code" list names "Identity resolution and merge logic" explicitly, and this is the other
+half of that (Session 4 built the identity/dedup half). Runs on the direct db client inside
+one transaction, same bypass `resolveOrCreateLead()`/`applyAssignment()` already use, since
+reassigning rows across six tables atomically has no RLS policy written for it (nor should it
+— this isn't a caller-driven "move this row" operation, it's the one deliberate merge
+primitive). Reassigns `enquiries`, `interactions`, `tasks`, `stage_history`,
+`assignment_history`, and `lead_identifiers` from the merged lead onto the survivor; soft-
+deletes the merged lead with `merged_into_lead_id` set (never hard-deleted, per non-negotiable
+#5 — its row is still there, still resolvable); and writes a `lead_merges` row with a full
+JSON snapshot of the merged lead exactly as it was, for audit and manual undo if a reviewer
+ever gets it wrong. Also reassigns any *other* pending `merge_review_queue` pairing that
+referenced the merged lead onto the survivor instead — and if that reassignment would leave a
+row pointing at the same lead on both sides (a real thing that can happen when three-plus
+leads turn out to all be the same person across separate ambiguous pairings), that row is
+auto-rejected rather than left as a nonsensical self-referencing pairing.
+
+**Where RLS bypass stops**: `confirmMerge()` (the actual merge) needs the direct-client bypass
+for the reasons above and re-implements the own/center/all scope check against *both* leads in
+the pairing before touching anything, same pattern as `createLeadManually()`/`importLeads()`.
+`rejectMerge()` does not — it's a single-row status update to `merge_review_queue`, and
+migration 0005 already has a real RLS policy for exactly this (`merge_review_queue_update`,
+gated on `lead.merge` against the anchor lead) that had simply never been exercised by any
+code before now. It runs through the normal RLS-bound client instead of bypassing something
+that didn't need bypassing.
+
+**Tests:** `tests/merge-leads.spec.ts` (5 cases, integration — needs a real Postgres, same as
+`identity-resolve.spec.ts`) — refuses a self-merge, throws on a missing lead, reassigns every
+table correctly and soft-deletes the merged lead with a real snapshot, reassigns an unrelated
+pending pairing onto the survivor, and confirms the self-reference auto-rejection actually
+fires. Not unit-testable as pure logic like the cron evaluators — this genuinely needs to
+prove real cross-table writes land correctly.
+
+**Verified:** `npx tsc --noEmit` and `npx eslint` clean. `npm run build` succeeds
+(`/leads/merge-review` compiles as a real route). Full suite green against a real local
+Postgres 16 instance: `Tests 178 passed | 2 skipped (180)` across 22 files. Also hand-verified
+the exact SQL shapes the merge-review page and `rejectMerge()` issue against the seeded schema
+(same `SupabaseClient` isn't type-generated caveat as always).
+
+**Verify by:** `npm test` — expect `178 passed | 2 skipped`. In the live app: trigger an
+ambiguous match (submit two enquiries where one shares a phone with an existing lead and a
+different email with another existing lead — the CSV importer or manual entry both go through
+the same `resolveOrCreateLead()` path), confirm a "Merge review" button with a badge appears
+on the leads list for a user with `lead.merge`, open it, and confirm both leads' details show
+correctly. Confirm one pairing and verify: the merged lead's enquiries/interactions/tasks now
+show on the survivor's timeline, the merged lead itself still exists but is gone from every
+list, and a new `lead_merges` row exists. Reject a different pairing and confirm both leads
+remain untouched and separate.
+
+**Next:** the last of the three items requested together this session — prebuilt dashboards on
+`/reports` (leads by source, funnel snapshot, counsellor scorecard, centre performance),
+scoped down from Phase 2's full "generic pivot widget" ambition to a first real pass.
