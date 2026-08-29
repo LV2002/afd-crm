@@ -1,0 +1,1 @@
+ALTER TABLE "org_settings" ADD COLUMN "temperature_override_days" integer DEFAULT 3 NOT NULL;

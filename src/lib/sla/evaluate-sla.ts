@@ -52,17 +52,20 @@ function measureBaseline(policy: SlaPolicyRow, lead: Lead, currentStageEnteredAt
 }
 
 /**
- * Evaluates one lead against active `sla_policies` in priority order
- * (lower number = higher priority, same convention as pipeline_stages and
- * assignment_rules) and returns the first one whose `applies_to`
- * conditions match — same condition grammar and evaluator as the
- * assignment engine (docs/01-DATA-MODEL.md § SLA policies: "same
- * condition grammar"). A lead nothing applies to (or whose one matching
- * policy's measure doesn't currently apply — see measureBaseline) is
- * never breached.
+ * Evaluates one lead against active `sla_policies` in priority order and
+ * returns the first one whose `applies_to` conditions match — same
+ * condition grammar and evaluator as the assignment engine
+ * (docs/01-DATA-MODEL.md § SLA policies: "same condition grammar").
+ * Highest `priority` number wins first (docs/01-DATA-MODEL.md § SLA
+ * policies, line "Highest priority whose applies_to matches wins" —
+ * the OPPOSITE convention from assignment_rules' "lower number = higher
+ * priority," matching the settings screen's own descending priority
+ * display for both sla_policies and temperature_rules). A lead nothing
+ * applies to (or whose one matching policy's measure doesn't currently
+ * apply — see measureBaseline) is never breached.
  */
 export function evaluateLeadSla(input: SlaEvaluationInput): SlaEvaluationResult {
-  const sorted = [...input.policies].sort((a, b) => a.priority - b.priority);
+  const sorted = [...input.policies].sort((a, b) => b.priority - a.priority);
 
   for (const policy of sorted) {
     if (!evaluateConditions((policy.appliesTo as RuleConditions | null) ?? {}, input.lead)) continue;

@@ -1439,3 +1439,80 @@ bucket.
 **Next:** the Meta Lead Ads webhook — the last major Phase 2 ingestion item, and the one that
 actually needs external setup (Meta app review + a verified domain) started before it can be
 finished, so worth kicking off soon even if the CRM-side work waits.
+
+---
+
+## Session 14 — Temperature recompute cron (Phase 2) — 2026-08-29
+
+**Real bug found and fixed in last session's SLA sweep before building this one:**
+`evaluateLeadSla()` sorted `sla_policies` ascending by priority (lowest number evaluated
+first) — but docs/01-DATA-MODEL.md § SLA policies says explicitly: "Highest `priority` whose
+`applies_to` matches wins." That's the *opposite* convention from `assignment_rules` ("lower
+number = higher priority"), and both the SLA and temperature settings screens already order
+their lists `priority DESC` — a signal this session's own tests had missed. Fixed the sort
+direction in `lib/sla/evaluate-sla.ts`, and corrected the two priority-ordering tests in
+`tests/sla-evaluate.spec.ts` that had encoded the same wrong assumption (they still passed
+under the bug, coincidentally, because the "specific" policy in each happened to be given the
+lower number — flipped both so they'd actually fail under the old, wrong direction). This had
+shipped to `main` last session but almost certainly never ran against real data yet (`CRON_SECRET`
+isn't set in Vercel), so no real breach data was affected.
+
+**Shipped:** `/api/cron/recompute-temperature`, nightly (`vercel.json`, 20:30 UTC = 02:00 IST
+— off-hours, distinct from the SLA sweep's hourly schedule per docs/02-BUILD-PHASES.md's
+"evaluated nightly and on activity" for temperature vs. hourly-appropriate SLA checks).
+Evaluates every active lead (not deleted, not in a won/lost stage, and — critically — not
+under an active manual override) against `temperature_rules` in priority order, same
+`evaluateConditions()` evaluator reused a third time now (assignment engine, SLA sweep,
+temperature engine).
+
+**The manual-override half of this feature didn't exist until now either:** the data model
+has always described "`leads.temperature_override_until` still wins over any rule while it is
+in the future — a counsellor's manual judgement beats the engine for a configurable number of
+days," but nothing ever set `temperature_override_until`/`temperature_set_by` when a
+counsellor actually changed a lead's temperature by hand (it went through the same generic
+per-field write as any other lead field, per `updateLead()`). Building the recompute cron
+would have made that dormant gap actively harmful — a counsellor's manual "no actually this
+one's cold now" would get silently overwritten by the very next nightly run. Fixed:
+`updateLead()` now detects a genuine `temperature` change (compared against the lead's prior
+stored value, not just "was the field present in the form") and stamps the override for
+`org_settings.temperature_override_days` (new column, migration 0015; defaults to 3 — the
+number this exact config knob was always supposed to exist for but never had a home).
+
+**Also wired up in passing:** `leads.last_activity_at` (existed since Session 1, never
+written) now updates on every interaction logged, the same "the column already existed, why
+was nothing writing to it" pattern as `first_response_at` last session.
+
+**Known broken / stubbed:** only the nightly batch half of "evaluated nightly and on
+activity" is built — an immediate recompute right after a relevant event (a new interaction,
+a stage move) isn't wired up; a changed lead waits for the next nightly run. The condition
+grammar reused from the assignment engine can't yet express the data model's own illustrative
+temperature-rule example ("replied within 48h AND stage rank >= 5 → hot") — there's no
+whitelisted field for "hours since last activity" or "current stage's rank/probability" in
+`evaluateConditions()`'s `FIELD_MAP`. Real, useful rules on the fields that already are
+whitelisted (source, district, exam year, centre, temperature itself, etc.) work today;
+extending the condition grammar with time-based/derived fields is separate engine work for
+later — see docs/DECISIONS.md.
+
+**Tests:** `tests/temperature-evaluate.spec.ts` (5 cases) — no rules, a catch-all, a
+non-matching rule, priority ordering (highest number wins), falling through to a lower-priority
+rule. `tests/sla-evaluate.spec.ts`'s priority tests corrected as described above.
+
+**Verified:** `npx tsc --noEmit` and `npx eslint` clean. `npm run build` succeeds (both cron
+routes compile). Full suite green against a real local Postgres 16 instance with migration
+0015 applied: `Tests 173 passed | 2 skipped (175)` across 21 files. The route handler itself
+was exercised end-to-end against a live fixture (a Kannur lead, a rule matching
+`district=Kannur → hot`): confirmed the temperature changes and `temperature_set_by` is set to
+`'rule'`, then confirmed setting `temperature_override_until` in the future correctly makes
+the next run skip that lead entirely (`skippedOverride: 1`, temperature unchanged) — not just
+typed and reasoned about.
+
+**Verify by:** `npm test` — expect `173 passed | 2 skipped`. In the live app, once
+`CRON_SECRET` is set in Vercel (same variable the SLA sweep already needs): manually change a
+lead's temperature and confirm the badge doesn't flip back on its own for a few days; separately,
+create a temperature rule matching some real leads and confirm they pick it up after the next
+nightly run (or by calling the route directly with the right bearer token, for same-day
+testing).
+
+**Next:** the merge review UI — `merge_review_queue` has been silently filling up with
+ambiguous-match rows since Session 4's identity resolution work, with no screen to review or
+act on any of them yet.
