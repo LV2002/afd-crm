@@ -712,3 +712,29 @@ assignment code itself. Pre-existing limitation of the current test setup (each 
 manages its own fixtures/cleanup independently, with no shared locking), not something this
 session's changes touch or fix. `npx vitest run --no-file-parallelism` is the reliable way to
 get a real full-suite signal locally until the suite's fixtures are made cross-file-safe.
+
+2026-08-29 · [my-day] "At risk" (docs/02-BUILD-PHASES.md § Phase 2's "overdue → due today →
+new assignments → at-risk") has no real SLA-breach signal to key off yet — `leads.sla_breached`
+exists as a column but nothing computes it; that's the SLA cron, still later in Phase 2. Rather
+than leave the bucket empty or invent a fake breach calculation, it uses the honest signal
+already available: a **hot** lead with no `next_followup_at` scheduled at all. That's a real,
+meaningful "about to fall through the cracks" condition on its own (a counsellor's hottest
+leads should never be sitting with no planned next step), and the bucket already checks
+`sla_breached` first so it becomes the real thing for free the moment the SLA cron starts
+setting that column — no My Day code changes needed then.
+
+2026-08-29 · [my-day] Each lead lands in **exactly one** bucket — overdue, due-today, new
+assignment, at-risk, in that priority order — never more than one, and never split across two.
+The alternative (showing a lead in every bucket whose condition happens to be true) would let
+the same lead double- or triple-count toward "how much is on my plate today," which defeats
+the point of a prioritized work queue. A lead that's both overdue and technically a "new
+assignment" (never contacted, but with an overdue task) is shown once, under Overdue — that's
+the more urgent framing and the one that should get worked first.
+
+2026-08-29 · [my-day] A task's due date and a lead's own `next_followup_at` are two independent
+"when do I need to act" signals for the same lead (a task might be assigned by someone else,
+e.g. a centre head asking a counsellor to send a document, entirely separate from the
+counsellor's own logged follow-up plan). My Day treats whichever is earlier as the lead's
+reason for showing up — never shows both, never picks the follow-up over an equally-relevant
+overdue task. Only tasks assigned to the viewing user are considered (not every open task on
+the lead), matching "my queue," not "everything happening on this lead."
