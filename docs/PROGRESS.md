@@ -1582,3 +1582,68 @@ remain untouched and separate.
 **Next:** the last of the three items requested together this session — prebuilt dashboards on
 `/reports` (leads by source, funnel snapshot, counsellor scorecard, centre performance),
 scoped down from Phase 2's full "generic pivot widget" ambition to a first real pass.
+
+---
+
+## Session 16 — Prebuilt dashboards (Phase 2) — 2026-08-29
+
+**Shipped:** the real `/reports` screen — the last of the three items requested together this
+session (temperature cron, merge review, dashboards). Four sections: leads by source and a
+funnel snapshot as bar charts (Recharts, now a real dependency), a counsellor scorecard and a
+centre performance table (total/won/lost/conversion), all computed from a plain, present-moment
+snapshot of active leads — not yet date-range-filterable, deliberately scoped down from Phase
+2's full "generic pivot widget" ambition (nine dimensions over an arbitrary range). The
+aggregation itself is a pure module, `lib/reports/aggregate-leads.ts` (8 unit tests), same
+"page fetches, pure function counts" split as My Day and the two cron evaluators.
+
+**A real access-model gap found while building this, not before:** `report.read`/
+`report.center`/`report.org` are three separate permission primitives (not one permission with
+an own/center/all scope, unlike every other permission code) — and `accounts`/`academics` hold
+`report.read`+`report.center` but **not `lead.read` at all**. `leads`' own RLS policy
+(`leads_select`) is gated on `lead.read`, so a reports page built the "normal" way — RLS-bound
+client, querying `leads` directly — would have silently shown these two roles zero data on
+every widget, not an access-denied message, just quietly wrong numbers. Fixed by building this
+page the same way as the SLA/temperature crons and the merge logic: the direct db client,
+re-implementing the own/center/all scope check from scratch — here, reading which of the three
+report permission codes the caller holds (`report.org` > `report.center` > `report.read`) as
+the tier, since scope is expressed via code presence for these three, not a shared scope
+column. The query only ever selects `id`/`assignedTo`/`centerId`/`stageId`/`firstTouchSource`
+— never a name, phone, or email — so a role that can see aggregate counts without `lead.read`
+still never gets individual lead PII through this door.
+
+**Known broken / stubbed:** no date-range filter yet (today = all-time). No CSV/XLSX/PDF
+export of any report (Phase 2 also lists this; separate work). The scorecard and centre
+performance sections don't render at all for an `own`-scope viewer (a single counsellor
+comparing themselves to themselves, or a "centre performance" table with one row, isn't a
+useful report) — they only appear for `center`/`org` scope.
+
+**Colour:** both charts use the theme's own `--primary` CSS variable as a single consistent
+hue for magnitude (count) rather than one colour per bar/category — correct per the dataviz
+skill's form guidance (colour encodes a second variable only when there is one) and
+automatically correct in both light and dark since it's the existing token, not a new colour
+introduced for this session.
+
+**Tests:** `tests/aggregate-leads.spec.ts` (8 cases) — by-source counting and the "Unknown"
+bucket for a missing source, funnel including zero-count stages in sort order, scorecard/centre
+won-lost counting and sorting, both correctly excluding unassigned/uncentred leads.
+
+**Verified:** `npx tsc --noEmit` and `npx eslint` clean. `npm run build` succeeds (`/reports`
+compiles as a real route; recharts' ~111 kB is isolated to this one route via Next's
+code-splitting, not shipped to every page). Full suite green against a real local Postgres 16
+instance: `Tests 186 passed | 2 skipped (188)` across 23 files. The actual aggregation pipeline
+was also run end-to-end against live Postgres (the exact queries `page.tsx` issues, run
+directly) to confirm no SQL/column-name errors — Drizzle's query builder is fully typed against
+the schema here (unlike the untyped Supabase-JS client most other pages use), so this was
+lower-risk than usual, but still checked for real rather than assumed from types alone.
+
+**Verify by:** `npm test` — expect `186 passed | 2 skipped`. In the live app: as an admin,
+visit `/reports` and confirm all four sections render (charts included) once there's at least
+one lead; log in as a counsellor (`own` scope) and confirm only the two charts show, not the
+scorecard/centre tables; if you can, log in as an `accounts` or `academics` user and confirm
+they see real counts on `/reports` despite not being able to open `/leads` at all — that's the
+gap this session found and fixed.
+
+**Next:** all three items requested this session are done. Remaining Phase 2 work: the Meta
+Lead Ads webhook and the wider integration/bulk-database ingestion scope Leon described and
+asked to defer (docs/DECISIONS.md § A10) — both still waiting on Leon's own next steps rather
+than CRM-side code.
