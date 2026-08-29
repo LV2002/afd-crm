@@ -82,6 +82,40 @@ Needed before Phase 4, not before Phase 1.
 
 **Decision:**
 
+### A10. Bulk lead databases + wider integration ingestion (raised 2026-08-29, deferred)
+Leon's stated future scope, explicitly not being built yet — captured here so it isn't lost
+before we get back to it:
+
+- **More ingestion sources than Phase 2 currently lists**, each polled/synced roughly every
+  10 minutes so the CRM stays current: Meta Lead Ads, website activity webhooks, and a Google
+  Sheets bridge (leads landing in a Sheet — presumably from a source that isn't a direct
+  webhook target — should flow into the CRM automatically rather than needing a manual CSV
+  export/import each time).
+- **Bulk purchased/partner databases** (school databases, etc.) need a genuinely different
+  path from a normal lead: upload the whole raw database into the CRM into some kind of
+  staging area, have someone manually filter/review it, then promote only the relevant rows
+  into the real leads list — where counsellors and everyone else's normal views only ever see
+  promoted leads, not the raw uploaded pile.
+- **The non-promoted rows are not meant to be discarded.** The actual end goal: get every
+  database Leon has ever collected into the CRM as the single source of truth, promoted or
+  not, so all of it (not just active leads) can drive **retargeting audiences on Meta and
+  Google Ads** and **periodic WhatsApp Business API broadcast messaging** — i.e. a bulk-upload
+  row has a real, ongoing purpose even if a counsellor never works it as a lead.
+
+**Open design tension to resolve when we build this** (not decided, don't assume an answer):
+this doesn't fit cleanly into the current "one ingestion path" model (CLAUDE.md non-negotiable
+#8 — everything goes through `resolveOrCreateLead()` then `applyAssignment()`, on the premise
+that every ingested row is a real lead someone will work). A bulk-uploaded row that's
+deliberately *not* a worked lead until promoted, but still wants to exist in the CRM for ad
+audience/WhatsApp targeting purposes, is a different lifecycle than today's `leads` table
+assumes. Whether that means a genuinely separate table (e.g. something like a
+`lead_database_rows` staging area, with promotion being its own explicit action that then
+*does* go through the normal identity/assignment path) or a flag/stage on `leads` itself that
+hides a row from every counsellor-facing view until promoted is an actual design decision to
+make deliberately when this is scoped, not something to default on quietly.
+
+**Decision:** deferred — Leon will revisit this when ready to scope it properly.
+
 ---
 
 ## B. Assumptions made during the build
