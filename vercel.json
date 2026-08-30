@@ -2,31 +2,31 @@
   "crons": [
     {
       "path": "/api/cron/sla-sweep",
-      "schedule": "0 * * * *"
-    },
-    {
-      "path": "/api/cron/recompute-temperature",
-      "schedule": "30 20 * * *"
-    },
-    {
-      "path": "/api/cron/ad-spend-sync/meta",
-      "schedule": "30 21 * * *"
-    },
-    {
-      "path": "/api/cron/retargeting-sync/meta",
-      "schedule": "30 22 * * *"
-    },
-    {
-      "path": "/api/cron/ad-spend-sync/google",
-      "schedule": "0 22 * * *"
-    },
-    {
-      "path": "/api/cron/retargeting-sync/google",
-      "schedule": "0 23 * * *"
+      "schedule": "0 0 * * 0"
     },
     {
       "path": "/api/cron/whatsapp-broadcast-sweep",
-      "schedule": "0 * * * *"
+      "schedule": "0 1 * * 0"
+    },
+    {
+      "path": "/api/cron/recompute-temperature",
+      "schedule": "30 20 * * 1"
+    },
+    {
+      "path": "/api/cron/ad-spend-sync/meta",
+      "schedule": "30 21 * * 2"
+    },
+    {
+      "path": "/api/cron/retargeting-sync/meta",
+      "schedule": "30 22 * * 3"
+    },
+    {
+      "path": "/api/cron/ad-spend-sync/google",
+      "schedule": "0 22 * * 4"
+    },
+    {
+      "path": "/api/cron/retargeting-sync/google",
+      "schedule": "0 23 * * 5"
     }
   ]
 }
