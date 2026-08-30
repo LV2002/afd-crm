@@ -880,4 +880,50 @@ not just read for correctness.
 
 ---
 
+## Post-Session-7 fix #2: `db:seed`/`db:migrate` never actually loaded `.env.local`
+
+Found while walking the user through re-verifying the three fixes above: `npm run db:seed`
+threw `Error: DATABASE_URL is not set` even though `.env.local` had a correctly-formed
+`DATABASE_URL` in it. Root cause, present since the very first commit: both `seed.ts` and
+`drizzle.config.ts` used a bare `import "dotenv/config"`, which **only ever loads a file
+literally named `.env`** — it silently ignores `.env.local`, the file
+`docs/GETTING-STARTED.md` tells every new setup to create. Nobody had hit this from a fresh
+terminal before now; the app itself (`npm run dev`) works fine because Next.js has its own
+built-in `.env.local` loading, unrelated to the `dotenv` package.
+
+The obvious fix — `import { config as loadEnv } from "dotenv"; loadEnv({ path: [".env.local",
+".env"] });` — turned out to be insufficient for `seed.ts` specifically, and worth recording
+why: esbuild (which `tsx` uses to run TypeScript) hoists **every** `require()` from an `import`
+statement above all other top-level code in a file, in declaration order, regardless of where
+they're textually interleaved. `seed.ts` imports `{ db } from "./client"`, and `./client`
+reads `process.env.DATABASE_URL` during its own module evaluation — which, after hoisting,
+now runs *before* a `loadEnv()` **function call** sitting lower in the file, even if that call
+appears above the `./client` import in the source. Confirmed this concretely with
+`esbuild.transformSync()` on the actual file: every `require(...)` landed at the top of the
+compiled output in import order, ahead of the `loadEnv()` call.
+
+The original bare `import "dotenv/config"` avoided this because its side effect ran *during
+that import's own module evaluation* — and since imports execute in declaration order, having
+it as the first import guaranteed it ran before `./client`. Fixed the same way, correctly
+this time: `src/lib/db/load-env.ts` is a one-line side-effect module that calls
+`loadEnv({ path: [".env.local", ".env"] })` at its own top level; `seed.ts` does
+`import "./load-env";` as its first import, so hoisting still runs it before `./client`.
+`drizzle.config.ts` didn't need this workaround — its own `DATABASE_URL` check is a plain
+statement in the config file itself, not inside an imported module, so a straightforward
+`loadEnv()` call before that check works.
+
+**Verified:** confirmed with `esbuild.transformSync()` that `require("./load-env")` now
+appears first in the compiled output, ahead of `require("./client")`. Reproduced the exact
+reported failure (renamed a scratch `.env` to `.env.local`, ran `npm run db:seed`, got the
+same `DATABASE_URL is not set` error) and confirmed the fix resolves it — `npm run db:seed`
+now prints `injected env (1) from .env.local,.env` and seeds successfully; `npm run db:migrate`
+also confirmed working the same way. `npx tsc --noEmit`, `npx eslint .`, `npm run build` all
+pass clean; `npm test` — `Tests 91 passed | 2 skipped (93)`.
+
+**Verify by:** pull this branch, confirm `.env.local` has a real `DATABASE_URL`, then run
+`npm run db:seed` — it should no longer say "DATABASE_URL is not set", and its first line of
+output should be `injected env (N) from .env.local,.env`.
+
+---
+
 <!-- Sessions append below -->
