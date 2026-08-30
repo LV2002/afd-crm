@@ -557,6 +557,8 @@ interface FieldSeed {
   showInList?: boolean;
   showInFilters?: boolean;
   options?: Array<{ value: string; label: string }>;
+  /** Defaults to true — everything on this list was a lead-form field from the start. STUDENT_FIELD_SEEDS mixes real columns (true) with admin-added form fields (false), so it's explicit there. */
+  isCore?: boolean;
 }
 
 const LEAD_FIELD_SEEDS: FieldSeed[] = [
@@ -598,12 +600,86 @@ const LEAD_FIELD_SEEDS: FieldSeed[] = [
   { key: "brochure_sent", label: "Brochure Sent", type: "boolean", section: "Tracking" },
 ];
 
-async function seedFieldDefinitions() {
-  for (const [index, field] of LEAD_FIELD_SEEDS.entries()) {
+/**
+ * Every field on AFD's actual paper intake form (docs/PROGRESS.md, Session
+ * 24 — the uploaded "Student Profile" PDF), mapped onto `students`: the
+ * ~11 that already have a real column (isCore, matching the column name
+ * exactly) plus the rest as genuinely admin-editable custom fields
+ * (is_core: false, living in `students.custom`) — not hardcoded columns,
+ * since a different institute's intake form would ask different
+ * questions, and CLAUDE.md's plug-and-play test applies here exactly as
+ * much as it does to lead fields.
+ */
+const STUDENT_FIELD_SEEDS: FieldSeed[] = [
+  // Personal (core)
+  { key: "full_name", label: "Name", type: "text", section: "Personal", isRequired: true, isCore: true },
+  { key: "phone", label: "Student Phone Number", type: "phone", section: "Personal", isRequired: true, isCore: true },
+  { key: "email", label: "Email", type: "email", section: "Personal", isCore: true },
+  { key: "dob", label: "DOB", type: "date", section: "Personal", isCore: true },
+  { key: "parent_phone", label: "Parent Phone", type: "phone", section: "Personal", isCore: true },
+
+  // Personal (custom — not on the students table today)
+  { key: "city", label: "City", type: "text", section: "Personal" },
+  { key: "address", label: "Address", type: "long_text", section: "Personal" },
+  { key: "pincode", label: "Pincode", type: "text", section: "Personal" },
+  { key: "state", label: "State", type: "text", section: "Personal" },
+  { key: "photo_url", label: "Photo", type: "url", section: "Personal" },
+
+  // Parents (custom)
+  { key: "mother_name", label: "Mother Name", type: "text", section: "Parents" },
+  { key: "mother_phone", label: "Mother Phone Number", type: "phone", section: "Parents" },
+  { key: "father_name", label: "Father Name", type: "text", section: "Parents" },
+  { key: "father_phone", label: "Father Phone Number", type: "phone", section: "Parents" },
+
+  // Program (core)
+  { key: "current_course", label: "Course", type: "select", section: "Program", isCore: true },
+  { key: "current_batch_id", label: "Batch", type: "select", section: "Program", isCore: true },
+  { key: "center_id", label: "Centre", type: "select", section: "Program", isCore: true },
+  { key: "joined_at", label: "Date of Joining", type: "date", section: "Program", isCore: true },
+  { key: "status", label: "Status", type: "select", section: "Program", isCore: true, options: [
+    { value: "active", label: "Active" },
+    { value: "on_hold", label: "On Hold" },
+    { value: "completed", label: "Completed" },
+    { value: "dropped", label: "Dropped" },
+  ] },
+  { key: "target_exams", label: "Design Exam Interested In", type: "multiselect", section: "Program", isCore: true },
+  { key: "target_exam_year", label: "Exam Year", type: "text", section: "Program", isCore: true },
+
+  // Program (custom)
+  { key: "program", label: "Program", type: "select", section: "Program", options: [
+    { value: "PG", label: "PG" },
+    { value: "UG", label: "UG" },
+    { value: "Foundation", label: "Foundation" },
+    { value: "Crash Course", label: "Crash Course" },
+  ] },
+  { key: "mode", label: "Mode", type: "select", section: "Program", options: [
+    { value: "Online", label: "Online" },
+    { value: "Offline", label: "Offline" },
+    { value: "Hybrid", label: "Hybrid" },
+  ] },
+
+  // Academic History (custom)
+  { key: "current_qualification", label: "Student Current Qualification", type: "text", section: "Academic History" },
+  { key: "last_school_attended", label: "Last/Current School Attended", type: "text", section: "Academic History" },
+  { key: "stream_11_12", label: "11th & 12th Stream", type: "text", section: "Academic History" },
+  { key: "exam_board", label: "Exam Board", type: "text", section: "Academic History" },
+  { key: "percentage_10th", label: "10th Percentage", type: "number", section: "Academic History" },
+  { key: "percentage_12th", label: "12th Percentage", type: "number", section: "Academic History" },
+  { key: "art_teacher_name", label: "Art Teacher Name", type: "text", section: "Academic History" },
+  { key: "art_teacher_phone", label: "Art Teacher Contact Number", type: "phone", section: "Academic History" },
+
+  // Interests & Notes (custom)
+  { key: "design_discipline_interested", label: "Design Discipline Interested In", type: "long_text", section: "Interests & Notes" },
+  { key: "hobbies", label: "Areas of Interest & Hobbies", type: "long_text", section: "Interests & Notes" },
+  { key: "comments", label: "Comments", type: "long_text", section: "Interests & Notes" },
+];
+
+async function seedFieldDefinitionsFor(entity: "lead" | "student", seeds: FieldSeed[]) {
+  for (const [index, field] of seeds.entries()) {
     await db
       .insert(fieldDefinitions)
       .values({
-        entity: "lead",
+        entity,
         key: field.key,
         label: field.label,
         type: field.type,
@@ -612,7 +688,7 @@ async function seedFieldDefinitions() {
         isRequired: field.isRequired ?? false,
         showInList: field.showInList ?? false,
         showInFilters: field.showInFilters ?? false,
-        isCore: true,
+        isCore: field.isCore ?? true,
         options: field.options,
       })
       .onConflictDoUpdate({
@@ -625,7 +701,12 @@ async function seedFieldDefinitions() {
         },
       });
   }
-  console.log(`seeded ${LEAD_FIELD_SEEDS.length} field definitions`);
+  console.log(`seeded ${seeds.length} ${entity} field definitions`);
+}
+
+async function seedFieldDefinitions() {
+  await seedFieldDefinitionsFor("lead", LEAD_FIELD_SEEDS);
+  await seedFieldDefinitionsFor("student", STUDENT_FIELD_SEEDS);
 }
 
 interface UserSeed {

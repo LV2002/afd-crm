@@ -9,8 +9,9 @@ import { cn } from "@/lib/utils";
 import type { FieldSection } from "@/lib/fields/group-by-section";
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 
+import { DynamicFieldInput } from "@/components/fields/dynamic-field-input";
+
 import { updateLead, type FormState } from "./actions";
-import { DynamicFieldInput } from "./dynamic-field-input";
 import { RevealPhoneButton } from "../reveal-phone-button";
 import { StateDistrictFields } from "./state-district-fields";
 

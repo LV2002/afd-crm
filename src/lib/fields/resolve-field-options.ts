@@ -29,6 +29,12 @@ const CORE_KEY_TO_DROPDOWN_CATEGORY: Record<string, string> = {
   temperature: "temperature",
   interested_exams: "exam",
   courses_interested: "course",
+  // students.target_exams reuses the same "exam" category as leads'
+  // interested_exams — one admin-editable exam list for the whole system,
+  // not a second one to keep in sync.
+  target_exams: "exam",
+  // Same reasoning: students.current_course reuses leads' "course" list.
+  current_course: "course",
 };
 
 /**
@@ -73,6 +79,15 @@ export async function resolveFieldOptions(
       .from("centers")
       .select("id, name")
       .eq("is_active", true)
+      .order("name")
+      .returns<Array<{ id: string; name: string }>>();
+    return (data ?? []).map((r) => ({ value: r.id, label: r.name }));
+  }
+
+  if (field.key === "current_batch_id") {
+    const { data } = await supabase
+      .from("batches")
+      .select("id, name")
       .order("name")
       .returns<Array<{ id: string; name: string }>>();
     return (data ?? []).map((r) => ({ value: r.id, label: r.name }));

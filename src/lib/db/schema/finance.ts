@@ -5,6 +5,7 @@ import {
   boolean,
   date,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -197,6 +198,8 @@ export const students = pgTable("students", {
   currentBatchId: uuid("current_batch_id").references((): AnyPgColumn => batches.id, {
     onDelete: "set null",
   }),
+  /** Escape hatch for custom fields (field_definitions, entity='student', is_core=false) — no migration needed, same pattern as leads.custom. */
+  custom: jsonb("custom").$type<Record<string, unknown>>(),
   ...timestamps(),
   ...softDelete(),
 }, (t) => [uniqueIndex("students_student_code_uq").on(t.studentCode)]);

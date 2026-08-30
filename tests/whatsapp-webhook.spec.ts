@@ -34,8 +34,16 @@ const { setIntegrationCredential, deleteIntegrationCredential } = await import("
 
 const APP_SECRET = "test-wa-app-secret";
 const VERIFY_TOKEN = "test-wa-verify-token";
-const PHONE_NUMBER_ID = "test-phone-number-id";
 const MARKER = "WhatsAppWebhookTest";
+// Unique to this file — findScopeIdByCredentialValue() does a reverse
+// lookup by decrypted VALUE across every scoped credential for
+// (provider, key), so a value shared with another test file's fixture
+// (e.g. tests/whatsapp-broadcast-sweep.spec.ts also registering a
+// "phone_number_id") is a real race under Vitest's parallel file
+// execution: whichever row the query happens to return first "wins",
+// silently routing this test's webhook call to the OTHER file's
+// counsellor. Caught as an intermittent CI-only flake, not a logic bug.
+const PHONE_NUMBER_ID = `${MARKER}-phone-number-id`;
 
 // leads.assigned_to carries a real FK to profiles, so the counsellor this
 // test routes to must be a real fixture row, not an arbitrary uuid — same

@@ -1358,3 +1358,77 @@ scope call, not a considered design decision: a review/approval step is real, se
 work (a broadcast reaching the wrong audience is hard to partially undo — Meta doesn't support
 recalling a sent WhatsApp message), flagged here so it doesn't get mistaken for "this is how
 it should stay."
+
+2026-08-30 · [students] Leon shared AFD's actual paper intake form (a PDF export of a Google
+Sheet) — the earlier placeholder print layout (Session 19) never matched it, since no real
+template existed to build against yet. Rather than hardcoding the ~20 fields it asks for
+(mother/father details, academic history, art teacher, design discipline, hobbies, a photo)
+as new `students` columns, they're wired through the SAME admin-editable custom-fields system
+(`field_definitions`, `entity='student'`) leads already use — a different design institute's
+intake form asks different questions, so CLAUDE.md's plug-and-play test ("could this be
+deployed for a different company by changing only database contents") applies here exactly
+as much as it does to lead fields. `students` gained a `custom` jsonb column (migration 0029)
+mirroring `leads.custom` exactly. The whole custom-fields pipeline
+(`get-field-schema.ts`/`field-column.ts`/`resolve-field-options.ts`) turned out to already be
+100% entity-generic — including the Settings → Custom Fields UI's entity picker, which
+already listed "student" as a choosable option with zero code behind it. This is the same
+pattern as this session's WhatsApp work: a real feature turned out to already be half-built
+as unused-but-correct scaffolding from Phase 1, just never given real data to prove it out.
+
+2026-08-30 · [students] `getFieldSchema`'s `sort_order` (drives the edit form's section tabs)
+and the print page's field ORDER/PAIRING are deliberately two separate concerns, not one. The
+edit form groups fields by topic for usability (Personal / Parents / Program / Academic
+History / Interests & Notes); the print page reproduces the physical paper form's exact
+row-by-row layout, which interleaves those same topics in a specific sequence a real form
+just has (Name, then Program+Batch, then DOB+Mode, ...). `PRINT_ROWS` in
+`students/[id]/print/page.tsx` is a small hardcoded array of field-key pairs — the one part of
+this feature that ISN'T config-driven, because a physical form's fixed layout is a genuine
+one-time design decision, not admin-configurable data the way its field LABELS are (which
+still come from `field_definitions` and do change if edited in Settings).
+
+2026-08-30 · [students] The print page's photo box is positioned as an absolutely-positioned
+overlay outside the table's own column grid, not as an HTML rowSpan cell inside it — an
+earlier draft used rowSpan and got the column count wrong (a row spanned by a rowSpan cell
+above it must NOT also declare a cell for that column, and getting this wrong desyncs the
+whole table's implied column count for every row below it). Overlaying avoids the whole class
+of rowSpan/colSpan bookkeeping bugs for what's fundamentally just "the photo lives in this
+corner," at the cost of not being pixel-identical to the original PDF's exact grid lines
+around the photo — an acceptable trade for a working, correct print page over a
+visually-perfect but fragile one.
+
+2026-08-30 · [students] Student photo is a plain URL field (`photo_url`, admin pastes a
+link — e.g. from wherever the counsellor already stores it), not a real upload flow into
+Supabase Storage. CLAUDE.md names Storage/signed-URLs as the stack's intended file-handling
+approach, but nothing in this codebase has ever actually built that yet (`"file"` has been a
+listed field TYPE since Phase 1 with zero implementation behind it — same "reserved hook,
+never used" pattern as several WhatsApp permissions/columns turned out to be). Building real
+upload (a private bucket, storage RLS policies, an upload widget, signed URLs for the print
+view) is legitimate, separate work — deferred here for the same reason WhatsApp inbound media
+download was deferred: honest, complete as far as it goes, not a half-finished pretense of
+more.
+
+2026-08-30 · [students] The academics detail page (`students/[id]/page.tsx`) previously had no
+edit capability at all — read-only fields, even though the `academics` role has held
+`student.update` (at centre scope) since it was seeded. `dynamic-field-input.tsx` moved from
+`leads/[id]/` to `src/components/fields/` since it was already 100% entity-agnostic (reads
+only `field.type`, nothing lead-specific) and is now genuinely shared between the lead and
+student edit forms — a real, justified relocation once a second real caller existed, not a
+speculative "might reuse someday" abstraction.
+
+2026-08-30 · [tests] Fixed a real, reproducible test-isolation bug: `tests/whatsapp-webhook.spec.ts`
+and `tests/whatsapp-broadcast-sweep.spec.ts` both registered a `phone_number_id` credential
+using the exact same literal string (`"test-phone-number-id"`) for two DIFFERENT counsellor
+fixtures. `findScopeIdByCredentialValue()` does a reverse lookup by decrypted VALUE across
+every scoped credential for `(provider, key)` — under Vitest's parallel file execution
+against one shared local Postgres, whichever row happened to be returned first would "win,"
+occasionally routing one file's inbound-webhook test to the OTHER file's counsellor id
+(caught as an intermittent `expected X to be Y` UUID mismatch, not a deterministic failure).
+Fixed by making each file's test value unique to its own `MARKER`. Separately observed (not
+fixed): the Meta/Google retargeting-sync test suites can occasionally hit a foreign-key
+violation under the same parallel-execution conditions, because their production code
+deliberately scans the *entire* `leads` table (a correct, intentional design for AFD's real
+volume — see that route's own comment) rather than filtering to just that test file's
+fixtures; a lead can very rarely be deleted by another file's cleanup between that scan and a
+later write in the same request. Not chased down further — it didn't reproduce on a second
+run, and forcing serial test-file execution to eliminate it entirely would slow down the
+whole suite for a flake that has never been observed twice in a row.

@@ -6,9 +6,13 @@ import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { groupBySection } from "@/lib/fields/group-by-section";
+import { getFieldSchema } from "@/lib/fields/get-field-schema";
+import { OPTION_BEARING_TYPES, resolveFieldOptions, type FieldOption } from "@/lib/fields/resolve-field-options";
 import { formatDateIST } from "@/lib/format/date";
 import { createClient } from "@/lib/supabase/server";
 
+import { StudentEditForm } from "./student-edit-form";
 import type { StudentDetailRow } from "./types";
 
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -21,13 +25,32 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   const { data: student } = await supabase
     .from("students")
     .select(
-      "id, student_code, full_name, phone, parent_phone, email, dob, status, joined_at, target_exams, target_exam_year, current_course, centers(name), batches(name)",
+      "id, student_code, full_name, phone, parent_phone, email, dob, status, joined_at, target_exams, target_exam_year, current_course, current_batch_id, center_id, custom, centers(name), batches(name)",
     )
     .eq("id", id)
     .is("deleted_at", null)
     .maybeSingle<StudentDetailRow>();
 
   if (!student) notFound();
+
+  const canEdit = can(user, "student.update");
+
+  const fields = await getFieldSchema(supabase, "student", user);
+  const sections = groupBySection(fields);
+
+  const values: Record<string, unknown> = {};
+  for (const field of fields) {
+    values[field.key] = field.isCore
+      ? (student as unknown as Record<string, unknown>)[field.key]
+      : (student.custom ?? {})[field.key];
+  }
+
+  const optionsByKey: Record<string, FieldOption[]> = {};
+  for (const field of fields) {
+    if (OPTION_BEARING_TYPES.has(field.type)) {
+      optionsByKey[field.key] = await resolveFieldOptions(supabase, field);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -52,28 +75,30 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         that's the boundary CLAUDE.md draws between accounts and
         academics, enforced twice over: `payment.read`'s RLS policy
         wouldn't grant academics a payments row anyway, and this page
-        never asks for one.
+        never asks for one. Every OTHER field on the real intake form
+        (docs/PROGRESS.md, Session 24) is driven entirely by
+        field_definitions(entity='student') — an admin adding a new
+        question to the form needs a Settings screen, not a code change.
       */}
-      <div className="grid grid-cols-2 gap-4 rounded-lg border p-4 sm:grid-cols-3">
-        <Field label="Phone">{student.phone}</Field>
-        <Field label="Parent phone">{student.parent_phone ?? "—"}</Field>
-        <Field label="Email">{student.email ?? "—"}</Field>
-        <Field label="Date of birth">{student.dob ? formatDateIST(student.dob, "d MMM yyyy") : "—"}</Field>
-        <Field label="Course">{student.current_course ?? "—"}</Field>
-        <Field label="Batch">{student.batches?.name ?? "—"}</Field>
-        <Field label="Target exams">{student.target_exams?.join(", ") || "—"}</Field>
-        <Field label="Target exam year">{student.target_exam_year ?? "—"}</Field>
-        <Field label="Joined">{formatDateIST(student.joined_at, "d MMM yyyy")}</Field>
-      </div>
+      {canEdit ? (
+        <StudentEditForm studentId={id} sections={sections} values={values} optionsByKey={optionsByKey} />
+      ) : (
+        <div className="grid grid-cols-2 gap-4 rounded-lg border p-4 sm:grid-cols-3">
+          {fields.map((field) => (
+            <div key={field.id} className="flex flex-col gap-0.5">
+              <span className="text-xs text-muted-foreground">{field.label}</span>
+              <span className="text-sm font-medium">{formatFieldValue(field.key, values[field.key])}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium">{children}</span>
-    </div>
-  );
+function formatFieldValue(key: string, value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  if (Array.isArray(value)) return value.join(", ") || "—";
+  if (key === "dob" || key === "joined_at") return formatDateIST(value as string, "d MMM yyyy");
+  return String(value);
 }

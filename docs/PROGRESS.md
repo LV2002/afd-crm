@@ -2214,3 +2214,77 @@ WhatsApp panel on its detail page; then reply from the CRM and confirm it's deli
 **Next:** Telephony (click-to-call, call logging) — the last integration in the confirmed
 build order — or the accounts system Leon asked to leave for last, once he shares the
 finance sheet.
+
+## Session 24 — Real student profile form (custom fields for `students` + print rebuild)
+
+Leon shared AFD's actual paper intake form (a PDF export from Google Sheets) — the earlier
+placeholder print layout (Session 19) was never built against a real template, since none
+existed yet. This session rebuilds it field-for-field and, in the process, wires up the
+`students` entity onto the same admin-editable custom-fields system `leads` already uses,
+rather than hardcoding ~20 new columns onto the `students` table.
+
+- **`students.custom`** (migration 0029) — a jsonb escape hatch mirroring `leads.custom`
+  exactly. Turned out to be the only piece of infrastructure actually missing:
+  `get-field-schema.ts`, `field-column.ts`, and `resolve-field-options.ts` were already
+  fully entity-generic, and the Settings → Custom Fields UI already listed "student" as a
+  choosable entity with zero code changes needed — another Phase 1 hook (like several of
+  this session's WhatsApp pieces) that existed but had never been exercised.
+- **34 `field_definitions` rows seeded for `entity = 'student'`** (`src/lib/db/seed.ts`) —
+  ~11 core fields (the columns `students` already had: name, phone, email, DOB, course,
+  batch, centre, status, target exams, exam year, date of joining) plus ~21 new custom
+  fields matching the real form exactly (Program, Mode, City, Address, Pincode, State,
+  Mother/Father name+phone, Current Qualification, Design Discipline, Last School, Art
+  Teacher name+phone, 11th/12th Stream, Exam Board, 10th/12th Percentage, Hobbies, Photo,
+  Comments). `resolve-field-options.ts` gained two new dropdown mappings
+  (`target_exams`/`current_course` → the same admin-editable "exam"/"course" lists leads
+  already use — one list each, not a second one to keep in sync) and a `current_batch_id`
+  branch mirroring the existing `center_id` one.
+- **Students are now actually editable** — `students/[id]/page.tsx` previously had no edit
+  capability at all (read-only, despite `academics` having held `student.update` since it
+  was seeded). New `StudentEditForm` + `updateStudent` Server Action mirror the lead
+  edit form's exact shape (one `<form>` per section tab, core field → real column, custom
+  field → `students.custom`). `dynamic-field-input.tsx` moved from `leads/[id]/` to
+  `src/components/fields/` since it was already 100% entity-agnostic and now has a second
+  real caller.
+- **`/students/[id]/print` rebuilt** to visually match the real form: a bordered two-column
+  table (label/value/label/value), gray "pill" styling on Program/Batch/Mode, a photo box
+  (URL-based — see below) positioned top-right, Comments and a Signature line at the
+  bottom. The field LABELS and VALUES come from `field_definitions`/`students.custom` (an
+  admin renaming a label in Settings changes what prints), but the row-by-row PAIRING/ORDER
+  is a small fixed array matching the physical paper form's actual layout — a deliberate,
+  documented exception to "everything is config-driven," since a printed form's fixed
+  layout is a real one-time design decision, not admin-editable data.
+- **Photo is a pasted URL, not a real upload** — `photo_url` is a plain `url`-type custom
+  field. Real upload (Supabase Storage bucket, RLS storage policies, an upload widget,
+  signed URLs) is legitimate separate work this session doesn't attempt, same as WhatsApp's
+  deferred inbound-media download — flagged, not silently skipped.
+- **Fixed a real test-isolation bug found while re-running the suite**: two WhatsApp test
+  files (`whatsapp-webhook.spec.ts`, `whatsapp-broadcast-sweep.spec.ts`) had registered a
+  `phone_number_id` test credential under the exact same literal string for two different
+  counsellor fixtures — harmless in isolation, but an intermittent flake under Vitest's
+  parallel file execution (whichever file's row the reverse-lookup query happened to see
+  first would "win"). Fixed by making each file's test value unique to its own marker.
+
+**Verified:** `npx tsc --noEmit` clean. `npx eslint` clean on every new/touched file.
+`npm run build` succeeds — `/students/[id]` grew from a static 845B read-only page to a real
+5kB edit form; `/students/[id]/print` compiles against the new field-schema-driven layout.
+Full suite green against real local Postgres 16: **330 tests passed across 42 files**
+(unchanged count from Session 23 — this pass added no new test files, since the custom-fields
+pipeline it relies on is already covered by the leads equivalent; re-verified by re-running
+the full suite twice after the isolation fix, both clean).
+
+**Stubbed / deliberately out of scope for this pass:** real photo upload (URL-paste stub
+only, see docs/DECISIONS.md). The print page's field ORDER is hardcoded to match the one
+real paper form Leon shared — a second institute's differently-shaped form would need its
+own `PRINT_ROWS` array, not just new `field_definitions` rows.
+
+**Verify by:** `npm run db:migrate && npm run db:seed && DATABASE_URL=... npm test` — expect
+`330 passed` and `seeded 34 student field definitions` in the seed output. Then `npm run
+build`. In the browser: open any student's detail page as academics/admin, confirm every
+field from the real form is editable and grouped into sensible section tabs; save a value in
+each new field, then open Print Profile and confirm it appears in the right place with the
+real form's label, in the same row-pairing as the physical document.
+
+**Next:** Telephony (click-to-call, call logging) — the last integration in the confirmed
+build order — or the accounts system Leon asked to leave for last, once he shares the
+finance sheet.

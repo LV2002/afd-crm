@@ -82,7 +82,7 @@ beforeAll(async () => {
   await db.execute(sql`insert into auth.users (id, email) values (${counsellorId}, ${email})`);
   await db.insert(profiles).values({ id: counsellorId, fullName: `${MARKER} Counsellor`, email, roleId: counsellorRole.id });
   await setIntegrationCredential("whatsapp", "access_token", "fake-access-token");
-  await setIntegrationCredential("whatsapp", "phone_number_id", "test-phone-number-id", counsellorId);
+  await setIntegrationCredential("whatsapp", "phone_number_id", `${MARKER}-phone-number-id`, counsellorId);
 
   const [tag] = await db.insert(tags).values({ name: `${MARKER} Tag ${randomUUID().slice(0, 8)}` }).returning({ id: tags.id });
   tagId = tag.id;
@@ -123,7 +123,7 @@ describe("GET /api/cron/whatsapp-broadcast-sweep", () => {
     expect(recipient.status).toBe("sent");
     expect(recipient.waMessageId).toBe("wamid.sent123");
 
-    expect(sendTemplateMessage).toHaveBeenCalledWith("test-phone-number-id", "fake-access-token", "+919847600401", "demo_followup", "en_US", undefined);
+    expect(sendTemplateMessage).toHaveBeenCalledWith(`${MARKER}-phone-number-id`, "fake-access-token", "+919847600401", "demo_followup", "en_US", undefined);
   });
 
   it("marks the broadcast completed once its only recipient is done", async () => {
