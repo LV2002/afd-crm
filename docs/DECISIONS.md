@@ -934,3 +934,501 @@ dedicated Claim button, but not blocked). Left broad deliberately for a first pa
 centre's real membership list is small and human-reviewed at assignment time, so the practical
 risk of picking the "wrong" role from the dropdown is low; tighten later if it turns out to
 matter in practice.
+
+2026-08-29 · [phase4] Phase 4's foundation pass deliberately scopes down from the full doc.
+Built for real: `fee_structures`, `enrolments`, `payments`, `receipts`, `students`, both named
+gates, the accounts queue, and a fee structures settings screen. Deferred, not built at all
+this session: promos/`lead_promos`, `discount_approvals` (the `discount.approve` permission
+exists and is enforced nowhere — a counsellor can set any discount at Gate 1 today, there is
+no approval-authority-limit check), instalment templates/tracking/ageing (an enrolment's
+balance is computed live from summing the ledger on the detail page, not tracked as scheduled
+due dates), documents/enrolment agreements, the registration/enrolment form builder
+(`enrolment_forms`/`form_tokens`/`form_submissions`), refunds (`payment.refund` exists and is
+unused — a correction today would be a manually-inserted reversal payment row via direct DB
+access, not a UI action), and batch management (the `batches`/`student_batches` tables exist
+with full RLS, but no screen creates a batch, so `batch_id` stays null on every enrolment/
+student). Revisit in the order Leon actually needs them, not necessarily this order.
+
+2026-08-29 · [phase4] "Lead work stops" after Gate 1 (CLAUDE.md non-negotiable) is implemented
+by moving the lead into the seeded `stage_type='won'` pipeline stage, not by adding a check to
+the `leads_update` RLS policy. That stage was already excluded from My Day's queue, the SLA
+sweep, the temperature recompute cron, and the reports page (all four already special-case won/
+lost stages) — so this reuses an existing exclusion rather than adding a new one to the most
+security-sensitive policy in the schema. Consequence worth knowing: a counsellor with
+`lead.update` can still technically edit a won-stage lead's fields through the normal lead
+edit form — nothing in RLS blocks it. Revisit if that turns out to matter in practice; the
+safer fix (a genuine `leads_update` policy carve-out for won/lost stages) was judged too risky
+to add in the same pass as everything else in this session.
+
+2026-08-29 · [phase4] Gate 1's fee lookup key is (course, centre, mode, academic year) against
+`fee_structures`, with a manual total-fee override accepted when no row matches — deliberately,
+since `fee_structures` coverage is entirely admin-maintained and won't have a row for every
+combination from day one. `confirmAdmission()` throws rather than silently defaulting to zero
+or refusing the admission outright; the calling Server Action surfaces that error to the
+counsellor as "provide totalFeePaiseOverride" (rendered as the "Manual fee override" field).
+No UI currently distinguishes "used the fee structure" from "used a manual override" on the
+resulting enrolment — both look identical afterward. Add an `enrolments.fee_source` column
+if that distinction ever needs to be reportable.
+
+2026-08-29 · [phase4] `recordPayment()`'s Gate 2 trigger is "this is the first CREDIT payment
+with no `reverses_payment_id`, for this enrolment" — checked by counting matching `payments`
+rows after the insert, not by any flag on the enrolment. A debit (reversal) recorded before any
+credit would not itself trigger Gate 2 (a reversal only exists to correct a prior credit, so
+this case shouldn't arise in practice, but the guard is written to require a credit
+specifically rather than "any payment row exists" to be safe against it). Chose "first
+payment, however small" as the Gate 2 trigger — not "payment covers the full fee" or "payment
+meets some configurable minimum" — because CLAUDE.md's own lifecycle description says the gate
+fires on "first payment cleared," and instalment plans aren't built yet to define what a
+"first instalment amount" would even mean. Revisit once instalment templates exist.
+
+2026-08-29 · [phase4] `students` profile fields (name, phone, parent phone, email, DOB, target
+exams, target exam year) are copied from the lead at Gate 2 and never synced again — a
+deliberate one-time copy, not a live reference. This is CLAUDE.md's own instruction taken
+literally: "academics must never have to query the sales table." A phone number corrected on
+the lead after Gate 2 does NOT propagate to the student record; whoever notices the mismatch
+has to fix both records by hand. No reconciliation tooling built for this — flag as real,
+scoped follow-up work if it turns out to matter operationally (most students won't have their
+lead record touched again after admission anyway, since "lead work stops" at Gate 1).
+
+2026-08-29 · [phase4] Real migration-authoring bug, caught and fixed before it shipped: hand-
+writing an RLS-only migration's snapshot by literally `cp`-ing the previous migration's
+snapshot file (as this session initially did for 0016→0017) copies that file's `id` AND
+`prevId` verbatim, producing two snapshots that claim the identical migration-history node.
+`drizzle-kit migrate` never validates this and applies the SQL fine regardless — the corruption
+is silent until the next `drizzle-kit generate` call, which refused outright with "pointing to
+a parent snapshot ... which is a collision." The correct way to hand-write an RLS-only
+snapshot (confirmed against how Sessions 3–7's own migrations 0005/0008/0010/0012/0014 did it):
+copy the file's contents for the table/policy shape, but always mint a fresh `id` and set
+`prevId` to the immediately-prior migration's `id` — never copy both fields verbatim. Anyone
+hand-writing a future RLS-only migration should check this specifically, since nothing short
+of running `generate` again will reveal the mistake.
+
+2026-08-29 · [phase4] `students.student_code`'s default (`'STU' || lpad(nextval(...), 6, '0')`)
+is a raw SQL expression set directly in the RLS migration (0017), not something Drizzle's
+column builders (unlike `bigserial`, used for `leads.lead_number`/`receipts.receipt_no`) can
+express natively — so it was initially left off the Drizzle schema definition entirely, which
+made `tsc` correctly reject every `.insert(students, {...})` call for missing a required field.
+Fixed by adding the identical default expression to the schema column via
+`.default(sql\`...\`)` (migration 0018 — a genuine no-op against the database, which already
+had this default from 0017; it exists only so `drizzle-kit`'s own migration history matches
+what schema.ts now declares). Pattern worth remembering: any column whose default is a raw SQL
+expression needs that expression mirrored in the Drizzle schema too, or every caller gets a
+spurious "required field" type error despite the column being genuinely optional at the
+database level.
+
+2026-08-29 · [phase4] `fee_structures` was added to the config export/import bundle
+(`bundle-schema.ts`/`export-config.ts`/`import-config.ts`), bumping `CONFIG_BUNDLE_VERSION`
+from `1` to `2` — the first real version bump this bundle has had. Justification: CLAUDE.md's
+own "What is configurable" table lists "Fees: Structures ..." explicitly, so per the doc's own
+plug-and-play test this table has to travel with the rest of an instance's configuration, not
+be left to re-enter by hand on every new deployment. `center_id` carries over unchanged on
+import — no remapping needed — because `importConfig()` re-inserts `centers` rows with their
+original ids into what must be a freshly-migrated, empty instance; the same reasoning already
+applied to `business_hours`/`holidays`, which also carry a bare `center_id`.
+
+2026-08-29 · [departments] Leon asked for "a whole different experience" per department
+(sales/accounts/academics), each seeing only what they should of each other's leads. Decision:
+one app, one codebase, department-shaped *screens and permissions*, not three separate
+front ends — a role-aware `/dashboard` plus each department's own workspace (`/accounts`,
+now `/students`), gated on the permission primitives that already exist, never a role name.
+Three real front ends would mean three places to fix the same bug; this gets the same felt
+separation (a counsellor never sees an accounts screen, an academics user never sees a payment
+number) for a fraction of the build and maintenance cost. Revisit only if a department's needs
+genuinely diverge in ways that don't fit the shared shell — nothing so far has.
+
+2026-08-29 · [departments] Fixed a real Session 18 gap: the `accounts` role never held
+`lead.read`, so `/accounts/[id]`'s `leads(student_name, primary_phone)` embed was silently
+returning `null` for every accounts user (RLS enforces each embedded table's own SELECT
+policy — `leads_select` needs `lead.read`, and `enrolments`'/`payments`' own policies don't
+substitute for it). Granted `accounts` `lead.read` + `lead.reveal_phone` + `interaction.read`
+at scope `center` — matches Leon's explicit ask that "accounts and sales should see everything
+about each other's leads." Side effect worth knowing: this also puts `/leads` and `/my-day` in
+an accounts user's sidebar (both nav items are gated on the bare `lead.read` permission, with
+no finer-grained "lead.read but only via an enrolment" primitive). Left as-is rather than
+inventing role-specific nav suppression — `/leads` filtered to their own centre is genuinely
+useful for cross-referencing before an enrolment exists, and My Day just shows an empty queue
+for a role nothing gets assigned to, which is harmless. Did NOT make the equivalent change for
+`academics` — CLAUDE.md already gives academics everything the phrase "core lead details"
+promises via the `students` table itself (name, phone, course, exams targeted, all copied at
+Gate 2), which is the entire point of that denormalisation; adding `lead.read` for academics
+would let them browse the sales pipeline, which is the thing being scoped away, not toward.
+
+2026-08-29 · [dashboard] `/dashboard`'s five widgets are gated on the permission each actually
+needs (`lead.read` at scope `own` for "Your day", `lead.assign` for "Pipeline",
+`payment.read`/`student.read`/`settings.manage` for the other three) rather than checked
+against a role code — a role holding several of these bundles (center_head; admin/co_admin)
+sees several widgets, which is correct: CLAUDE.md describes center_head as running their
+centre end to end, not just its sales pipeline, so seeing accounts+academics summaries too is
+the intended behaviour, not scope creep to fix later. "Your day" specifically checks
+`scopeFor(user, 'lead.read') === 'own'`, not `can(user, 'lead.read')` — at scope
+`center`/`all` the underlying query (`assigned_to = user.id`) would only ever return zero
+rows, since nothing gets assigned directly to accounts/center_head/admin, so gating on scope
+avoids shipping a widget that would always render empty for those roles.
+
+2026-08-29 · [my-day] Factored the My Day page's fetch-and-build logic out into
+`getMyDayQueueForUser()` (`src/lib/my-day/get-queue.ts`) so the dashboard's "Your day" widget
+and the full `/my-day` page share one query instead of two copies drifting apart. The full
+page still owns its own `batchNameLookup()` call (the widget only needs counts, not centre
+names), so the split is at "fetch + bucket the queue," not the whole page.
+
+2026-08-29 · [students] The students list (`/students`) masks phone numbers the same way the
+leads list does (CLAUDE.md non-negotiable #6's "list view... in bulk" concern applies to any
+scrollable list of contact numbers, not specifically to leads) — but the student *detail*
+page shows the phone in full immediately, with no reveal-audit step, unlike a lead's. Reasons
+this is a deliberate difference rather than an oversight: (1) there's no
+`lead.reveal_phone`-equivalent primitive for students, and inventing one plus its audit
+plumbing wasn't asked for and wasn't built; (2) the underlying risk `lead.reveal_phone` exists
+for — a counsellor building a personal database of prospects to poach — doesn't really apply
+to an already-enrolled, already-paying student academics is delivering a course to. Revisit if
+this turns out to matter in practice; the fix would be a `student.reveal_phone` primitive
+mirroring the lead one exactly.
+
+2026-08-29 · [students] No edit capability on the student detail page this pass — Leon's ask
+was specifically "should be able to see," and `student.update` (already held by the academics
+role since Phase 4's seed) stays unused by any UI until a future session builds it. Batch
+assignment specifically can't be built yet regardless, since there's still no batch-management
+screen (Session 18 deferred it; `batches`/`student_batches` are schema-only).
+
+2026-08-29 · [tags] Lead tagging is `tags` (admin-configurable definitions, same
+list/new/`[id]`/active-toggle shape as Centres/Fee Structures, gated on `settings.manage`) +
+`lead_tags` (the many-to-many join). Deliberately did NOT add a new permission primitive for
+applying/removing a tag — it reuses `lead.update`, since tagging a lead is a lightweight edit
+of that lead, not a distinct capability CLAUDE.md's "each primitive is an enforcement point"
+principle would justify a new one for. `lead_tags` has no UPDATE policy at all (only
+SELECT/INSERT/DELETE) — a tag application is either present or absent, never edited in place;
+removing and re-adding is the only "change" that makes sense. Deactivating a tag definition
+hides it from the "+ Add tag" picker on new tagging but does NOT retroactively strip it from
+leads that already carry it — same "deactivate ≠ remove usages" precedent already established
+for pipeline stages and dropdown options.
+
+2026-08-29 · [tags] The leads list's tag filter is a bespoke `tag` query param resolved to a
+plain lead-id list (`leads.page.tsx` queries `lead_tags` directly, then `.in("id", ...)`),
+NOT wired into the generic field-schema-driven filter engine (`applyLeadFilters`/
+`readFilterValues`/`filterParamKey`) every other lead filter uses. Reason: that engine is
+built around `field_definitions` — one column, one value — and a tag is a many-to-many
+relationship with no backing column on `leads` at all. Forcing tags through that engine would
+mean either inventing a fake field_definitions row for something that isn't a field, or
+teaching the engine about join-table filters generally; neither was worth it for one filter.
+Revisit if a second non-column filter shows up and the duplication starts to hurt.
+
+2026-08-29 · [tags] `tags` was added to the config export/import bundle
+(`CONFIG_BUNDLE_VERSION` bumped `2` → `3`), same reasoning as `fee_structures` in Session 18:
+an admin-editable label list is configuration, and CLAUDE.md's plug-and-play test says
+configuration travels with the instance. `lead_tags` (which leads carry which tags) is
+correctly excluded — it's data, same bucket as leads/students/payments themselves, never
+exported. No retargeting sync exists yet to consume these tags (Meta/Google/WhatsApp audience
+sync is the integration work in docs/DECISIONS.md § A10, still deferred) — this session only
+builds the tag itself and the ability to apply it; where a tagged segment goes is future work.
+
+2026-08-29 · [testing] Adding RLS test coverage for a permission boundary sometimes requires
+giving a fixture user real centre membership it doesn't have by default (`accounts_a`/
+`academics_a` start with none, specifically so other tests can assert "sees nothing, not even
+its own profile's centre"). Giving them global membership in the outer `beforeAll` to test
+Phase 4 boundaries broke an earlier, unrelated `users.manage` visibility assertion that
+depends on those two fixtures having zero centres. Fixed by scoping the membership to a local
+`beforeAll`/`afterAll` on a wrapping `describe` around just the tests that need it, instead of
+the file's global fixture setup — the correct pattern for "this fixture needs different state
+for just this group of tests" going forward, rather than mutating shared fixture state and
+hoping nothing downstream depends on its old shape.
+
+2026-08-29 · [testing] `fee_structures` was missing from `tests/rls.spec.ts`'s
+`UNIVERSALLY_READABLE_TABLES` list despite being select-all-authenticated (Session 18 added
+the RLS policy but not the corresponding test-suite entry) — added it alongside the new
+`tags` entry while touching that list for this session's work. A small, easy-to-miss class of
+gap worth watching for: adding a new select-all config table needs both the migration AND this
+list updated, and nothing currently forces the second half to happen.
+
+2026-08-29 · [integrations] WhatsApp will be **one verified number per counsellor**, not the
+shared-number-with-per-message-attribution model this session recommended (cheaper, one
+business verification, one bill). Leon's explicit call, made after hearing the tradeoff —
+each counsellor already texts leads from what amounts to a personal WhatsApp identity today,
+so continuity mattered more than the cost/complexity difference. Consequence for the actual
+WhatsApp build (queued, not started): `whatsapp_accounts` (docs/01-DATA-MODEL.md) needs an
+`assigned_to` (profile id) column that doesn't exist in the doc's current sketch, and the
+onboarding flow is "add a counsellor → they go through Meta's WhatsApp Business number
+verification → paste their number's credentials into a per-counsellor Settings screen," not
+a single org-wide setup. `integration_credentials.scope_id` (this session) exists specifically
+so that per-counsellor credential storage doesn't need a schema change when this gets built.
+
+2026-08-29 · [integrations] "Plug and play" for Meta (and every integration after it) means
+every credential lives in `integration_credentials`, encrypted, entered through a Settings
+form — never an env var, since an env var needs a deploy and the whole point is that
+connecting a new ad account or WhatsApp number doesn't. The one deliberate exception:
+`INTEGRATION_ENCRYPTION_KEY` itself, which cannot be a database row without becoming
+circular (it's what the database rows are encrypted under). Generated once with
+`openssl rand -base64 32` and set in the deploy environment; rotating it means re-encrypting
+every stored credential, not attempted by any code this session — treat it as a one-time
+setup value, same category as `DATABASE_URL`.
+
+2026-08-29 · [integrations] `integration_credentials` has literally zero RLS policies for any
+authenticated role, on any command — not "settings.manage can read, nobody else can," zero.
+Same reasoning as the `permissions` table: a credential should never be readable through the
+browser at all, encrypted or not, so there's no RLS-bound path that should exist for it in
+the first place. Every read/write goes through `src/lib/integrations/credentials.ts` on the
+direct db client, and that module's own functions are the only enforcement point — the
+calling Server Action (gated on `settings.manage`) is what actually stands between a browser
+session and a credential ever being touched.
+
+2026-08-29 · [integrations] `src/lib/integrations/credentials.ts` deliberately has NO
+`import "server-only"`, for the same documented reason as `seed-permissions.ts`/
+`import-config.ts`: that package throws under a plain Node process (confirmed — both `tsx`
+and a bare Vitest run hit it), not just under webpack's client/server boundary check, and
+this module's own tests need to import it directly. The real security boundary is RLS (see
+above) plus always running on the direct db client, not the presence of this lint-time
+marker — so omitting it here costs nothing real and buys testability.
+
+2026-08-29 · [integrations] The Meta Lead Ads webhook fetches each lead's actual answers from
+the Graph API rather than trusting the webhook payload itself — Meta's `leadgen` webhook
+event carries only a `leadgen_id`, never the submitted name/phone/email, by design (their
+docs call this out explicitly: the webhook is a notification, not the data). This means
+every real lead requires one extra network call per webhook delivery, and that call can fail
+independently of signature verification — handled by giving each `leadgen_id` its own
+`webhook_events` row with its own status, so a Graph API outage marks exactly the affected
+leads `failed` (for Meta's own retry to pick up) without blocking or duplicate-processing
+anything else in the same delivery.
+
+2026-08-29 · [integrations] Ad spend sync assumes the Meta ad account is INR-denominated —
+`spend` comes back from the Insights API as a decimal string in whatever currency the ad
+account itself uses, and this session's mapper (`mapMetaInsightsRow`) multiplies it by 100
+and rounds, with no currency conversion. Correct today (AFD India's ad accounts are INR) and
+wrong the moment any ad account isn't — if that ever happens, `ad_spend_daily` needs its own
+currency column and the mapper needs to stop assuming. Not built defensively against that
+possibility now since it isn't a real scenario yet, per CLAUDE.md's own steer against
+building for hypothetical requirements.
+
+2026-08-29 · [integrations] The retargeting/Custom Audience upload — the actual "send every
+lead back to Meta for retargeting automatically" half of Leon's ask — is NOT built this
+session. Only inbound ingestion (the webhook) and ad spend reporting exist so far, neither of
+which uploads any lead's PII anywhere. Flagged once already (before this session started) as
+a real DPDP Act / consent question that needs an explicit answer, not an assumption, before
+an automated daily upload of hashed phone numbers to an ad platform ships — still open.
+Whoever picks this up next should get that answer before writing the sync, not after,
+precisely because by then the rest of the Meta plumbing will already exist and make the
+upload job look like a trivial extension of it.
+
+2026-08-29 · [integrations] Leon confirmed explicitly ("yes everyone is consenting") that
+every lead in the CRM has given consent for retargeting — this is the answer the entry above
+said was required before building the Custom Audience upload, so it's built this session.
+Eligibility (`isRetargetingEligible` in `src/lib/integrations/audience-sync.ts`) still checks
+`consentStatus === "given"` per-lead rather than skipping the check organisation-wide: a lead
+with `consentStatus: null` (never asked) or `"withdrawn"` is excluded regardless of Leon's
+blanket confirmation, and `doNotContact`/any non-empty `optedOutChannels` also excludes. This
+is deliberate — Leon's answer establishes the *policy* (consent has been sought and given as
+a matter of practice), not a licence to upload leads whose own record says otherwise or who
+opt out later. No per-channel opt-out vocabulary is seeded yet, so `optedOutChannels` is
+treated as all-or-nothing (any entry excludes from every platform) until that's built out.
+
+2026-08-29 · [integrations] The retargeting sync is a genuine two-way diff, not an
+add-only job — `ad_audience_members` tracks current platform membership per
+`(platform, lead_id)`, and each run computes `eligibleLeadIds` vs
+`currentlySyncedLeadIds` and both adds and removes. This matters specifically because
+consent is revocable: a lead who withdraws consent (or gets marked do-not-contact) after
+already being uploaded must be actively removed from the ad platform's audience, not just
+excluded from future adds — an add-only sync would leave a withdrawn lead sitting in Meta's
+Custom Audience indefinitely. Verified with a real test
+(`tests/meta-retargeting-sync.spec.ts`) that flips a synced lead's `consentStatus` to
+`"withdrawn"` and confirms `removeUsersFromAudience` is called and the `ad_audience_members`
+row is deleted in the same run.
+
+2026-08-29 · [integrations] Google's Lead Form webhook has no HMAC signature header at all
+— the shared secret (`google_key`) is a plain field inside the JSON body itself, verified by
+constant-time string comparison after parsing, not before. This is a real, documented
+deviation from CLAUDE.md non-negotiable #9's literal phrasing ("check the signature before
+parsing") — there is no signature to check pre-parse in Google's design, only a field inside
+the body. The underlying intent (never trust the body until its authenticity is checked, and
+persist it regardless) is preserved: the raw payload is stored in `webhook_events` whether or
+not `google_key` matches, exactly like a bad-signature Meta request. `JSON.parse` on an
+untrusted string is not itself a security boundary crossing (no code execution, no side
+effects) — the actual boundary crossed is "believe this payload enough to create a lead,"
+which still only happens after the key check passes.
+
+2026-08-29 · [integrations] A Google Lead Form webhook delivery with `is_test: true`
+(triggered by clicking "Send test lead" in Google Ads' own UI) is persisted to
+`webhook_events` and marked `done`, but deliberately never reaches `resolveOrCreateLead()`.
+Without this, every click of that button — something an admin might do repeatedly while
+verifying the webhook is wired up — would create a real fake lead in the live sales
+pipeline. Meta has no equivalent concept (its webhook only fires on genuine form
+submissions), so this branch has no Meta counterpart.
+
+2026-08-29 · [integrations] Google Ads' `metrics.conversions` (used as `leadsReported` in
+`ad_spend_daily` for the Google platform) counts every conversion action on the account, not
+specifically lead-form submissions — unlike Meta's Insights `actions` array, which lets the
+mapper filter to just the known lead action types. Isolating "only the lead-form conversion"
+on the Google side would need a specific conversion action id configured per-account ahead of
+time, which nothing in this system does yet. Treated as correct for AFD's actual accounts
+(single-purpose, lead-generation-only) and flagged rather than built around, per CLAUDE.md's
+steer against solving a hypothetical requirement — the day an account also tracks e.g.
+page-view conversions, this number silently overstates lead volume and needs revisiting.
+
+2026-08-29 · [integrations] Meta Custom Audiences and Google Customer Match hash phone
+numbers under genuinely different normalisation rules — Meta wants digits-only with country
+code and no leading `+`, Google wants strict E.164 with the `+` kept. Both platforms silently
+accept a wrongly-normalised hash rather than erroring; it just never matches anyone, so this
+would have been a silent no-op retargeting sync rather than a visible bug if shipped wrong.
+Kept as two separate functions (`hashPhone`/`normalizePhoneForHash` for Meta,
+`hashPhoneE164`/`normalizePhoneE164ForHash` for Google) rather than one shared "normalize
+phone for retargeting" that would necessarily be wrong for one of the two platforms.
+
+2026-08-29 · [integrations] `ads_access_token` (Marketing API — Insights, Custom Audiences)
+and `page_access_token` (Graph API — fetching a submitted lead's own answers) are stored and
+tested as two separate credentials, not one. They require different Meta permission scopes
+(`ads_read`/`ads_management` vs page-scoped lead-retrieval permissions) and are typically
+issued to different token types (System User vs Page token) — conflating them was an actual
+bug caught mid-session (the ad-spend-sync cron originally reused `page_access_token`) before
+it shipped. `testMetaConnection` now checks each token independently against Meta's
+`/debug_token` and reports both, since "the Meta integration is connected" isn't a single
+yes/no when the two halves (lead ingestion vs. spend/retargeting) can be configured, valid,
+or broken independently of each other.
+
+2026-08-29 · [whatsapp] "One number per counsellor" (Leon's confirmed decision, overriding
+this session's own shared-number-with-attribution recommendation) is implemented as ONE
+org-wide `access_token` credential plus a PER-COUNSELLOR `phone_number_id` credential
+(`scope_id` = the counsellor's profile id) — not N separate access tokens. This is how Meta's
+WhatsApp Cloud API actually works: a single System User token with
+`whatsapp_business_messaging` can act on any phone number in the WhatsApp Business Account,
+so "one number per counsellor" only requires N distinct `phone_number_id`s, not N distinct
+credentials of every kind. Routing (which counsellor "owns" an inbound message, which number
+an outbound send goes out from) is entirely about which `phone_number_id` is used per call —
+`findScopeIdByCredentialValue()` (new in `credentials.ts`) does the reverse lookup for the
+inbound direction.
+
+2026-08-29 · [whatsapp] An inbound WhatsApp message to a specific counsellor's number sets
+`assignedTo` explicitly on `resolveOrCreateLead()`'s input, bypassing `applyAssignment()`
+entirely (same short-circuit `resolveOrCreateLead()` already documents for "a counsellor
+manually creating a lead for themselves"). Reasoning: a customer messaging one specific
+counsellor's personal WhatsApp number is a stronger, more specific routing signal than any
+generic assignment rule (source/centre/exam) could produce — the customer already has (or
+found) a relationship with that person. If this ever needs to be overridable per-rule, that's
+a real future ask, not assumed here.
+
+2026-08-29 · [whatsapp] WhatsApp's Lead Form-equivalent has no HMAC signature to check before
+parsing at all for the *handshake* concern Meta's Lead Ads/Google both have, but it DOES have
+one for message delivery: `X-Hub-Signature-256`, verified with `verifyMetaSignature()` reused
+directly, unmodified — WhatsApp Business webhooks are the same Meta Graph webhooks product as
+Lead Ads, just a different field subscription. This is different from the Google Lead Form
+webhook (Session 22), which has no signature header at all and authenticates via a plain
+`google_key` field inside the JSON body — worth noting since it would be easy to assume "no
+signature header" is the norm for a non-Meta-Ads webhook, when actually it's WhatsApp that's
+the same Meta product family and Google that's the outlier here.
+
+2026-08-29 · [whatsapp] Inbound media (image/document/audio/video/sticker) is recorded by its
+Meta media id and mime type only — NOT downloaded into Supabase Storage this session. A real,
+deliberately deferred gap: nothing is lost (the raw webhook delivery is still in
+`webhook_events` and the message row still exists with its media id), a counsellor just can't
+view the attachment inline in the chat panel yet, and the media id itself expires eventually
+per Meta's own retention rules if never fetched. Downloading requires an additional Graph API
+call (`GET /{media_id}` for a temporary URL, then a fetch of that URL) plus a private Storage
+bucket and signed-URL viewer — real, scoped work for a future session, not attempted here to
+keep this session's already-large scope from growing further.
+
+2026-08-29 · [whatsapp] The 1:1 chat panel's template-send path (used to message a lead
+outside Meta's 24-hour customer service window) takes a template name/language/parameter
+typed in by the counsellor, not a picker fetched from Meta's Message Templates API. A real,
+documented gap for the same reason as media download above — fetching and caching the
+account's actually-approved templates is its own small feature, not attempted this session.
+The counsellor has to already know the exact approved template name; a wrong one is rejected
+by Meta with a clear error, not silently dropped.
+
+2026-08-29 · [whatsapp] The marketing broadcast feature sends each recipient from THEIR OWN
+LEAD'S assigned counsellor's WhatsApp number, not a separate dedicated "marketing" number —
+deliberate, not an oversight. No such credential exists (by design: "one number per
+counsellor" was Leon's whole model, and inventing a marketing-specific number would be a
+second, competing identity). Sending through the recipient's existing counsellor keeps the
+broadcast inside a thread the customer already recognises rather than arriving from a
+stranger number — arguably a better outcome for a template message than a generic company
+broadcast number would produce. The real cost: a lead with no assigned counsellor, or whose
+counsellor has no number configured, can't receive a broadcast at all — the sweep marks that
+one recipient `failed` with a clear reason rather than silently skipping it or attempting a
+fallback send from an arbitrary other number.
+
+2026-08-29 · [whatsapp] The broadcast audience is deliberately filtered to exclude
+`do_not_contact` leads (same as the retargeting sync) but does NOT check
+`consent_status`/`opted_out_channels` the way the ad-platform retargeting sync does — those
+fields govern ad-platform retargeting consent specifically, a different, narrower consent
+question than "can we message this person on WhatsApp at all." `do_not_contact` is the one
+flag clearly meant to be a blanket suppression regardless of channel, so it's the one checked
+here. Worth revisiting once (if) WhatsApp-specific opt-in/opt-out tracking exists as its own
+concept — flagged rather than conflated with the retargeting consent fields on a guess.
+
+2026-08-29 · [whatsapp] A WhatsApp broadcast is always template-based, with no "draft, review,
+then send" step — creating a broadcast immediately snapshots its recipient list and sets
+`status = 'sending'`, and the cron sweep starts draining it on its very next run. There is no
+in-between "queued but not yet sending" state a human reviews before commit. This was a
+scope call, not a considered design decision: a review/approval step is real, sensible future
+work (a broadcast reaching the wrong audience is hard to partially undo — Meta doesn't support
+recalling a sent WhatsApp message), flagged here so it doesn't get mistaken for "this is how
+it should stay."
+
+2026-08-30 · [students] Leon shared AFD's actual paper intake form (a PDF export of a Google
+Sheet) — the earlier placeholder print layout (Session 19) never matched it, since no real
+template existed to build against yet. Rather than hardcoding the ~20 fields it asks for
+(mother/father details, academic history, art teacher, design discipline, hobbies, a photo)
+as new `students` columns, they're wired through the SAME admin-editable custom-fields system
+(`field_definitions`, `entity='student'`) leads already use — a different design institute's
+intake form asks different questions, so CLAUDE.md's plug-and-play test ("could this be
+deployed for a different company by changing only database contents") applies here exactly
+as much as it does to lead fields. `students` gained a `custom` jsonb column (migration 0029)
+mirroring `leads.custom` exactly. The whole custom-fields pipeline
+(`get-field-schema.ts`/`field-column.ts`/`resolve-field-options.ts`) turned out to already be
+100% entity-generic — including the Settings → Custom Fields UI's entity picker, which
+already listed "student" as a choosable option with zero code behind it. This is the same
+pattern as this session's WhatsApp work: a real feature turned out to already be half-built
+as unused-but-correct scaffolding from Phase 1, just never given real data to prove it out.
+
+2026-08-30 · [students] `getFieldSchema`'s `sort_order` (drives the edit form's section tabs)
+and the print page's field ORDER/PAIRING are deliberately two separate concerns, not one. The
+edit form groups fields by topic for usability (Personal / Parents / Program / Academic
+History / Interests & Notes); the print page reproduces the physical paper form's exact
+row-by-row layout, which interleaves those same topics in a specific sequence a real form
+just has (Name, then Program+Batch, then DOB+Mode, ...). `PRINT_ROWS` in
+`students/[id]/print/page.tsx` is a small hardcoded array of field-key pairs — the one part of
+this feature that ISN'T config-driven, because a physical form's fixed layout is a genuine
+one-time design decision, not admin-configurable data the way its field LABELS are (which
+still come from `field_definitions` and do change if edited in Settings).
+
+2026-08-30 · [students] The print page's photo box is positioned as an absolutely-positioned
+overlay outside the table's own column grid, not as an HTML rowSpan cell inside it — an
+earlier draft used rowSpan and got the column count wrong (a row spanned by a rowSpan cell
+above it must NOT also declare a cell for that column, and getting this wrong desyncs the
+whole table's implied column count for every row below it). Overlaying avoids the whole class
+of rowSpan/colSpan bookkeeping bugs for what's fundamentally just "the photo lives in this
+corner," at the cost of not being pixel-identical to the original PDF's exact grid lines
+around the photo — an acceptable trade for a working, correct print page over a
+visually-perfect but fragile one.
+
+2026-08-30 · [students] Student photo is a plain URL field (`photo_url`, admin pastes a
+link — e.g. from wherever the counsellor already stores it), not a real upload flow into
+Supabase Storage. CLAUDE.md names Storage/signed-URLs as the stack's intended file-handling
+approach, but nothing in this codebase has ever actually built that yet (`"file"` has been a
+listed field TYPE since Phase 1 with zero implementation behind it — same "reserved hook,
+never used" pattern as several WhatsApp permissions/columns turned out to be). Building real
+upload (a private bucket, storage RLS policies, an upload widget, signed URLs for the print
+view) is legitimate, separate work — deferred here for the same reason WhatsApp inbound media
+download was deferred: honest, complete as far as it goes, not a half-finished pretense of
+more.
+
+2026-08-30 · [students] The academics detail page (`students/[id]/page.tsx`) previously had no
+edit capability at all — read-only fields, even though the `academics` role has held
+`student.update` (at centre scope) since it was seeded. `dynamic-field-input.tsx` moved from
+`leads/[id]/` to `src/components/fields/` since it was already 100% entity-agnostic (reads
+only `field.type`, nothing lead-specific) and is now genuinely shared between the lead and
+student edit forms — a real, justified relocation once a second real caller existed, not a
+speculative "might reuse someday" abstraction.
+
+2026-08-30 · [tests] Fixed a real, reproducible test-isolation bug: `tests/whatsapp-webhook.spec.ts`
+and `tests/whatsapp-broadcast-sweep.spec.ts` both registered a `phone_number_id` credential
+using the exact same literal string (`"test-phone-number-id"`) for two DIFFERENT counsellor
+fixtures. `findScopeIdByCredentialValue()` does a reverse lookup by decrypted VALUE across
+every scoped credential for `(provider, key)` — under Vitest's parallel file execution
+against one shared local Postgres, whichever row happened to be returned first would "win,"
+occasionally routing one file's inbound-webhook test to the OTHER file's counsellor id
+(caught as an intermittent `expected X to be Y` UUID mismatch, not a deterministic failure).
+Fixed by making each file's test value unique to its own `MARKER`. Separately observed (not
+fixed): the Meta/Google retargeting-sync test suites can occasionally hit a foreign-key
+violation under the same parallel-execution conditions, because their production code
+deliberately scans the *entire* `leads` table (a correct, intentional design for AFD's real
+volume — see that route's own comment) rather than filtering to just that test file's
+fixtures; a lead can very rarely be deleted by another file's cleanup between that scan and a
+later write in the same request. Not chased down further — it didn't reproduce on a second
+run, and forcing serial test-file execution to eliminate it entirely would slow down the
+whole suite for a flake that has never been observed twice in a row.

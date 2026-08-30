@@ -66,6 +66,18 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["rules.manage"],
   },
   {
+    href: "/settings/fee-structures",
+    label: "Fee Structures",
+    description: "Base fee by course, centre, mode and academic year",
+    permissions: ["settings.manage"],
+  },
+  {
+    href: "/settings/tags",
+    label: "Tags",
+    description: "Labels a lead can carry, for segmentation and retargeting audiences",
+    permissions: ["settings.manage"],
+  },
+  {
     href: "/settings/dropdowns",
     label: "Dropdowns",
     description: "Manage categories and options",
@@ -82,6 +94,18 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     label: "Config Export/Import",
     description: "Export configuration as a bundle, or bootstrap a fresh instance from one",
     permissions: ["config.export", "config.import"],
+  },
+  {
+    href: "/settings/integrations",
+    label: "Integrations",
+    description: "Connect Meta, Google, WhatsApp and telephony — plug in credentials, no deploy",
+    permissions: ["settings.manage"],
+  },
+  {
+    href: "/settings/whatsapp-broadcasts",
+    label: "WhatsApp Broadcasts",
+    description: "Send a template message to every lead carrying a tag",
+    permissions: ["whatsapp.campaign"],
   },
 ];
 

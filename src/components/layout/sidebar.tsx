@@ -2,12 +2,14 @@
 
 import {
   BarChart3,
+  GraduationCap,
   KanbanSquare,
   LayoutDashboard,
   Settings,
   Sparkles,
   Sun,
   Users,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -27,6 +29,8 @@ const ICON_MAP: Record<NavIconKey, LucideIcon> = {
   "my-day": Sun,
   leads: Users,
   pipeline: KanbanSquare,
+  accounts: Wallet,
+  students: GraduationCap,
   reports: BarChart3,
   ask: Sparkles,
   settings: Settings,

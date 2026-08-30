@@ -1,0 +1,248 @@
+/**
+ * Integration test for the WhatsApp webhook route — needs a real database
+ * with migrations applied and INTEGRATION_ENCRYPTION_KEY set:
+ *
+ *   npm run db:migrate && npm test
+ *
+ * No network calls to mock at all: unlike Meta Lead Ads, an inbound
+ * WhatsApp message carries its full content in the webhook payload
+ * itself, and a status callback is a pure database update — so every
+ * assertion here runs the real code path (signature verification,
+ * webhook_events persistence, resolveOrCreateLead(), counsellor routing,
+ * status-callback correlation) against Postgres.
+ */
+import { createHmac, randomUUID } from "node:crypto";
+
+import { config as loadEnv } from "dotenv";
+import { eq, like, sql } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+loadEnv({ path: ".env" });
+loadEnv({ path: ".env.local", override: true });
+
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is not set — see the file header for how to run this suite.");
+}
+if (!process.env.INTEGRATION_ENCRYPTION_KEY) {
+  throw new Error("INTEGRATION_ENCRYPTION_KEY is not set — see .env.local.");
+}
+
+const { GET, POST } = await import("../src/app/api/webhooks/whatsapp/route");
+const { db } = await import("../src/lib/db/client");
+const { leads, profiles, roles, webhookEvents, whatsappMessages } = await import("../src/lib/db/schema");
+const { setIntegrationCredential, deleteIntegrationCredential } = await import("../src/lib/integrations/credentials");
+
+const APP_SECRET = "test-wa-app-secret";
+const VERIFY_TOKEN = "test-wa-verify-token";
+const MARKER = "WhatsAppWebhookTest";
+// Unique to this file — findScopeIdByCredentialValue() does a reverse
+// lookup by decrypted VALUE across every scoped credential for
+// (provider, key), so a value shared with another test file's fixture
+// (e.g. tests/whatsapp-broadcast-sweep.spec.ts also registering a
+// "phone_number_id") is a real race under Vitest's parallel file
+// execution: whichever row the query happens to return first "wins",
+// silently routing this test's webhook call to the OTHER file's
+// counsellor. Caught as an intermittent CI-only flake, not a logic bug.
+const PHONE_NUMBER_ID = `${MARKER}-phone-number-id`;
+
+// leads.assigned_to carries a real FK to profiles, so the counsellor this
+// test routes to must be a real fixture row, not an arbitrary uuid — same
+// technique as tests/rls.spec.ts's createFixtureProfile.
+let COUNSELLOR_ID: string;
+
+function sign(body: string, secret: string): string {
+  return `sha256=${createHmac("sha256", secret).update(body, "utf8").digest("hex")}`;
+}
+
+function messagePayload(overrides: { messageId?: string; from?: string; name?: string; body?: string } = {}) {
+  const messageId = overrides.messageId ?? `wamid.${randomUUID()}`;
+  return JSON.stringify({
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        id: "waba1",
+        changes: [
+          {
+            field: "messages",
+            value: {
+              messaging_product: "whatsapp",
+              metadata: { phone_number_id: PHONE_NUMBER_ID, display_phone_number: "911234567890" },
+              contacts: [{ profile: { name: overrides.name ?? `${MARKER} Contact` }, wa_id: overrides.from ?? "919847500301" }],
+              messages: [
+                {
+                  id: messageId,
+                  from: overrides.from ?? "919847500301",
+                  timestamp: "1700000000",
+                  type: "text",
+                  text: { body: overrides.body ?? "Hi, interested in NID coaching" },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+}
+
+function statusPayload(wamid: string, status: "sent" | "delivered" | "read" | "failed") {
+  return JSON.stringify({
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        id: "waba1",
+        changes: [
+          {
+            field: "messages",
+            value: {
+              messaging_product: "whatsapp",
+              metadata: { phone_number_id: PHONE_NUMBER_ID },
+              statuses: [{ id: wamid, status, timestamp: "1700000100", recipient_id: "919847500301" }],
+            },
+          },
+        ],
+      },
+    ],
+  });
+}
+
+async function sweep() {
+  const testLeads = await db.select({ id: leads.id }).from(leads).where(like(leads.studentName, `${MARKER}%`));
+  for (const lead of testLeads) {
+    await db.delete(whatsappMessages).where(eq(whatsappMessages.leadId, lead.id));
+  }
+  await db.delete(leads).where(like(leads.studentName, `${MARKER}%`));
+  await db.delete(webhookEvents).where(eq(webhookEvents.source, "whatsapp"));
+}
+
+beforeAll(async () => {
+  await sweep();
+
+  const [counsellorRole] = await db.select({ id: roles.id }).from(roles).where(eq(roles.code, "counsellor"));
+  if (!counsellorRole) throw new Error("Expected seeded role 'counsellor' — run `npm run db:seed` first.");
+
+  // auth.users is Supabase-owned (see src/lib/db/schema/_helpers.ts) — a
+  // real row needs a real id + email, same shape as
+  // tests/rls.spec.ts's createFixtureProfile.
+  COUNSELLOR_ID = randomUUID();
+  const email = `${MARKER.toLowerCase()}.counsellor.${COUNSELLOR_ID.slice(0, 8)}@test.invalid`;
+  await db.execute(sql`insert into auth.users (id, email) values (${COUNSELLOR_ID}, ${email})`);
+  await db.insert(profiles).values({ id: COUNSELLOR_ID, fullName: `${MARKER} Counsellor`, email, roleId: counsellorRole.id });
+
+  await setIntegrationCredential("whatsapp", "app_secret", APP_SECRET);
+  await setIntegrationCredential("whatsapp", "verify_token", VERIFY_TOKEN);
+  await setIntegrationCredential("whatsapp", "phone_number_id", PHONE_NUMBER_ID, COUNSELLOR_ID);
+});
+
+afterAll(async () => {
+  await sweep();
+  await deleteIntegrationCredential("whatsapp", "app_secret");
+  await deleteIntegrationCredential("whatsapp", "verify_token");
+  await deleteIntegrationCredential("whatsapp", "phone_number_id", COUNSELLOR_ID);
+  await db.delete(profiles).where(eq(profiles.id, COUNSELLOR_ID));
+  await db.execute(sql`delete from auth.users where id = ${COUNSELLOR_ID}`);
+});
+
+describe("GET /api/webhooks/whatsapp (verification handshake)", () => {
+  it("echoes the challenge when the verify token matches", async () => {
+    const req = new Request(`https://example.com/api/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=${VERIFY_TOKEN}&hub.challenge=echo456`);
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("echo456");
+  });
+
+  it("rejects a wrong verify token", async () => {
+    const req = new Request("https://example.com/api/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=echo456");
+    const res = await GET(req);
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("POST /api/webhooks/whatsapp (inbound messages)", () => {
+  it("rejects a request with an invalid signature and logs it", async () => {
+    const body = messagePayload();
+    const req = new Request("https://example.com/api/webhooks/whatsapp", {
+      method: "POST",
+      headers: { "x-hub-signature-256": "sha256=deadbeef" },
+      body,
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+
+    const [row] = await db.select().from(webhookEvents).where(eq(webhookEvents.source, "whatsapp")).orderBy(webhookEvents.receivedAt);
+    expect(row.signatureOk).toBe(false);
+    expect(row.status).toBe("failed");
+  });
+
+  it("processes a validly-signed inbound message into a real lead + whatsapp_messages row, routed to the number's owning counsellor", async () => {
+    const body = messagePayload({ from: "919847500302", name: `${MARKER} New Contact` });
+    const req = new Request("https://example.com/api/webhooks/whatsapp", {
+      method: "POST",
+      headers: { "x-hub-signature-256": sign(body, APP_SECRET) },
+      body,
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    const [lead] = await db.select().from(leads).where(eq(leads.studentName, `${MARKER} New Contact`));
+    expect(lead).toBeDefined();
+    expect(lead.firstTouchSource).toBe("whatsapp");
+    expect(lead.assignedTo).toBe(COUNSELLOR_ID);
+
+    const [message] = await db.select().from(whatsappMessages).where(eq(whatsappMessages.leadId, lead.id));
+    expect(message.direction).toBe("inbound");
+    expect(message.status).toBe("received");
+    expect(message.body).toBe("Hi, interested in NID coaching");
+    expect(message.counsellorId).toBe(COUNSELLOR_ID);
+  });
+
+  it("does not create a second lead or message when the same wamid is delivered twice", async () => {
+    const messageId = `wamid.${randomUUID()}`;
+    const body = messagePayload({ messageId, from: "919847500303", name: `${MARKER} Replay Contact` });
+    const makeRequest = () =>
+      new Request("https://example.com/api/webhooks/whatsapp", {
+        method: "POST",
+        headers: { "x-hub-signature-256": sign(body, APP_SECRET) },
+        body,
+      });
+
+    await POST(makeRequest());
+    await POST(makeRequest());
+
+    const leadsFound = await db.select().from(leads).where(eq(leads.studentName, `${MARKER} Replay Contact`));
+    expect(leadsFound).toHaveLength(1);
+    const messagesFound = await db.select().from(whatsappMessages).where(eq(whatsappMessages.leadId, leadsFound[0].id));
+    expect(messagesFound).toHaveLength(1);
+  });
+
+  it("updates an existing outbound message's status on a delivery-status callback", async () => {
+    const body = messagePayload({ from: "919847500304", name: `${MARKER} Status Contact` });
+    await POST(
+      new Request("https://example.com/api/webhooks/whatsapp", { method: "POST", headers: { "x-hub-signature-256": sign(body, APP_SECRET) }, body }),
+    );
+    const [lead] = await db.select().from(leads).where(eq(leads.studentName, `${MARKER} Status Contact`));
+
+    const outboundWamid = `wamid.${randomUUID()}`;
+    await db.insert(whatsappMessages).values({
+      leadId: lead.id,
+      direction: "outbound",
+      waMessageId: outboundWamid,
+      fromPhone: "+911234567890",
+      toPhone: "+919847500304",
+      status: "sent",
+    });
+
+    const statusBody = statusPayload(outboundWamid, "delivered");
+    const res = await POST(
+      new Request("https://example.com/api/webhooks/whatsapp", {
+        method: "POST",
+        headers: { "x-hub-signature-256": sign(statusBody, APP_SECRET) },
+        body: statusBody,
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const [updated] = await db.select().from(whatsappMessages).where(eq(whatsappMessages.waMessageId, outboundWamid));
+    expect(updated.status).toBe("delivered");
+  });
+});

@@ -23,9 +23,13 @@ export interface FilterFieldWithOptions {
 export function LeadFilters({
   filterFields,
   searchValue,
+  tagOptions,
+  tagValue,
 }: {
   filterFields: FilterFieldWithOptions[];
   searchValue: string;
+  tagOptions?: FieldOption[];
+  tagValue?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -91,6 +95,20 @@ export function LeadFilters({
           </Select>
         );
       })}
+      {tagOptions && tagOptions.length > 0 && (
+        <Select value={tagValue || undefined} onValueChange={(value) => updateParam("tag", value)}>
+          <SelectTrigger className="h-8 w-40">
+            <SelectValue placeholder="Tag" />
+          </SelectTrigger>
+          <SelectContent>
+            {tagOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     </div>
   );
 }

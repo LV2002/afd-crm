@@ -44,6 +44,8 @@ function emptyBundle() {
     slaPolicies: [],
     businessHours: [],
     holidays: [],
+    feeStructures: [],
+    tags: [],
   };
 }
 

@@ -1,0 +1,1 @@
+ALTER TABLE "students" ALTER COLUMN "student_code" SET DEFAULT ('STU'::text || lpad((nextval('student_code_seq'::regclass))::text, 6, '0'::text));

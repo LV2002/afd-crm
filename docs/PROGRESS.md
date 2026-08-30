@@ -22,8 +22,13 @@ Keep it short. This is a handoff note, not a changelog — git has the changelog
 
 ## Current state
 
-Session 1 shipped: Phase 0 scaffold, schema, dynamic permissions, RLS, auth and app shell.
-Next task: **Session 2 — Settings UI**.
+Session 20 shipped: the Meta integration (Lead Ads webhook + daily ad spend sync) and the
+"plug and play" credential-storage foundation every future integration (Google, WhatsApp,
+telephony) will reuse — a real, working first slice of the four-integration ask in
+docs/DECISIONS.md § A10.
+Next task: **Session 21 — Google Ads** (mirrors this session's Meta shape) or WhatsApp
+(shared-vs-per-counsellor number decision made — see docs/DECISIONS.md), at Leon's direction.
+Accounts ledgers are still queued behind Leon sending the finance sheet.
 
 ---
 
@@ -1706,3 +1711,580 @@ and now shows up in that counsellor's My Day / leads list.
 **Next:** genuinely out of pure-CRM Phase 2 work for now — everything left (Meta webhook,
 website/Google Sheets ingestion, the bulk-database staging area) is integration work Leon
 explicitly asked to defer to a later conversation (docs/DECISIONS.md § A10).
+
+---
+
+## Session 18 — Phase 4 foundation: enrolment, fees, payments, both gates — 2026-08-29
+
+**Shipped:** the object model CLAUDE.md lists as "Fixed in code" — lead → enrolment →
+student, and the two named gates between them — built for real, not stubbed. Deliberately
+scoped down from the full Phase 4 doc to a working foundation; see "Stubbed" below for
+exactly what's deferred.
+
+- **Schema** (`src/lib/db/schema/finance.ts`, migrations 0016–0018): `fee_structures`,
+  `enrolments`, `payments`, `receipts`, `students`, `batches`, `student_batches`.
+  `payments`/`receipts` have no UPDATE/DELETE RLS policy for any role, including admin —
+  CLAUDE.md non-negotiable #7's append-only ledger, enforced at the database, not by
+  convention. `receipts.receipt_no` is a `bigserial`; `students.student_code` gets
+  `'STU' || lpad(nextval('student_code_seq'), 6, '0')` from a dedicated sequence — same
+  gapless-via-DB-sequence approach as `leads.lead_number`, no app-computed numbers anywhere.
+- **Gate 1** (`src/lib/enrolment/confirm-admission.ts`, `confirmAdmission()`): sales confirms
+  an admission. Looks up `fee_structures` by (course, centre, mode, academic year), or takes
+  a manual override when no row matches; computes `net_fee_paise`; refuses a second
+  enrolment on the same lead; stamps `sales_to_accounts_at`/`by` at creation. "Lead work
+  stops" (CLAUDE.md non-negotiable) is implemented by moving the lead into the seeded
+  `stage_type='won'` stage rather than touching the core `leads_update` RLS policy — that
+  stage is already excluded from My Day, the SLA sweep, the temperature cron and reports, so
+  this reuses that exclusion instead of adding a new one. UI: a "Confirm admission" panel on
+  the lead detail page, gated on `enrolment.create`.
+- **Gate 2** (`src/lib/enrolment/record-payment.ts`, `recordPayment()`): accounts records a
+  payment. Always inserts a `payments` row and its `receipts` row. On the enrolment's FIRST
+  credit payment only, also creates the `students` row (profile fields copied once from the
+  lead, then independent — academics never queries the sales table) and stamps
+  `accounts_to_academics_at`/`by`. A later instalment against the same enrolment doesn't
+  re-fire the gate or create a second student. UI: `/accounts` (a queue of every enrolment,
+  oldest-awaiting-first-payment first) and `/accounts/[id]` (ledger + payment form), both
+  gated on `payment.read`/`payment.record`. New sidebar entry.
+- Both gate functions run on the direct db client inside the caller's own transaction — same
+  bypass pattern as `resolveOrCreateLead()`/`mergeLeads()`/`applyAssignment()` — because each
+  is a deliberate one-time state transition writing across tables no single RLS policy could
+  express. The calling Server Action (`confirmAdmissionAction`, `recordPaymentAction`)
+  re-implements the own/center/all scope check before ever calling in, exactly like
+  `confirmMerge()` already does for merges.
+- `src/lib/format/currency.ts` — the `formatINR()` helper CLAUDE.md's conventions call for;
+  Phase 4 is the first feature to put money in front of a user, so it didn't exist until now.
+- **Fee structures settings screen** (`/settings/fee-structures`): admin CRUD (course/centre/
+  mode/academic year/base fee), same list+new+`[id]`+active-toggle shape as the Centres
+  screen. Course and mode are selected from the existing `course`/`preferred_mode` dropdown
+  categories, never freeform.
+- **Config export/import**: `fee_structures` added to the config bundle (CLAUDE.md's own
+  "What is configurable" table lists "Fees: Structures" explicitly) — `bundle-schema.ts`,
+  `export-config.ts`, `import-config.ts`, bundle version bumped `1` → `2` since this is a
+  genuine shape change. `centerId` carries over as-is on import, same as
+  `business_hours`/`holidays` — `importConfig()` re-inserts `centers` with their original
+  ids, so no remapping is needed.
+
+**A real bug caught and fixed during this session, not after:** the 0017 RLS migration's
+snapshot file was created by copying `0016_snapshot.json` verbatim, which left its `id` and
+`prevId` identical to 0016's — an invalid migration-history chain that `drizzle-kit migrate`
+never validates but `drizzle-kit generate` does, so it would have silently corrupted the next
+migration's ancestry the first time anyone ran `generate` again. Caught by running `generate`
+for the `students.student_code` fix below, before it ever reached `main`. Fixed by giving
+0017 its own new id chained onto 0016's — the correct way to hand-write a snapshot copy,
+confirmed against how Sessions 3–7's own hand-written RLS migrations (0005, 0008, 0010, 0012,
+0014) actually did it.
+
+**Also caught by `tsc`, not a live-DB surprise this time:** `students.student_code`'s default
+is a raw SQL expression set in migration 0017, not something drizzle-kit's `bigserial`/etc.
+column builders can express — so it wasn't reflected in `finance.ts`, and `tsc` correctly
+flagged every `.insert(students)` call as missing a required field. Fixed by adding the exact
+same default expression to the schema column via `.default(sql\`...\`)`, generating migration
+0018 to confirm it (a genuine no-op against the already-correct database), and applying it.
+
+**Stubbed / deliberately out of scope for this pass** (see docs/DECISIONS.md for the reasoning
+behind each): promos, `lead_promos`, `discount_approvals` (the `discount.approve` permission
+exists and is enforced nowhere yet — a counsellor can apply any discount at Gate 1 today);
+instalment templates/tracking and ageing (an enrolment's balance is computed live from the
+ledger, not tracked as due dates); documents/enrolment agreements; the registration/enrolment
+form builder (`enrolment_forms`/`form_tokens`/`form_submissions`); refunds (the `payment.refund`
+permission exists but nothing calls it — a correction today would be a manual reversal
+payment row, not yet wired to a UI); batch management UI (`batches`/`student_batches` schema
+only, no screen creates a batch yet, so `batchId` stays null everywhere); gate-lag reporting
+(sales→accounts→academics timing isn't in the reports page yet). No live browser testing —
+this environment has no real Supabase project configured (`DATABASE_URL` only, no
+`NEXT_PUBLIC_SUPABASE_URL`), same limitation as every prior session; verified instead by
+`tsc`, `eslint`, a full `next build`, and integration tests against real local Postgres,
+including one true end-to-end test that runs a lead through both gates in sequence.
+
+**Verified:** `npx tsc --noEmit` and `npx eslint` clean across every new/changed file.
+`npm run build` succeeds — `/accounts`, `/accounts/[id]`, `/settings/fee-structures` and its
+`new`/`[id]` routes all compile. Full suite green against real local Postgres 16:
+**203 tests passed** across 26 files (up from 196/24 at the end of Session 17) — 5 new
+`confirm-admission.spec.ts` tests, 5 new `record-payment.spec.ts` tests, 1 new
+`phase4-gates-e2e.spec.ts` end-to-end test, and 1 new config-bundle-schema shape test.
+Migrations 0016–0018 applied cleanly to `afd_verify`; direct `psql` confirmed `payments`/
+`receipts` carry only `_select`/`_insert` policies (no update/delete at all) and the
+`student_code` sequence default produces `STU000001`-shaped codes.
+
+**Verify by:** `npm run db:migrate && DATABASE_URL=... npm test` — expect `203 passed`. Then
+`npm run build`. In the live app (once a real Supabase project is connected): as a counsellor
+on a lead's detail page, use "Confirm admission" — the lead should move to the "Admission
+Confirmed" pipeline stage and vanish from My Day/SLA sweeps; as an accounts user, open
+`/accounts`, record a payment against that enrolment, and confirm a student record appears
+(check via `/settings` → nothing yet, there's no students screen this session — verify via
+the enrolment detail page's "Student created" date instead).
+
+**Next:** Phase 4 depth (promos/discount approvals, instalment tracking, batch management UI,
+gate-lag reporting) or moving on to Phase 5, whichever Leon prefers.
+
+---
+
+## Session 19 — Role-aware dashboards, academics workspace, lead tagging — 2026-08-29
+
+**Shipped:** the three pieces of the "separate department experiences" ask that don't need
+the accounts ledger work Leon is sending finance-sheet context for first (that's queued as
+Session 20).
+
+- **Fixed a real bug from Session 18**, found while scoping this work: the `accounts` role
+  never held `lead.read`, so the `/accounts/[id]` page's `leads(student_name, primary_phone)`
+  embed was silently returning `null` for every accounts user — RLS enforces each embedded
+  table's own SELECT policy independently, and `leads_select` is gated on `lead.read`. Fixed
+  by granting `accounts` `lead.read` + `lead.reveal_phone` + `interaction.read` at scope
+  `center` in `seed.ts` — accounts can now see full lead context (source, history) for leads
+  at their own centre(s), matching Leon's "accounts and sales should see everything about
+  each other's leads" ask. Deliberately did NOT add the equivalent for `academics`: they
+  already get everything CLAUDE.md says they need ("core lead details" — name, phone, course,
+  exams targeted) via the `students` table itself, which is the whole point of copying those
+  fields at Gate 2 rather than having academics query leads.
+- **Role-aware dashboards** (`/dashboard`, previously the untouched Phase 0 placeholder):
+  five widgets, each gated on the specific permission it needs, never a role name — "Your
+  day" (`scopeFor(lead.read) === 'own'`, i.e. counsellor-shaped: reuses the new
+  `getMyDayQueueForUser()` helper, factored out of the My Day page itself so the count-only
+  widget and the full page share one query), "Pipeline" (`lead.assign`, i.e. centre-head-
+  shaped), "Accounts" (`payment.read`), "Academics" (`student.read`), "Organisation"
+  (`settings.manage`). A role holding several of these bundles (center_head; admin/co_admin)
+  correctly sees several widgets — that's not a bug, CLAUDE.md describes center_head as
+  running their centre end to end, not just its sales pipeline.
+- **Academics workspace**: `/students` (list, masked phone — same bulk-exposure reasoning as
+  the leads list, search + status filter) and `/students/[id]` (detail, full personal details,
+  course, exams targeted — **zero fee/payment fields anywhere in the query**, the boundary
+  CLAUDE.md draws between accounts and academics). New sidebar entry gated on `student.read`.
+- **Printable 1-page student profile** (`/students/[id]/print`): its own route, not a print
+  stylesheet bolted onto the detail page, since the detail page carries sidebar chrome and
+  interactive controls that don't belong on a physical form. Org name/logo header, every
+  personal/academic field, signature lines. The app shell (`(app)/layout.tsx`) now hides the
+  sidebar/header under `print:hidden` so any future print route gets a clean page for free.
+  Layout/fields are a reasonable first pass — Leon is sending a reference form to match later.
+- **Lead tagging**: `tags` (admin-configurable, `/settings/tags` — same list/new/`[id]`/
+  active-toggle shape as Centres/Fee Structures) and `lead_tags` (the many-to-many join, no
+  new permission primitive — applying/removing a tag reuses `lead.update`). A tags control on
+  the lead detail page (badges with remove, an "+ Add tag" select) and a tag filter on the
+  leads list (resolved to a lead-id list outside the generic field-schema filter engine, since
+  tags aren't a `field_definitions`-backed column). Added to the config export/import bundle
+  (`CONFIG_BUNDLE_VERSION` bumped `2` → `3`) — tags are configuration, same reasoning as
+  `fee_structures` last session. No retargeting sync yet (that's the Meta/Google/WhatsApp
+  integration work Leon explicitly deferred, docs/DECISIONS.md § A10) — this session only
+  builds the tag itself; a tagged segment doesn't go anywhere yet.
+- Also closed a small pre-existing gap while touching `UNIVERSALLY_READABLE_TABLES` in
+  `tests/rls.spec.ts`: `fee_structures` (Session 18) had never been added to that list despite
+  being a select-all-authenticated config table — added alongside the new `tags` entry.
+- **New RLS coverage that didn't exist before**: `tests/rls.spec.ts` had zero assertions on
+  the `students` table, and nothing proving academics is actually blocked from payments
+  end-to-end (as opposed to just "the seed doesn't grant it," which a future seed edit could
+  quietly break). Added a scoped sub-suite that gives `accounts_a`/`academics_a` real Kochi
+  membership *only for those tests* (a local `beforeAll`/`afterAll`, not the global fixture
+  setup — doing it globally broke an earlier, unrelated `users.manage` visibility test that
+  depends on those two fixtures having no centre) and asserts: accounts sees the ledger,
+  academics doesn't, both see the `students` row, a same-centre counsellor (no `student.read`)
+  doesn't. Proves the boundary is the held permission, not an accident of centre membership.
+
+**A real migration-authoring mistake caught immediately, not shipped:** the `students` list
+page's initial `.select(...)` used an explicit PostgREST FK-hint
+(`batches!students_current_batch_id_batches_id_fk(name)`) copied from habit — unnecessary
+since `students` has only one FK to `batches`, and the hint's constraint name wasn't even
+verified against what drizzle-kit actually generated. Simplified to a plain `batches(name)`
+before this ever ran against real Postgres.
+
+**Stubbed / deliberately out of scope for this pass:** no edit capability on the student
+detail page (Leon's ask was "should be able to see" — `student.update`, held by academics,
+is still unused by any UI; batch assignment specifically needs the batch-management screen
+Session 18 already deferred). No audited phone-reveal step on the student detail page — its
+phone is shown in full directly, unlike a lead's (see the page's own comment: these are
+already-enrolled customers with a fundamentally different bulk-exposure risk than
+leads-a-counsellor-could-poach, and there's no existing `lead.reveal_phone`-equivalent
+primitive for students to reuse). No way to delete/deactivate a lead_tags row from the tags
+settings screen once created elsewhere — deactivating a *tag definition* hides it from the
+"+ Add" picker for new tagging but doesn't retroactively strip it off leads that already
+carry it, same "deactivate ≠ remove usages" precedent as pipeline stages and dropdown
+options. Accounts ledgers (bank/cash/petty-cash per centre) explicitly punted to next session
+pending Leon's finance sheet, per his own instruction this turn.
+
+**Verified:** `npx tsc --noEmit` and `npx eslint` clean across every new/changed file.
+`npm run build` succeeds — `/students`, `/students/[id]`, `/students/[id]/print`,
+`/settings/tags` and its `new`/`[id]` routes, and the rebuilt `/dashboard` all compile. Full
+suite green against real local Postgres 16: **208 tests passed** across 26 files (up from
+203/26 at the end of Session 18) — 4 new RLS boundary assertions (accounts sees the ledger,
+academics doesn't, students visibility, counsellor exclusion) and 1 new config-bundle shape
+test for `tags`. Migrations 0019–0020 applied cleanly; direct `psql` confirmed `tags`/
+`lead_tags` carry exactly the policies the migration declares. Also caught and fixed, mid-
+session: local Postgres had stopped across a container restart — restarted the cluster,
+re-ran `db:migrate` (no-op, already current) and `db:seed` (idempotent upsert, picked up the
+new `accounts` grants) before any of this session's verification ran.
+
+**Verify by:** `npm run db:migrate && npm run db:seed && DATABASE_URL=... npm test` — expect
+`208 passed`. Then `npm run build`. In the live app (once a real Supabase project is
+connected): log in as each role and confirm the dashboard shows only the widgets that role's
+permissions justify; as academics, open `/students`, pick one, confirm no fee data appears
+anywhere, and use "Print profile"; as any role with `lead.update`, open a lead and add/remove
+a tag, then filter `/leads` by that tag.
+
+**Next:** accounts ledgers (bank/cash/petty-cash per centre, fee payment logging against
+them) once Leon's finance sheet is in hand — see docs/DECISIONS.md for why this is real,
+harder work that shouldn't be rushed. Otherwise, the same Phase 4 depth list as Session 18.
+
+---
+
+## Session 20 — Meta integration: Lead Ads webhook + ad spend sync — 2026-08-29
+
+**Shipped:** the first real slice of the four-integration ask (Meta, Google, WhatsApp,
+telephony — docs/DECISIONS.md § A10) Leon asked to pick back up this session, built to
+actually be "plug and play": an admin pastes credentials into Settings → Integrations → Meta
+and the webhook/sync starts working, no deploy.
+
+- **Credential storage foundation** (`integration_credentials`, `src/lib/integrations/
+  credentials.ts`) — every future integration (Google next session, then WhatsApp) reuses
+  this rather than each inventing its own. AES-256-GCM at rest, keyed by a new
+  `INTEGRATION_ENCRYPTION_KEY` env var — the one piece of this whole feature that genuinely
+  needs a deploy rather than a form, since it's what the database rows are encrypted under.
+  No RLS SELECT/INSERT/UPDATE policy for any authenticated role at all (same shape as
+  `permissions` — see docs/DECISIONS.md): nobody should ever read a secret back through the
+  browser, encrypted or not. `scope_id` (nullable, no FK) already supports a per-counsellor
+  credential — built now because Leon's WhatsApp decision this session (see below) means it's
+  needed soon, not because Meta needs it today.
+- **`webhook_events`** (docs/01-DATA-MODEL.md's own spec, never built until now) — every
+  webhook handler writes here before doing anything else (CLAUDE.md non-negotiable #9),
+  `UNIQUE(source, external_id)` as the idempotency key so a platform's retry-on-failure
+  behaviour can never create a duplicate lead.
+- **Meta Lead Ads webhook** (`/api/webhooks/meta-leads`): GET handles Meta's subscription
+  handshake; POST verifies `X-Hub-Signature-256` against the raw body (not the re-parsed
+  JSON — re-serialisation isn't guaranteed to byte-match), persists regardless of whether the
+  signature passed, then — only for a valid signature — fetches the lead's actual answers
+  from the Graph API (the webhook itself only carries a `leadgen_id`) and calls
+  `resolveOrCreateLead()`, the one ingestion path every source goes through (CLAUDE.md
+  non-negotiable #8). A batch of leads in one delivery is handled per-`leadgen_id`, each with
+  its own `onConflictDoNothing()` idempotency check, so a retry of a partially-failed
+  delivery only ever re-attempts the entries that actually failed.
+- **Ad spend sync** (`ad_spend_daily`, `/api/cron/ad-spend-sync/meta`, same `CRON_SECRET`
+  pattern as the existing crons) — pulls yesterday's per-ad spend/impressions/clicks/
+  lead-count from Meta's Insights API and upserts, always for "yesterday in IST" specifically
+  since ad platforms don't finalise a day's numbers until well after midnight.
+- **Settings → Integrations** (`/settings/integrations`, `/settings/integrations/meta`) — an
+  index card per provider (Meta live, Google/WhatsApp/Telephony marked "Coming soon") and a
+  credentials form that never echoes a stored secret back, only whether each field is set. A
+  "Test connection" button calls Meta's `/debug_token` to confirm the Page Access Token is
+  real, issued by the configured app, and not expired — without ever displaying the token.
+
+**Real decisions made this turn, not just carried over:**
+- **WhatsApp: one number per counsellor**, not the shared-number-with-attribution model this
+  session recommended. Leon's call — the WhatsApp build (queued for a future session) now
+  needs a genuine per-counsellor onboarding flow, not a single shared account. See
+  docs/DECISIONS.md for what that actually implies (N separate Meta business verifications,
+  N separate per-conversation bills) and why `integration_credentials.scope_id` exists
+  already in anticipation of it.
+- **Build order confirmed**: Meta first (this session), then Google (mirrors this session's
+  shape almost exactly), then WhatsApp, then telephony last.
+- **The consent/DPDP question for retargeting sync is still open** — this session only
+  builds inbound ingestion and ad spend reporting, neither of which uploads any lead's PII
+  anywhere. The Custom Audience/Customer Match upload (the actual "send every lead back to
+  Meta/Google for retargeting" ask) is real, separate work for a later session, and still
+  needs an explicit answer on the consent basis before it's built — flagged again here so it
+  doesn't get built on autopilot once the rest of the Meta/Google plumbing exists and makes
+  it look like "just one more sync job."
+
+**Verified:** `npx tsc --noEmit` and `npx eslint` clean across every new file. `npm run
+build` succeeds — the webhook, cron, and both new settings routes all compile. Full suite
+green against real local Postgres 16: **248 tests passed** across 32 files (up from 208/26
+at the end of Session 19) — new coverage includes a genuine end-to-end webhook test (mocking
+only the one real network call, the Graph API lookup) that exercises signature rejection,
+successful ingestion into a real lead row, replay-safety on a duplicate `leadgen_id`, and
+failure handling, plus pure unit tests for signature verification, Meta field mapping, and
+the credential encryption round-trip (including that a stored value is never plaintext).
+Manually verified the encryption round-trip against real Postgres before writing it up as a
+formal test. Also caught mid-session, again: local Postgres had stopped between tool calls —
+restarted the cluster before continuing.
+
+**Stubbed / deliberately out of scope for this pass:** Google Ads (next session, same
+shape). WhatsApp and telephony (later sessions; `integration_provider` enum already has rows
+reserved for both). Retargeting/Custom Audience uploads (the consent question above has to
+be answered first). No UI for revoking/deleting a stored Meta credential — rotating is
+supported (save a new value over an old one), but there's no "disconnect" button; not asked
+for, and deleting a live integration's credential by accident is worse than not offering the
+option yet.
+
+**Verify by:** `npm run db:migrate && DATABASE_URL=... npm test` — expect `248 passed`. Then
+`npm run build`. Against a real Meta App + Page (once credentials are entered in Settings →
+Integrations → Meta): subscribe the webhook URL in Meta's App Dashboard using the Verify
+Token shown on that page, submit a test lead through the connected Lead Ads form, and confirm
+it appears in `/leads` within seconds with `source = meta` and the right campaign/ad id.
+
+**Next:** Google Ads (Lead Ads-equivalent ingestion + ad spend sync, mirroring this session),
+or WhatsApp (per-counsellor numbers, per Leon's decision) — whichever Leon wants next.
+
+## Session 21 — Meta Custom Audience retargeting sync
+
+Leon confirmed the open consent question from Session 20 ("yes everyone is consenting") and
+asked to proceed with the rest of the integration build order (Google next, then WhatsApp,
+then telephony). This session builds the retargeting half of the Meta integration that
+Session 20 deliberately left out.
+
+- **`ad_audience_members`** (`src/lib/db/schema/retargeting.ts`) — tracks current ad-platform
+  audience membership per `(platform, lead_id)`, so the sync knows what's already uploaded
+  and can compute an add/remove diff rather than only ever adding.
+- **Eligibility + diff logic** (`src/lib/integrations/audience-sync.ts`, pure functions,
+  fully unit tested) — `isRetargetingEligible()` excludes a lead with no recorded consent,
+  withdrawn consent, `doNotContact`, any opted-out channel, no phone/email, or soft-deleted;
+  `computeAudienceDiff()` takes the current eligible-lead-id set and the currently-synced set
+  and returns `{ toAdd, toRemove }`.
+- **PII hashing** (`src/lib/integrations/hash-pii.ts`) — SHA-256 hex of a normalised phone
+  (digits only) or email (trim+lowercase), per Meta/Google's shared Custom
+  Audience/Customer Match hashing spec.
+- **Meta Custom Audience client** (`src/lib/integrations/meta/audience-client.ts`) —
+  `createCustomAudience`, `addUsersToAudience`, `removeUsersFromAudience` against the
+  Marketing API.
+- **`/api/cron/retargeting-sync/meta`** — same `CRON_SECRET` pattern as the other crons.
+  Auto-creates the Custom Audience on first run and persists its id as an integration
+  credential; every run after that reuses it. Pulls all non-deleted leads, filters to
+  eligible ones, diffs against `ad_audience_members`, uploads/removes the difference, and
+  updates the bookkeeping table to match — verified end-to-end with a real test that flips a
+  synced lead's consent to `"withdrawn"` mid-test and confirms it's actually removed from the
+  platform audience, not just skipped on the next add.
+- **Fixed a real bug before it shipped**: the ad-spend-sync cron and the Meta settings
+  form/actions were using `page_access_token` for Marketing API calls (Insights, Custom
+  Audiences), which actually need a different token type (`ads_read`/`ads_management`).
+  Introduced a separate `ads_access_token` credential; the settings page now tests both
+  tokens independently since a Meta "connection" now has two independently-configurable
+  halves (lead ingestion vs. spend/retargeting).
+
+**Verified:** `npx tsc --noEmit` clean. `npx eslint` clean on every new/touched file.
+`npm run build` succeeds (`/api/cron/retargeting-sync/meta` compiles alongside everything
+else). Full suite green against real local Postgres 16: **276 tests passed across 35 files**
+(up from 248/32 at the end of Session 20) — new coverage is `tests/audience-sync.spec.ts`
+(14 pure tests), `tests/hash-pii.spec.ts` (9 pure tests), and
+`tests/meta-retargeting-sync.spec.ts` (5 end-to-end tests against real Postgres, mocking only
+the three outbound Meta Custom Audience API calls).
+
+**Stubbed / deliberately out of scope for this pass:** Google Ads (up next, same shape as
+Meta end-to-end: webhook, ad spend sync, Customer Match retargeting, settings UI). WhatsApp
+and telephony (later, per Leon's confirmed build order). No per-channel opt-out vocabulary
+yet, so `optedOutChannels` is all-or-nothing (see docs/DECISIONS.md).
+
+**Verify by:** `npm run db:migrate && DATABASE_URL=... npm test` — expect `276 passed`. Then
+`npm run build`. Against a real Meta Ad Account (once `ads_access_token`/`ad_account_id` are
+entered in Settings → Integrations → Meta): trigger `/api/cron/retargeting-sync/meta` and
+confirm a Custom Audience appears under Meta Ads Manager → Audiences populated with the
+consenting leads' hashed phone numbers.
+
+**Next:** Google Ads — Lead Form webhook, ad spend sync, Customer Match retargeting sync, and
+`/settings/integrations/google` credentials UI, mirroring this session and Session 20's shape
+as closely as Google's actual API allows.
+
+## Session 22 — Google Ads integration (webhook, ad spend, retargeting, settings)
+
+Continues straight from Session 21's "Next" — builds the entire Google Ads integration in
+one pass, mirroring the Meta integration's shape end to end. Verified Google's actual API
+contracts (webhook payload shape, response requirements, Customer Match hashing rules)
+against current documentation before writing code, rather than assuming they matched Meta's.
+
+- **`/api/webhooks/google-leads`** — Google's Lead Form webhook delivers the full lead
+  payload inline (unlike Meta, which only sends a `leadgen_id` requiring a follow-up Graph
+  API call), so there's no second network hop needed to ingest a lead. Verifies a `google_key`
+  field embedded in the JSON body itself (Google has no HMAC signature header, unlike Meta's
+  `X-Hub-Signature-256`) via constant-time comparison, persists to `webhook_events`
+  (`source = google_leads`) regardless of outcome, and calls `resolveOrCreateLead()` for a
+  real (non-test) lead. A `is_test: true` delivery (Google Ads' "Send test lead" button) is
+  persisted and marked done but never reaches `resolveOrCreateLead()` — see
+  docs/DECISIONS.md for why.
+- **`src/lib/integrations/google/map-lead-fields.ts`** — maps Google's standard
+  `user_column_data` column ids (`FULL_NAME`/`FIRST_NAME`/`LAST_NAME`/`PHONE_NUMBER`/
+  `EMAIL`/`CITY`) onto the same `ResolveLeadInput` shape as the Meta mapper, including
+  `gclid` for click-level attribution.
+- **Google Ads API client** (`src/lib/integrations/google/ads-client.ts`) — OAuth2 refresh
+  token → access token exchange, plus a generic paginated `googleAds:search` (GAQL) caller
+  used by both the spend sync and the settings "Test connection" check.
+- **Ad spend sync** (`src/lib/integrations/google/insights-client.ts`,
+  `/api/cron/ad-spend-sync/google`) — a GAQL query against `ad_group_ad` for yesterday's
+  per-ad cost/impressions/clicks/conversions, upserted into the same shared `ad_spend_daily`
+  table Meta writes to (`platform = google`). `cost_micros` → paise conversion, same
+  INR-assumption caveat as Meta's mapper.
+- **Customer Match retargeting sync** (`src/lib/integrations/google/audience-client.ts`,
+  `/api/cron/retargeting-sync/google`) — reuses Session 21's `isRetargetingEligible()`/
+  `computeAudienceDiff()`/`ad_audience_members` unchanged (`platform = google`); auto-creates
+  a Customer Match user list on first run via `UserListService`, then adds/removes hashed
+  phone numbers via `uploadUserData` each run, same two-way-diff shape as the Meta sync.
+- **`src/lib/integrations/hash-pii.ts`** — added `normalizePhoneE164ForHash`/`hashPhoneE164`
+  for Google, since Google's Customer Match hashing spec keeps the phone's leading `+`
+  (verified against Google's own docs) where Meta's Custom Audience spec strips it — these
+  are NOT interchangeable, a distinction the file's own comment previously (and wrongly)
+  glossed over as "identical between the two platforms."
+- **`/settings/integrations/google`** — credentials form (webhook verify key, OAuth client
+  id/secret, refresh token, developer token, customer id, optional manager/login customer
+  id), a "Test connection" button that does a real token refresh + minimal GAQL query, and
+  the integrations index page now links to it with live connection status.
+
+**Verified:** `npx tsc --noEmit` clean. `npx eslint` clean on every new/touched file.
+`npm run build` succeeds — all three new routes (`/api/webhooks/google-leads`,
+`/api/cron/ad-spend-sync/google`, `/api/cron/retargeting-sync/google`) and the new settings
+page compile. Full suite green against real local Postgres 16: **305 tests passed across 39
+files** (up from 276/35 at the end of Session 21) — new coverage: `tests/google-map-lead-fields.spec.ts`
+(pure), `tests/google-webhook.spec.ts` (7 end-to-end tests against real Postgres — notably
+no network mocking needed at all, since Google's webhook has no follow-up API call),
+`tests/google-ad-spend-sync.spec.ts` and `tests/google-retargeting-sync.spec.ts` (mocking
+only the OAuth refresh and the Ads/Customer Match API calls), plus new `hashPhoneE164`/
+`normalizePhoneE164ForHash` cases in `tests/hash-pii.spec.ts` that explicitly assert the
+Google and Meta hashes of the same phone number differ.
+
+**Stubbed / deliberately out of scope for this pass:** WhatsApp (per-counsellor numbers,
+per Leon's confirmed decision) and telephony — next, per the confirmed build order. No UI
+for revoking/deleting a stored Google credential, same reasoning as the Meta settings page.
+Google's `login_customer_id` (for accounts under a manager/MCC) is supported but untested
+against a real MCC setup — AFD's Google Ads account structure will determine whether it's
+actually needed.
+
+**Verify by:** `npm run db:migrate && DATABASE_URL=... npm test` — expect `305 passed`. Then
+`npm run build`. Against a real Google Ads account (once credentials are entered in
+Settings → Integrations → Google): paste the webhook URL and verify key into Google Ads →
+Leads → Lead form assets → webhook delivery, click "Send test lead," and confirm a
+`webhook_events` row appears with `status = done` and no corresponding row in `leads`; then
+submit a real (non-test) lead through the connected form and confirm it appears in `/leads`
+within seconds with `source = google`.
+
+**Next:** WhatsApp — per-counsellor Business API numbers (Leon's confirmed model), inbound/
+outbound chat on the lead profile, centre-head/admin visibility, and a marketing broadcast
+frontend for admin. Then telephony, last in the confirmed build order.
+
+## Session 23 — WhatsApp: per-counsellor chat + marketing broadcasts
+
+Continues the confirmed integration build order (Meta → Google → WhatsApp → telephony) into
+WhatsApp, the third integration. This turned out to lean heavily on scaffolding a much
+earlier session had already put in place without building on it yet: the `whatsapp` source in
+`webhook_events`, the `whatsapp`/`telephony` rows in `integration_provider`, the dedicated
+`whatsapp.read`/`whatsapp.send`/`whatsapp.campaign` permission primitives (already seeded
+onto counsellor/center_head at own/center scope), and `profiles.whatsapp_display_name` were
+all Phase 1 placeholders this session finally gave a real purpose.
+
+- **`whatsapp_messages`** (`src/lib/db/schema/whatsapp.ts`) — one row per inbound/outbound
+  message, RLS-gated on `whatsapp.read`/`whatsapp.send` (not `interaction.read`/`create` —
+  a role can hold one without the other) using the same `can_access_center()` shape as
+  `interactions`. Unlike `interactions`, it has a real UPDATE policy: a human-initiated send
+  is a two-step RLS-bound write (insert 'queued', call the Cloud API, update with the real
+  `wa_message_id` and final status) — see migration 0026's own comment for why that's
+  correct instead of falling back to the direct db client.
+- **`/api/webhooks/whatsapp`** — same webhook product as Meta Lead Ads (WhatsApp Cloud API
+  webhooks share `X-Hub-Signature-256`, so `verifyMetaSignature()` is reused unmodified), but
+  handles two kinds of delivery under one field subscription: an inbound message (through
+  `resolveOrCreateLead()`, explicitly assigned to the counsellor who owns the receiving
+  number — a customer messaging a specific person is a stronger signal than any assignment
+  rule) and a delivery-status callback (updates an existing outbound message's
+  sent/delivered/read/failed status by `wa_message_id`). No follow-up API call needed either
+  way — the full message is inline in the payload, same as Google's webhook.
+- **Outbound send** (`src/lib/integrations/whatsapp/client.ts`,
+  `src/app/(app)/leads/[id]/whatsapp-actions.ts`) — free-form text only within Meta's
+  24-hour customer service window (checked against the lead's last inbound message);
+  outside it, a template send is required to reopen the conversation. The chat panel on the
+  lead detail page (`whatsapp-panel.tsx`) shows both paths and switches based on the window.
+- **`/settings/integrations/whatsapp`** — org-wide credentials (app secret, verify token, one
+  shared access token) plus a per-counsellor table assigning each `whatsapp.send` holder
+  their own `phone_number_id`, with a per-number "Test connection" check
+  (`GET /{phone_number_id}` — confirms the number is real and reachable without ever sending
+  a message).
+- **Marketing broadcasts** (`whatsapp_broadcasts`/`whatsapp_broadcast_recipients`,
+  `/settings/whatsapp-broadcasts`, `/api/cron/whatsapp-broadcast-sweep`) — reuses the lead
+  tagging feature (Session 19) as the audience filter rather than inventing a second one: an
+  admin picks a tag and a pre-approved template, the recipient list is snapshotted
+  immediately (excluding `do_not_contact` leads), and an hourly cron sends a batch at a time
+  from each recipient's own assigned counsellor's number — never synchronously from the
+  create action, and never from a separate "marketing number" that doesn't exist in this
+  model. A lead with no assigned counsellor fails clearly rather than silently.
+
+**Verified:** `npx tsc --noEmit` clean. `npx eslint` clean on every new/touched file.
+`npm run build` succeeds — `/api/webhooks/whatsapp`, `/api/cron/whatsapp-broadcast-sweep`,
+and both new settings sections all compile. Full suite green against real local Postgres 16:
+**330 tests passed across 42 files** (up from 305/39 at the end of Session 22) — new coverage:
+`tests/whatsapp-map-inbound.spec.ts` (pure), `tests/whatsapp-webhook.spec.ts` (7 end-to-end
+tests against real Postgres, no network mocking needed at all — same reason as Google's
+webhook, the full message is inline), `tests/whatsapp-broadcast-sweep.spec.ts` (5 end-to-end
+tests mocking only `sendTemplateMessage`), and a new `whatsapp_messages` RLS block in
+`tests/rls.spec.ts` proving the dedicated `whatsapp.read`/`whatsapp.send` primitives are what
+gate visibility, not `lead.read`/`interaction.read`.
+
+**Stubbed / deliberately out of scope for this pass (all documented in docs/DECISIONS.md):**
+inbound media is recorded by Meta media id/mime type only, not downloaded into Supabase
+Storage; the template-send UI takes a typed-in template name rather than a picker fetched
+from Meta's Message Templates API; broadcasts have no draft/review step before sending;
+broadcast audience filtering checks `do_not_contact` only, not the ad-retargeting consent
+fields. Telephony — last in the confirmed build order — is still untouched.
+
+**Verify by:** `npm run db:migrate && DATABASE_URL=... npm test` — expect `330 passed`. Then
+`npm run build`. Against a real WhatsApp Business Account (once credentials are entered in
+Settings → Integrations → WhatsApp and at least one counsellor has a number assigned):
+message that counsellor's number from a phone and confirm a new lead appears in `/leads`
+with `source = whatsapp`, assigned to that counsellor, with the message visible in the
+WhatsApp panel on its detail page; then reply from the CRM and confirm it's delivered.
+
+**Next:** Telephony (click-to-call, call logging) — the last integration in the confirmed
+build order — or the accounts system Leon asked to leave for last, once he shares the
+finance sheet.
+
+## Session 24 — Real student profile form (custom fields for `students` + print rebuild)
+
+Leon shared AFD's actual paper intake form (a PDF export from Google Sheets) — the earlier
+placeholder print layout (Session 19) was never built against a real template, since none
+existed yet. This session rebuilds it field-for-field and, in the process, wires up the
+`students` entity onto the same admin-editable custom-fields system `leads` already uses,
+rather than hardcoding ~20 new columns onto the `students` table.
+
+- **`students.custom`** (migration 0029) — a jsonb escape hatch mirroring `leads.custom`
+  exactly. Turned out to be the only piece of infrastructure actually missing:
+  `get-field-schema.ts`, `field-column.ts`, and `resolve-field-options.ts` were already
+  fully entity-generic, and the Settings → Custom Fields UI already listed "student" as a
+  choosable entity with zero code changes needed — another Phase 1 hook (like several of
+  this session's WhatsApp pieces) that existed but had never been exercised.
+- **34 `field_definitions` rows seeded for `entity = 'student'`** (`src/lib/db/seed.ts`) —
+  ~11 core fields (the columns `students` already had: name, phone, email, DOB, course,
+  batch, centre, status, target exams, exam year, date of joining) plus ~21 new custom
+  fields matching the real form exactly (Program, Mode, City, Address, Pincode, State,
+  Mother/Father name+phone, Current Qualification, Design Discipline, Last School, Art
+  Teacher name+phone, 11th/12th Stream, Exam Board, 10th/12th Percentage, Hobbies, Photo,
+  Comments). `resolve-field-options.ts` gained two new dropdown mappings
+  (`target_exams`/`current_course` → the same admin-editable "exam"/"course" lists leads
+  already use — one list each, not a second one to keep in sync) and a `current_batch_id`
+  branch mirroring the existing `center_id` one.
+- **Students are now actually editable** — `students/[id]/page.tsx` previously had no edit
+  capability at all (read-only, despite `academics` having held `student.update` since it
+  was seeded). New `StudentEditForm` + `updateStudent` Server Action mirror the lead
+  edit form's exact shape (one `<form>` per section tab, core field → real column, custom
+  field → `students.custom`). `dynamic-field-input.tsx` moved from `leads/[id]/` to
+  `src/components/fields/` since it was already 100% entity-agnostic and now has a second
+  real caller.
+- **`/students/[id]/print` rebuilt** to visually match the real form: a bordered two-column
+  table (label/value/label/value), gray "pill" styling on Program/Batch/Mode, a photo box
+  (URL-based — see below) positioned top-right, Comments and a Signature line at the
+  bottom. The field LABELS and VALUES come from `field_definitions`/`students.custom` (an
+  admin renaming a label in Settings changes what prints), but the row-by-row PAIRING/ORDER
+  is a small fixed array matching the physical paper form's actual layout — a deliberate,
+  documented exception to "everything is config-driven," since a printed form's fixed
+  layout is a real one-time design decision, not admin-editable data.
+- **Photo is a pasted URL, not a real upload** — `photo_url` is a plain `url`-type custom
+  field. Real upload (Supabase Storage bucket, RLS storage policies, an upload widget,
+  signed URLs) is legitimate separate work this session doesn't attempt, same as WhatsApp's
+  deferred inbound-media download — flagged, not silently skipped.
+- **Fixed a real test-isolation bug found while re-running the suite**: two WhatsApp test
+  files (`whatsapp-webhook.spec.ts`, `whatsapp-broadcast-sweep.spec.ts`) had registered a
+  `phone_number_id` test credential under the exact same literal string for two different
+  counsellor fixtures — harmless in isolation, but an intermittent flake under Vitest's
+  parallel file execution (whichever file's row the reverse-lookup query happened to see
+  first would "win"). Fixed by making each file's test value unique to its own marker.
+
+**Verified:** `npx tsc --noEmit` clean. `npx eslint` clean on every new/touched file.
+`npm run build` succeeds — `/students/[id]` grew from a static 845B read-only page to a real
+5kB edit form; `/students/[id]/print` compiles against the new field-schema-driven layout.
+Full suite green against real local Postgres 16: **330 tests passed across 42 files**
+(unchanged count from Session 23 — this pass added no new test files, since the custom-fields
+pipeline it relies on is already covered by the leads equivalent; re-verified by re-running
+the full suite twice after the isolation fix, both clean).
+
+**Stubbed / deliberately out of scope for this pass:** real photo upload (URL-paste stub
+only, see docs/DECISIONS.md). The print page's field ORDER is hardcoded to match the one
+real paper form Leon shared — a second institute's differently-shaped form would need its
+own `PRINT_ROWS` array, not just new `field_definitions` rows.
+
+**Verify by:** `npm run db:migrate && npm run db:seed && DATABASE_URL=... npm test` — expect
+`330 passed` and `seeded 34 student field definitions` in the seed output. Then `npm run
+build`. In the browser: open any student's detail page as academics/admin, confirm every
+field from the real form is editable and grouped into sensible section tabs; save a value in
+each new field, then open Print Profile and confirm it appears in the right place with the
+real form's label, in the same row-pairing as the physical document.
+
+**Next:** Telephony (click-to-call, call logging) — the last integration in the confirmed
+build order — or the accounts system Leon asked to leave for last, once he shares the
+finance sheet.

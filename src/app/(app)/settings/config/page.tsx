@@ -39,8 +39,8 @@ export default async function ConfigPage() {
         <h1 className="text-2xl font-semibold">Config Export/Import</h1>
         <p className="text-sm text-muted-foreground">
           Every configuration table — organisation settings, terminology, centres, pipeline stages, custom
-          fields, roles, dropdowns, temperature rules, SLA policies, business hours and holidays — as one
-          bundle. Never includes leads, students, payments, users or the audit log.
+          fields, roles, dropdowns, temperature rules, SLA policies, business hours, holidays, fee
+          structures and tags — as one bundle. Never includes leads, students, payments, users or the audit log.
         </p>
       </div>
 

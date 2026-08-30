@@ -7,6 +7,26 @@
     {
       "path": "/api/cron/recompute-temperature",
       "schedule": "30 20 * * *"
+    },
+    {
+      "path": "/api/cron/ad-spend-sync/meta",
+      "schedule": "30 21 * * *"
+    },
+    {
+      "path": "/api/cron/retargeting-sync/meta",
+      "schedule": "30 22 * * *"
+    },
+    {
+      "path": "/api/cron/ad-spend-sync/google",
+      "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/cron/retargeting-sync/google",
+      "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/whatsapp-broadcast-sweep",
+      "schedule": "0 * * * *"
     }
   ]
 }

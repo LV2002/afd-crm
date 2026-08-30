@@ -113,6 +113,104 @@
       "when": 1787985549038,
       "tag": "0015_org_settings_temperature_override_days",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787997659063,
+      "tag": "0016_phase4_finance_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787997660063,
+      "tag": "0017_phase4_finance_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787998728507,
+      "tag": "0018_phase4_student_code_default_in_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788011834764,
+      "tag": "0019_lead_tags_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788011835764,
+      "tag": "0020_lead_tags_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788013941344,
+      "tag": "0021_integrations_webhooks_ad_spend",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788013942344,
+      "tag": "0022_integrations_webhooks_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788015749852,
+      "tag": "0023_ad_audience_members",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788015750852,
+      "tag": "0024_ad_audience_members_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788029217529,
+      "tag": "0025_whatsapp_messages",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788029218529,
+      "tag": "0026_whatsapp_messages_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788029839578,
+      "tag": "0027_whatsapp_broadcasts",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788029840578,
+      "tag": "0028_whatsapp_broadcasts_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788055927364,
+      "tag": "0029_students_custom_field",
+      "breakpoints": true
     }
   ]
 }

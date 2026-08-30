@@ -202,8 +202,43 @@ export const holidaySchema = z.object({
   updatedAt: nullableTimestamp,
 });
 
+/**
+ * CLAUDE.md § What is configurable lists "Fees: Structures ..." explicitly
+ * — base fee by course/centre/mode/year is configuration, not business
+ * data (unlike the enrolments/payments it's looked up from, which are
+ * never exported). `centerId` carries over as-is on import, same as
+ * `businessHoursSchema`/`holidaySchema`'s — importConfig() re-inserts
+ * `centers` rows with their original ids, so no remapping is needed.
+ */
+export const feeStructureSchema = z.object({
+  id: uuid,
+  course: z.string(),
+  centerId: uuid,
+  mode: z.string(),
+  academicYear: z.string(),
+  baseFeePaise: z.number().int(),
+  isActive: z.boolean(),
+  createdAt: timestamp,
+  updatedAt: nullableTimestamp,
+});
+
+/**
+ * Tag definitions are configuration (an admin-editable label list), same
+ * reasoning as fee_structures above — `lead_tags` (which leads carry which
+ * tag) is data, not configuration, and is never exported, same bucket as
+ * leads/students/payments themselves.
+ */
+export const tagSchema = z.object({
+  id: uuid,
+  name: z.string(),
+  color: z.string().nullable().optional(),
+  isActive: z.boolean(),
+  createdAt: timestamp,
+  updatedAt: nullableTimestamp,
+});
+
 /** Bumped only if this shape itself changes, not on every export. */
-export const CONFIG_BUNDLE_VERSION = "1";
+export const CONFIG_BUNDLE_VERSION = "3";
 
 export const configBundleSchema = z.object({
   version: z.literal(CONFIG_BUNDLE_VERSION),
@@ -221,6 +256,8 @@ export const configBundleSchema = z.object({
   slaPolicies: z.array(slaPolicySchema),
   businessHours: z.array(businessHoursSchema),
   holidays: z.array(holidaySchema),
+  feeStructures: z.array(feeStructureSchema),
+  tags: z.array(tagSchema),
 });
 
 export type ConfigBundle = z.infer<typeof configBundleSchema>;

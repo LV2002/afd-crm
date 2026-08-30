@@ -13,11 +13,24 @@ import {
 } from "@/lib/fields/resolve-field-options";
 import { getLeadDetail } from "@/lib/leads/get-lead-detail";
 import { formatDateIST } from "@/lib/format/date";
+import { formatINR } from "@/lib/format/currency";
 import { createClient } from "@/lib/supabase/server";
+import { getWhatsAppThread, isWithinCustomerServiceWindow } from "@/lib/whatsapp/get-thread";
 
+import { ConfirmAdmissionForm } from "./confirm-admission-form";
 import { InteractionForm } from "./interaction-form";
 import { LeadEditForm } from "./lead-edit-form";
+import { LeadTagsPanel, type TagOption } from "./lead-tags-panel";
 import { TasksPanel, type TaskRow } from "./tasks-panel";
+import { WhatsAppPanel } from "./whatsapp-panel";
+
+interface EnrolmentRow {
+  id: string;
+  course: string;
+  net_fee_paise: number;
+  status: string;
+  sales_to_accounts_at: string | null;
+}
 
 interface TimelineEntry {
   id: string;
@@ -54,12 +67,44 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     values[field.key] = field.isCore ? row[field.key] : (row.custom ?? {})[field.key];
   }
 
-  const [interactionTypes, interactionOutcomes] = await Promise.all([
+  const canCreateEnrolment = can(user, "enrolment.create");
+
+  const [interactionTypes, interactionOutcomes, courseOptions, modeOptions, { data: enrolment }] = await Promise.all([
     getDropdownOptions(supabase, "interaction_type"),
     getDropdownOptions(supabase, "interaction_outcome"),
+    canCreateEnrolment ? getDropdownOptions(supabase, "course") : Promise.resolve([]),
+    canCreateEnrolment ? getDropdownOptions(supabase, "preferred_mode") : Promise.resolve([]),
+    supabase
+      .from("enrolments")
+      .select("id, course, net_fee_paise, status, sales_to_accounts_at")
+      .eq("lead_id", id)
+      .is("deleted_at", null)
+      .maybeSingle<EnrolmentRow>(),
   ]);
 
+  const [{ data: leadTagRows }, { data: allTagRows }] = await Promise.all([
+    supabase
+      .from("lead_tags")
+      .select("tag_id, tags(id, name, color)")
+      .eq("lead_id", id)
+      .returns<Array<{ tag_id: string; tags: TagOption | null }>>(),
+    supabase
+      .from("tags")
+      .select("id, name, color")
+      .eq("is_active", true)
+      .order("name")
+      .returns<TagOption[]>(),
+  ]);
+  const currentTags = (leadTagRows ?? []).map((r) => r.tags).filter((t): t is TagOption => t !== null);
+  const currentTagIds = new Set(currentTags.map((t) => t.id));
+  const availableTags = (allTagRows ?? []).filter((t) => !currentTagIds.has(t.id));
+
   const timeline = await getTimeline(supabase, id);
+
+  const canReadWhatsApp = can(user, "whatsapp.read");
+  const [whatsappMessages, withinWhatsAppWindow] = canReadWhatsApp
+    ? await Promise.all([getWhatsAppThread(supabase, id), isWithinCustomerServiceWindow(supabase, id)])
+    : [[], false];
 
   const { data: taskRows } = await supabase
     .from("tasks")
@@ -84,6 +129,13 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         </div>
       </div>
 
+      <LeadTagsPanel
+        leadId={id}
+        currentTags={currentTags}
+        availableTags={availableTags}
+        canEdit={can(user, "lead.update")}
+      />
+
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           {can(user, "lead.update") ? (
@@ -101,12 +153,35 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         </div>
 
         <div className="flex flex-col gap-4">
+          {canCreateEnrolment &&
+            (enrolment ? (
+              <div className="flex flex-col gap-1 rounded-lg border p-4">
+                <h3 className="text-sm font-semibold">Admission confirmed</h3>
+                <p className="text-sm text-muted-foreground">{enrolment.course}</p>
+                <p className="text-sm">{formatINR(enrolment.net_fee_paise)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatDateIST(enrolment.sales_to_accounts_at, "d MMM yyyy, h:mm a")}
+                </p>
+              </div>
+            ) : (
+              <ConfirmAdmissionForm leadId={id} courses={courseOptions} modes={modeOptions} />
+            ))}
           {can(user, "interaction.create") && (
             <InteractionForm leadId={id} types={interactionTypes} outcomes={interactionOutcomes} />
           )}
           <TasksPanel leadId={id} tasks={taskRows ?? []} />
         </div>
       </div>
+
+      {canReadWhatsApp && (
+        <WhatsAppPanel
+          leadId={id}
+          toPhone={row.primary_phone}
+          messages={whatsappMessages}
+          canSend={can(user, "whatsapp.send")}
+          withinWindow={withinWhatsAppWindow}
+        />
+      )}
 
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Timeline</h2>

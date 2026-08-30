@@ -1,11 +1,16 @@
 "use server";
 
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { writeAuditLog } from "@/lib/audit/log";
-import { can, getCurrentUser } from "@/lib/auth/session";
+import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
+import { db } from "@/lib/db/client";
+import { leads } from "@/lib/db/schema";
+import { confirmAdmission } from "@/lib/enrolment/confirm-admission";
 import { fieldColumn } from "@/lib/fields/field-column";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
+import { parseRupeesToPaise } from "@/lib/format/currency";
 import { createClient } from "@/lib/supabase/server";
 
 export interface FormState {
@@ -240,6 +245,133 @@ export async function completeTask(taskId: string, leadId: string): Promise<void
     .from("tasks")
     .update({ status: "done", completed_at: new Date().toISOString(), completed_by: user.id })
     .eq("id", taskId);
+
+  revalidatePath(`/leads/${leadId}`);
+}
+
+/**
+ * Gate 1 (sales -> accounts). confirmAdmission() runs on the direct db
+ * client (see its own doc comment), so — same pattern as
+ * confirmMerge()/createLeadManually() — this action is the enforcement
+ * point: re-implements the own/center/all scope check `can_access_center()`
+ * would apply, checked against the lead before ever touching the database.
+ */
+export async function confirmAdmissionAction(
+  leadId: string,
+  _prevState: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "enrolment.create")) {
+    return { error: "You don't have permission to do that." };
+  }
+  const scope = scopeFor(user, "enrolment.create");
+  if (!scope) {
+    return { error: "You don't have permission to do that." };
+  }
+
+  const course = formData.get("course");
+  const mode = formData.get("mode");
+  const academicYear = formData.get("academicYear");
+  if (typeof course !== "string" || !course) return { error: "Course is required." };
+  if (typeof mode !== "string" || !mode) return { error: "Mode is required." };
+  if (typeof academicYear !== "string" || !academicYear.trim()) {
+    return { error: "Academic year is required." };
+  }
+
+  const discountPaise = parseRupeesToPaise(formData.get("discount")) ?? 0;
+  const feeOverrideRaw = formData.get("totalFeeOverride");
+  const totalFeePaiseOverride =
+    typeof feeOverrideRaw === "string" && feeOverrideRaw.trim() !== "" ? parseRupeesToPaise(feeOverrideRaw) : null;
+  if (typeof feeOverrideRaw === "string" && feeOverrideRaw.trim() !== "" && totalFeePaiseOverride === null) {
+    return { error: "Manual fee override must be a valid amount." };
+  }
+
+  const [lead] = await db.select().from(leads).where(eq(leads.id, leadId));
+  if (!lead || lead.deletedAt) {
+    return { error: "This lead no longer exists." };
+  }
+  if (scope === "own" && lead.assignedTo !== user.id) {
+    return { error: "This lead is outside your access." };
+  }
+  if (scope === "center" && (!lead.centerId || !user.centerIds.includes(lead.centerId))) {
+    return { error: "This lead is outside your access." };
+  }
+  if (!lead.centerId) {
+    return { error: "This lead has no centre assigned yet — set one before confirming admission." };
+  }
+
+  let result;
+  try {
+    result = await db.transaction((tx) =>
+      confirmAdmission(tx, {
+        leadId,
+        course,
+        centerId: lead.centerId!,
+        mode,
+        academicYear: academicYear.trim(),
+        totalFeePaiseOverride,
+        discountPaise,
+        confirmedBy: user.id,
+      }),
+    );
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not confirm admission." };
+  }
+
+  const supabase = await createClient();
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "enrolment.create",
+    entityType: "enrolments",
+    entityId: result.enrolmentId,
+    after: { leadId, course, mode, academicYear: academicYear.trim(), netFeePaise: result.netFeePaise },
+  });
+
+  revalidatePath(`/leads/${leadId}`);
+  return { success: "Admission confirmed." };
+}
+
+/**
+ * Applying/removing a tag is treated as a lead edit — gated on lead.update,
+ * same permission the rest of this file's mutations use, rather than a new
+ * primitive (lead_tags' own RLS insert/delete policies check the same
+ * thing, so this is defence in depth, not the only check).
+ */
+export async function addLeadTag(leadId: string, tagId: string): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "lead.update")) return;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("lead_tags").insert({ lead_id: leadId, tag_id: tagId, tagged_by: user.id });
+  if (error) return;
+
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "lead.tag_add",
+    entityType: "leads",
+    entityId: leadId,
+    after: { tagId },
+  });
+
+  revalidatePath(`/leads/${leadId}`);
+}
+
+export async function removeLeadTag(leadId: string, tagId: string): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "lead.update")) return;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("lead_tags").delete().eq("lead_id", leadId).eq("tag_id", tagId);
+  if (error) return;
+
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "lead.tag_remove",
+    entityType: "leads",
+    entityId: leadId,
+    after: { tagId },
+  });
 
   revalidatePath(`/leads/${leadId}`);
 }

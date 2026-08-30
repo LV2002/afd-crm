@@ -27,3 +27,15 @@ export function startOfDayIST(instant: Date): Date {
 export function startOfTomorrowIST(instant: Date): Date {
   return addDays(startOfDayIST(instant), 1);
 }
+
+/** The UTC instant of the 1st of the current month, midnight IST — for "this month" dashboard counters. */
+export function startOfMonthIST(instant: Date): Date {
+  const monthStr = formatInTimeZone(instant, DISPLAY_TIMEZONE, "yyyy-MM");
+  return fromZonedTime(`${monthStr}-01T00:00:00`, DISPLAY_TIMEZONE);
+}
+
+/** "Yesterday" as a plain `yyyy-MM-dd` string in IST — ad platforms report spend per calendar day, and a nightly sync run just after UTC midnight is still "today" in IST for another 5.5 hours, so this has to go through IST, not the server's own date. */
+export function yesterdayDateStringIST(instant: Date): string {
+  const todayStart = startOfDayIST(instant);
+  return formatInTimeZone(addDays(todayStart, -1), DISPLAY_TIMEZONE, "yyyy-MM-dd");
+}
