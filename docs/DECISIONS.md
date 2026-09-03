@@ -1522,3 +1522,43 @@ connection inherits this, and the same first-query cost applies to cron and webh
 (where a retry is NOT automatically safe). A connection warmed at process start would remove
 the class entirely; not built now because one retry solves the observed problem and a
 keep-warm mechanism has its own failure modes on serverless.
+
+2026-09-03 · [files] Real file upload, replacing the pasted-URL stub. Attachments hang off a
+lead or a student via two nullable FKs with a check constraint (exactly one parent), not a
+polymorphic `(entity, entity_id)` pair. A polymorphic pair would have needed the owning centre
+denormalised onto the attachment row for RLS to scope it, and that copy goes stale the moment a
+lead moves centres — a quiet way to leak a document across centres. Real FKs keep referential
+integrity and let every policy resolve the centre from the parent, so it is always current.
+
+Access is enforced twice in Postgres, on the row and on the object, because those are two
+different things a user could reach: `attachments` RLS governs the metadata, and Storage
+policies on `storage.objects` govern the bytes. Both call the same two helpers
+(`can_access_lead_files` / `can_access_student_files`), which are `security definer` for a
+specific reason: without it the `leads` lookup inside a policy is itself filtered by leads' RLS,
+so accounts and academics — which legitimately hold `file.read` but NOT `lead.read` — would find
+no parent row and be denied their own files. Object keys are `<kind>/<parent id>/<uuid>-<name>`
+because the Storage policies parse those first two segments; `buildStoragePath` and migration
+0031 must therefore change together, and `tests/attachments.spec.ts` pins the shape.
+
+The bucket and its object policies are wrapped in a guard on the `storage` schema existing. The
+test suite runs the same migration chain against a plain local Postgres with no Supabase
+Storage, and skipping there is correct rather than a compromise — there are no objects to
+protect on a database with no object store, and the `attachments` policies the tests actually
+exercise still apply.
+
+Two things found by testing rather than by reading. First, the soft-delete UPDATE returns rows,
+and Postgres applies the SELECT policy to the NEW row of a returning UPDATE — so with a select
+policy of plain `deleted_at is null`, removing a file failed with "new row violates row-level
+security policy". Fixed by making removed files visible to `file.delete` holders specifically,
+which is also the better rule: whoever can remove a document should be able to see what they
+removed, and the removal stays reversible. Second, the upload UI is a client component and
+needed the size limit and accepted extensions, so the constants and pure helpers live in
+`shared.ts` while `attachments.ts` keeps `server-only` — one number, used by both the form and
+the server-side check, that cannot drift.
+
+Counsellors get `file.read` + `file.upload` but deliberately NOT `file.delete`: dropping a
+signed agreement off a lead is not a counsellor's call. Nothing is ever hard-deleted — there is
+no DELETE policy on `attachments` at all, and removing a file only sets `deleted_at`, leaving
+the bytes in Storage. Signed URLs are minted per click rather than rendered into the list,
+because a signed URL is a bearer token: putting one in the markup would hand a working link to
+every document to anyone who views source, and leave them live in history.

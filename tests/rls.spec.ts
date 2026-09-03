@@ -872,3 +872,163 @@ describe("whatsapp_messages is scoped by whatsapp.read/whatsapp.send, not lead.r
     ).rejects.toThrow(/row-level security/);
   });
 });
+
+describe("attachments are scoped by their PARENT lead/student, via file.* primitives", () => {
+  let fileLeadId: string;
+  let fileAttachmentId: string;
+  let fileStudentId: string;
+  let studentAttachmentId: string;
+
+  beforeAll(async () => {
+    const [leadRow] = await owner<Array<{ id: string }>>`
+      insert into leads (student_name, primary_phone, center_id, assigned_to)
+      values ('RlsSpecTest attachment fixture', '+919847100411', ${centerIds.kochi}, ${fx.counsellor_kochi})
+      returning id
+    `;
+    fileLeadId = leadRow.id;
+
+    const [attRow] = await owner<Array<{ id: string }>>`
+      insert into attachments (lead_id, storage_path, file_name, mime_type, size_bytes)
+      values (${fileLeadId}, ${`lead/${fileLeadId}/rls-fixture.pdf`}, 'rls-fixture.pdf', 'application/pdf', 1024)
+      returning id
+    `;
+    fileAttachmentId = attRow.id;
+
+    const [studentRow] = await owner<Array<{ id: string }>>`
+      insert into students (full_name, phone, center_id)
+      values ('RlsSpecTest attachment student', '+919847100412', ${centerIds.kochi})
+      returning id
+    `;
+    fileStudentId = studentRow.id;
+
+    const [studentAtt] = await owner<Array<{ id: string }>>`
+      insert into attachments (student_id, storage_path, file_name, mime_type, size_bytes)
+      values (${fileStudentId}, ${`student/${fileStudentId}/photo.jpg`}, 'photo.jpg', 'image/jpeg', 2048)
+      returning id
+    `;
+    studentAttachmentId = studentAtt.id;
+  });
+
+  afterAll(async () => {
+    await owner`delete from attachments where lead_id = ${fileLeadId} or student_id = ${fileStudentId}`;
+    await owner`delete from students where id = ${fileStudentId}`;
+    await owner`delete from leads where id = ${fileLeadId}`;
+  });
+
+  it("the assigned counsellor (file.read at own scope) sees their lead's file", async () => {
+    const rows = await asUser(fx.counsellor_kochi, (tx) =>
+      tx<Array<{ id: string }>>`select id from attachments where id = ${fileAttachmentId}`,
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("another centre's counsellor sees nothing", async () => {
+    const rows = await asUser(fx.counsellor_kannur, (tx) =>
+      tx<Array<{ id: string }>>`select id from attachments where id = ${fileAttachmentId}`,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("the centre head (file.read at center scope) sees it", async () => {
+    const rows = await asUser(fx.centerhead_kochi, (tx) =>
+      tx<Array<{ id: string }>>`select id from attachments where id = ${fileAttachmentId}`,
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("a soft-deleted file disappears even from someone who could otherwise read it", async () => {
+    // Removal is an UPDATE setting deleted_at, never a DELETE — so the
+    // select policy's `deleted_at is null` is what actually hides it.
+    await ownerTx(async (tx) => {
+      await tx`update attachments set deleted_at = now() where id = ${fileAttachmentId}`;
+      await tx`set local role authenticated`;
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({
+        sub: fx.counsellor_kochi,
+        role: "authenticated",
+      })}, true)`;
+      const rows = await tx<Array<{ id: string }>>`select id from attachments where id = ${fileAttachmentId}`;
+      expect(rows).toHaveLength(0);
+    });
+  });
+
+  it("the assigned counsellor can attach a file to their own lead", async () => {
+    const inserted = await asUser(fx.counsellor_kochi, (tx) =>
+      tx<Array<{ id: string }>>`
+        insert into attachments (lead_id, storage_path, file_name, mime_type, size_bytes)
+        values (${fileLeadId}, ${`lead/${fileLeadId}/counsellor-upload.pdf`}, 'counsellor-upload.pdf', 'application/pdf', 10)
+        returning id
+      `,
+    );
+    expect(inserted).toHaveLength(1);
+  });
+
+  it("a counsellor with no access to the lead cannot attach a file to it", async () => {
+    await expect(
+      asUser(
+        fx.counsellor_kannur,
+        (tx) => tx`
+          insert into attachments (lead_id, storage_path, file_name, mime_type, size_bytes)
+          values (${fileLeadId}, ${`lead/${fileLeadId}/intruder.pdf`}, 'intruder.pdf', 'application/pdf', 10)
+        `,
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("a counsellor cannot remove a file — they hold file.upload but not file.delete", async () => {
+    // The UPDATE policy is gated on file.delete specifically, so a
+    // counsellor cannot quietly drop a signed agreement off a lead.
+    const updated = await asUser(fx.counsellor_kochi, (tx) =>
+      tx<Array<{ id: string }>>`
+        update attachments set deleted_at = now() where id = ${fileAttachmentId} returning id
+      `,
+    );
+    expect(updated).toHaveLength(0);
+  });
+
+  it("the centre head CAN remove a file (holds file.delete at center scope)", async () => {
+    const updated = await asUser(fx.centerhead_kochi, (tx) =>
+      tx<Array<{ id: string }>>`
+        update attachments set deleted_at = now() where id = ${fileAttachmentId} returning id
+      `,
+    );
+    expect(updated).toHaveLength(1);
+  });
+
+  it("academics reads a STUDENT file without holding lead.read at all", async () => {
+    // The reason can_access_student_files is security definer: academics
+    // never holds lead.read, and must still reach files on its own students.
+    await ownerTx(async (tx) => {
+      await tx`insert into user_centers (user_id, center_id) values (${fx.academics_a}, ${centerIds.kochi})`;
+      await tx`set local role authenticated`;
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({
+        sub: fx.academics_a,
+        role: "authenticated",
+      })}, true)`;
+      const rows = await tx<Array<{ id: string }>>`select id from attachments where id = ${studentAttachmentId}`;
+      expect(rows).toHaveLength(1);
+    });
+  });
+
+  it("a counsellor cannot read a student's file — student files need center/all scope", async () => {
+    const rows = await asUser(fx.counsellor_kochi, (tx) =>
+      tx<Array<{ id: string }>>`select id from attachments where id = ${studentAttachmentId}`,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("rejects a row attached to both a lead and a student, or to neither", async () => {
+    await expect(
+      owner`
+        insert into attachments (lead_id, student_id, storage_path, file_name, mime_type, size_bytes)
+        values (${fileLeadId}, ${fileStudentId}, 'lead/both.pdf', 'both.pdf', 'application/pdf', 1)
+      `,
+    ).rejects.toThrow(/attachments_one_parent/);
+
+    await expect(
+      owner`
+        insert into attachments (storage_path, file_name, mime_type, size_bytes)
+        values ('lead/orphan.pdf', 'orphan.pdf', 'application/pdf', 1)
+      `,
+    ).rejects.toThrow(/attachments_one_parent/);
+  });
+});

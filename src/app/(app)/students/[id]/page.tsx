@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Printer } from "lucide-react";
 
+import { AttachmentsPanel } from "@/components/files/attachments-panel";
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { groupBySection } from "@/lib/fields/group-by-section";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import { OPTION_BEARING_TYPES, resolveFieldOptions, type FieldOption } from "@/lib/fields/resolve-field-options";
 import { formatDateIST } from "@/lib/format/date";
+import { listAttachments } from "@/lib/storage/attachments";
 import { createClient } from "@/lib/supabase/server";
 
 import { StudentEditForm } from "./student-edit-form";
@@ -34,8 +36,10 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   if (!student) notFound();
 
   const canEdit = can(user, "student.update");
+  const canReadFiles = can(user, "file.read");
 
   const fields = await getFieldSchema(supabase, "student", user);
+  const attachments = canReadFiles ? await listAttachments(supabase, { kind: "student", id }) : [];
   const sections = groupBySection(fields);
 
   const values: Record<string, unknown> = {};
@@ -90,6 +94,20 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
               <span className="text-sm font-medium">{formatFieldValue(field.key, values[field.key])}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {canReadFiles && (
+        <div className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">Files</h2>
+          <AttachmentsPanel
+            parentKind="student"
+            parentId={id}
+            attachments={attachments}
+            canUpload={can(user, "file.upload")}
+            canDelete={can(user, "file.delete")}
+            labelSuggestions={["Photo", "ID proof", "Marksheet", "Portfolio", "Certificate"]}
+          />
         </div>
       )}
     </div>
