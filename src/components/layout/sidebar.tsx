@@ -31,7 +31,7 @@ const ICON_MAP: Record<NavIconKey, LucideIcon> = {
   pipeline: KanbanSquare,
   accounts: Wallet,
   students: GraduationCap,
-  reports: BarChart3,
+  insights: BarChart3,
   ask: Sparkles,
   settings: Settings,
 };

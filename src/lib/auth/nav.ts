@@ -12,7 +12,7 @@ export type NavIconKey =
   | "pipeline"
   | "accounts"
   | "students"
-  | "reports"
+  | "insights"
   | "ask"
   | "settings";
 
@@ -55,7 +55,7 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
   { href: "/pipeline", iconKey: "pipeline", permission: "lead.read", label: "Pipeline" },
   { href: "/accounts", iconKey: "accounts", permission: "payment.read", label: "Accounts" },
   { href: "/students", iconKey: "students", permission: "student.read", label: "Students" },
-  { href: "/reports", iconKey: "reports", permission: "report.read", label: "Reports" },
+  { href: "/insights", iconKey: "insights", permission: "report.read", label: "Insights" },
   { href: "/ask", iconKey: "ask", permission: "ai.query", label: "Ask AI" },
   { href: "/settings", iconKey: "settings", permission: "settings.manage", label: "Settings" },
 ];
