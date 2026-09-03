@@ -1778,3 +1778,23 @@ walk-in fills in by hand. `tests/profile-sheet.spec.ts` pins the row order again
 PDF and checks every key names a field that actually exists: a misspelt key does not crash, it
 prints a blank column with a raw key as its label, and nobody notices until it is on paper in
 front of a parent.
+
+2026-09-03 · [bug] The analyst's model name was hardcoded as `gemini-2.0-flash`, and Google
+retired it: Leon set a valid API key and got "Gemini doesn't recognise the model". Nothing was
+wrong with his key.
+
+The fix is not a newer name — that is the same bug with a later expiry date. The driver now asks
+the API which models the key can call `generateContent` on and picks the best one: newest, Flash
+by preference (the free tier's workhorse, and fast enough that a counsellor waits a second rather
+than ten), stable over preview, and the unsuffixed alias over a pinned `-001` build, since the
+alias keeps tracking the current build while the pinned one is what eventually 404s. Resolved
+once per process, and forgotten on a 404 so the next question re-resolves rather than repeating a
+dead name.
+
+`GEMINI_MODEL` still works and now means what it says — an explicit override that skips discovery.
+A hardcoded fallback remains for the case where the listing call itself fails, but only so the
+generate call can report the real problem (bad key, exhausted quota) in Google's own words instead
+of being masked. When the model genuinely is not recognised, the error now lists the names the
+operator's own key accepts rather than telling them to go and find one.
+
+`tests/gemini-model.spec.ts` covers the selection with a stubbed fetch: no database, no network.

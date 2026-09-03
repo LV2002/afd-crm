@@ -20,12 +20,105 @@ export type { GeminiToolDeclaration };
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 /**
- * Configurable because model names on this API change faster than the
- * code around them, and a wrong one is a 404 the operator can fix without
- * a deploy. The default is a current free-tier model; if Google renames
- * it, set GEMINI_MODEL rather than editing this file.
+ * An explicit model choice, if the operator made one. Left unset, the
+ * model is discovered from the API instead — see `resolveModel()`.
  */
-export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+export const GEMINI_MODEL_OVERRIDE = process.env.GEMINI_MODEL?.trim() || null;
+
+/**
+ * Used only when the API can't be asked (the listing call itself failed).
+ * Better than nothing, but the whole point of the discovery below is that
+ * a hardcoded name here goes stale without anybody noticing until a user
+ * gets a 404 — which is exactly what happened to `gemini-2.0-flash`.
+ */
+const FALLBACK_MODEL = "gemini-2.5-flash";
+
+interface ListedModel {
+  /** e.g. "models/gemini-2.5-flash" */
+  name: string;
+  supportedGenerationMethods?: string[];
+}
+
+/**
+ * The models this API key can actually call `generateContent` on, newest
+ * and most capable first.
+ *
+ * Model names on this API change faster than any code around them, and
+ * Google retires them: a name that worked at the time of writing is a 404
+ * some months later. Rather than guess, ask.
+ */
+export async function listUsableModels(apiKey: string, signal?: AbortSignal): Promise<string[]> {
+  const response = await fetch(`${API_BASE}?pageSize=200`, {
+    headers: { "x-goog-api-key": apiKey },
+    signal,
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new GeminiError(
+      `Gemini returned ${response.status} listing models: ${body.slice(0, 300)}`,
+      response.status,
+    );
+  }
+
+  const payload = (await response.json()) as { models?: ListedModel[] };
+  return (payload.models ?? [])
+    .filter((model) => model.supportedGenerationMethods?.includes("generateContent"))
+    .map((model) => model.name.replace(/^models\//, ""))
+    .filter((name) => !UNUSABLE.test(name))
+    .sort((a, b) => rank(b) - rank(a) || a.localeCompare(b));
+}
+
+/**
+ * Models that answer `generateContent` but are wrong for an analyst that
+ * has to call tools and return text: media generators, embedders, and the
+ * audio/live variants.
+ */
+const UNUSABLE = /embedding|aqa|imagen|veo|tts|image-generation|audio|live|learnlm/i;
+
+/**
+ * Prefers a Flash model (the free tier's workhorse, and fast enough that
+ * a counsellor waits a second rather than ten), the newest version, and a
+ * stable release over a preview or experimental one.
+ */
+function rank(name: string): number {
+  const [, major = "0", minor = "0"] = /(\d+)\.(\d+)/.exec(name) ?? [];
+  let score = Number(major) * 100 + Number(minor) * 10;
+  if (/flash/i.test(name)) score += 1000;
+  if (/lite/i.test(name)) score -= 400;
+  if (/preview|exp/i.test(name)) score -= 300;
+  // A bare "gemini-2.5-flash" beats "gemini-2.5-flash-001": the unsuffixed
+  // alias keeps pointing at the current build.
+  if (/-\d{3}$/.test(name)) score -= 50;
+  return score;
+}
+
+/**
+ * Resolved once per process, because the answer changes on Google's
+ * release schedule rather than per request, and the listing call is pure
+ * overhead on every question after the first.
+ */
+let cachedModel: string | null = null;
+
+export async function resolveModel(apiKey: string, signal?: AbortSignal): Promise<string> {
+  if (GEMINI_MODEL_OVERRIDE) return GEMINI_MODEL_OVERRIDE;
+  if (cachedModel) return cachedModel;
+
+  try {
+    const [best] = await listUsableModels(apiKey, signal);
+    cachedModel = best ?? FALLBACK_MODEL;
+  } catch {
+    // A listing failure is not worth failing the question over: the
+    // generate call is about to report the real problem (bad key, quota)
+    // with Google's own wording.
+    cachedModel = FALLBACK_MODEL;
+  }
+  return cachedModel;
+}
+
+/** Forgets the resolved model, so a 404 can be retried against a fresh listing. */
+export function forgetResolvedModel(): void {
+  cachedModel = null;
+}
 
 export interface GeminiFunctionCall {
   name: string;
@@ -64,8 +157,9 @@ export async function generateWithTools(options: {
   tools: GeminiToolDeclaration[];
   signal?: AbortSignal;
 }): Promise<GeminiTurn> {
+  const model = await resolveModel(options.apiKey, options.signal);
   const response = await fetch(
-    `${API_BASE}/${encodeURIComponent(GEMINI_MODEL)}:generateContent`,
+    `${API_BASE}/${encodeURIComponent(model)}:generateContent`,
     {
       method: "POST",
       headers: {
@@ -94,11 +188,15 @@ export async function generateWithTools(options: {
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    // Surface Google's own message: on the free tier the two failures that
-    // actually happen are a bad key and a quota exhaustion, and both say so
-    // clearly enough to act on.
+    // A 404 means the model name is gone. Drop the cached choice so the
+    // next question re-resolves against a fresh listing rather than
+    // repeating a name Google has retired.
+    if (response.status === 404) forgetResolvedModel();
+    // Otherwise surface Google's own message: on the free tier the two
+    // failures that actually happen are a bad key and a quota exhaustion,
+    // and both say so clearly enough to act on.
     throw new GeminiError(
-      `Gemini returned ${response.status}: ${body.slice(0, 400)}`,
+      `Gemini returned ${response.status} for model "${model}": ${body.slice(0, 400)}`,
       response.status,
     );
   }

@@ -70,8 +70,9 @@ export function AskPanel({
           Get a free key at <span className="font-mono">aistudio.google.com/apikey</span> and set it
           as <code className="font-mono">GEMINI_API_KEY</code> — locally in{" "}
           <code className="font-mono">.env.local</code>, and on Vercel under Project Settings →
-          Environment Variables — then restart. Optionally set{" "}
-          <code className="font-mono">GEMINI_MODEL</code> to choose a different model.
+          Environment Variables — then restart. The model is picked automatically from whatever
+          your key can use; set <code className="font-mono">GEMINI_MODEL</code> only if you want a
+          specific one.
         </p>
       </div>
     );

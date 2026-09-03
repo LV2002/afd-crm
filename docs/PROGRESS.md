@@ -2521,3 +2521,21 @@ form.
 
 **Next:** Telephony (blocked on a provider), or the accounts system once the finance sheet
 arrives.
+
+## Session 32 — The analyst picks its own model
+
+**Fixed:** `/ask` failed with *Gemini doesn't recognise the model "gemini-2.0-flash"* on a
+perfectly good API key. Google had retired that name; it was hardcoded as the default.
+
+Rather than hardcode a newer one — the same bug with a later expiry date — the driver now asks
+Google which models the key can actually use and picks the newest stable Flash model, resolved
+once per process and re-resolved after a 404. `GEMINI_MODEL` still overrides it. When a model
+genuinely isn't recognised, the error now lists the names that key accepts.
+
+**Tests:** `tests/gemini-model.spec.ts` (9 new), stubbed fetch, no database.
+
+**Verified:** `npx tsc --noEmit` clean, `next lint` clean (one pre-existing warning), `npm run
+build` succeeds.
+
+**Needs Leon:** nothing — no new environment variable. If `GEMINI_MODEL` was set to
+`gemini-2.0-flash` while debugging, unset it so the CRM picks for itself.
