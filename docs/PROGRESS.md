@@ -2480,3 +2480,44 @@ whatever the print dialog last used, which is how a form silently comes out on L
 
 **Verified:** `npx tsc --noEmit` clean, `npx eslint` clean, `npm run build` succeeds, 405/405
 tests green against a database rebuilt from scratch.
+
+## Session 31 — A separate Student Profile Form builder, and printing a lead's submitted form
+
+Both of Leon's asks, shipped.
+
+**Settings → Student Profile Form** is a real screen now, not a pointer at Custom Fields. It
+lists the questions in the order a student sees them, with per-row switches for *required* and
+*on the form*, arrows to reorder, and **Add a question** (which lands on a form already set to
+the student entity). Underneath, a second table shows the student fields that are *not* asked —
+batch, centre, status, joining date and so on — so an admin looking for a question that isn't on
+the form finds it there instead of creating a duplicate.
+
+**New column: `field_definitions.on_profile_form`** (migration 0035). Before this, the public
+form rendered *every* student field, so it asked students to set their own batch id and enrolment
+status. The flag is deliberately separate from `is_active`: those fields are live in the CRM,
+they just aren't things a student answers. The migration backfills existing installs so nobody's
+form goes empty on deploy, and re-running the seed no longer overwrites a reordered or trimmed
+form.
+
+**Print a lead's submitted profile form** — `/leads/[id]/profile-form/print`, reachable from the
+Student profile form panel on the lead page. It comes out on the exact sheet Leon uploaded,
+because it is now literally the same component as `/students/[id]/print`: the layout moved to
+`lib/print/profile-sheet.ts` + `components/print/profile-sheet.tsx` and both pages render it.
+A4 portrait, as everything printable is. An unsubmitted form still prints, as the blank sheet a
+walk-in fills in by hand.
+
+**Tests:** `tests/profile-sheet.spec.ts` (16 new) pins the sheet's row order against the uploaded
+PDF, checks every printed key names a student field that actually exists, and asserts the seed's
+exclusion list and the migration's backfill list agree.
+
+**Verified:** `npx tsc --noEmit` clean, `next lint` clean (one pre-existing unused-var warning in
+`storage/shared.ts`), `npm run build` succeeds with both new routes, and every non-database test
+passes. The database-backed specs fail here with `ECONNREFUSED 127.0.0.1:5432` — this container
+has no local Postgres — so they still need a run against a real database.
+
+**Needs Leon:** `npm run db:migrate` for migration 0035. No re-seed required; the migration
+backfills the flag on its own. Re-seeding is safe either way and will no longer undo a reordered
+form.
+
+**Next:** Telephony (blocked on a provider), or the accounts system once the finance sheet
+arrives.

@@ -44,14 +44,14 @@ export default async function ProfileFormsPage() {
           Forms sent to students who are joining. {submitted.length} submitted of {all.length} sent.
         </p>
         {/*
-          The questions are not edited here — they are the student field
-          definitions, shared with the printed profile. Saying so where
-          someone looks for them saves a hunt through Settings.
+          The questions are not edited here — they live on their own
+          builder screen. Saying so where someone looks for them saves a
+          hunt through Settings.
         */}
         <p className="mt-1 text-sm text-muted-foreground">
-          To change what the form asks, edit the student fields in{" "}
-          <Link href="/settings/fields" className="font-medium underline">
-            Settings → Custom Fields
+          To change what the form asks, use{" "}
+          <Link href="/settings/profile-form" className="font-medium underline">
+            Settings → Student Profile Form
           </Link>
           . A form link is created from an individual lead&apos;s page.
         </p>

@@ -619,6 +619,26 @@ const LEAD_FIELD_SEEDS: FieldSeed[] = [
  * questions, and CLAUDE.md's plug-and-play test applies here exactly as
  * much as it does to lead fields.
  */
+/**
+ * Student fields the institute fills in itself, so they are NOT asked on
+ * the student-facing profile form (/f/<token>). Everything else on
+ * STUDENT_FIELD_SEEDS is. Mirrors the backfill in migration 0035 — an
+ * admin can move any question on or off the form afterwards in
+ * Settings → Student Profile Form.
+ *
+ * `photo_url` is here for a different reason from the rest: it is a
+ * pasted-URL field, and a student on a phone has no URL to paste.
+ */
+const STUDENT_FIELDS_OFF_PROFILE_FORM = new Set([
+  "photo_url",
+  "center_id",
+  "current_course",
+  "current_batch_id",
+  "status",
+  "joined_at",
+  "target_exam_year",
+]);
+
 const STUDENT_FIELD_SEEDS: FieldSeed[] = [
   // Personal (core)
   { key: "full_name", label: "Name", type: "text", section: "Personal", isRequired: true, isCore: true },
@@ -698,6 +718,7 @@ async function seedFieldDefinitionsFor(entity: "lead" | "student", seeds: FieldS
         showInList: field.showInList ?? false,
         showInFilters: field.showInFilters ?? false,
         isCore: field.isCore ?? true,
+        onProfileForm: entity === "student" && !STUDENT_FIELDS_OFF_PROFILE_FORM.has(field.key),
         options: field.options,
       })
       .onConflictDoUpdate({
@@ -706,8 +727,13 @@ async function seedFieldDefinitionsFor(entity: "lead" | "student", seeds: FieldS
           label: field.label,
           type: field.type,
           section: field.section,
-          sortOrder: index,
         },
+        // `sort_order` and `on_profile_form` are deliberately NOT in this
+        // set. Both are things an admin changes in Settings → Student
+        // Profile Form, and re-running the seed against a live instance
+        // must not quietly undo a reordered or trimmed form. New rows
+        // still land in the order written above, which is all the seed
+        // is for.
       });
   }
   console.log(`seeded ${seeds.length} ${entity} field definitions`);

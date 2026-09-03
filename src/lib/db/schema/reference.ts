@@ -113,6 +113,18 @@ export const fieldDefinitions = pgTable(
     section: text("section").notNull(),
     showInList: boolean("show_in_list").notNull().default(false),
     showInFilters: boolean("show_in_filters").notNull().default(false),
+    /**
+     * Asked on the student-facing profile form (the tokenised /f/<token>
+     * page), as opposed to only on the internal student record.
+     *
+     * Separate from `isActive` because the two answer different
+     * questions: a field can be perfectly live in the CRM and still be
+     * something no student should be filling in about themselves — their
+     * batch, their centre, their enrolment status. Before this column
+     * existed the public form rendered every student field, which asked
+     * a sixteen-year-old to pick their own batch id.
+     */
+    onProfileForm: boolean("on_profile_form").notNull().default(false),
     visibleToRoles: uuid("visible_to_roles").array(),
     editableByRoles: uuid("editable_by_roles").array(),
     /** Backed by a real column (name, phone, stage). Cannot be deleted. */

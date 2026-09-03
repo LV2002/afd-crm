@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { PrintButton } from "@/app/(app)/students/[id]/print/print-button";
+import { PrintButton } from "@/components/print/print-button";
 import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { getLeadFeePlan } from "@/lib/enrolment/get-fee-plan";

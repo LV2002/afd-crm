@@ -1731,3 +1731,50 @@ edited in Settings → Custom Fields. Leon went looking for a "student profile f
 Settings and found the deleted Registration Forms gone — reasonable, since nothing said where
 the questions actually live. They are the student `field_definitions`, shared with the printed
 profile, which is why there is no separate form builder: one definition, one form, one printout.
+
+2026-09-03 · [ux] Reversing the entry above: there IS a separate form builder now —
+Settings → Student Profile Form. Leon asked for one after the pointer went in, which is the
+answer to the question the pointer was dodging. The previous reasoning ("one definition, one
+form, one printout") was right about the data and wrong about the screen: the student field
+definitions are still the single source of truth, and the new screen edits exactly those rows.
+What changed is that composing a questionnaire and adding a column to a record are different
+jobs, and a screen listing lead, student and enrolment fields together serves neither well. The
+builder shows order, required, and on/off the form; it hides entity, list and filter visibility.
+Custom Fields still exists and still edits the same rows.
+
+2026-09-03 · [schema] Added `field_definitions.on_profile_form`. Until now the public form
+rendered every student field definition, which meant it asked a sixteen-year-old to set their own
+batch id, centre, enrolment status and joining date. Those are real fields — staff fill them in —
+so deactivating them was not an option, and that is exactly why the flag is separate from
+`is_active`: "live in the CRM" and "asked of the student" are different questions and were being
+answered by the same column.
+
+Migration 0035 backfills every student field to true except the institute-assigned ones, so an
+existing install keeps a working form rather than silently getting an empty one on deploy. The
+seed carries the same exclusion list, and `tests/profile-sheet.spec.ts` asserts the two lists
+agree — two installs of the same CRM showing different forms is the failure worth catching. The
+seed's upsert deliberately no longer overwrites `sort_order` or `on_profile_form`: both are
+things an admin changes on the builder screen, and re-running the seed must not quietly undo a
+reordered form.
+
+A new student field created from Settings → Custom Fields defaults to being ON the form, since
+"Add a question" is overwhelmingly why one gets created. Not offered as a checkbox: that generic
+form cannot reliably render a control keyed to the entity dropdown's live value (the existing
+options textarea has the same limitation), and the builder shows the placement plainly with one
+switch to change it.
+
+2026-09-03 · [print] A lead's submitted profile form now prints on the same paper sheet as the
+student record, at `/leads/[id]/profile-form/print`. Leon asked for the printout to come out with
+the exact fields from the sheet he uploaded, and it does — the layout is unchanged, because it is
+now literally the same component. `PRINT_ROWS` and the sheet markup moved to
+`lib/print/profile-sheet.ts` and `components/print/profile-sheet.tsx`; when the row order lived
+inside the students page, a second printer of the same form could only have copied it and started
+drifting the day either one changed.
+
+The lead-side page exists because a student's answers arrive months before the `students` row
+does — that record is created at the accounts→academics gate — and the office wants the sheet in
+the file from the day the form comes back. An unsubmitted form still prints, as the blank sheet a
+walk-in fills in by hand. `tests/profile-sheet.spec.ts` pins the row order against the uploaded
+PDF and checks every key names a field that actually exists: a misspelt key does not crash, it
+prints a blank column with a raw key as its label, and nobody notices until it is on paper in
+front of a parent.

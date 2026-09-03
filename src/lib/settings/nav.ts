@@ -84,6 +84,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage"],
   },
   {
+    href: "/settings/profile-form",
+    label: "Student Profile Form",
+    description: "Compose the questions students answer on their own profile form",
+    permissions: ["settings.manage"],
+  },
+  {
     href: "/settings/fields",
     label: "Custom Fields",
     description: "Add fields to lead / student / enrolment",
