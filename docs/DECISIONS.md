@@ -1492,3 +1492,33 @@ page must serve aggregate counts to roles like accounts/academics that don't hol
 without exposing per-lead PII — see the page's own header comment), and the service-role key
 is forbidden in browser-reachable routes by CLAUDE.md § Non-negotiables 3. The connection is
 the right architecture; it just needed to fail honestly.
+
+2026-09-03 · [insights] **Resolved.** With per-query deadlines in place the page finally named
+its own failure: `Insights "leads" query exceeded 8000ms` — the FIRST query in the sequence —
+after which a reload rendered the page fine in milliseconds. So `DATABASE_URL` was correct all
+along and the database was never unreachable; the earlier diagnosis above was right about the
+mechanism (only this page uses a direct socket, and a stalled render returns nothing) but wrong
+about the cause.
+
+The real cause is cold-connection cost. postgres.js connects lazily, so whichever query runs
+first also pays for the TCP connect, TLS handshake and pooler auth. The client's dev server was
+reporting `Network: http://172.20.10.5:3000` — the 172.20.10.x subnet an iPhone Personal
+Hotspot hands out — so that setup was crossing a tethered mobile link to an AWS region. Over
+that, connection establishment alone outlasted a timeout sized for a warm connection, while
+every subsequent query on the now-warm connection returned instantly. Hence the maddening
+"fails once, then works" behaviour, and hence its appearance on both local and production: the
+same laptop, the same link, in both cases.
+
+Fixed by tolerance rather than by raising a number and hoping: per-query timeout 8s → 10s, plus
+one retry on a timeout or socket error. The retry is what actually matters — it converts a
+first-query cold start into a warm second attempt, and it is safe here specifically because
+these are read-only SELECTs, so re-running one cannot double-apply anything. A write path must
+not copy this pattern without idempotency. Also set `maxDuration = 30` on the route: Vercel
+kills a function at its plan limit and the browser then gets a bare network error with no server
+log, which is the single thing that made this so hard to see.
+
+Worth keeping in mind for later: any page whose first database read happens on a cold
+connection inherits this, and the same first-query cost applies to cron and webhook handlers
+(where a retry is NOT automatically safe). A connection warmed at process start would remove
+the class entirely; not built now because one retry solves the observed problem and a
+keep-warm mechanism has its own failure modes on serverless.

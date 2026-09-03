@@ -35,22 +35,57 @@ import { LeadsBySourceChart } from "./leads-by-source-chart";
  * holds regardless of which client fetches it.
  */
 /**
- * Runs one query under its own deadline and logs how long it took. The
- * per-query label is the point: when this page stalled, "the page doesn't
- * load" was all anyone could see, and a single combined timeout still
- * couldn't say *which* read was slow. Each line lands in the dev server
- * log (and in Vercel's function logs), so a stall names itself.
+ * Vercel kills a function at its plan's limit and the browser then gets a
+ * bare "network error" with no server log — the symptom that made this page
+ * so hard to diagnose. Asking for headroom means a slow cold connection
+ * fails as a readable error page instead of a severed request.
+ */
+export const maxDuration = 30;
+
+const QUERY_TIMEOUT_MS = 10_000;
+const QUERY_ATTEMPTS = 2;
+
+/**
+ * Runs one query under its own deadline, retrying once, and logs how long
+ * it took. Two things are load-bearing here.
+ *
+ * The per-query label: when this page stalled, "the page doesn't load" was
+ * all anyone could see, and a single combined timeout still couldn't say
+ * *which* read was slow. Each line lands in the dev server log (and in
+ * Vercel's function logs), so a stall names itself.
+ *
+ * The retry: postgres.js connects lazily, so the FIRST query of a request
+ * also pays for the TCP connect, TLS handshake and pooler auth. Over a slow
+ * or lossy link (a phone hotspot, say) that alone can outlast a timeout
+ * sized for a warm connection — which is exactly how this surfaced: the
+ * `leads` query, first in the sequence, blew an 8s deadline while every
+ * later query on the now-warm connection returned in milliseconds. Retrying
+ * is safe because these are read-only SELECTs: re-running one cannot
+ * double-apply anything.
  */
 async function timedQuery<T>(label: string, run: () => Promise<T>): Promise<T> {
-  const started = Date.now();
-  try {
-    const result = await withDeadline(run(), 8_000, `Insights "${label}" query`);
-    console.log(`[insights] ${label}: ok in ${Date.now() - started}ms`);
-    return result;
-  } catch (error) {
-    console.error(`[insights] ${label}: FAILED after ${Date.now() - started}ms`, error);
-    throw error;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= QUERY_ATTEMPTS; attempt += 1) {
+    const started = Date.now();
+    try {
+      const result = await withDeadline(run(), QUERY_TIMEOUT_MS, `Insights "${label}" query`);
+      const suffix = attempt > 1 ? ` (attempt ${attempt})` : "";
+      console.log(`[insights] ${label}: ok in ${Date.now() - started}ms${suffix}`);
+      return result;
+    } catch (error) {
+      lastError = error;
+      const elapsed = Date.now() - started;
+      const transient = isDeadlineExceeded(error) || isDatabaseUnreachable(error);
+      if (!transient || attempt === QUERY_ATTEMPTS) {
+        console.error(`[insights] ${label}: FAILED after ${elapsed}ms`, error);
+        break;
+      }
+      console.warn(
+        `[insights] ${label}: no answer in ${elapsed}ms — retrying once (the first query also opens the connection)`,
+      );
+    }
   }
+  throw lastError;
 }
 
 function DatabaseUnreachable() {
@@ -86,11 +121,13 @@ function DatabaseTooSlow() {
       <p className="text-sm font-medium">The database didn&apos;t respond in time.</p>
       <p className="max-w-prose text-xs text-muted-foreground">
         The connection opened, so <code className="font-mono">DATABASE_URL</code> is reachable —
-        a query just took too long to come back. The dev server log (or Vercel&apos;s function
-        log) names which one, on a line beginning{" "}
-        <code className="font-mono">[insights]</code>. A paused or sleeping Supabase project is
-        the usual cause; the Supabase dashboard will say so and offer Restore. Run{" "}
-        <code className="font-mono">npm run db:check</code> to confirm the database is awake.
+        a query just took too long to come back, twice. On a slow or intermittent link (a phone
+        hotspot, patchy wifi) opening the connection alone can take this long; reloading often
+        works because the connection is then warm. The dev server log — or Vercel&apos;s function
+        log — names which query, on a line beginning{" "}
+        <code className="font-mono">[insights]</code>. If it persists on a good connection, check
+        whether the Supabase project is paused (the dashboard will say so and offer Restore), and
+        run <code className="font-mono">npm run db:check</code>.
       </p>
     </div>
   );
