@@ -1798,3 +1798,23 @@ of being masked. When the model genuinely is not recognised, the error now lists
 operator's own key accepts rather than telling them to go and find one.
 
 `tests/gemini-model.spec.ts` covers the selection with a stubbed fetch: no database, no network.
+
+2026-09-03 · [bug] With the model now discovered rather than hardcoded, the analyst landed on
+`gemini-3.8-flash` — a thinking model — and every question failed with:
+
+  Function call is missing a thought_signature in functionCall parts.
+
+The tool loop echoed the model's turn back as `{ functionCall }` rebuilt from the name and args.
+That is enough for a non-thinking model and not enough for a thinking one: each `functionCall`
+arrives with a `thoughtSignature`, which is how the model resumes its own reasoning across the
+tool round trip, and rebuilding the part drops it. Fixed by returning the model's parts exactly as
+they arrived and pushing those back verbatim.
+
+`GeminiPart` is deliberately an open shape rather than a union of the three parts this code
+constructs. A turn that has to be handed back unchanged will keep growing fields this code never
+writes, and a closed union would silently drop each new one — this bug, again, on a delay.
+
+Thought parts are filtered out of the answer text but kept in the echoed turn: they are the
+model's reasoning, not its answer, and showing them would put half-formed working in front of a
+counsellor. `tests/gemini-model.spec.ts` covers both, including several calls in one turn each
+carrying its own signature.

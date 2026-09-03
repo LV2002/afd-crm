@@ -125,19 +125,44 @@ export interface GeminiFunctionCall {
   args: Record<string, unknown>;
 }
 
+/**
+ * One part of one turn.
+ *
+ * Deliberately an open shape rather than a union of the three parts this
+ * code constructs, because a model's own parts have to be handed BACK
+ * verbatim and they carry fields this code never writes. `thoughtSignature`
+ * is the one that bites: on a thinking model (Gemini 3.x) every
+ * `functionCall` comes with one, and returning the call without it is
+ * rejected —
+ *
+ *   Function call is missing a thought_signature in functionCall parts.
+ *
+ * — because the signature is how the model resumes its own reasoning
+ * across the tool round trip. Reconstructing a turn from just the name and
+ * args loses it.
+ */
+export interface GeminiPart {
+  text?: string;
+  thought?: boolean;
+  thoughtSignature?: string;
+  functionCall?: GeminiFunctionCall;
+  functionResponse?: { name: string; response: Record<string, unknown> };
+}
+
 /** One turn of the conversation, in Gemini's shape. */
 export interface GeminiContent {
   role: "user" | "model";
-  parts: Array<
-    | { text: string }
-    | { functionCall: GeminiFunctionCall }
-    | { functionResponse: { name: string; response: Record<string, unknown> } }
-  >;
+  parts: GeminiPart[];
 }
 
 export interface GeminiTurn {
   text: string;
   functionCalls: GeminiFunctionCall[];
+  /**
+   * The model's parts exactly as they arrived. Push these back onto
+   * `contents` rather than rebuilding the turn — see GeminiPart above.
+   */
+  parts: GeminiPart[];
 }
 
 export class GeminiError extends Error {
@@ -203,7 +228,7 @@ export async function generateWithTools(options: {
 
   const payload = (await response.json()) as {
     candidates?: Array<{
-      content?: { parts?: Array<{ text?: string; functionCall?: GeminiFunctionCall }> };
+      content?: { parts?: GeminiPart[] };
       finishReason?: string;
     }>;
     promptFeedback?: { blockReason?: string };
@@ -218,12 +243,16 @@ export async function generateWithTools(options: {
 
   const parts = payload.candidates?.[0]?.content?.parts ?? [];
   return {
+    // `thought` parts are the model's own reasoning summary, not an
+    // answer — they belong in the echoed turn but not on screen.
     text: parts
+      .filter((part) => !part.thought)
       .map((part) => part.text ?? "")
       .join("")
       .trim(),
     functionCalls: parts
       .map((part) => part.functionCall)
       .filter((call): call is GeminiFunctionCall => Boolean(call)),
+    parts,
   };
 }
