@@ -2353,3 +2353,39 @@ suite 9/9 green. Timeout behaviour confirmed by direct probe against a blackhole
 pooler** string (port `6543`) in *both* `.env.local` (then fully restart `npm run dev`) and
 Vercel → Settings → Environment Variables (then redeploy). The code change makes the page
 *tell* him if it's still wrong instead of hanging.
+
+## Session 27 — Insights page resolved: cold-connection cost, not connectivity
+
+With per-query deadlines in place the page named its own failure: `Insights "leads" query
+exceeded 8000ms` — the *first* query in the sequence — after which a reload rendered the page
+fine in milliseconds. So `DATABASE_URL` was correct all along and the database was never
+unreachable.
+
+Real cause: postgres.js connects lazily, so whichever query runs first also pays for the TCP
+connect, TLS handshake and pooler auth. Leon's dev server was reporting `Network:
+http://172.20.10.5:3000` — the subnet an iPhone Personal Hotspot hands out — so that was a
+tethered mobile link to an AWS region, over which connection setup alone outlasted a timeout
+sized for a warm connection. Hence "fails once, then works", and hence the same failure on
+local *and* production: same laptop, same link.
+
+**Shipped:**
+- Per-query timeout 8s → 10s, plus **one retry** on a timeout or socket error. The retry is the
+  part that matters: it turns a first-query cold start into a warm second attempt. Safe here
+  only because these are read-only SELECTs — a write path must not copy this without
+  idempotency.
+- `export const maxDuration = 30` on the route, so Vercel doesn't kill the function mid-request
+  and hand the browser a bare network error with no server log.
+- The "database didn't respond" panel now names a slow link as the likely cause rather than a
+  paused project.
+
+**Verified:** `npx tsc --noEmit` clean, `npx eslint` clean, `npm run build` succeeds, suite
+15/15 green. Confirmed working in Leon's browser — Insights renders with 8 leads, both charts
+drawing.
+
+**Carry forward:** any page whose first database read happens on a cold connection inherits
+this, and the same cost applies to cron and webhook handlers, where a blind retry is NOT safe.
+A connection warmed at process start would remove the class entirely; not built now because one
+retry solves the observed problem and keep-warm has its own failure modes on serverless.
+
+**Next:** Telephony (blocked on Leon picking a provider), or the accounts system once he shares
+the finance sheet.
