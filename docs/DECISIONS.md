@@ -1522,3 +1522,114 @@ connection inherits this, and the same first-query cost applies to cron and webh
 (where a retry is NOT automatically safe). A connection warmed at process start would remove
 the class entirely; not built now because one retry solves the observed problem and a
 keep-warm mechanism has its own failure modes on serverless.
+
+2026-09-03 · [files] Real file upload, replacing the pasted-URL stub. Attachments hang off a
+lead or a student via two nullable FKs with a check constraint (exactly one parent), not a
+polymorphic `(entity, entity_id)` pair. A polymorphic pair would have needed the owning centre
+denormalised onto the attachment row for RLS to scope it, and that copy goes stale the moment a
+lead moves centres — a quiet way to leak a document across centres. Real FKs keep referential
+integrity and let every policy resolve the centre from the parent, so it is always current.
+
+Access is enforced twice in Postgres, on the row and on the object, because those are two
+different things a user could reach: `attachments` RLS governs the metadata, and Storage
+policies on `storage.objects` govern the bytes. Both call the same two helpers
+(`can_access_lead_files` / `can_access_student_files`), which are `security definer` for a
+specific reason: without it the `leads` lookup inside a policy is itself filtered by leads' RLS,
+so accounts and academics — which legitimately hold `file.read` but NOT `lead.read` — would find
+no parent row and be denied their own files. Object keys are `<kind>/<parent id>/<uuid>-<name>`
+because the Storage policies parse those first two segments; `buildStoragePath` and migration
+0031 must therefore change together, and `tests/attachments.spec.ts` pins the shape.
+
+The bucket and its object policies are wrapped in a guard on the `storage` schema existing. The
+test suite runs the same migration chain against a plain local Postgres with no Supabase
+Storage, and skipping there is correct rather than a compromise — there are no objects to
+protect on a database with no object store, and the `attachments` policies the tests actually
+exercise still apply.
+
+Two things found by testing rather than by reading. First, the soft-delete UPDATE returns rows,
+and Postgres applies the SELECT policy to the NEW row of a returning UPDATE — so with a select
+policy of plain `deleted_at is null`, removing a file failed with "new row violates row-level
+security policy". Fixed by making removed files visible to `file.delete` holders specifically,
+which is also the better rule: whoever can remove a document should be able to see what they
+removed, and the removal stays reversible. Second, the upload UI is a client component and
+needed the size limit and accepted extensions, so the constants and pure helpers live in
+`shared.ts` while `attachments.ts` keeps `server-only` — one number, used by both the form and
+the server-side check, that cannot drift.
+
+Counsellors get `file.read` + `file.upload` but deliberately NOT `file.delete`: dropping a
+signed agreement off a lead is not a counsellor's call. Nothing is ever hard-deleted — there is
+no DELETE policy on `attachments` at all, and removing a file only sets `deleted_at`, leaving
+the bytes in Storage. Signed URLs are minted per click rather than rendered into the list,
+because a signed URL is a bearer token: putting one in the markup would hand a working link to
+every document to anyone who views source, and leave them live in history.
+
+2026-09-03 · [registration] Public tokenised registration form. Submissions go through
+`resolveOrCreateLead()` then `applyAssignment()` like every other source (CLAUDE.md
+§ Non-negotiables 8) — it is a new front door, not a second ingestion route. That is what makes
+a student who fills the form twice, or who already exists from a Meta ad, one lead with several
+enquiries rather than a duplicate, and it means the form never decides who owns the lead.
+
+Which questions get asked is `field_keys`, naming `field_definitions` rows, so an admin adds a
+question by picking an existing lead field — including a custom one they invented — with no
+migration. The form's own key order is preserved rather than the field definitions' sort order:
+on a registration form the order is content, since it reads as a conversation.
+
+The security shape needed care, because this is the only unauthenticated write path a stranger
+can reach with nothing but a URL. Three things carry it. The token is 32 CSPRNG bytes, never
+derived from the form name, and is a capability to SUBMIT only — the page renders nothing about
+existing leads, so a leaked link exposes no data. `PUBLIC_CORE_FIELDS` is an allow-list mapping
+snake_case field keys to Drizzle column properties, so a submission can only ever reach the
+columns named there — never `stage_id`, `assigned_to`, `center_id` or `temperature`, even if an
+admin mistakenly adds one of those keys to a form. And answers are written onto a NEWLY created
+lead only: a second fill must not overwrite a counsellor's corrections, and the enquiry row
+keeps the full submission either way, so nothing the applicant typed is lost.
+
+Like the webhook handlers, this runs on the direct db connection rather than an RLS-bound
+client — an anonymous visitor has no session for a policy to bind to. RLS on
+`registration_forms` therefore protects the table from signed-in users who shouldn't manage
+forms; the token is what protects the public path.
+
+Known gap, stated rather than hidden: there is a honeypot but NO rate limiting. A determined
+script could still create many leads with fabricated phone numbers. Real protection belongs at
+the edge (Vercel WAF, Cloudflare Turnstile) rather than in a per-request database check, which
+would be both slower and easy to defeat; worth adding before the link is published widely.
+
+2026-09-03 · [tests] Switched Vitest to serial file execution (`fileParallelism: false`).
+The earlier entry accepted the cross-file race on the grounds it "has never been observed twice
+in a row" — it since has, and the registration suite (which creates and deletes leads) makes it
+likelier. Root cause is unchanged and is not a bug: the retargeting syncs scan the whole `leads`
+table because that is correct for AFD's volume, so a concurrent file's cleanup can delete a row
+mid-scan. Serial costs ~16s (9s → 25s). These suites are what prove the RLS boundaries hold, and
+a result that can't be trusted is worth less than the time saved.
+
+2026-09-03 · [ai] The `/ask` analyst. CLAUDE.md § AI analyst rules is the whole design: it must
+never generate SQL against the live database, and every tool must apply the same centre scoping
+as RLS. Both are structural here rather than instructed. The model chooses which of eight fixed
+tools to call and with what typed arguments; it never supplies a query, a table or a column, so
+the worst a hostile question can achieve is calling the wrong tool and getting a number back.
+`tests/ai-analyst.spec.ts` asserts that no tool exposes an argument named sql/query/table/column/
+where/filter/expression/raw, and that every schema sets `additionalProperties: false` — a
+guarantee about the surface, not a hope about the prompt.
+
+Scoping is derived by `analystScope()` exactly as the Insights page derives it (widest of the
+three `report.*` codes held), and `leadScopeWhere()` is written once and used by every tool: a
+scoping rule written five times is one that will eventually be written four times.
+`allowedCenterIds()` narrows a caller-supplied centre filter to what they may see, which is the
+specific hole the CLAUDE.md sentence warns about — the model passes a centre because the user
+named it, and without that narrowing the tool would answer. The Kannur-head-asking-about-Kochi
+case is a test.
+
+Tools return aggregates only — counts, rates, group labels. No name, phone or email can enter a
+tool result, so the analyst cannot become a route around the bulk-PII rule (§ Non-negotiables 6).
+Every question is written to `audit_log` for the same reason exports are.
+
+`scope.ts` reads the permission map directly instead of importing `can()`, because that module is
+`server-only` and a value import would make the scoping rules — the part most worth testing —
+untestable under Vitest. Same reasoning as `credentials.ts`.
+
+Model choice deliberately differs from CLAUDE.md's stack table, which names `claude-sonnet-4-6`.
+That entry predates the current model line-up, so the code defaults to `claude-opus-5` and reads
+`ANTHROPIC_MODEL` from the environment — configuration, not code (§ Non-negotiables 10), so Leon
+can trade quality for cost without a deploy. Flagged to him rather than silently chosen. The
+route returns a clear 503 when `ANTHROPIC_API_KEY` is unset, and the page says how to set it,
+rather than failing as a broken feature.

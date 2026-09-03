@@ -5,6 +5,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { getFieldSchema, type FieldSchemaEntry } from "@/lib/fields/get-field-schema";
 import { getRawFieldValue } from "@/lib/fields/field-column";
 import { formatDateIST } from "@/lib/format/date";
+import { createSignedUrl, listAttachments } from "@/lib/storage/attachments";
 import { createClient } from "@/lib/supabase/server";
 
 import type { StudentDetailRow } from "../types";
@@ -84,7 +85,22 @@ export default async function StudentPrintPage({ params }: { params: Promise<{ i
     return { field, display: formatPrintValue(field, rawValue(key), optionsByKey.get(key) ?? []) };
   }
 
-  const photoUrl = rawValue("photo_url");
+  /**
+   * Prefer a real uploaded photo over the pasted-URL field. `photo_url`
+   * was the stand-in from before Storage existed and is kept as a
+   * fallback so profiles filled in under the old flow still print with a
+   * picture. The signed URL is minted here, at render, because the bucket
+   * is private — an <img> tag cannot authenticate on its own.
+   */
+  const pastedPhotoUrl = rawValue("photo_url");
+  const uploadedPhoto = can(user, "file.read")
+    ? (await listAttachments(supabase, { kind: "student", id })).find(
+        (a) => a.mime_type.startsWith("image/") && (a.label ?? "").toLowerCase().includes("photo"),
+      )
+    : undefined;
+  const signedPhotoUrl = uploadedPhoto ? await createSignedUrl(supabase, uploadedPhoto.storage_path) : null;
+  const photoUrl =
+    signedPhotoUrl ?? (typeof pastedPhotoUrl === "string" && pastedPhotoUrl ? pastedPhotoUrl : null);
 
   return (
     <div className="relative mx-auto max-w-3xl p-8 print:p-0">
@@ -99,7 +115,7 @@ export default async function StudentPrintPage({ params }: { params: Promise<{ i
         simpler and doesn't distort the rest of the table's 4-column grid.
       */}
       <div className="absolute right-8 top-24 print:right-0 print:top-20">
-        <PhotoBox url={typeof photoUrl === "string" && photoUrl ? photoUrl : null} />
+        <PhotoBox url={photoUrl} />
       </div>
 
       <table className="w-full border-collapse border border-foreground text-sm">

@@ -211,6 +211,34 @@
       "when": 1788055927364,
       "tag": "0029_students_custom_field",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1788404958091,
+      "tag": "0030_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788404959091,
+      "tag": "0031_attachments_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788405752289,
+      "tag": "0032_registration_forms",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788405753289,
+      "tag": "0033_registration_forms_rls",
+      "breakpoints": true
     }
   ]
 }

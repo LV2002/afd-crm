@@ -1,7 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/auth"];
+/**
+ * `/r` is the public registration form. It is reached by prospective
+ * students who have no account and never will, so it must not be bounced
+ * to /login — the form's token is its own authorisation, and it grants
+ * only the right to submit.
+ */
+const PUBLIC_PATHS = ["/login", "/auth", "/r"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });

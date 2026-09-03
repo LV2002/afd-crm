@@ -15,6 +15,8 @@ import { getLeadDetail } from "@/lib/leads/get-lead-detail";
 import { formatDateIST } from "@/lib/format/date";
 import { formatINR } from "@/lib/format/currency";
 import { createClient } from "@/lib/supabase/server";
+import { AttachmentsPanel } from "@/components/files/attachments-panel";
+import { listAttachments } from "@/lib/storage/attachments";
 import { getWhatsAppThread, isWithinCustomerServiceWindow } from "@/lib/whatsapp/get-thread";
 
 import { ConfirmAdmissionForm } from "./confirm-admission-form";
@@ -106,6 +108,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     ? await Promise.all([getWhatsAppThread(supabase, id), isWithinCustomerServiceWindow(supabase, id)])
     : [[], false];
 
+  const canReadFiles = can(user, "file.read");
+  const attachments = canReadFiles ? await listAttachments(supabase, { kind: "lead", id }) : [];
+
   const { data: taskRows } = await supabase
     .from("tasks")
     .select("id, title, type, due_at, status")
@@ -181,6 +186,20 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           canSend={can(user, "whatsapp.send")}
           withinWindow={withinWhatsAppWindow}
         />
+      )}
+
+      {canReadFiles && (
+        <div className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">Files</h2>
+          <AttachmentsPanel
+            parentKind="lead"
+            parentId={id}
+            attachments={attachments}
+            canUpload={can(user, "file.upload")}
+            canDelete={can(user, "file.delete")}
+            labelSuggestions={["ID proof", "Marksheet", "Portfolio", "Signed agreement", "Fee receipt"]}
+          />
+        </div>
       )}
 
       <div className="flex flex-col gap-3">

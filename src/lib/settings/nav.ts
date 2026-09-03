@@ -72,6 +72,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage"],
   },
   {
+    href: "/settings/registration-forms",
+    label: "Registration Forms",
+    description: "Public links a student fills in themselves; answers arrive as leads",
+    permissions: ["settings.manage"],
+  },
+  {
     href: "/settings/tags",
     label: "Tags",
     description: "Labels a lead can carry, for segmentation and retargeting audiences",

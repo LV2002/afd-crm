@@ -19,6 +19,7 @@ export const PERMISSION_CATEGORIES = [
   "Enrolment",
   "Payments",
   "Academics",
+  "Files",
   "Reports",
   "Administration",
 ] as const;
@@ -186,6 +187,26 @@ export const PERMISSIONS = [
     label: "Manage batches",
     category: "Academics",
     description: "Create batches and assign students to them.",
+  },
+
+  // Files
+  {
+    code: "file.read",
+    label: "View files",
+    category: "Files",
+    description: "Open documents attached to a lead or student.",
+  },
+  {
+    code: "file.upload",
+    label: "Upload files",
+    category: "Files",
+    description: "Attach documents to a lead or student.",
+  },
+  {
+    code: "file.delete",
+    label: "Remove files",
+    category: "Files",
+    description: "Remove an attached document. The file is soft-deleted, never destroyed.",
   },
 
   // Reports
