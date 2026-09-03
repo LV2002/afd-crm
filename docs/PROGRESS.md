@@ -2288,3 +2288,31 @@ real form's label, in the same row-pairing as the physical document.
 **Next:** Telephony (click-to-call, call logging) — the last integration in the confirmed
 build order — or the accounts system Leon asked to leave for last, once he shares the
 finance sheet.
+
+## Session 25 — Renamed `/reports` → `/insights` (client-side URL filter workaround)
+
+Leon reported the Reports page silently failing to load — in every browser including
+Incognito, on both his local dev server and live Vercel production. Since those two
+environments share no backend, and both showed an identical network-level failure (not an
+app error), the cause had to be client-side: something on his machine/network blocking any
+URL containing the word "reports" (a known false-positive pattern with some antivirus web
+filters and system-wide ad blockers). Rather than asking him to diagnose security software,
+renamed the route and every visible reference: `src/app/(app)/reports/` →
+`src/app/(app)/insights/`, nav item, sidebar icon map, dashboard admin widget link, page
+heading. Left `report.read`/`report.center`/`report.org` permission codes and the
+`lib/reports/aggregate-leads.ts` module path unchanged — neither is ever a browser URL. See
+docs/DECISIONS.md for the full reasoning.
+
+**Verified:** `npx tsc --noEmit` clean (after clearing a stale `.next` cache that still
+referenced the old path). `npm run build` succeeds — route manifest shows `/insights`,
+`/reports` is gone entirely.
+
+**Verify by:** in the browser, sidebar shows "Insights" instead of "Reports" and navigates
+to `/insights` correctly; the dashboard admin widget's "Marketing & funnel insights →" link
+works too.
+
+**Next:** Confirm with Leon that `/insights` actually loads now, on both local and
+production. If it still fails, the client-side-filter theory is wrong and the earlier
+"0 bytes transferred" network error needs re-diagnosing from scratch (e.g. checking whether
+his Mac has AdGuard/Little Snitch/antivirus web-shield software installed, or testing the
+production URL from a different network entirely, like his phone's cellular data).

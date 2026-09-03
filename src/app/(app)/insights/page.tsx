@@ -79,7 +79,7 @@ export default async function ReportsPage() {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-2xl font-semibold">Reports</h1>
+        <h1 className="text-2xl font-semibold">Insights</h1>
         <p className="text-sm text-muted-foreground">
           A current snapshot — {leadRows.length} lead{leadRows.length === 1 ? "" : "s"} in view.
           Not yet filterable by date range; see docs/DECISIONS.md.

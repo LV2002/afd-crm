@@ -1432,3 +1432,24 @@ fixtures; a lead can very rarely be deleted by another file's cleanup between th
 later write in the same request. Not chased down further — it didn't reproduce on a second
 run, and forcing serial test-file execution to eliminate it entirely would slow down the
 whole suite for a flake that has never been observed twice in a row.
+
+2026-09-03 · [insights] Renamed the `/reports` route (and its nav entry) to `/insights`,
+after the client reported the page silently failing to load — in every browser including
+Incognito, on both his local dev server AND the live Vercel production deployment. Since
+local dev and Vercel production share no backend infrastructure, and the failure mode
+(devtools showing 0 bytes transferred / a network-level error, not an application error)
+was identical on both, the common factor had to be client-side: something on the client's
+machine or network blocking any request whose URL contains the literal word "reports."
+This is a known false-positive pattern — some antivirus "web shield" products and
+system-wide ad/tracker blockers filter URLs matching common analytics-beacon path patterns
+(e.g. CSP `report-uri`/`report-to`, telemetry `/report` endpoints), and such filters
+typically inspect traffic below the browser (a system network extension or DNS-level
+filter), which is why disabling one browser's extensions or using Incognito didn't help.
+Rather than asking a non-technical client to diagnose or disable security software on his
+own machine, renamed the *browser-visible* route/link/label from "Reports" to "Insights"
+site-wide (`src/app/(app)/reports/` → `src/app/(app)/insights/`, `nav.ts`, `sidebar.tsx`
+icon map, the dashboard admin widget's link). Deliberately left untouched: the
+`report.read`/`report.center`/`report.org` permission codes (`src/lib/auth/permissions.ts`)
+and the `src/lib/reports/aggregate-leads.ts` module path — neither is ever a browser URL,
+so neither can trigger this class of filter, and renaming them would just be churn (plus,
+for the permission codes, a values a role's `role_permissions` rows already reference).

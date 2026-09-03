@@ -35,8 +35,8 @@ export async function AdminWidget() {
           <StatTile label="Admissions" value={admissionsThisMonth ?? 0} />
         </div>
         <div className="flex gap-4">
-          <Link href="/reports" className="text-sm font-medium hover:underline">
-            Marketing & funnel reports →
+          <Link href="/insights" className="text-sm font-medium hover:underline">
+            Marketing & funnel insights →
           </Link>
           <Link href="/settings" className="text-sm font-medium hover:underline">
             Settings →
