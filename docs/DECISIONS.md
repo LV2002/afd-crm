@@ -1453,3 +1453,42 @@ icon map, the dashboard admin widget's link). Deliberately left untouched: the
 and the `src/lib/reports/aggregate-leads.ts` module path — neither is ever a browser URL,
 so neither can trigger this class of filter, and renaming them would just be churn (plus,
 for the permission codes, a values a role's `role_permissions` rows already reference).
+
+2026-09-03 · [insights] **The client-side-filter theory above was WRONG.** The rename changed
+nothing, which is what forced a real diagnosis. Actual root cause: `insights/page.tsx` is the
+only *page* in the app that reads over a direct Postgres socket (`@/lib/db/client`) — grep
+confirms every other importer of it is an `api/cron/*` route, an `api/webhooks/*` route, or an
+`actions.ts` Server Action, none of which run on a browser GET. Every other page reads through
+Supabase's HTTP API. So this is the only screen that fails when `DATABASE_URL` is wrong or
+points at a host the environment can't route to — which is precisely the IPv6-only Supabase
+direct hostname, in BOTH of the client's environments (his home network locally, Vercel's
+functions in production). That is why it failed in both places at once while every other page
+looked fine, and why it looked like a client-side problem: the two environments were failing
+for the same *class* of reason, not a shared backend.
+
+The failure was invisible rather than loud because of a timeout interaction, measured
+directly rather than assumed: a *refused* connection throws in ~7ms, but an *unreachable*
+host (packets dropped, no RST) doesn't error at all — postgres.js stalls for its
+`connect_timeout`, which defaults to **30s**. Locally that meant the dev server printed
+"✓ Compiled /reports" and then never a GET line, because the request genuinely hadn't
+finished. On Vercel it was worse: functions are killed at ~10-15s, well before 30s, so the
+function died mid-request and the browser got a bare "network error" with **0 bytes
+transferred** and nothing in the server logs — the exact symptom screenshotted, and one that
+looks nothing like a database problem.
+
+Two fixes, both about making this legible rather than papering over it:
+1. `connect_timeout: 8` in `client.ts`. The specific number matters — it must fail *inside*
+   a Vercel function's lifetime so the app can render an error page, rather than being killed
+   mid-response and returning nothing. Verified empirically: 8.0s, code `CONNECT_TIMEOUT`.
+2. `isDatabaseUnreachable()` + a `DatabaseUnreachable` panel on the Insights page naming
+   `DATABASE_URL` and the pooler string. Deliberately matches *socket* errors only, never
+   SQLSTATE query errors (`42703` undefined column, `23505` unique violation, `42501` RLS
+   denial) — a config message shown in place of a real bug would be worse than the crash it
+   replaced. Pinned by `tests/db-unreachable.spec.ts`.
+
+Not done, considered: moving this page onto the Supabase HTTP client to remove the direct
+socket entirely. Rejected because the direct client is a deliberate design choice here (the
+page must serve aggregate counts to roles like accounts/academics that don't hold `lead.read`,
+without exposing per-lead PII — see the page's own header comment), and the service-role key
+is forbidden in browser-reachable routes by CLAUDE.md § Non-negotiables 3. The connection is
+the right architecture; it just needed to fail honestly.

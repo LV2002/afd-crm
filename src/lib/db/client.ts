@@ -31,9 +31,24 @@ function getConnectionString() {
  * this is required for pooled connections and a no-op against a direct
  * one — safe either way. See docs/GETTING-STARTED.md for which
  * connection string to use where.
+ *
+ * `connect_timeout` is lowered from postgres.js's 30s default to 8s
+ * deliberately, and the number matters. When DATABASE_URL points at a
+ * host that *drops* packets rather than refusing them — which is exactly
+ * what Supabase's IPv6-only direct hostname does from a network without
+ * IPv6 routing — the connection neither succeeds nor errors; it stalls
+ * for the whole timeout. A refused port throws in milliseconds, so this
+ * only ever bites in the unreachable case, and it bit hard: at 30s a
+ * Vercel function (killed at 10-15s) died mid-request and the browser
+ * got a bare "network error" with zero bytes and no server log, while
+ * locally the dev server printed "Compiled" and then simply never
+ * finished the request. 8s fails *inside* the function's lifetime, so a
+ * misconfigured DATABASE_URL surfaces as a readable error page (see
+ * `isDatabaseUnreachable`) instead of an unexplained dead tab.
  */
 const client =
-  globalThis.__afdDbClient ?? postgres(getConnectionString(), { max: 1, prepare: false });
+  globalThis.__afdDbClient ??
+  postgres(getConnectionString(), { max: 1, prepare: false, connect_timeout: 8 });
 
 if (process.env.NODE_ENV !== "production") {
   globalThis.__afdDbClient = client;
@@ -50,3 +65,27 @@ export const db = drizzle(client, { schema });
  * should take this type and let the caller own the transaction boundary.
  */
 export type DbExecutor = typeof db | Parameters<Parameters<(typeof db)["transaction"]>[0]>[0];
+
+/**
+ * True when an error is the connection never being established at all —
+ * a wrong or unreachable DATABASE_URL — rather than a failure of the
+ * query itself. Callers that render UI use this to show a configuration
+ * message instead of a generic crash; it deliberately does NOT match
+ * query-level errors (a bad column, a constraint violation), because
+ * those are real bugs and must keep surfacing as such.
+ */
+const UNREACHABLE_CODES = new Set([
+  "CONNECT_TIMEOUT", // host accepted no connection within connect_timeout — unroutable address
+  "ECONNREFUSED", // nothing listening on that port
+  "ENOTFOUND", // hostname doesn't resolve
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "ETIMEDOUT",
+  "ECONNRESET",
+]);
+
+export function isDatabaseUnreachable(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && UNREACHABLE_CODES.has(code);
+}
