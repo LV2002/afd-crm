@@ -37,6 +37,36 @@ describe("isDatabaseUnreachable", () => {
     expect(isDatabaseUnreachable(errorWithCode("42501"))).toBe(false);
   });
 
+  it("matches through a Drizzle wrapper, which puts the driver error on .cause", () => {
+    // Drizzle 0.45 throws DrizzleQueryError with the postgres.js error as
+    // `cause`, so the socket code is never on the top-level error. Reading
+    // only the top level made this check silently never fire.
+    const wrapped = Object.assign(new Error("Failed query: select 1"), {
+      cause: errorWithCode("CONNECT_TIMEOUT"),
+    });
+    expect(isDatabaseUnreachable(wrapped)).toBe(true);
+  });
+
+  it("matches through several layers of wrapping", () => {
+    const inner = errorWithCode("ENOTFOUND");
+    const mid = Object.assign(new Error("driver"), { cause: inner });
+    const outer = Object.assign(new Error("Failed query"), { cause: mid });
+    expect(isDatabaseUnreachable(outer)).toBe(true);
+  });
+
+  it("does not hang on a self-referential cause chain", () => {
+    const loop = new Error("loops forever") as Error & { cause?: unknown };
+    loop.cause = loop;
+    expect(isDatabaseUnreachable(loop)).toBe(false);
+  });
+
+  it("does not match a wrapped query error", () => {
+    const wrapped = Object.assign(new Error("Failed query: select bogus"), {
+      cause: errorWithCode("42703"),
+    });
+    expect(isDatabaseUnreachable(wrapped)).toBe(false);
+  });
+
   it("does not match an error carrying no code, or a non-error value", () => {
     expect(isDatabaseUnreachable(new Error("something went wrong"))).toBe(false);
     expect(isDatabaseUnreachable("ECONNREFUSED")).toBe(false);

@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { can, getCurrentUser } from "@/lib/auth/session";
-import { db, isDatabaseUnreachable } from "@/lib/db/client";
+import { db, isDatabaseUnreachable, withDeadline } from "@/lib/db/client";
 import { centers, leads, pipelineStages, profiles } from "@/lib/db/schema";
 import {
   aggregateCentrePerformance,
@@ -78,25 +78,32 @@ export default async function InsightsPage() {
   // look like a broken page. Catch it here and say so plainly; anything
   // else is a real bug and still throws. See docs/DECISIONS.md.
   let data;
+  console.log("[insights] querying database…");
   try {
-    data = await Promise.all([
-      db
-        .select({
-          id: leads.id,
-          assignedTo: leads.assignedTo,
-          centerId: leads.centerId,
-          stageId: leads.stageId,
-          firstTouchSource: leads.firstTouchSource,
-        })
-        .from(leads)
-        .where(leadWhere),
-      db
-        .select({ id: pipelineStages.id, name: pipelineStages.name, sortOrder: pipelineStages.sortOrder, stageType: pipelineStages.stageType })
-        .from(pipelineStages),
-      db.select({ id: centers.id, name: centers.name }).from(centers),
-      db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles),
-    ]);
+    data = await withDeadline(
+      Promise.all([
+        db
+          .select({
+            id: leads.id,
+            assignedTo: leads.assignedTo,
+            centerId: leads.centerId,
+            stageId: leads.stageId,
+            firstTouchSource: leads.firstTouchSource,
+          })
+          .from(leads)
+          .where(leadWhere),
+        db
+          .select({ id: pipelineStages.id, name: pipelineStages.name, sortOrder: pipelineStages.sortOrder, stageType: pipelineStages.stageType })
+          .from(pipelineStages),
+        db.select({ id: centers.id, name: centers.name }).from(centers),
+        db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles),
+      ]),
+      12_000,
+      "Insights database query",
+    );
+    console.log("[insights] database returned OK");
   } catch (error) {
+    console.error("[insights] database query failed:", error);
     if (isDatabaseUnreachable(error)) return <DatabaseUnreachable />;
     throw error;
   }
