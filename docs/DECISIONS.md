@@ -1711,3 +1711,23 @@ issued. The instalment agreement uses A4 *landscape*: its original is A5 landsca
 two-column design needs the width, so printing the same layout on A4 keeps the proportions and
 makes it markedly more legible, which matters on a document someone signs. Type sizes were
 raised accordingly — they had been set for the smaller sheet.
+
+2026-09-03 · [bug] `INSTALMENT_SLOTS` was exported from `fee-actions.ts`, which carries
+`"use server"`. Next.js rewrites EVERY export of such a file into a server-action stub, so the
+client received something that was not an array. It reached the client's browser as two errors
+that name neither the file nor the real cause — `A "use server" file can only export async
+functions, found object` and `..._WEBPACK_IMPORTED_MODULE__.INSTALMENT_SLOTS.map is not a
+function` — and neither `tsc` nor `next build` catches it, because the types are entirely
+consistent and the directive's constraint is invisible to both.
+
+Fixed by moving the constant to `instalment-plan.ts`, the pure module, where it belonged anyway.
+Added `tests/use-server-exports.spec.ts`, which scans every `"use server"` file for a non-async
+export — type-only exports are erased before the directive matters, so they are not flagged. The
+guard was verified by deliberately reintroducing the bug and watching it fail, then removing it;
+a scan that has never been seen to fail is not evidence of anything.
+
+2026-09-03 · [ux] Added a pointer on the Student Profile Forms page saying the questions are
+edited in Settings → Custom Fields. Leon went looking for a "student profile form" entry in
+Settings and found the deleted Registration Forms gone — reasonable, since nothing said where
+the questions actually live. They are the student `field_definitions`, shared with the printed
+profile, which is why there is no separate form builder: one definition, one form, one printout.

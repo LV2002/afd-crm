@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { INSTALMENT_SLOTS, saveFeePlan, type FeeFormState } from "@/lib/enrolment/fee-actions";
+import { saveFeePlan, type FeeFormState } from "@/lib/enrolment/fee-actions";
+import { INSTALMENT_SLOTS } from "@/lib/enrolment/instalment-plan";
 import { formatINR } from "@/lib/format/currency";
 
 const initialState: FeeFormState = {};

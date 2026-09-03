@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { getStudentFieldLabels } from "@/lib/profile-form/field-labels";
@@ -41,13 +43,25 @@ export default async function ProfileFormsPage() {
         <p className="text-sm text-muted-foreground">
           Forms sent to students who are joining. {submitted.length} submitted of {all.length} sent.
         </p>
+        {/*
+          The questions are not edited here — they are the student field
+          definitions, shared with the printed profile. Saying so where
+          someone looks for them saves a hunt through Settings.
+        */}
+        <p className="mt-1 text-sm text-muted-foreground">
+          To change what the form asks, edit the student fields in{" "}
+          <Link href="/settings/fields" className="font-medium underline">
+            Settings → Custom Fields
+          </Link>
+          . A form link is created from an individual lead&apos;s page.
+        </p>
       </div>
 
       {all.length === 0 ? (
         <div className="rounded-lg border border-dashed p-10 text-center">
           <p className="text-sm text-muted-foreground">
             No profile forms yet. Open a lead who is joining and create their form link from the
-            Student profile form section.
+            Student profile form section on their page.
           </p>
         </div>
       ) : (
