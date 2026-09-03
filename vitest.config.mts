@@ -15,6 +15,23 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    /**
+     * Test files share one real Postgres, and several suites deliberately
+     * scan the WHOLE `leads` table because that is what their production
+     * code does (the retargeting syncs, correctly, for AFD's volume). Run
+     * in parallel, one file's cleanup can delete a row another file's scan
+     * has already read, producing a foreign-key violation unrelated to
+     * anything either test is asserting.
+     *
+     * docs/DECISIONS.md previously accepted that flake on the grounds it
+     * had never been seen twice; it since has, and adding the registration
+     * suite — which creates and deletes leads — makes it likelier still.
+     * Serial file execution costs about 16s (9s -> 25s) and removes the
+     * class entirely. These suites are what prove the RLS boundaries hold,
+     * so a result that cannot be trusted is worth far less than the time
+     * saved. Tests WITHIN a file still run normally.
+     */
+    fileParallelism: false,
     // RLS tests do real round trips against Postgres, including a schema
     // lookup pass in beforeAll — the default 5s hook timeout is too tight.
     hookTimeout: 30_000,

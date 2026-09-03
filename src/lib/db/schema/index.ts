@@ -10,6 +10,7 @@ export * from "./activity";
 export * from "./config";
 export * from "./finance";
 export * from "./files";
+export * from "./registration";
 export * from "./tags";
 export * from "./integrations";
 export * from "./webhooks";

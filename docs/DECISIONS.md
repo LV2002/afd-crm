@@ -1562,3 +1562,42 @@ no DELETE policy on `attachments` at all, and removing a file only sets `deleted
 the bytes in Storage. Signed URLs are minted per click rather than rendered into the list,
 because a signed URL is a bearer token: putting one in the markup would hand a working link to
 every document to anyone who views source, and leave them live in history.
+
+2026-09-03 · [registration] Public tokenised registration form. Submissions go through
+`resolveOrCreateLead()` then `applyAssignment()` like every other source (CLAUDE.md
+§ Non-negotiables 8) — it is a new front door, not a second ingestion route. That is what makes
+a student who fills the form twice, or who already exists from a Meta ad, one lead with several
+enquiries rather than a duplicate, and it means the form never decides who owns the lead.
+
+Which questions get asked is `field_keys`, naming `field_definitions` rows, so an admin adds a
+question by picking an existing lead field — including a custom one they invented — with no
+migration. The form's own key order is preserved rather than the field definitions' sort order:
+on a registration form the order is content, since it reads as a conversation.
+
+The security shape needed care, because this is the only unauthenticated write path a stranger
+can reach with nothing but a URL. Three things carry it. The token is 32 CSPRNG bytes, never
+derived from the form name, and is a capability to SUBMIT only — the page renders nothing about
+existing leads, so a leaked link exposes no data. `PUBLIC_CORE_FIELDS` is an allow-list mapping
+snake_case field keys to Drizzle column properties, so a submission can only ever reach the
+columns named there — never `stage_id`, `assigned_to`, `center_id` or `temperature`, even if an
+admin mistakenly adds one of those keys to a form. And answers are written onto a NEWLY created
+lead only: a second fill must not overwrite a counsellor's corrections, and the enquiry row
+keeps the full submission either way, so nothing the applicant typed is lost.
+
+Like the webhook handlers, this runs on the direct db connection rather than an RLS-bound
+client — an anonymous visitor has no session for a policy to bind to. RLS on
+`registration_forms` therefore protects the table from signed-in users who shouldn't manage
+forms; the token is what protects the public path.
+
+Known gap, stated rather than hidden: there is a honeypot but NO rate limiting. A determined
+script could still create many leads with fabricated phone numbers. Real protection belongs at
+the edge (Vercel WAF, Cloudflare Turnstile) rather than in a per-request database check, which
+would be both slower and easy to defeat; worth adding before the link is published widely.
+
+2026-09-03 · [tests] Switched Vitest to serial file execution (`fileParallelism: false`).
+The earlier entry accepted the cross-file race on the grounds it "has never been observed twice
+in a row" — it since has, and the registration suite (which creates and deletes leads) makes it
+likelier. Root cause is unchanged and is not a bug: the retargeting syncs scan the whole `leads`
+table because that is correct for AFD's volume, so a concurrent file's cleanup can delete a row
+mid-scan. Serial costs ~16s (9s → 25s). These suites are what prove the RLS boundaries hold, and
+a result that can't be trusted is worth less than the time saved.
