@@ -1,0 +1,1 @@
+ALTER TABLE "enrolments" ADD COLUMN "down_payment_paise" bigint DEFAULT 0 NOT NULL;

@@ -24,7 +24,7 @@ export default async function AskPage() {
         </p>
       </div>
       <AskPanel
-        configured={Boolean(process.env.ANTHROPIC_API_KEY)}
+        configured={Boolean(process.env.GEMINI_API_KEY)}
         suggestions={
           scope === "own"
             ? ["Where are my leads stuck?", "Why am I losing leads?", "How many leads am I yet to respond to?"]

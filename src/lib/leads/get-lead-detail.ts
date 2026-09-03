@@ -11,6 +11,9 @@ export interface LeadDetailRow {
   center_id: string | null;
   assigned_to: string | null;
   custom: Record<string, unknown> | null;
+  profile_form_token: string | null;
+  profile_form_submitted_at: string | null;
+  profile_form_data: Record<string, unknown> | null;
   [column: string]: unknown;
 }
 

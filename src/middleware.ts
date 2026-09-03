@@ -2,12 +2,12 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * `/r` is the public registration form. It is reached by prospective
- * students who have no account and never will, so it must not be bounced
- * to /login — the form's token is its own authorisation, and it grants
- * only the right to submit.
+ * `/f` is the student profile form a lead fills in themselves. They have no
+ * account and never will, so it must not be bounced to /login — the form's
+ * per-lead token is its own authorisation, and it grants only the right to
+ * submit that one lead's profile.
  */
-const PUBLIC_PATHS = ["/login", "/auth", "/r"];
+const PUBLIC_PATHS = ["/login", "/auth", "/f"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });

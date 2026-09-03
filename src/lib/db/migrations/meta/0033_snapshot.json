@@ -1,6 +1,6 @@
 {
-  "id": "703757a7-0270-4b26-861e-1f159d97e5d9",
-  "prevId": "70ad937b-21a6-45d4-92bd-54e71cb990ff",
+  "id": "98c494a3-7264-430a-928e-72a520dde41d",
+  "prevId": "dcdce7b7-2a73-4e10-ab54-ed5467d3827b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2228,6 +2228,30 @@
           "primaryKey": false,
           "notNull": false
         },
+        "profile_form_token": {
+          "name": "profile_form_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "profile_form_sent_at": {
+          "name": "profile_form_sent_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "profile_form_submitted_at": {
+          "name": "profile_form_submitted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "profile_form_data": {
+          "name": "profile_form_data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2333,7 +2357,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "leads_profile_form_token_unique": {
+          "name": "leads_profile_form_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "profile_form_token"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -3300,6 +3332,123 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.enrolment_instalments": {
+      "name": "enrolment_instalments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "enrolment_id": {
+          "name": "enrolment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sequence": {
+          "name": "sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "due_date": {
+          "name": "due_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_paise": {
+          "name": "amount_paise",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "enrolment_instalments_enrolment_idx": {
+          "name": "enrolment_instalments_enrolment_idx",
+          "columns": [
+            {
+              "expression": "enrolment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "enrolment_instalments_seq_uq": {
+          "name": "enrolment_instalments_seq_uq",
+          "columns": [
+            {
+              "expression": "enrolment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "enrolment_instalments_enrolment_id_enrolments_id_fk": {
+          "name": "enrolment_instalments_enrolment_id_enrolments_id_fk",
+          "tableFrom": "enrolment_instalments",
+          "tableTo": "enrolments",
+          "columnsFrom": [
+            "enrolment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "enrolment_instalments_sequence_positive": {
+          "name": "enrolment_instalments_sequence_positive",
+          "value": "sequence >= 1"
+        },
+        "enrolment_instalments_amount_positive": {
+          "name": "enrolment_instalments_amount_positive",
+          "value": "amount_paise > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.enrolments": {
       "name": "enrolments",
       "schema": "",
@@ -3366,11 +3515,23 @@
           "notNull": true,
           "default": 0
         },
+        "discount_name": {
+          "name": "discount_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "net_fee_paise": {
           "name": "net_fee_paise",
           "type": "bigint",
           "primaryKey": false,
           "notNull": true
+        },
+        "fee_notes": {
+          "name": "fee_notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "status": {
           "name": "status",
@@ -4300,158 +4461,6 @@
           "value": "(lead_id is not null and student_id is null) or (lead_id is null and student_id is not null)"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.registration_forms": {
-      "name": "registration_forms",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "token": {
-          "name": "token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'Registration Form'"
-        },
-        "center_id": {
-          "name": "center_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "field_keys": {
-          "name": "field_keys",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "intro_text": {
-          "name": "intro_text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "success_message": {
-          "name": "success_message",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "registration_forms_token_idx": {
-          "name": "registration_forms_token_idx",
-          "columns": [
-            {
-              "expression": "token",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "registration_forms_center_id_centers_id_fk": {
-          "name": "registration_forms_center_id_centers_id_fk",
-          "tableFrom": "registration_forms",
-          "tableTo": "centers",
-          "columnsFrom": [
-            "center_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "registration_forms_created_by_profiles_id_fk": {
-          "name": "registration_forms_created_by_profiles_id_fk",
-          "tableFrom": "registration_forms",
-          "tableTo": "profiles",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "registration_forms_token_unique": {
-          "name": "registration_forms_token_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.lead_tags": {

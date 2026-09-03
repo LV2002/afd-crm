@@ -229,15 +229,22 @@
     {
       "idx": 32,
       "version": "7",
-      "when": 1788405752289,
-      "tag": "0032_registration_forms",
+      "when": 1788420838730,
+      "tag": "0032_fees_instalments_profile_form",
       "breakpoints": true
     },
     {
       "idx": 33,
       "version": "7",
-      "when": 1788405753289,
-      "tag": "0033_registration_forms_rls",
+      "when": 1788420839730,
+      "tag": "0033_enrolment_instalments_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788421455392,
+      "tag": "0034_enrolment_down_payment",
       "breakpoints": true
     }
   ]

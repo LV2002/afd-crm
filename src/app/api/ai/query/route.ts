@@ -1,35 +1,26 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { ANALYST_TOOLS, runAnalystTool } from "@/lib/ai/tools";
+import { analystScope } from "@/lib/ai/tools/scope";
+import { GEMINI_MODEL, GeminiError, generateWithTools, type GeminiContent } from "@/lib/ai/gemini";
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
-import { anthropicToolDefinitions, runAnalystTool } from "@/lib/ai/tools";
-import { analystScope } from "@/lib/ai/tools/scope";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * The AI analyst endpoint.
+ * The AI analyst endpoint, running on Gemini's free tier.
  *
- * Claude is given a fixed set of tools and asked a question; it chooses
- * which to call. It never sees, writes or receives SQL — see
- * src/lib/ai/tools/index.ts for why that boundary is where it is.
- *
- * The loop runs server-side and the caller's own SessionUser is passed to
- * every tool, so the answer can only ever be built from data that caller
- * could already see.
+ * The provider is deliberately the only thing this file knows about the
+ * model. Which questions can be answered, and with whose data, is decided
+ * entirely by `@/lib/ai/tools`: Gemini picks a tool and arguments, this
+ * loop runs it with the caller's own SessionUser, and no SQL is ever
+ * generated (CLAUDE.md § AI analyst rules).
  */
 
 export const maxDuration = 60;
 
-/**
- * Configurable rather than hardcoded (CLAUDE.md § Non-negotiables 10). The
- * default is the current recommended model; an operator who wants to trade
- * quality for cost sets ANTHROPIC_MODEL without a deploy.
- */
-const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-opus-5";
-
-/** Bounded so a confused model cannot loop indefinitely on someone's bill. */
+/** Bounded so a confused model cannot loop indefinitely against the quota. */
 const MAX_TURNS = 6;
 
 const requestSchema = z.object({
@@ -57,9 +48,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "You don't have permission to use the analyst." }, { status: 403 });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
     return NextResponse.json(
-      { error: "The analyst isn't configured yet — ANTHROPIC_API_KEY is not set." },
+      { error: "The analyst isn't configured yet — GEMINI_API_KEY is not set." },
       { status: 503 },
     );
   }
@@ -76,65 +68,64 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Ask a question first." }, { status: 400 });
   }
 
-  const client = new Anthropic();
-  const messages: Anthropic.MessageParam[] = [
-    { role: "user", content: parsed.data.question },
-  ];
+  const contents: GeminiContent[] = [{ role: "user", parts: [{ text: parsed.data.question }] }];
+  const toolDeclarations = ANALYST_TOOLS.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.inputSchema,
+  }));
   const toolsUsed: string[] = [];
 
   try {
     for (let turn = 0; turn < MAX_TURNS; turn += 1) {
-      const response = await client.messages.create({
-        model: MODEL,
-        max_tokens: 4096,
-        system: systemPrompt(analystScope(user), user.centerIds.length),
-        tools: anthropicToolDefinitions(),
-        messages,
+      const result = await generateWithTools({
+        apiKey,
+        systemInstruction: systemPrompt(analystScope(user), user.centerIds.length),
+        contents,
+        tools: toolDeclarations,
       });
 
-      if (response.stop_reason !== "tool_use") {
-        const answer = response.content
-          .filter((block): block is Anthropic.TextBlock => block.type === "text")
-          .map((block) => block.text)
-          .join("\n")
-          .trim();
-
-        // Every question asked of the data is worth a row, even though the
-        // analyst only ever returns aggregates: it records who asked what,
-        // which is the same reason exports are audited.
+      if (result.functionCalls.length === 0) {
         const supabase = await createClient();
+        // Every question asked of the data is worth a row, even though the
+        // analyst only returns aggregates: it records who asked what, the
+        // same reason exports are audited.
         await writeAuditLog(supabase, {
           actorId: user.id,
           action: "ai.query",
           entityType: "ai",
-          after: { question: parsed.data.question, toolsUsed },
+          after: { question: parsed.data.question, toolsUsed, model: GEMINI_MODEL },
         });
 
         return NextResponse.json({
-          answer: answer || "I couldn't find an answer to that.",
+          answer: result.text || "I couldn't find an answer to that.",
           toolsUsed,
         });
       }
 
-      messages.push({ role: "assistant", content: response.content });
+      // Echo the model's own turn back before the results, or the next
+      // request loses the link between a call and its response.
+      contents.push({
+        role: "model",
+        parts: result.functionCalls.map((call) => ({ functionCall: call })),
+      });
 
-      // All tool results for one assistant turn must go back in a SINGLE
-      // user message, or the model learns to stop calling tools in parallel.
-      const results: Anthropic.ToolResultBlockParam[] = [];
-      for (const block of response.content) {
-        if (block.type !== "tool_use") continue;
-        toolsUsed.push(block.name);
-        const outcome = await runAnalystTool(block.name, block.input, { user });
-        results.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: JSON.stringify(outcome.ok ? outcome.result : { error: outcome.error }),
-          // Report a failed tool back as an error rather than dropping it,
-          // so the model can correct course instead of hanging.
-          is_error: !outcome.ok,
+      const responses: GeminiContent["parts"] = [];
+      for (const call of result.functionCalls) {
+        toolsUsed.push(call.name);
+        const outcome = await runAnalystTool(call.name, call.args, { user });
+        responses.push({
+          functionResponse: {
+            name: call.name,
+            // A failed tool is reported back as data rather than dropped,
+            // so the model can correct itself instead of hanging.
+            response: outcome.ok
+              ? { result: outcome.result }
+              : { error: outcome.error },
+          },
         });
       }
-      messages.push({ role: "user", content: results });
+      contents.push({ role: "user", parts: responses });
     }
 
     return NextResponse.json({
@@ -142,13 +133,27 @@ export async function POST(request: Request) {
       toolsUsed,
     });
   } catch (error) {
-    if (error instanceof Anthropic.AuthenticationError) {
-      return NextResponse.json({ error: "The analyst's API key was rejected." }, { status: 502 });
-    }
-    if (error instanceof Anthropic.RateLimitError) {
-      return NextResponse.json({ error: "The analyst is rate limited. Try again shortly." }, { status: 429 });
-    }
-    if (error instanceof Anthropic.APIError) {
+    if (error instanceof GeminiError) {
+      if (error.status === 429) {
+        return NextResponse.json(
+          { error: "The free Gemini quota is used up for now. Try again in a few minutes." },
+          { status: 429 },
+        );
+      }
+      if (error.status === 400 || error.status === 403) {
+        return NextResponse.json(
+          { error: `The analyst couldn't run: ${error.message}` },
+          { status: 502 },
+        );
+      }
+      if (error.status === 404) {
+        return NextResponse.json(
+          {
+            error: `Gemini doesn't recognise the model "${GEMINI_MODEL}". Set GEMINI_MODEL to a current model name.`,
+          },
+          { status: 502 },
+        );
+      }
       return NextResponse.json({ error: `The analyst failed: ${error.message}` }, { status: 502 });
     }
     throw error;
