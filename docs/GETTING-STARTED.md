@@ -65,15 +65,26 @@ git add . && git commit -m "spec" && git push
 The service-role key bypasses every RLS policy you are about to write. If it reaches
 GitHub, rotate it immediately in Supabase.
 
-**`DATABASE_URL` on Vercel must be the pooled connection string, not the direct one.**
-Supabase's direct connection host (`db.xxxxx.supabase.co:5432`, the one above) resolves to an
-IPv6-only address in many regions — fine from your own machine, but Vercel's serverless
-functions can't reach it at all, and every write that goes through Drizzle directly
-(`resolveOrCreateLead()`, cron jobs, CSV import, ...) fails with `getaddrinfo ENOTFOUND`. In
+**Use the pooled connection string for `DATABASE_URL` — on Vercel *and* locally.**
+Supabase's direct connection host (`db.xxxxx.supabase.co:5432`, the one shown above) resolves
+to an IPv6-only address in many regions. Vercel's serverless functions can't reach it at all,
+and neither can plenty of ordinary home and office networks that have no IPv6 route. In
 Supabase's dashboard → Project Settings → Database → Connection string, copy the **"Transaction"
-pooler** string instead (port `6543`, host like `aws-0-<region>.pooler.supabase.com`) and set
-that as `DATABASE_URL` in Vercel's own Project Settings → Environment Variables. Your local
-`.env.local` can keep the direct connection string — this only matters for the deployed app.
+pooler** string instead (port `6543`, host like `aws-0-<region>.pooler.supabase.com`, and note
+the username becomes `postgres.<project-ref>` rather than plain `postgres`) and use that in
+both `.env.local` and Vercel's own Project Settings → Environment Variables.
+
+An earlier version of this doc said local could keep the direct string. That was wrong and
+cost a lot of debugging time, so it's worth knowing the failure signature: a direct host that
+can't be routed to doesn't refuse the connection, it **drops the packets**, so nothing errors
+— the request just stalls until the connect timeout. The symptom is a page that never loads
+with no error anywhere, and locally a dev server that logs `✓ Compiled` and then never a `GET`
+line. Because only the Insights page reads over a direct Postgres socket (everything else goes
+through Supabase's HTTP API), it can look like one broken page rather than a broken database
+connection. See docs/DECISIONS.md § 2026-09-03.
+
+Note that `.env.local` is read once when the dev server starts, so after editing it you must
+fully stop and restart `npm run dev` — a browser refresh will keep using the old value.
 
 ### 6. Export your current data
 Sheets → CSV, into `data/` (add `data/` to `.gitignore`). You won't import until
