@@ -1,10 +1,12 @@
-import { desc, inArray, isNull } from "drizzle-orm";
+import { desc, eq, inArray, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db/client";
 import { businessHours, centers, holidays, leads, pipelineStages, slaPolicies, stageHistory } from "@/lib/db/schema";
 import type { DayHours } from "@/lib/sla/business-hours";
+import { dueEscalations, policyEscalationSteps } from "@/lib/sla/escalations";
 import { evaluateLeadSla } from "@/lib/sla/evaluate-sla";
+import { notify } from "@/lib/notifications/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +18,15 @@ export const dynamic = "force-dynamic";
  * CRON_SECRET, which only Vercel's own cron invocation (configured in
  * vercel.json) and a manually-authorized call know.
  *
- * Deliberately does NOT run the escalation ladder's notify_roles/
- * notify_owner/unassign/requeue side effects yet — there's no
- * `notifications` table to notify through (same gap already noted for the
- * assignment engine, docs/PROGRESS.md). `flag_breach` is the one escalation
- * action this sweep already delivers, since that's exactly what setting
- * `sla_breached` is. See docs/DECISIONS.md.
+ * The escalation ladder is live: `notify_roles`, `notify_owner` and
+ * `unassign` all take effect, and `flag_breach` is delivered by setting
+ * `sla_breached`. `requeue` is still not implemented, deliberately — the
+ * data model defines no queue for it to mean anything against, and a
+ * switch that silently does nothing is exactly what this sweep spent
+ * months being. When a queue exists, this is where it goes.
+ *
+ * A rung fires once, not every hour: `leads.sla_escalated_at_hours` records
+ * the highest rung already reached, and clears when the SLA clears.
  */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -37,7 +42,7 @@ export async function GET(request: Request) {
     db.select({ id: pipelineStages.id, stageType: pipelineStages.stageType }).from(pipelineStages),
     db.select().from(businessHours),
     db.select().from(holidays),
-    db.select({ id: centers.id, timezone: centers.timezone }).from(centers),
+    db.select({ id: centers.id, name: centers.name, timezone: centers.timezone }).from(centers),
   ]);
 
   const enabledPolicies = activePolicies.filter((p) => p.isActive);
@@ -94,6 +99,23 @@ export async function GET(request: Request) {
   const toClear: string[] = [];
   let breachedCount = 0;
 
+  const policyById = new Map(enabledPolicies.map((p) => [p.id, p]));
+  const centerNameById = new Map(centerRows.map((c) => [c.id, c.name]));
+
+  /** Which policy breached a lead, and by how much — for the breach copy. */
+  const breachPolicyName = new Map<string, string>();
+  const breachHoursOverdue = new Map<string, number>();
+
+  /** Escalations to deliver after the status writes, so the ladder never blocks them. */
+  const pendingEscalations: Array<{
+    lead: (typeof evaluableLeads)[number];
+    policyName: string;
+    atHours: number;
+    notifyRoles: string[];
+    notifyOwner: boolean;
+    unassign: boolean;
+  }> = [];
+
   for (const lead of evaluableLeads) {
     const timeZone = (lead.centerId && timeZoneByCenter.get(lead.centerId)) || "Asia/Kolkata";
     const centerBusinessHours = (lead.centerId && businessHoursByCenter.get(lead.centerId)) || [];
@@ -110,12 +132,38 @@ export async function GET(request: Request) {
       now,
     });
 
-    if (result.breached) breachedCount++;
+    if (result.breached) {
+      breachedCount++;
+      const policy = result.policyId ? policyById.get(result.policyId) : undefined;
+      if (policy) {
+        breachPolicyName.set(lead.id, policy.name);
+        breachHoursOverdue.set(lead.id, Math.max(0, result.elapsedHours - policy.targetHours));
+      }
+    }
 
     if (result.breached && !lead.slaBreached) {
       toBreach.push(lead.id);
     } else if (!result.breached && lead.slaBreached) {
       toClear.push(lead.id);
+    }
+
+    // The ladder only climbs while the lead is actually breaching. A lead
+    // that has been worked has no rungs due, and clearing the record below
+    // means one that goes bad again starts from the bottom.
+    if (result.breached && result.policyId) {
+      const policy = policyById.get(result.policyId);
+      const steps = policyEscalationSteps(policy?.escalations);
+      const due = dueEscalations(steps, result.elapsedHours, lead.slaEscalatedAtHours);
+      for (const step of due) {
+        pendingEscalations.push({
+          lead,
+          policyName: policy?.name ?? "SLA",
+          atHours: step.atHours,
+          notifyRoles: step.notifyRoles,
+          notifyOwner: step.notifyOwner,
+          unassign: step.unassign,
+        });
+      }
     }
   }
 
@@ -123,7 +171,75 @@ export async function GET(request: Request) {
     await db.update(leads).set({ slaBreached: true }).where(inArray(leads.id, toBreach));
   }
   if (toClear.length > 0) {
-    await db.update(leads).set({ slaBreached: false }).where(inArray(leads.id, toClear));
+    // Clearing the rung too: a lead that was rescued and later goes bad
+    // again deserves the ladder from the bottom, not silence because it
+    // once reached 72 hours.
+    await db
+      .update(leads)
+      .set({ slaBreached: false, slaEscalatedAtHours: null })
+      .where(inArray(leads.id, toClear));
+  }
+
+  // Newly breached leads get the plain breach notification. Only NEW ones:
+  // a lead that has been breaching for a week is not news every hour.
+  for (const leadId of toBreach) {
+    const lead = evaluableLeads.find((l) => l.id === leadId);
+    if (!lead) continue;
+    await notify({
+      eventKey: "lead.sla_breached",
+      context: {
+        lead_name: lead.studentName,
+        lead_number: lead.leadNumber,
+        policy_name: breachPolicyName.get(lead.id) ?? "SLA",
+        hours_overdue: Math.round(breachHoursOverdue.get(lead.id) ?? 0),
+        center_name: lead.centerId ? centerNameById.get(lead.centerId) : null,
+      },
+      href: `/leads/${lead.id}`,
+      entityType: "leads",
+      entityId: lead.id,
+      centerId: lead.centerId,
+      ownerId: lead.assignedTo,
+    });
+  }
+
+  let escalated = 0;
+  let unassigned = 0;
+  for (const step of pendingEscalations) {
+    const { lead } = step;
+
+    await notify({
+      eventKey: "lead.sla_escalated",
+      context: {
+        lead_name: lead.studentName,
+        lead_number: lead.leadNumber,
+        policy_name: step.policyName,
+        at_hours: step.atHours,
+        center_name: lead.centerId ? centerNameById.get(lead.centerId) : null,
+      },
+      href: `/leads/${lead.id}`,
+      entityType: "leads",
+      entityId: lead.id,
+      centerId: lead.centerId,
+      ownerId: lead.assignedTo,
+      overrideRoles: step.notifyRoles,
+      overrideNotifyOwner: step.notifyOwner,
+    });
+
+    // Recorded even when the notification reached nobody. The rung has
+    // been climbed either way, and re-firing it every hour because no role
+    // was configured would be the worse failure.
+    await db
+      .update(leads)
+      .set({
+        slaEscalatedAtHours: step.atHours,
+        // `unassign` sends the lead back to the orphan queue, which is
+        // where a centre head picks up work nobody is doing.
+        ...(step.unassign ? { assignedTo: null } : {}),
+      })
+      .where(eq(leads.id, lead.id));
+
+    escalated += 1;
+    if (step.unassign) unassigned += 1;
   }
 
   return NextResponse.json({
@@ -131,5 +247,7 @@ export async function GET(request: Request) {
     breached: breachedCount,
     newlyBreached: toBreach.length,
     cleared: toClear.length,
+    escalated,
+    unassigned,
   });
 }

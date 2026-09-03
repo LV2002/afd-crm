@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { NotificationBell } from "@/components/layout/notification-bell";
 import { Sidebar } from "@/components/layout/sidebar";
 import { UserMenu } from "@/components/layout/user-menu";
 import { navItemsFor } from "@/lib/auth/nav";
@@ -27,7 +28,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex flex-1 flex-col print:block">
         <header className="flex h-14 items-center justify-between border-b px-4 print:hidden">
           <span className="text-sm font-medium md:hidden">AFD India CRM</span>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-1">
+            <NotificationBell />
             <UserMenu user={user} />
           </div>
         </header>

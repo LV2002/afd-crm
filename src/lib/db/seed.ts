@@ -11,6 +11,7 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import { eq } from "drizzle-orm";
 
 import { PERMISSIONS, type PermissionCode, type PermissionScope } from "../auth/permissions";
+import { NOTIFICATION_EVENTS } from "../notifications/events";
 import { ensurePermissionsSeeded } from "../auth/seed-permissions";
 import { db } from "./client";
 import {
@@ -18,6 +19,7 @@ import {
   dropdownCategories,
   dropdownOptions,
   fieldDefinitions,
+  notificationSettings,
   orgSettings,
   pipelineStages,
   profiles,
@@ -830,6 +832,36 @@ async function seedUsers(
   console.log(`seeded ${USER_SEEDS.length} users (password: ${SEED_PASSWORD})`);
 }
 
+/**
+ * One settings row per event in NOTIFICATION_EVENTS.
+ *
+ * Insert-only on conflict: an admin who has rewritten the copy or changed
+ * which roles hear about a breach must not have that undone by a re-seed.
+ * A new event added in code does get its row on the next seed, which is the
+ * one thing this needs to do to an existing install — and `notify()` falls
+ * back to these same defaults meanwhile, so a fresh event works on deploy
+ * whether or not anyone remembers to run the seed.
+ */
+async function seedNotificationSettings(roleIds: Record<string, string>) {
+  for (const event of NOTIFICATION_EVENTS) {
+    await db
+      .insert(notificationSettings)
+      .values({
+        eventKey: event.key,
+        isEnabled: true,
+        notifyRoles: event.defaultNotifyRoleCodes
+          .map((code) => roleIds[code])
+          .filter((id): id is string => Boolean(id)),
+        notifyOwner: event.defaultNotifyOwner,
+        channels: ["in_app"],
+        titleTemplate: event.defaultTitle,
+        bodyTemplate: event.defaultBody,
+      })
+      .onConflictDoNothing({ target: notificationSettings.eventKey });
+  }
+  console.log(`seeded ${NOTIFICATION_EVENTS.length} notification settings`);
+}
+
 async function main() {
   await seedOrgSettings();
   await seedTerminology();
@@ -839,6 +871,7 @@ async function main() {
   await seedDropdowns();
   await seedPipelineStages();
   await seedFieldDefinitions();
+  await seedNotificationSettings(roleIds);
   await seedUsers(roleIds, centerIds);
   console.log("done");
   process.exit(0);

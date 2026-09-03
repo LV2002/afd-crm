@@ -2554,3 +2554,50 @@ across several calls in one turn, and reasoning excluded from the answer.
 
 **Verified:** `npx tsc --noEmit` clean, `next lint` clean (one pre-existing warning), `npm run
 build` succeeds.
+
+## Session 34 — Notifications, and the escalation ladder finally does something
+
+The CRM could not tell anyone anything. `sla_policies.escalations` had been storing "at 48 hours,
+notify the centre head" since Phase 2 and doing nothing with it; accounts learned about a
+confirmed admission by refreshing a page. That is closed.
+
+**Six events, each with a real emit site** — lead assigned, SLA breached, SLA escalation step,
+admission confirmed, student profile form submitted, payment recorded. The events are fixed in
+code (`lib/notifications/events.ts`) on the same discipline as the permission primitives: a key
+exists because something actually calls it.
+
+**Settings → Notifications** is where an admin decides the rest, with no deploy: whether each
+event fires, which roles hear it, whether the lead's owner hears it, and the exact wording of the
+title and message. The copy is `{{lead_name}}`-style templates, and the screen lists the variables
+each event supplies and warns in red if you use one it doesn't.
+
+**A bell in the top bar** with an unread count, and a **/notifications** page — all, unread, mark
+read, mark all read, dismiss, and a link straight through to the lead or enrolment.
+
+**Nobody is told about something they could not open.** A notification carries a student's name,
+so a Kannur centre head never hears about a Kochi breach. The lead's owner is exempt (it is their
+lead), and nobody is ever notified about their own action.
+
+**The escalation ladder is live.** `notify_roles`, `notify_owner` and `unassign` all take effect,
+and a rung fires once rather than every hour — a new `leads.sla_escalated_at_hours` column records
+how far up a lead has climbed, and clears when the SLA clears. `requeue` remains unimplemented and
+is now documented as such rather than silently ignored: the data model defines no queue for it.
+
+**Privacy:** `notifications` is readable only by its own recipient — no centre scope, no all-scope,
+not even for an admin — and has no INSERT policy at all, so only the system can create one.
+
+**Tests:** `tests/notifications.spec.ts` (27, no database) covers recipient resolution, template
+rendering and the ladder's fire-once logic; `tests/rls.spec.ts` gains 8 assertions that a
+notification is readable only by its recipient, cannot be handed to someone else, and cannot be
+forged from a browser session.
+
+**Verified:** `npx tsc --noEmit` clean, `next lint` clean (one pre-existing warning), `npm run
+build` succeeds with both new routes, and every test that does not need a database passes. The
+database-backed specs — including the new RLS assertions — need a run against real Postgres; this
+container has none.
+
+**Needs Leon:** `npm run db:migrate` (0036–0038) and `npm run db:seed`. The seed is what creates
+the six settings rows; without it the events still fire on their built-in defaults, but the
+settings screen shows "Using defaults" until you save one.
+
+**Next:** collections (who owes what and since when), or telephony once a provider is chosen.

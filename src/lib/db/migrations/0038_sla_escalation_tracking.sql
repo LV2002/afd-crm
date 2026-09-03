@@ -1,0 +1,1 @@
+ALTER TABLE "leads" ADD COLUMN "sla_escalated_at_hours" integer;

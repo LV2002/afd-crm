@@ -106,6 +106,10 @@ const UNIVERSALLY_READABLE_TABLES = [
   "holidays",
   "fee_structures",
   "tags",
+  // Configuration, like the rest of this list — the copy is not secret and
+  // any signed-in user may read which events notify whom. The DELIVERED
+  // notifications are the opposite and are asserted separately below.
+  "notification_settings",
 ] as const;
 
 let roleIds: Record<(typeof ROLE_CODES)[number], string>;
@@ -1030,5 +1034,112 @@ describe("attachments are scoped by their PARENT lead/student, via file.* primit
         values ('lead/orphan.pdf', 'orphan.pdf', 'application/pdf', 1)
       `,
     ).rejects.toThrow(/attachments_one_parent/);
+  });
+});
+
+/**
+ * Notifications are personal mail.
+ *
+ * The policy is `recipient_id = auth.uid()` and nothing else — no centre
+ * scope, no all-scope escape hatch, not even for an admin. An admin who
+ * needs to know what happened has audit_log; reading everybody's messages
+ * is a surveillance feature nobody asked for. These tests are that
+ * sentence, executed.
+ */
+describe("notifications are readable only by their own recipient", () => {
+  let toCounsellorKochi: string;
+  let toAdmin: string;
+
+  beforeAll(async () => {
+    const [a] = await owner<Array<{ id: string }>>`
+      insert into notifications (recipient_id, event_key, title, body, center_id)
+      values (${fx.counsellor_kochi}, 'lead.assigned', 'RlsSpecTest notification', 'body', ${centerIds.kochi})
+      returning id
+    `;
+    toCounsellorKochi = a.id;
+
+    const [b] = await owner<Array<{ id: string }>>`
+      insert into notifications (recipient_id, event_key, title, body)
+      values (${fx.admin_a}, 'lead.assigned', 'RlsSpecTest admin notification', 'body')
+      returning id
+    `;
+    toAdmin = b.id;
+  });
+
+  afterAll(async () => {
+    await owner`delete from notifications where title like 'RlsSpecTest%'`;
+  });
+
+  it("the recipient reads their own", async () => {
+    const rows = await asUser(fx.counsellor_kochi, (tx) =>
+      tx<Array<{ id: string }>>`select id from notifications where id = ${toCounsellorKochi}`,
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("a colleague in the same centre cannot", async () => {
+    const rows = await asUser(fx.centerhead_kochi, (tx) =>
+      tx<Array<{ id: string }>>`select id from notifications where id = ${toCounsellorKochi}`,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("not even an admin can read somebody else's", async () => {
+    const rows = await asUser(fx.admin_a, (tx) =>
+      tx<Array<{ id: string }>>`select id from notifications where id = ${toCounsellorKochi}`,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("the admin still reads their own", async () => {
+    const rows = await asUser(fx.admin_a, (tx) =>
+      tx<Array<{ id: string }>>`select id from notifications where id = ${toAdmin}`,
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("the recipient can mark their own read", async () => {
+    await asUser(fx.counsellor_kochi, (tx) =>
+      tx`update notifications set read_at = now() where id = ${toCounsellorKochi}`,
+    );
+    const [row] = await owner<Array<{ read_at: Date | null }>>`
+      select read_at from notifications where id = ${toCounsellorKochi}
+    `;
+    expect(row.read_at).not.toBeNull();
+  });
+
+  it("nobody can hand their notification to somebody else", async () => {
+    // The WITH CHECK repeats the recipient test, so an UPDATE cannot
+    // rewrite recipient_id on the way past.
+    await asUser(fx.counsellor_kochi, (tx) =>
+      tx`update notifications set recipient_id = ${fx.admin_a} where id = ${toCounsellorKochi}`,
+    ).catch(() => undefined);
+
+    const [row] = await owner<Array<{ recipient_id: string }>>`
+      select recipient_id from notifications where id = ${toCounsellorKochi}
+    `;
+    expect(row.recipient_id).toBe(fx.counsellor_kochi);
+  });
+
+  it("a browser session cannot manufacture a notification at all", async () => {
+    // There is no INSERT policy. Notifications are written by the system
+    // on the direct connection, which is what stops one person sending
+    // another a message that looks like it came from the CRM.
+    await expect(
+      asUser(fx.admin_a, (tx) =>
+        tx`insert into notifications (recipient_id, event_key, title, body)
+           values (${fx.counsellor_kochi}, 'lead.assigned', 'RlsSpecTest forged', 'forged')`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("a dismissed notification stops being readable", async () => {
+    await asUser(fx.admin_a, (tx) =>
+      tx`update notifications set deleted_at = now() where id = ${toAdmin}`,
+    );
+    const rows = await asUser(fx.admin_a, (tx) =>
+      tx<Array<{ id: string }>>`select id from notifications where id = ${toAdmin}`,
+    );
+    expect(rows).toHaveLength(0);
   });
 });

@@ -11,6 +11,7 @@ import { confirmAdmission } from "@/lib/enrolment/confirm-admission";
 import { fieldColumn } from "@/lib/fields/field-column";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import { parseRupeesToPaise } from "@/lib/format/currency";
+import { notify } from "@/lib/notifications/notify";
 import { createClient } from "@/lib/supabase/server";
 
 export interface FormState {
@@ -326,6 +327,25 @@ export async function confirmAdmissionAction(
     entityType: "enrolments",
     entityId: result.enrolmentId,
     after: { leadId, course, mode, academicYear: academicYear.trim(), netFeePaise: result.netFeePaise },
+  });
+
+  // Accounts has work now, and until this existed they found out by
+  // refreshing a page. Notified after the transaction committed, so the
+  // message can never describe an admission that was rolled back.
+  await notify({
+    eventKey: "admission.confirmed",
+    context: {
+      lead_name: lead.studentName,
+      lead_number: lead.leadNumber,
+      course,
+      counsellor_name: user.fullName,
+    },
+    href: `/accounts/${result.enrolmentId}`,
+    entityType: "enrolments",
+    entityId: result.enrolmentId,
+    centerId: lead.centerId,
+    ownerId: lead.assignedTo,
+    actorId: user.id,
   });
 
   revalidatePath(`/leads/${leadId}`);

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
 import { leads } from "@/lib/db/schema";
+import { notify } from "@/lib/notifications/notify";
 
 import { getProfileFormByToken, type ProfileFormField } from "./get-form";
 
@@ -88,6 +89,34 @@ export async function submitProfileForm(
       updatedAt: new Date(),
     })
     .where(eq(leads.id, form.leadId));
+
+  // The counsellor who sent the link is waiting on this. Notified after
+  // the write, and never allowed to fail the submission: a student who
+  // filled the form in must always get their thank-you.
+  const [lead] = await db
+    .select({
+      studentName: leads.studentName,
+      leadNumber: leads.leadNumber,
+      centerId: leads.centerId,
+      assignedTo: leads.assignedTo,
+    })
+    .from(leads)
+    .where(eq(leads.id, form.leadId));
+
+  if (lead) {
+    await notify({
+      eventKey: "profile_form.submitted",
+      context: {
+        lead_name: lead.studentName,
+        lead_number: lead.leadNumber,
+        },
+      href: `/leads/${form.leadId}`,
+      entityType: "leads",
+      entityId: form.leadId,
+      centerId: lead.centerId,
+      ownerId: lead.assignedTo,
+    });
+  }
 
   return { success: "Thank you — your details have been received." };
 }

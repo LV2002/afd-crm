@@ -17,3 +17,4 @@ export * from "./ad-spend";
 export * from "./retargeting";
 export * from "./whatsapp";
 export * from "./whatsapp-broadcasts";
+export * from "./notifications";

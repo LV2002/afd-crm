@@ -1818,3 +1818,59 @@ Thought parts are filtered out of the answer text but kept in the echoed turn: t
 model's reasoning, not its answer, and showing them would put half-formed working in front of a
 counsellor. `tests/gemini-model.spec.ts` covers both, including several calls in one turn each
 carrying its own signature.
+
+2026-09-03 · [feature] Notifications, and the end of the inert escalation ladder.
+
+Until now the CRM could not tell anyone anything. `sla_policies.escalations` had stored
+`notify_roles` and `notify_owner` since Phase 2, an admin could edit them in Settings → SLA
+Policies, and nothing whatsoever happened — the sweep's own comment admitted it. The same gap left
+accounts finding out about a confirmed admission by refreshing a page.
+
+The events are FIXED IN CODE (`lib/notifications/events.ts`), on the same discipline as the
+permission primitives: a key exists because there is a real `notify()` call behind it, and one
+without a call site would be a switch in the admin UI that silently does nothing — which is
+precisely the bug being fixed. Six events ship, each with a genuine emit site: lead assigned, SLA
+breached, SLA escalation step, admission confirmed, profile form submitted, payment recorded.
+
+What IS configurable, per event, with no deploy: whether it fires, which roles hear it, whether
+the lead's owner hears it, and the exact copy. That is CLAUDE.md § What is configurable —
+"Notifications: which events notify which roles, on which channels, with what copy" — with one
+honest omission: only `in_app` is delivered. The `channels` column exists and defaults to
+`{in_app}`, but no channel picker is shown, because offering WhatsApp as a checkbox that does
+nothing would repeat the exact failure this work exists to correct. When a second channel actually
+delivers, the control goes in.
+
+Recipients are resolved with a rule worth stating: nobody is told about something they could not
+open anyway. The copy carries a student's name, so a Kannur centre head hearing about every Kochi
+breach is both noise and a quiet leak of the per-centre data the RLS policies spend their whole
+existence enforcing. Org-wide readers are recognised by their role's own `lead.read` scope, never
+by a role name (CLAUDE.md § Roles). The lead's owner is exempt from the centre test — it is their
+lead — and nobody is ever notified of their own action.
+
+`notifications` has a SELECT policy of `recipient_id = auth.uid()` and NO INSERT POLICY AT ALL.
+Notifications are written by the system on the direct connection, exactly as audit_log and lead
+assignment already are, so a browser session cannot manufacture a message that appears to come
+from the CRM. There is deliberately no centre- or all-scoped read path, not even for an admin: a
+notification is mail addressed to a person, and "the admin reads everyone's messages" is a
+surveillance feature nobody asked for. What an admin genuinely needs is already in audit_log.
+
+`notify()` never throws. A notification is a courtesy attached to some other piece of work — an
+admission being confirmed, a student submitting their form — and failing that work because the
+courtesy failed would be the wrong trade every time.
+
+Emission happens strictly AFTER the surrounding transaction commits, never inside it. `db`'s pool
+is `max: 1`, so a second connection opened while a transaction still holds the first would
+deadlock; and a notification about an admission that then rolls back would be a lie. That is why
+`resolveOrCreateLead()` was split into a transaction body and a thin wrapper.
+
+2026-09-03 · [schema] Added `leads.sla_escalated_at_hours` (migration 0038): the highest
+escalation rung a lead has already reached. Without it the hourly sweep would notify the same
+centre head about the same lead every hour until somebody touched it, which trains people to
+ignore notifications and is worse than having none. Cleared when the SLA clears, so a rescued lead
+that goes bad again climbs the ladder from the bottom. When several rungs come due at once — a
+lead untouched over a weekend crossing 24h, 48h and 72h — only the highest fires: the lower ones
+are implied by it, and three messages about one lead say nothing the last one doesn't.
+
+The ladder's `unassign` action is now implemented too (the lead returns to the orphan queue).
+`requeue` is still not, deliberately and on the record: the data model defines no queue for it to
+mean anything against, and implementing a guess would be worse than the honest gap.

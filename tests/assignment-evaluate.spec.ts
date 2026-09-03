@@ -59,6 +59,7 @@ function baseLead(overrides: Partial<Lead> = {}): Lead {
     lastActivityAt: null,
     nextFollowupAt: null,
     slaBreached: false,
+    slaEscalatedAtHours: null,
     consentStatus: null,
     consentSource: null,
     consentAt: null,

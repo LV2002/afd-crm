@@ -99,6 +99,14 @@ export const leads = pgTable(
     nextFollowupAt: timestamp("next_followup_at", { withTimezone: true }),
 
     slaBreached: boolean("sla_breached").notNull().default(false),
+    /**
+     * The highest escalation rung (`at_hours`) this lead has already been
+     * escalated to, so the sweep tells a centre head once rather than
+     * every hour until somebody touches the lead. Cleared when the SLA
+     * clears, so a lead that goes bad again escalates again from the
+     * bottom of the ladder.
+     */
+    slaEscalatedAtHours: integer("sla_escalated_at_hours"),
 
     consentStatus: text("consent_status"),
     consentSource: text("consent_source"),
