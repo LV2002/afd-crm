@@ -2539,3 +2539,18 @@ build` succeeds.
 
 **Needs Leon:** nothing — no new environment variable. If `GEMINI_MODEL` was set to
 `gemini-2.0-flash` while debugging, unset it so the CRM picks for itself.
+
+## Session 33 — Thought signatures
+
+**Fixed:** with the model discovered rather than hardcoded, `/ask` selected `gemini-3.8-flash` —
+a thinking model — and every question failed with *Function call is missing a thought_signature in
+functionCall parts*. The tool loop was rebuilding the model's turn from the function name and
+arguments, which drops the signature a thinking model needs to resume its own reasoning after a
+tool call. The model's parts are now echoed back exactly as they arrived. Its reasoning is kept
+out of the answer text but inside the echoed turn.
+
+**Tests:** three more in `tests/gemini-model.spec.ts` (12 total) — signature preserved, preserved
+across several calls in one turn, and reasoning excluded from the answer.
+
+**Verified:** `npx tsc --noEmit` clean, `next lint` clean (one pre-existing warning), `npm run
+build` succeeds.

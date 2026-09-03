@@ -113,12 +113,12 @@ export async function POST(request: Request) {
         });
       }
 
-      // Echo the model's own turn back before the results, or the next
-      // request loses the link between a call and its response.
-      contents.push({
-        role: "model",
-        parts: result.functionCalls.map((call) => ({ functionCall: call })),
-      });
+      // Echo the model's own turn back VERBATIM before the results, or
+      // the next request loses the link between a call and its response.
+      // Rebuilding the parts from name and args is not good enough: a
+      // thinking model attaches a `thoughtSignature` to each functionCall
+      // and rejects the follow-up without it.
+      contents.push({ role: "model", parts: result.parts });
 
       const responses: GeminiContent["parts"] = [];
       for (const call of result.functionCalls) {

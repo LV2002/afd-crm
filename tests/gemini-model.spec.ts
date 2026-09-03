@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // an override that skips discovery entirely, which is the point of it.
 delete process.env.GEMINI_MODEL;
 
-const { forgetResolvedModel, listUsableModels, resolveModel } = await import(
+const { forgetResolvedModel, generateWithTools, listUsableModels, resolveModel } = await import(
   "../src/lib/ai/gemini"
 );
 
@@ -144,5 +144,108 @@ describe("resolveModel", () => {
     stubFetch(modelListing([]));
 
     expect(await resolveModel("k")).toBe("gemini-2.5-flash");
+  });
+});
+
+describe("generateWithTools", () => {
+  /**
+   * Routes the model listing and the generate call to different
+   * responses, since resolving the model happens before generating.
+   */
+  function stubApi(generate: unknown) {
+    const spy = vi.fn(async (url: string) =>
+      url.includes(":generateContent") ? generate : modelListing(["gemini-3.8-flash"]),
+    );
+    vi.stubGlobal("fetch", spy);
+    return spy;
+  }
+
+  const args = {
+    apiKey: "k",
+    systemInstruction: "be useful",
+    contents: [{ role: "user" as const, parts: [{ text: "how many leads?" }] }],
+    tools: [],
+  };
+
+  it("returns the model's parts verbatim, thought signatures included", async () => {
+    // A thinking model rejects the follow-up request if the functionCall
+    // it gets back has lost its thoughtSignature:
+    //   "Function call is missing a thought_signature in functionCall parts."
+    // So the caller must echo these parts, not rebuild them from name+args.
+    stubApi({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  functionCall: { name: "leads_by_source", args: { days: 30 } },
+                  thoughtSignature: "sig-abc",
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    });
+
+    const turn = await generateWithTools(args);
+
+    expect(turn.functionCalls).toEqual([{ name: "leads_by_source", args: { days: 30 } }]);
+    expect(turn.parts).toEqual([
+      {
+        functionCall: { name: "leads_by_source", args: { days: 30 } },
+        thoughtSignature: "sig-abc",
+      },
+    ]);
+  });
+
+  it("keeps the signature on every call when the model asks for several at once", async () => {
+    stubApi({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [
+                { functionCall: { name: "a", args: {} }, thoughtSignature: "sig-1" },
+                { functionCall: { name: "b", args: {} }, thoughtSignature: "sig-2" },
+              ],
+            },
+          },
+        ],
+      }),
+    });
+
+    const turn = await generateWithTools(args);
+
+    expect(turn.parts.map((part) => part.thoughtSignature)).toEqual(["sig-1", "sig-2"]);
+  });
+
+  it("keeps the model's reasoning out of the answer but inside the echoed turn", async () => {
+    stubApi({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [
+                { text: "First I should count them.", thought: true },
+                { text: "You had 42 leads last month." },
+              ],
+            },
+          },
+        ],
+      }),
+    });
+
+    const turn = await generateWithTools(args);
+
+    expect(turn.text).toBe("You had 42 leads last month.");
+    expect(turn.parts).toHaveLength(2);
   });
 });
