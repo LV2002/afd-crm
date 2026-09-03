@@ -1601,3 +1601,35 @@ likelier. Root cause is unchanged and is not a bug: the retargeting syncs scan t
 table because that is correct for AFD's volume, so a concurrent file's cleanup can delete a row
 mid-scan. Serial costs ~16s (9s → 25s). These suites are what prove the RLS boundaries hold, and
 a result that can't be trusted is worth less than the time saved.
+
+2026-09-03 · [ai] The `/ask` analyst. CLAUDE.md § AI analyst rules is the whole design: it must
+never generate SQL against the live database, and every tool must apply the same centre scoping
+as RLS. Both are structural here rather than instructed. The model chooses which of eight fixed
+tools to call and with what typed arguments; it never supplies a query, a table or a column, so
+the worst a hostile question can achieve is calling the wrong tool and getting a number back.
+`tests/ai-analyst.spec.ts` asserts that no tool exposes an argument named sql/query/table/column/
+where/filter/expression/raw, and that every schema sets `additionalProperties: false` — a
+guarantee about the surface, not a hope about the prompt.
+
+Scoping is derived by `analystScope()` exactly as the Insights page derives it (widest of the
+three `report.*` codes held), and `leadScopeWhere()` is written once and used by every tool: a
+scoping rule written five times is one that will eventually be written four times.
+`allowedCenterIds()` narrows a caller-supplied centre filter to what they may see, which is the
+specific hole the CLAUDE.md sentence warns about — the model passes a centre because the user
+named it, and without that narrowing the tool would answer. The Kannur-head-asking-about-Kochi
+case is a test.
+
+Tools return aggregates only — counts, rates, group labels. No name, phone or email can enter a
+tool result, so the analyst cannot become a route around the bulk-PII rule (§ Non-negotiables 6).
+Every question is written to `audit_log` for the same reason exports are.
+
+`scope.ts` reads the permission map directly instead of importing `can()`, because that module is
+`server-only` and a value import would make the scoping rules — the part most worth testing —
+untestable under Vitest. Same reasoning as `credentials.ts`.
+
+Model choice deliberately differs from CLAUDE.md's stack table, which names `claude-sonnet-4-6`.
+That entry predates the current model line-up, so the code defaults to `claude-opus-5` and reads
+`ANTHROPIC_MODEL` from the environment — configuration, not code (§ Non-negotiables 10), so Leon
+can trade quality for cost without a deploy. Flagged to him rather than silently chosen. The
+route returns a clear 503 when `ANTHROPIC_API_KEY` is unset, and the page says how to set it,
+rather than failing as a broken feature.

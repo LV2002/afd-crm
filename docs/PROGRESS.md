@@ -2389,3 +2389,40 @@ retry solves the observed problem and keep-warm has its own failure modes on ser
 
 **Next:** Telephony (blocked on Leon picking a provider), or the accounts system once he shares
 the finance sheet.
+
+## Session 28 — File uploads, public registration form, AI analyst
+
+Three features Leon picked. All shipped, all tested, 406 tests green across 46 files.
+
+**1. File uploads (Supabase Storage).** Private `attachments` bucket, a soft-deleted
+`attachments` table, and enforcement in Postgres twice over — RLS on the row, Storage policies on
+the object — both resolving the owning centre from the parent lead/student rather than a
+denormalised copy that could go stale. Upload panel on lead detail and student profile; the print
+page now uses a real uploaded photo. Counsellors can read and upload but not delete.
+
+**2. Public tokenised registration form.** `/r/<token>`, outside the auth shell. Questions come
+from `field_definitions`, so an admin changes what's asked with no deploy. Submissions run through
+`resolveOrCreateLead()` + `applyAssignment()` like every other source, so a repeat filler is
+matched, not duplicated. An allow-list stops a public submission ever reaching `stage_id`,
+`assigned_to`, `center_id` or `temperature`. Admin screen at Settings → Registration Forms with a
+copy-link button and open/close.
+
+**3. AI analyst `/ask`.** Eight fixed, parameterised tools; the model never writes SQL. Every tool
+applies the same scoping as RLS and returns aggregates only. Suggested questions adapt to the
+caller's scope.
+
+**Verified:** `npx tsc --noEmit` clean, `npx eslint` clean, `npm run build` succeeds, 406/406
+tests green — run against a real Postgres 16 with the full migration chain applied from scratch.
+
+**Needs Leon (config, not code):**
+- `ANTHROPIC_API_KEY` for the analyst — `/ask` says so on screen until it's set.
+- Optionally `ANTHROPIC_MODEL` (defaults to `claude-opus-5`).
+- Run `npm run db:migrate && npm run db:seed` for migrations 0030-0033 and the new file
+  permissions.
+
+**Known gap, stated not hidden:** the public form has a honeypot but no rate limiting. That
+belongs at the edge (Vercel WAF / Cloudflare Turnstile) and is worth adding before the link is
+published widely.
+
+**Next:** Telephony (blocked on Leon picking a provider), or the accounts system once he shares
+the finance sheet.
