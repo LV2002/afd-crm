@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { can, getCurrentUser } from "@/lib/auth/session";
-import { db, isDatabaseUnreachable, withDeadline } from "@/lib/db/client";
+import { db, isDatabaseUnreachable, isDeadlineExceeded, withDeadline } from "@/lib/db/client";
 import { centers, leads, pipelineStages, profiles } from "@/lib/db/schema";
 import {
   aggregateCentrePerformance,
@@ -34,6 +34,25 @@ import { LeadsBySourceChart } from "./leads-by-source-chart";
  * firstTouchSource — never a name, phone, or email — so that boundary
  * holds regardless of which client fetches it.
  */
+/**
+ * Runs one query under its own deadline and logs how long it took. The
+ * per-query label is the point: when this page stalled, "the page doesn't
+ * load" was all anyone could see, and a single combined timeout still
+ * couldn't say *which* read was slow. Each line lands in the dev server
+ * log (and in Vercel's function logs), so a stall names itself.
+ */
+async function timedQuery<T>(label: string, run: () => Promise<T>): Promise<T> {
+  const started = Date.now();
+  try {
+    const result = await withDeadline(run(), 8_000, `Insights "${label}" query`);
+    console.log(`[insights] ${label}: ok in ${Date.now() - started}ms`);
+    return result;
+  } catch (error) {
+    console.error(`[insights] ${label}: FAILED after ${Date.now() - started}ms`, error);
+    throw error;
+  }
+}
+
 function DatabaseUnreachable() {
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-12 text-center">
@@ -48,7 +67,30 @@ function DatabaseUnreachable() {
         <code className="font-mono">6543</code>), not the direct one — locally in{" "}
         <code className="font-mono">.env.local</code>, and on Vercel in Project Settings →
         Environment Variables. The direct hostname is IPv6-only and is unreachable from Vercel
-        and from many home networks. See docs/GETTING-STARTED.md.
+        and from many home networks. Run <code className="font-mono">npm run db:check</code> to
+        test the connection directly. See docs/GETTING-STARTED.md.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Distinct from DatabaseUnreachable on purpose: here the connection *worked*
+ * and a query was simply too slow, so pointing at DATABASE_URL would send
+ * someone to re-check a setting that is already correct.
+ */
+function DatabaseTooSlow() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-12 text-center">
+      <DatabaseZap className="size-8 text-muted-foreground" />
+      <p className="text-sm font-medium">The database didn&apos;t respond in time.</p>
+      <p className="max-w-prose text-xs text-muted-foreground">
+        The connection opened, so <code className="font-mono">DATABASE_URL</code> is reachable —
+        a query just took too long to come back. The dev server log (or Vercel&apos;s function
+        log) names which one, on a line beginning{" "}
+        <code className="font-mono">[insights]</code>. A paused or sleeping Supabase project is
+        the usual cause; the Supabase dashboard will say so and offer Restore. Run{" "}
+        <code className="font-mono">npm run db:check</code> to confirm the database is awake.
       </p>
     </div>
   );
@@ -77,38 +119,46 @@ export default async function InsightsPage() {
   // at a host this environment can't route to. That made a config problem
   // look like a broken page. Catch it here and say so plainly; anything
   // else is a real bug and still throws. See docs/DECISIONS.md.
-  let data;
-  console.log("[insights] querying database…");
+  // Run these one at a time rather than in a Promise.all. The db client is
+  // `max: 1`, so concurrency buys nothing — four queries serialise on the
+  // single connection either way — but issuing them together makes
+  // postgres.js *pipeline* them, and pipelining is where connection-pooler
+  // incompatibilities live (Supabase's transaction-mode pooler hands each
+  // transaction a different physical connection). Sequential costs the same
+  // wall-clock time here, avoids that class of stall, and names the query
+  // that is slow instead of hanging the whole page anonymously.
+  let leadRows, stageRows, centerRows, profileRows;
   try {
-    data = await withDeadline(
-      Promise.all([
-        db
-          .select({
-            id: leads.id,
-            assignedTo: leads.assignedTo,
-            centerId: leads.centerId,
-            stageId: leads.stageId,
-            firstTouchSource: leads.firstTouchSource,
-          })
-          .from(leads)
-          .where(leadWhere),
-        db
-          .select({ id: pipelineStages.id, name: pipelineStages.name, sortOrder: pipelineStages.sortOrder, stageType: pipelineStages.stageType })
-          .from(pipelineStages),
-        db.select({ id: centers.id, name: centers.name }).from(centers),
-        db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles),
-      ]),
-      12_000,
-      "Insights database query",
+    leadRows = await timedQuery("leads", () =>
+      db
+        .select({
+          id: leads.id,
+          assignedTo: leads.assignedTo,
+          centerId: leads.centerId,
+          stageId: leads.stageId,
+          firstTouchSource: leads.firstTouchSource,
+        })
+        .from(leads)
+        .where(leadWhere),
     );
-    console.log("[insights] database returned OK");
+    stageRows = await timedQuery("stages", () =>
+      db
+        .select({ id: pipelineStages.id, name: pipelineStages.name, sortOrder: pipelineStages.sortOrder, stageType: pipelineStages.stageType })
+        .from(pipelineStages),
+    );
+    centerRows = await timedQuery("centers", () =>
+      db.select({ id: centers.id, name: centers.name }).from(centers),
+    );
+    profileRows = await timedQuery("profiles", () =>
+      db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles),
+    );
   } catch (error) {
-    console.error("[insights] database query failed:", error);
+    // Order matters: a deadline error also carries ETIMEDOUT, so check the
+    // more specific case first or a slow query gets reported as unreachable.
+    if (isDeadlineExceeded(error)) return <DatabaseTooSlow />;
     if (isDatabaseUnreachable(error)) return <DatabaseUnreachable />;
     throw error;
   }
-
-  const [leadRows, stageRows, centerRows, profileRows] = data;
 
   const centerNameById = new Map(centerRows.map((c) => [c.id, c.name]));
   const userNameById = new Map(profileRows.map((p) => [p.id, p.fullName]));
