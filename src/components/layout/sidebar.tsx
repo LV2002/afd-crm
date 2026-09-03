@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  ClipboardList,
   GraduationCap,
   KanbanSquare,
   LayoutDashboard,
@@ -31,6 +32,7 @@ const ICON_MAP: Record<NavIconKey, LucideIcon> = {
   pipeline: KanbanSquare,
   accounts: Wallet,
   students: GraduationCap,
+  "profile-forms": ClipboardList,
   insights: BarChart3,
   ask: Sparkles,
   settings: Settings,

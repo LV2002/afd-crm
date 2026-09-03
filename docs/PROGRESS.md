@@ -2426,3 +2426,38 @@ published widely.
 
 **Next:** Telephony (blocked on Leon picking a provider), or the accounts system once he shares
 the finance sheet.
+
+## Session 29 — Gemini analyst, per-lead student profile form, fees + instalment agreement
+
+Leon's corrections to Session 28, all shipped. 405 tests green across 46 files.
+
+**AI → Gemini free tier.** Only the driver changed; the tool set and scoping are
+provider-agnostic and untouched. Model configurable via `GEMINI_MODEL`.
+
+**Student Profile Form is now per-lead.** The generic public form is deleted, not left
+alongside. Each lead gets its own link (`/f/<token>`), minted on demand by the counsellor and
+idempotent, so the form arrives bound to the right person. Answers appear on that lead's page and
+in a new **Student Profile Forms** tab — searchable across the answers, sortable by lead number,
+name or submission date, expandable per row.
+
+**Fees & instalment agreement on the lead page.** Course fee, discount + discount name, down
+payment, up to four instalments (due date + amount), notes, and the signed copy uploaded as an
+attachment. A live running total shows what is still unscheduled. Once the plan adds up and the
+signed copy is on file, **Print instalment agreement** renders the real form — landscape A5, two
+columns, matching AFD's `installment_agreement_a5.pdf`.
+
+**File size limits** are now stated on the upload control (20 MB, and the accepted formats).
+
+**Verified:** `npx tsc --noEmit` clean, `npx eslint` clean, `npm run build` succeeds, 405/405
+tests green, full migration chain applied from an empty database.
+
+**Needs Leon (config, not code):**
+- `GEMINI_API_KEY` from aistudio.google.com/apikey — `/ask` says so on screen until set.
+- `npm run db:migrate && npm run db:seed` for migrations 0032–0034.
+
+**Open:** the print agreement draws four instalment rows where the paper form has three, and
+leaves Receipt No blank (a receipt number belongs to the ledger, not the plan). Worth a look on
+real paper before it goes to students.
+
+**Next:** Telephony (blocked on a provider), or the accounts system once the finance sheet
+arrives.

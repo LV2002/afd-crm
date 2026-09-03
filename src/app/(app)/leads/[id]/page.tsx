@@ -16,7 +16,11 @@ import { formatDateIST } from "@/lib/format/date";
 import { formatINR } from "@/lib/format/currency";
 import { createClient } from "@/lib/supabase/server";
 import { AttachmentsPanel } from "@/components/files/attachments-panel";
+import { FeePlanPanel } from "@/components/enrolment/fee-plan-panel";
+import { ProfileFormPanel } from "@/components/profile-form/profile-form-panel";
 import { listAttachments } from "@/lib/storage/attachments";
+import { getLeadFeePlan } from "@/lib/enrolment/get-fee-plan";
+import { getStudentFieldLabels } from "@/lib/profile-form/field-labels";
 import { getWhatsAppThread, isWithinCustomerServiceWindow } from "@/lib/whatsapp/get-thread";
 
 import { ConfirmAdmissionForm } from "./confirm-admission-form";
@@ -110,6 +114,15 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   const canReadFiles = can(user, "file.read");
   const attachments = canReadFiles ? await listAttachments(supabase, { kind: "lead", id }) : [];
+  // The signed agreement is just an attachment labelled as such — the same
+  // storage and access rules as any other file, no separate mechanism.
+  const hasSignedAgreement = attachments.some((a) =>
+    (a.label ?? "").toLowerCase().includes("instalment"),
+  );
+
+  const canReadFees = can(user, "enrolment.read");
+  const feePlan = canReadFees ? await getLeadFeePlan(id) : null;
+  const studentFieldLabels = await getStudentFieldLabels(supabase);
 
   const { data: taskRows } = await supabase
     .from("tasks")
@@ -188,6 +201,32 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         />
       )}
 
+      <div className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">Student profile form</h2>
+        <ProfileFormPanel
+          leadId={id}
+          token={row.profile_form_token}
+          submittedAt={row.profile_form_submitted_at}
+          answers={row.profile_form_data}
+          fieldLabels={studentFieldLabels}
+          canManage={can(user, "lead.update")}
+        />
+      </div>
+
+      {canReadFees && feePlan && (
+        <div className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">Fees &amp; instalment agreement</h2>
+          <FeePlanPanel
+            leadId={id}
+            values={feePlan.values}
+            canEdit={can(user, "enrolment.update")}
+            hasEnrolment={feePlan.hasEnrolment}
+            hasSignedAgreement={hasSignedAgreement}
+            printHref={`/leads/${id}/instalment-agreement`}
+          />
+        </div>
+      )}
+
       {canReadFiles && (
         <div className="flex flex-col gap-3">
           <h2 className="text-lg font-semibold">Files</h2>
@@ -197,7 +236,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             attachments={attachments}
             canUpload={can(user, "file.upload")}
             canDelete={can(user, "file.delete")}
-            labelSuggestions={["ID proof", "Marksheet", "Portfolio", "Signed agreement", "Fee receipt"]}
+            labelSuggestions={["Signed instalment agreement", "ID proof", "Marksheet", "Fee receipt"]}
           />
         </div>
       )}

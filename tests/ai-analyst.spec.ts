@@ -225,3 +225,35 @@ describe("the tool surface itself", () => {
     }
   });
 });
+
+describe("Gemini schema translation", () => {
+  it("strips additionalProperties, which Gemini's schema subset rejects", async () => {
+    // The tool definitions keep `additionalProperties: false` because it
+    // documents intent and a future provider may enforce it; Gemini 400s on
+    // it. Arguments are validated by zod in runAnalystTool either way, so
+    // the model not seeing the constraint costs nothing.
+    const { geminiToolDeclarations } = await import("../src/lib/ai/gemini-tools");
+    for (const declaration of geminiToolDeclarations(ANALYST_TOOLS)) {
+      expect(declaration.parameters).not.toHaveProperty("additionalProperties");
+    }
+  });
+
+  it("omits an empty properties map rather than sending one", async () => {
+    // Gemini rejects `{type: "object", properties: {}}`. sla_breaches and
+    // list_centres take no arguments, so they are the ones that would trip it.
+    const { geminiToolDeclarations } = await import("../src/lib/ai/gemini-tools");
+    const noArgTools = geminiToolDeclarations(ANALYST_TOOLS).filter((d) =>
+      ["sla_breaches", "list_centres"].includes(d.name),
+    );
+    expect(noArgTools.length).toBe(2);
+    for (const declaration of noArgTools) {
+      expect(declaration.parameters).not.toHaveProperty("properties");
+    }
+  });
+
+  it("keeps the date-range properties for tools that take them", async () => {
+    const { geminiToolDeclarations } = await import("../src/lib/ai/gemini-tools");
+    const bySource = geminiToolDeclarations(ANALYST_TOOLS).find((d) => d.name === "leads_by_source");
+    expect(Object.keys((bySource!.parameters as { properties: object }).properties)).toEqual(["from", "to"]);
+  });
+});

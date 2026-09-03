@@ -9,22 +9,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { PublicFormField } from "@/lib/registration/get-form";
-import { submitRegistration, type SubmitState } from "@/lib/registration/submit";
+import type { ProfileFormField } from "@/lib/profile-form/get-form";
+import { submitProfileForm, type ProfileSubmitState } from "@/lib/profile-form/submit";
 
-const initialState: SubmitState = {};
+const initialState: ProfileSubmitState = {};
 
 /**
- * Rendered from the form's configured fields, not a hardcoded list, so an
- * admin changes what is asked by editing the form — no deploy.
- *
- * Inputs are plain HTML rather than the app's DynamicFieldInput: this page
- * is filled in by a student on a phone, often on a poor connection, and it
- * should work with as little JavaScript as possible. Native `required`,
+ * Plain HTML inputs rather than the app's DynamicFieldInput: a student
+ * fills this in on a phone, often on a poor connection. Native `required`,
  * `type="tel"` and `<select>` give better mobile keyboards and validation
- * than a custom widget would.
+ * than a custom widget, and the page works with almost no JavaScript.
  */
-function Field({ field }: { field: PublicFormField }) {
+function Field({ field }: { field: ProfileFormField }) {
   const id = `field-${field.key}`;
   const required = field.isRequired;
 
@@ -90,44 +86,62 @@ function Field({ field }: { field: PublicFormField }) {
   );
 }
 
-export function RegistrationForm({ token, fields }: { token: string; fields: PublicFormField[] }) {
-  const [state, action, pending] = useActionState(submitRegistration, initialState);
+export function ProfileFormFields({
+  token,
+  fields,
+}: {
+  token: string;
+  fields: ProfileFormField[];
+}) {
+  const [state, action, pending] = useActionState(submitProfileForm, initialState);
 
   if (state.success) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-10 text-center">
         <CheckCircle2 className="size-8 text-emerald-600" />
         <p className="text-sm font-medium">{state.success}</p>
+        <p className="text-xs text-muted-foreground">
+          Your centre will be in touch about the next step, which is the fee payment.
+        </p>
       </div>
     );
   }
 
+  // Grouped by the section each field belongs to, so a 30-field form reads
+  // as a few short blocks rather than one intimidating column.
+  const sections = [...new Set(fields.map((f) => f.section))];
+
   return (
-    <form action={action} className="flex flex-col gap-5">
+    <form action={action} className="flex flex-col gap-6">
       <input type="hidden" name="token" value={token} />
 
-      {/*
-        Honeypot. Hidden from people, irresistible to naive bots that fill
-        every input they find. `tabIndex={-1}` and autoComplete="off" keep
-        it out of the way of anyone using a keyboard or a password manager;
-        aria-hidden keeps it out of screen readers.
-      */}
       <div className="hidden" aria-hidden="true">
         <label htmlFor="website">Website</label>
         <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" />
       </div>
 
-      {fields.map((field) => (
-        <Field key={field.key} field={field} />
+      {sections.map((section) => (
+        <section key={section} className="flex flex-col gap-4 rounded-lg border p-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            {section}
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {fields
+              .filter((f) => f.section === section)
+              .map((field) => (
+                <Field key={field.key} field={field} />
+              ))}
+          </div>
+        </section>
       ))}
 
       {state.error && <FormMessage error={state.error} />}
 
       <Button type="submit" disabled={pending} className="w-full">
-        {pending ? "Submitting…" : "Submit"}
+        {pending ? "Submitting…" : "Submit my details"}
       </Button>
       <p className="text-xs text-muted-foreground">
-        Your details are used only to contact you about your enquiry.
+        Your details are used only for your admission and course records.
       </p>
     </form>
   );

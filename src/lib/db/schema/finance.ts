@@ -3,7 +3,9 @@ import {
   bigint,
   bigserial,
   boolean,
+  check,
   date,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -90,7 +92,24 @@ export const enrolments = pgTable("enrolments", {
   academicYear: text("academic_year").notNull(),
   totalFeePaise: bigint("total_fee_paise", { mode: "number" }).notNull(),
   discountPaise: bigint("discount_paise", { mode: "number" }).notNull().default(0),
+  /**
+   * What the discount was called ("Early Bird", "Sibling", "Staff Ward").
+   * Free text rather than a dropdown: a discount's name is often written
+   * ad hoc on the agreement, and forcing it into a managed list would make
+   * counsellors pick a wrong-but-close option. It prints on the
+   * instalment agreement, so it has to say what was actually agreed.
+   */
+  discountName: text("discount_name"),
   netFeePaise: bigint("net_fee_paise", { mode: "number" }).notNull(),
+  /**
+   * The amount taken at the point of joining, before the instalment
+   * schedule begins. It appears on AFD's paper agreement as its own line
+   * ("Down Payment Paid"), separate from the instalments, so it is stored
+   * separately rather than folded into instalment 1.
+   */
+  downPaymentPaise: bigint("down_payment_paise", { mode: "number" }).notNull().default(0),
+  /** Anything the counsellor needs on the record — prints on the agreement. */
+  feeNotes: text("fee_notes"),
   status: enrolmentStatusEnum("status").notNull().default("pending_payment"),
   enrolledAt: timestamp("enrolled_at", { withTimezone: true }).notNull().defaultNow(),
   salesToAccountsAt: timestamp("sales_to_accounts_at", { withTimezone: true }),
@@ -238,3 +257,39 @@ export const studentBatches = pgTable("student_batches", {
   leftAt: timestamp("left_at", { withTimezone: true }),
   reason: text("reason"),
 });
+
+/**
+ * One row per instalment on an enrolment's payment plan.
+ *
+ * A table rather than four pairs of columns on `enrolments`
+ * (`instalment_1_due`, `instalment_1_amount`, ...). The UI offers four
+ * slots because that is what AFD's paper agreement has, but four is a
+ * property of today's form, not of the business: a plan with six
+ * instalments should need a different UI, not a migration. Rows also make
+ * "what is overdue" an ordinary query instead of four OR'd comparisons.
+ *
+ * These are the AGREED schedule, not money received. Actual receipts live
+ * in the append-only `payments` ledger, and a balance is derived by
+ * comparing the two — never by mutating a counter here (CLAUDE.md
+ * § Non-negotiables 7).
+ */
+export const enrolmentInstalments = pgTable(
+  "enrolment_instalments",
+  {
+    id: idColumn(),
+    enrolmentId: uuid("enrolment_id")
+      .notNull()
+      .references(() => enrolments.id, { onDelete: "cascade" }),
+    /** 1-4 today; the check allows more so a longer plan needs no migration. */
+    sequence: integer("sequence").notNull(),
+    dueDate: date("due_date").notNull(),
+    amountPaise: bigint("amount_paise", { mode: "number" }).notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    index("enrolment_instalments_enrolment_idx").on(table.enrolmentId),
+    uniqueIndex("enrolment_instalments_seq_uq").on(table.enrolmentId, table.sequence),
+    check("enrolment_instalments_sequence_positive", sql`sequence >= 1`),
+    check("enrolment_instalments_amount_positive", sql`amount_paise > 0`),
+  ],
+);

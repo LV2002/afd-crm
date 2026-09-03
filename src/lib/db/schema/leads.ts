@@ -118,6 +118,20 @@ export const leads = pgTable(
     /** Escape hatch for custom fields (field_definitions, is_core = false) — no migration needed. */
     custom: jsonb("custom").$type<Record<string, unknown>>(),
 
+    /**
+     * The lead's own student-profile-form link. One per lead, minted on
+     * demand by the counsellor, so the form arrives already bound to the
+     * person it is about — no identity matching, no chance of a submission
+     * landing on the wrong record.
+     *
+     * Nullable because most leads never reach this stage: the form goes
+     * out only once sales have confirmed the student is joining.
+     */
+    profileFormToken: text("profile_form_token").unique(),
+    profileFormSentAt: timestamp("profile_form_sent_at", { withTimezone: true }),
+    profileFormSubmittedAt: timestamp("profile_form_submitted_at", { withTimezone: true }),
+    /** The student's own answers, keyed by student field_definitions.key. */
+    profileFormData: jsonb("profile_form_data").$type<Record<string, unknown>>(),
     ...timestamps(),
     ...softDelete(),
   },

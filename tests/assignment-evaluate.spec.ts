@@ -72,6 +72,10 @@ function baseLead(overrides: Partial<Lead> = {}): Lead {
     createdAt: new Date(),
     updatedAt: null,
     deletedAt: null,
+    profileFormToken: null,
+    profileFormSentAt: null,
+    profileFormSubmittedAt: null,
+    profileFormData: null,
     ...overrides,
   };
 }

@@ -1633,3 +1633,62 @@ That entry predates the current model line-up, so the code defaults to `claude-o
 can trade quality for cost without a deploy. Flagged to him rather than silently chosen. The
 route returns a clear 503 when `ANTHROPIC_API_KEY` is unset, and the page says how to set it,
 rather than failing as a broken feature.
+
+2026-09-03 · [ai] Swapped the analyst from Anthropic to Google Gemini's free tier — Leon's
+explicit call: this feature must not generate per-query charges. Only the driver changed. The
+tool set and the scoping in `lib/ai/tools` are provider-agnostic and untouched, so the security
+properties (fixed tools, no SQL, same centre scoping as RLS, aggregates only) hold regardless of
+who serves the model. Raw REST rather than an SDK: the request shape is the whole integration.
+Two shape differences are normalised in `gemini-schema.ts` — Gemini rejects
+`additionalProperties` and rejects an object schema with an empty `properties` map — kept out of
+the tool definitions so those stay provider-neutral, and pinned by tests. Model is
+`GEMINI_MODEL`-configurable (default `gemini-2.0-flash`) because these names change faster than
+the code and a wrong one is a 404 an operator should fix without a deploy; a 404 is reported
+with that instruction rather than as a generic failure.
+
+2026-09-03 · [profile-form] **Replaced** the generic public registration form with a per-lead
+student profile form. Leon's correction: this is not lead capture — it goes to students sales
+have already confirmed are joining, and completing it is step one of admission (fees are step
+two). The old `registration_forms` table, its settings screens and its `/r/<token>` route are
+deleted rather than left alongside; two ways to do this would have meant two things to keep
+right. Its migrations (0032/0033 as first written) had never run outside the sandbox, so they
+were removed rather than superseded by a drop.
+
+The token now lives on the lead (`leads.profile_form_token`), minted on demand by the
+counsellor. That is a better shape than the generic one it replaces: the form arrives already
+bound to the person it is about, so there is no identity matching and no way for an answer to
+land on the wrong record. Minting is idempotent — pressing the button twice returns the same
+link, because the counsellor may already have sent the first one and regenerating would silently
+break a link sitting in a student's WhatsApp. The form renders the STUDENT field definitions
+(the real AFD intake form seeded from the paper original), so it and the print profile stay the
+same document.
+
+Answers land in `leads.profile_form_data` as jsonb, deliberately NOT on the lead's own columns:
+what the student said about themselves is kept distinct from what the counsellor recorded, so
+neither silently overwrites the other and a counsellor can see both when they differ.
+Resubmission is refused rather than overwriting — once a counsellor has worked from these
+answers, a second submission from a forwarded link would change the record under them.
+
+2026-09-03 · [fees] Fee and instalment plan on the lead page, and the printable agreement.
+Written onto the lead's existing `enrolments` row rather than a parallel record: the enrolment
+IS the commercial record, and duplicating fee figures would give accounts two numbers to
+reconcile. Instalments are a table (`enrolment_instalments`), not four pairs of columns — the UI
+offers four slots because AFD's paper form does, but four is a property of today's form, not of
+the business, and rows make "what is overdue" an ordinary query. Saving replaces the rows
+wholesale rather than diffing: a renegotiated plan is a new plan, and matching old rows to new
+by position would mis-assign due dates. This is the AGREED schedule; money received stays in the
+append-only `payments` ledger, and a balance is derived by comparing the two.
+
+`validatePlan` deliberately allows a part-scheduled plan — a student pays something now and the
+rest is agreed later is real, and refusing it would push counsellors into entering a fake
+instalment; the UI shows the shortfall instead. It does reject scheduling MORE than is payable,
+which is always a typo and would print an agreement overcharging a student. Printing is gated on
+the plan being complete AND the signed copy being on file, because a half-entered agreement in a
+student's hands is worse than none.
+
+The print page matches the real form (landscape A5, two columns, numbered sections, blue
+accents) with two deliberate departures: it draws four instalment rows where the paper has three
+(Leon asked for four slots; unused rows still print so it looks familiar), and the Receipt No
+column stays blank because a receipt number is issued by the ledger when money actually arrives,
+not when the plan is agreed. `down_payment_paise` was added to `enrolments` because the paper
+form carries it as its own line, separate from the instalments.

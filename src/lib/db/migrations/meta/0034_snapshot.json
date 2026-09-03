@@ -1,6 +1,6 @@
 {
-  "id": "dcdce7b7-2a73-4e10-ab54-ed5467d3827b",
-  "prevId": "9d9184c0-9cbe-4837-9c07-601ab5a7e058",
+  "id": "249e694f-c8ff-48e4-89fd-2eafcb52be6f",
+  "prevId": "98c494a3-7264-430a-928e-72a520dde41d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3526,6 +3526,13 @@
           "type": "bigint",
           "primaryKey": false,
           "notNull": true
+        },
+        "down_payment_paise": {
+          "name": "down_payment_paise",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "fee_notes": {
           "name": "fee_notes",

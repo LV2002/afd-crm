@@ -74,8 +74,8 @@ export function AttachmentsPanel({
             <div className="flex flex-col gap-2">
               <Label htmlFor="file">File</Label>
               <Input id="file" name="file" type="file" accept={ALLOWED_EXTENSIONS} required />
-              <p className="text-xs text-muted-foreground">
-                Images or PDF, up to {MAX_FILE_BYTES / 1024 / 1024} MB.
+              <p className="text-xs font-medium text-muted-foreground">
+                Maximum file size {MAX_FILE_BYTES / 1024 / 1024} MB · JPG, PNG, WebP, HEIC or PDF
               </p>
             </div>
             <div className="flex flex-col gap-2">

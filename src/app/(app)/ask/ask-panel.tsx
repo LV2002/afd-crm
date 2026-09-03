@@ -67,10 +67,11 @@ export function AskPanel({
         <Sparkles className="size-8 text-muted-foreground" />
         <p className="text-sm font-medium">The analyst isn&apos;t switched on yet.</p>
         <p className="max-w-prose text-xs text-muted-foreground">
-          Set <code className="font-mono">ANTHROPIC_API_KEY</code> in your environment — locally in{" "}
+          Get a free key at <span className="font-mono">aistudio.google.com/apikey</span> and set it
+          as <code className="font-mono">GEMINI_API_KEY</code> — locally in{" "}
           <code className="font-mono">.env.local</code>, and on Vercel under Project Settings →
           Environment Variables — then restart. Optionally set{" "}
-          <code className="font-mono">ANTHROPIC_MODEL</code> to choose a different model.
+          <code className="font-mono">GEMINI_MODEL</code> to choose a different model.
         </p>
       </div>
     );
