@@ -78,7 +78,16 @@ export async function withDeadline<T>(work: Promise<T>, ms: number, label: strin
   let timer: NodeJS.Timeout | undefined;
   const deadline = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
-      reject(Object.assign(new Error(`${label} exceeded ${ms}ms`), { code: "ETIMEDOUT" }));
+      reject(
+        Object.assign(new Error(`${label} exceeded ${ms}ms`), {
+          code: "ETIMEDOUT",
+          // Distinguishes "connected fine, then the query stalled" from
+          // "never reached the database" — the two have different causes
+          // and telling a user to fix DATABASE_URL when it is already
+          // correct sends them down the wrong path.
+          deadlineExceeded: true,
+        }),
+      );
     }, ms);
   });
   try {
@@ -105,6 +114,16 @@ const UNREACHABLE_CODES = new Set([
   "ETIMEDOUT",
   "ECONNRESET",
 ]);
+
+/** True when `withDeadline` gave up: the database answered too slowly. */
+export function isDeadlineExceeded(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 10 && current instanceof Error; depth += 1) {
+    if ((current as { deadlineExceeded?: unknown }).deadlineExceeded === true) return true;
+    current = current.cause;
+  }
+  return false;
+}
 
 export function isDatabaseUnreachable(error: unknown): boolean {
   // Drizzle wraps whatever the driver threw in a DrizzleQueryError and hangs

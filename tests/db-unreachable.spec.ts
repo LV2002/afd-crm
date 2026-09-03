@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { isDatabaseUnreachable } from "../src/lib/db/client";
+import { isDatabaseUnreachable, isDeadlineExceeded, withDeadline } from "../src/lib/db/client";
 
 function errorWithCode(code: string): Error {
   return Object.assign(new Error(`connect ${code} 10.255.255.1:5432`), { code });
@@ -72,5 +72,23 @@ describe("isDatabaseUnreachable", () => {
     expect(isDatabaseUnreachable("ECONNREFUSED")).toBe(false);
     expect(isDatabaseUnreachable(null)).toBe(false);
     expect(isDatabaseUnreachable(undefined)).toBe(false);
+  });
+});
+
+describe("isDeadlineExceeded", () => {
+  it("is true for a withDeadline rejection, and false for a plain socket timeout", async () => {
+    // A query that connected fine but answered too slowly must NOT be
+    // reported as an unreachable database — that sends someone to re-check
+    // a DATABASE_URL that is already correct.
+    const slow = new Promise((resolve) => setTimeout(resolve, 5_000));
+    await expect(withDeadline(slow, 10, "test")).rejects.toThrow(/exceeded 10ms/);
+
+    const caught = await withDeadline(slow, 10, "test").catch((e: unknown) => e);
+    expect(isDeadlineExceeded(caught)).toBe(true);
+    expect(isDeadlineExceeded(errorWithCode("ETIMEDOUT"))).toBe(false);
+  });
+
+  it("resolves and clears its timer when the work finishes in time", async () => {
+    await expect(withDeadline(Promise.resolve("done"), 1_000, "test")).resolves.toBe("done");
   });
 });
