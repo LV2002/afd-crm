@@ -1692,3 +1692,109 @@ accents) with two deliberate departures: it draws four instalment rows where the
 column stays blank because a receipt number is issued by the ledger when money actually arrives,
 not when the plan is agreed. `down_payment_paise` was added to `enrolments` because the paper
 form carries it as its own line, separate from the instalments.
+
+2026-09-03 · [print] Two corrections to the above, both from Leon.
+
+The print gate was backwards. Printing had been gated on the signed copy already being
+uploaded, which makes the actual workflow impossible: the counsellor PRINTS the agreement, the
+student signs it on paper, and the signed sheet is scanned back in. Printing is now available as
+soon as the plan is complete, and the panel says what happens next. The remaining gate — the
+instalments having to add up — is a different thing and stays: a half-entered schedule would
+print an agreement whose numbers don't add up, and that is the copy the student keeps.
+
+Everything printable is now explicitly A4, set in one place (`lib/print/page-css.ts`) rather
+than per page. Without a `@page` rule browsers fall back to whatever the print dialog last used,
+which is how a form silently comes out on Letter. A4 is the paper AFD's offices have, and every
+one of these documents is printed to be signed and scanned back — a document that prints at
+another size returns cropped or rescaled, and the signed copy on file no longer matches the one
+issued. The instalment agreement uses A4 *landscape*: its original is A5 landscape and the
+two-column design needs the width, so printing the same layout on A4 keeps the proportions and
+makes it markedly more legible, which matters on a document someone signs. Type sizes were
+raised accordingly — they had been set for the smaller sheet.
+
+2026-09-03 · [bug] `INSTALMENT_SLOTS` was exported from `fee-actions.ts`, which carries
+`"use server"`. Next.js rewrites EVERY export of such a file into a server-action stub, so the
+client received something that was not an array. It reached the client's browser as two errors
+that name neither the file nor the real cause — `A "use server" file can only export async
+functions, found object` and `..._WEBPACK_IMPORTED_MODULE__.INSTALMENT_SLOTS.map is not a
+function` — and neither `tsc` nor `next build` catches it, because the types are entirely
+consistent and the directive's constraint is invisible to both.
+
+Fixed by moving the constant to `instalment-plan.ts`, the pure module, where it belonged anyway.
+Added `tests/use-server-exports.spec.ts`, which scans every `"use server"` file for a non-async
+export — type-only exports are erased before the directive matters, so they are not flagged. The
+guard was verified by deliberately reintroducing the bug and watching it fail, then removing it;
+a scan that has never been seen to fail is not evidence of anything.
+
+2026-09-03 · [ux] Added a pointer on the Student Profile Forms page saying the questions are
+edited in Settings → Custom Fields. Leon went looking for a "student profile form" entry in
+Settings and found the deleted Registration Forms gone — reasonable, since nothing said where
+the questions actually live. They are the student `field_definitions`, shared with the printed
+profile, which is why there is no separate form builder: one definition, one form, one printout.
+
+2026-09-03 · [ux] Reversing the entry above: there IS a separate form builder now —
+Settings → Student Profile Form. Leon asked for one after the pointer went in, which is the
+answer to the question the pointer was dodging. The previous reasoning ("one definition, one
+form, one printout") was right about the data and wrong about the screen: the student field
+definitions are still the single source of truth, and the new screen edits exactly those rows.
+What changed is that composing a questionnaire and adding a column to a record are different
+jobs, and a screen listing lead, student and enrolment fields together serves neither well. The
+builder shows order, required, and on/off the form; it hides entity, list and filter visibility.
+Custom Fields still exists and still edits the same rows.
+
+2026-09-03 · [schema] Added `field_definitions.on_profile_form`. Until now the public form
+rendered every student field definition, which meant it asked a sixteen-year-old to set their own
+batch id, centre, enrolment status and joining date. Those are real fields — staff fill them in —
+so deactivating them was not an option, and that is exactly why the flag is separate from
+`is_active`: "live in the CRM" and "asked of the student" are different questions and were being
+answered by the same column.
+
+Migration 0035 backfills every student field to true except the institute-assigned ones, so an
+existing install keeps a working form rather than silently getting an empty one on deploy. The
+seed carries the same exclusion list, and `tests/profile-sheet.spec.ts` asserts the two lists
+agree — two installs of the same CRM showing different forms is the failure worth catching. The
+seed's upsert deliberately no longer overwrites `sort_order` or `on_profile_form`: both are
+things an admin changes on the builder screen, and re-running the seed must not quietly undo a
+reordered form.
+
+A new student field created from Settings → Custom Fields defaults to being ON the form, since
+"Add a question" is overwhelmingly why one gets created. Not offered as a checkbox: that generic
+form cannot reliably render a control keyed to the entity dropdown's live value (the existing
+options textarea has the same limitation), and the builder shows the placement plainly with one
+switch to change it.
+
+2026-09-03 · [print] A lead's submitted profile form now prints on the same paper sheet as the
+student record, at `/leads/[id]/profile-form/print`. Leon asked for the printout to come out with
+the exact fields from the sheet he uploaded, and it does — the layout is unchanged, because it is
+now literally the same component. `PRINT_ROWS` and the sheet markup moved to
+`lib/print/profile-sheet.ts` and `components/print/profile-sheet.tsx`; when the row order lived
+inside the students page, a second printer of the same form could only have copied it and started
+drifting the day either one changed.
+
+The lead-side page exists because a student's answers arrive months before the `students` row
+does — that record is created at the accounts→academics gate — and the office wants the sheet in
+the file from the day the form comes back. An unsubmitted form still prints, as the blank sheet a
+walk-in fills in by hand. `tests/profile-sheet.spec.ts` pins the row order against the uploaded
+PDF and checks every key names a field that actually exists: a misspelt key does not crash, it
+prints a blank column with a raw key as its label, and nobody notices until it is on paper in
+front of a parent.
+
+2026-09-03 · [bug] The analyst's model name was hardcoded as `gemini-2.0-flash`, and Google
+retired it: Leon set a valid API key and got "Gemini doesn't recognise the model". Nothing was
+wrong with his key.
+
+The fix is not a newer name — that is the same bug with a later expiry date. The driver now asks
+the API which models the key can call `generateContent` on and picks the best one: newest, Flash
+by preference (the free tier's workhorse, and fast enough that a counsellor waits a second rather
+than ten), stable over preview, and the unsuffixed alias over a pinned `-001` build, since the
+alias keeps tracking the current build while the pinned one is what eventually 404s. Resolved
+once per process, and forgotten on a 404 so the next question re-resolves rather than repeating a
+dead name.
+
+`GEMINI_MODEL` still works and now means what it says — an explicit override that skips discovery.
+A hardcoded fallback remains for the case where the listing call itself fails, but only so the
+generate call can report the real problem (bad key, exhausted quota) in Google's own words instead
+of being masked. When the model genuinely is not recognised, the error now lists the names the
+operator's own key accepts rather than telling them to go and find one.
+
+`tests/gemini-model.spec.ts` covers the selection with a stubbed fetch: no database, no network.

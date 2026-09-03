@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Copy, Link2 } from "lucide-react";
+import Link from "next/link";
+import { Check, Copy, Link2, Printer } from "lucide-react";
 import { useActionState, useState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
@@ -48,14 +49,28 @@ export function ProfileFormPanel({
     const entries = Object.entries(answers).filter(([, v]) => v !== null && v !== "");
     return (
       <div className="flex flex-col gap-3">
-        <p className="text-sm text-muted-foreground">
-          Submitted{" "}
-          {new Date(submittedAt).toLocaleString("en-IN", {
-            dateStyle: "medium",
-            timeStyle: "short",
-            timeZone: "Asia/Kolkata",
-          })}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-muted-foreground">
+            Submitted{" "}
+            {new Date(submittedAt).toLocaleString("en-IN", {
+              dateStyle: "medium",
+              timeStyle: "short",
+              timeZone: "Asia/Kolkata",
+            })}
+          </p>
+          {/*
+            The office keeps a paper copy in the student's file from the
+            day the form comes back, months before the `students` record
+            that /students/[id]/print needs exists. Same A4 sheet, same
+            layout.
+          */}
+          <Button asChild type="button" variant="outline" size="sm">
+            <Link href={`/leads/${leadId}/profile-form/print`} target="_blank">
+              <Printer className="size-4" />
+              Print profile form
+            </Link>
+          </Button>
+        </div>
         <dl className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2">
           {entries.map(([key, value]) => (
             <div key={key} className="flex flex-col gap-0.5">

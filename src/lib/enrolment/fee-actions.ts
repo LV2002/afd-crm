@@ -9,15 +9,17 @@ import { db } from "@/lib/db/client";
 import { enrolmentInstalments, enrolments, leads } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 
-import { rupeesToPaise, validatePlan, type InstalmentInput } from "./instalment-plan";
+import {
+  INSTALMENT_SLOTS,
+  rupeesToPaise,
+  validatePlan,
+  type InstalmentInput,
+} from "./instalment-plan";
 
 export interface FeeFormState {
   error?: string;
   success?: string;
 }
-
-/** Four slots, because that is what AFD's paper agreement has. */
-export const INSTALMENT_SLOTS = [1, 2, 3, 4] as const;
 
 /**
  * Saves the fee and instalment plan a counsellor agreed with a student.

@@ -57,9 +57,15 @@ export async function getProfileFormByToken(token: string): Promise<ProfileFormL
 
   if (!lead) return { status: "not_found" };
 
-  // The STUDENT field definitions — the real AFD intake form seeded from
-  // the paper original — not the lead ones. An admin adding a question in
-  // Settings → Custom Fields changes this form with no deploy.
+  // The STUDENT field definitions marked as belonging on the
+  // student-facing form — not the lead ones, and not every student field.
+  // An admin composes this form in Settings → Student Profile Form, and a
+  // question added or moved there changes it with no deploy.
+  //
+  // `onProfileForm` and `isActive` are both required, and they are not the
+  // same test: a field can be perfectly live in the CRM and still be
+  // something no student should answer about themselves (their batch,
+  // their centre, their enrolment status).
   const definitions = await db
     .select({
       key: fieldDefinitions.key,
@@ -72,7 +78,14 @@ export async function getProfileFormByToken(token: string): Promise<ProfileFormL
       options: fieldDefinitions.options,
     })
     .from(fieldDefinitions)
-    .where(and(eq(fieldDefinitions.entity, "student"), isNull(fieldDefinitions.deletedAt)))
+    .where(
+      and(
+        eq(fieldDefinitions.entity, "student"),
+        eq(fieldDefinitions.onProfileForm, true),
+        eq(fieldDefinitions.isActive, true),
+        isNull(fieldDefinitions.deletedAt),
+      ),
+    )
     .orderBy(fieldDefinitions.sortOrder);
 
   return {

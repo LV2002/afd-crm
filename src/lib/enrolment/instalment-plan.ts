@@ -4,6 +4,18 @@
  * that must not be wrong.
  */
 
+/**
+ * Four slots, because that is what AFD's paper agreement has.
+ *
+ * Lives here rather than in `fee-actions.ts`: that file is `"use server"`,
+ * and Next.js requires such a file to export ONLY async functions. A plain
+ * const exported from it is rewritten into a server-action stub, so the
+ * client sees something that is not an array — which surfaced as
+ * `INSTALMENT_SLOTS.map is not a function` and as "A 'use server' file can
+ * only export async functions, found object".
+ */
+export const INSTALMENT_SLOTS = [1, 2, 3, 4] as const;
+
 export interface InstalmentInput {
   sequence: number;
   dueDate: string;

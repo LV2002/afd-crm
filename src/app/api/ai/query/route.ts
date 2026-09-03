@@ -3,7 +3,13 @@ import { z } from "zod";
 
 import { ANALYST_TOOLS, runAnalystTool } from "@/lib/ai/tools";
 import { analystScope } from "@/lib/ai/tools/scope";
-import { GEMINI_MODEL, GeminiError, generateWithTools, type GeminiContent } from "@/lib/ai/gemini";
+import {
+  GeminiError,
+  generateWithTools,
+  listUsableModels,
+  resolveModel,
+  type GeminiContent,
+} from "@/lib/ai/gemini";
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
@@ -76,6 +82,10 @@ export async function POST(request: Request) {
   }));
   const toolsUsed: string[] = [];
 
+  // Resolved once and recorded on the audit row: which model answered is
+  // part of what was asked and answered, and it is no longer a constant.
+  const model = await resolveModel(apiKey);
+
   try {
     for (let turn = 0; turn < MAX_TURNS; turn += 1) {
       const result = await generateWithTools({
@@ -94,7 +104,7 @@ export async function POST(request: Request) {
           actorId: user.id,
           action: "ai.query",
           entityType: "ai",
-          after: { question: parsed.data.question, toolsUsed, model: GEMINI_MODEL },
+          after: { question: parsed.data.question, toolsUsed, model },
         });
 
         return NextResponse.json({
@@ -147,10 +157,16 @@ export async function POST(request: Request) {
         );
       }
       if (error.status === 404) {
+        // Google retires model names, so rather than tell the operator to
+        // go and find a valid one, ask the API which names their own key
+        // accepts and put them in the message.
+        const available = await listUsableModels(apiKey).catch(() => [] as string[]);
+        const suggestion =
+          available.length > 0
+            ? ` This key can use: ${available.slice(0, 5).join(", ")}. Set GEMINI_MODEL to one of them, or unset it to let the CRM pick.`
+            : " Set GEMINI_MODEL to a current model name, or unset it to let the CRM pick.";
         return NextResponse.json(
-          {
-            error: `Gemini doesn't recognise the model "${GEMINI_MODEL}". Set GEMINI_MODEL to a current model name.`,
-          },
+          { error: `Gemini doesn't recognise the model "${model}".${suggestion}` },
           { status: 502 },
         );
       }

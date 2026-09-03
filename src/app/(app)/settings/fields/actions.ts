@@ -107,6 +107,13 @@ export async function createField(
       editable_by_roles: editableByRoles.length > 0 ? editableByRoles : null,
       sort_order: count ?? 0,
       is_core: false,
+      // A new student field goes onto the student-facing profile form by
+      // default, because "Add a question" from Settings → Student Profile
+      // Form is overwhelmingly why one gets created. Not offered as a
+      // checkbox here: this generic form can't reliably show a control
+      // that depends on the entity dropdown's live value, and the builder
+      // screen shows the placement plainly with one switch to change it.
+      on_profile_form: parsed.data.entity === "student",
     })
     .select("id")
     .single();
@@ -124,6 +131,7 @@ export async function createField(
   });
 
   revalidatePath("/settings/fields");
+  revalidatePath("/settings/profile-form");
   redirect(`/settings/fields/${data.id}`);
 }
 
@@ -177,6 +185,7 @@ export async function updateField(
   });
 
   revalidatePath("/settings/fields");
+  revalidatePath("/settings/profile-form");
   revalidatePath(`/settings/fields/${fieldId}`);
   return { success: "Saved." };
 }
