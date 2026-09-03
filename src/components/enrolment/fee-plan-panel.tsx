@@ -180,23 +180,32 @@ export function FeePlanPanel({
       </form>
 
       {/*
-        The print option appears only once the plan is complete AND the
-        signed copy is on file. Printing a half-entered agreement is how a
-        student ends up holding a document that doesn't match the record.
+        Printing comes BEFORE the signed copy, not after: the counsellor
+        prints this, the student signs it on paper, and the signed sheet is
+        scanned back in as an attachment. Gating printing on the upload
+        would make the workflow impossible.
+
+        It is still gated on the plan being complete, which is a different
+        thing: a half-entered schedule would print an agreement whose
+        numbers don't add up, and that is the copy the student keeps.
       */}
-      {planComplete && hasSignedAgreement ? (
-        <div>
+      {planComplete ? (
+        <div className="flex flex-wrap items-center gap-3">
           <Button asChild variant="outline" size="sm">
             <Link href={printHref} target="_blank">
               <Printer className="size-4" /> Print instalment agreement
             </Link>
           </Button>
+          <span className="text-xs text-muted-foreground">
+            {hasSignedAgreement
+              ? "Signed copy is on file."
+              : "Print it, get it signed, then upload the signed copy under Files below."}
+          </span>
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">
-          {!planComplete
-            ? "The instalments need to add up to the payable amount before the agreement can be printed."
-            : "Upload the signed instalment agreement below to enable printing."}
+          The instalments need to add up to the payable amount before the agreement can be
+          printed. {shortfallPaise > 0 && `${formatINR(shortfallPaise)} still to schedule.`}
         </p>
       )}
     </div>

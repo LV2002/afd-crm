@@ -2461,3 +2461,22 @@ real paper before it goes to students.
 
 **Next:** Telephony (blocked on a provider), or the accounts system once the finance sheet
 arrives.
+
+## Session 30 — Print-then-sign order, and A4 everywhere
+
+Two corrections from Leon.
+
+**The print gate was backwards.** Printing had been blocked until the signed copy was uploaded,
+which makes the real workflow impossible — you print it, the student signs it, *then* you upload
+the signed sheet. Printing is now available as soon as the plan adds up, and the panel tells you
+what to do next. The "instalments must add up" gate stays: that one prevents printing an
+agreement whose numbers are wrong.
+
+**All printables are A4**, set once in `src/lib/print/page-css.ts`. The student profile prints
+A4 portrait; the instalment agreement prints A4 landscape, since its two-column design needs the
+width (the paper original is A5 landscape — same layout, larger and more legible). Type sizes
+were raised to suit the bigger sheet. Without an explicit `@page` rule, browsers fall back to
+whatever the print dialog last used, which is how a form silently comes out on Letter.
+
+**Verified:** `npx tsc --noEmit` clean, `npx eslint` clean, `npm run build` succeeds, 405/405
+tests green against a database rebuilt from scratch.

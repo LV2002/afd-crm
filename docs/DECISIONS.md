@@ -1692,3 +1692,22 @@ accents) with two deliberate departures: it draws four instalment rows where the
 column stays blank because a receipt number is issued by the ledger when money actually arrives,
 not when the plan is agreed. `down_payment_paise` was added to `enrolments` because the paper
 form carries it as its own line, separate from the instalments.
+
+2026-09-03 · [print] Two corrections to the above, both from Leon.
+
+The print gate was backwards. Printing had been gated on the signed copy already being
+uploaded, which makes the actual workflow impossible: the counsellor PRINTS the agreement, the
+student signs it on paper, and the signed sheet is scanned back in. Printing is now available as
+soon as the plan is complete, and the panel says what happens next. The remaining gate — the
+instalments having to add up — is a different thing and stays: a half-entered schedule would
+print an agreement whose numbers don't add up, and that is the copy the student keeps.
+
+Everything printable is now explicitly A4, set in one place (`lib/print/page-css.ts`) rather
+than per page. Without a `@page` rule browsers fall back to whatever the print dialog last used,
+which is how a form silently comes out on Letter. A4 is the paper AFD's offices have, and every
+one of these documents is printed to be signed and scanned back — a document that prints at
+another size returns cropped or rescaled, and the signed copy on file no longer matches the one
+issued. The instalment agreement uses A4 *landscape*: its original is A5 landscape and the
+two-column design needs the width, so printing the same layout on A4 keeps the proportions and
+makes it markedly more legible, which matters on a document someone signs. Type sizes were
+raised accordingly — they had been set for the smaller sheet.

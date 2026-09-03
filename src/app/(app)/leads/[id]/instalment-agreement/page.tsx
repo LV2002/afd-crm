@@ -7,6 +7,7 @@ import { getLeadFeePlan } from "@/lib/enrolment/get-fee-plan";
 import { formatINR } from "@/lib/format/currency";
 import { formatDateIST } from "@/lib/format/date";
 import { getLeadDetail } from "@/lib/leads/get-lead-detail";
+import { A4_LANDSCAPE_CSS } from "@/lib/print/page-css";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -16,6 +17,10 @@ import { createClient } from "@/lib/supabase/server";
  *
  * Rendered from the saved plan rather than from what is on screen, so the
  * paper a student signs and the record the CRM holds cannot diverge.
+ *
+ * Printed on A4 landscape rather than the original's A5: A4 is the paper
+ * AFD's offices have, and this sheet is printed, signed by hand and
+ * scanned back in — see lib/print/page-css.ts.
  *
  * Two deliberate departures from the paper original, both because the
  * original is a blank to be filled by hand and this one is printed
@@ -28,21 +33,12 @@ import { createClient } from "@/lib/supabase/server";
  *    agreed, so pre-filling it would be inventing one.
  */
 
-/** Landscape A5 — the size the original is designed for. */
-const PAGE_STYLE = `
-  @page { size: A5 landscape; margin: 8mm; }
-  @media print {
-    .no-print { display: none !important; }
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  }
-`;
-
 const ACCENT = "#2c5aa0";
 
 function SectionHeading({ number, children }: { number: number; children: React.ReactNode }) {
   return (
     <h2
-      className="mb-2 flex items-center gap-2 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white"
+      className="mb-2 flex items-center gap-2 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white"
       style={{ background: ACCENT }}
     >
       <span>
@@ -55,8 +51,8 @@ function SectionHeading({ number, children }: { number: number; children: React.
 /** A labelled line with a dotted rule, as on the paper form. */
 function FieldLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline gap-2 text-[10px]">
-      <span className="w-28 shrink-0 font-semibold" style={{ color: ACCENT }}>
+    <div className="flex items-baseline gap-2 text-[11px]">
+      <span className="w-32 shrink-0 font-semibold" style={{ color: ACCENT }}>
         {label}
       </span>
       <span className="flex-1 border-b border-dotted border-gray-400 pb-0.5">{value || " "}</span>
@@ -93,8 +89,8 @@ export default async function InstalmentAgreementPage({
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: PAGE_STYLE }} />
-      <div className="mx-auto max-w-[210mm] bg-white p-6 text-black print:p-0">
+      <style dangerouslySetInnerHTML={{ __html: A4_LANDSCAPE_CSS }} />
+      <div className="mx-auto max-w-[297mm] bg-white p-6 text-black print:p-0">
         <div className="no-print">
           <PrintButton />
         </div>
@@ -110,15 +106,15 @@ export default async function InstalmentAgreementPage({
             >
               afdindia
             </div>
-            <p className="mt-0.5 text-[7px] uppercase tracking-wider text-gray-600">
+            <p className="mt-0.5 text-[8px] uppercase tracking-wider text-gray-600">
               gateway to global design schools
             </p>
           </div>
           <div className="text-right">
-            <h1 className="text-base font-bold uppercase" style={{ color: ACCENT }}>
+            <h1 className="text-lg font-bold uppercase" style={{ color: ACCENT }}>
               Installment Payment Agreement
             </h1>
-            <p className="text-[9px] text-gray-600">
+            <p className="text-[10px] text-gray-600">
               Form No: AFD/FEE/{year}/{String(row.lead_number).padStart(6, "0")}
             </p>
           </div>
@@ -155,7 +151,7 @@ export default async function InstalmentAgreementPage({
               />
             </div>
 
-            <table className="w-full border-collapse text-[9px]">
+            <table className="w-full border-collapse text-[10px]">
               <thead>
                 <tr className="text-white" style={{ background: ACCENT }}>
                   <th className="border border-gray-400 p-1 text-left">INST.</th>
@@ -188,7 +184,7 @@ export default async function InstalmentAgreementPage({
             </table>
 
             {plan.values.feeNotes && (
-              <p className="mt-2 text-[8px] leading-snug">
+              <p className="mt-2 text-[9px] leading-snug">
                 <span className="font-semibold" style={{ color: ACCENT }}>
                   Notes:{" "}
                 </span>
@@ -200,7 +196,7 @@ export default async function InstalmentAgreementPage({
           {/* Right column: the terms and the signatures. */}
           <div className="border-l border-dashed border-gray-300 pl-5">
             <SectionHeading number={3}>Terms &amp; Payment Conditions</SectionHeading>
-            <ol className="mb-4 list-decimal space-y-1.5 pl-4 text-[8.5px] leading-snug">
+            <ol className="mb-4 list-decimal space-y-2 pl-4 text-[10px] leading-snug">
               <li>
                 <span className="font-bold">Due Dates &amp; Grace Period:</span> Installment payments
                 must be cleared on or before the specified due dates. A 5-day grace period is
@@ -229,7 +225,7 @@ export default async function InstalmentAgreementPage({
             </ol>
 
             <SectionHeading number={4}>Authorization &amp; Signatures</SectionHeading>
-            <div className="mt-10 flex items-end justify-between gap-3 text-[9px]">
+            <div className="mt-16 flex items-end justify-between gap-4 text-[10px]">
               <div className="flex-1 border-t border-gray-500 pt-1 text-center font-bold">
                 Student
               </div>
@@ -240,7 +236,7 @@ export default async function InstalmentAgreementPage({
                 Authorized Signatory
               </div>
             </div>
-            <p className="mt-4 text-center text-[9px] text-gray-600">
+            <p className="mt-4 text-center text-[10px] text-gray-600">
               Date: ____ / ____ / {year} &nbsp;|&nbsp; Place: ____________________
             </p>
           </div>

@@ -6,6 +6,7 @@ import { getFieldSchema, type FieldSchemaEntry } from "@/lib/fields/get-field-sc
 import { getRawFieldValue } from "@/lib/fields/field-column";
 import { formatDateIST } from "@/lib/format/date";
 import { createSignedUrl, listAttachments } from "@/lib/storage/attachments";
+import { A4_PORTRAIT_CSS } from "@/lib/print/page-css";
 import { createClient } from "@/lib/supabase/server";
 
 import type { StudentDetailRow } from "../types";
@@ -103,7 +104,9 @@ export default async function StudentPrintPage({ params }: { params: Promise<{ i
     signedPhotoUrl ?? (typeof pastedPhotoUrl === "string" && pastedPhotoUrl ? pastedPhotoUrl : null);
 
   return (
-    <div className="relative mx-auto max-w-3xl p-8 print:p-0">
+    <>
+      <style dangerouslySetInnerHTML={{ __html: A4_PORTRAIT_CSS }} />
+      <div className="relative mx-auto max-w-3xl p-8 print:p-0">
       <PrintButton />
 
       {/*
@@ -165,7 +168,8 @@ export default async function StudentPrintPage({ params }: { params: Promise<{ i
           </tr>
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }
 
