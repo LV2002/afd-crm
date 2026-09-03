@@ -1,4 +1,5 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { DatabaseZap } from "lucide-react";
 
 import { AccessDenied } from "@/components/layout/access-denied";
 import {
@@ -10,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { can, getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db/client";
+import { db, isDatabaseUnreachable } from "@/lib/db/client";
 import { centers, leads, pipelineStages, profiles } from "@/lib/db/schema";
 import {
   aggregateCentrePerformance,
@@ -33,7 +34,27 @@ import { LeadsBySourceChart } from "./leads-by-source-chart";
  * firstTouchSource — never a name, phone, or email — so that boundary
  * holds regardless of which client fetches it.
  */
-export default async function ReportsPage() {
+function DatabaseUnreachable() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-12 text-center">
+      <DatabaseZap className="size-8 text-muted-foreground" />
+      <p className="text-sm font-medium">Can&apos;t reach the database.</p>
+      <p className="max-w-prose text-xs text-muted-foreground">
+        This page reads directly from Postgres rather than through Supabase&apos;s API, so it is
+        the first place a bad <code className="font-mono">DATABASE_URL</code> shows up — every
+        other screen can still look fine. Check that{" "}
+        <code className="font-mono">DATABASE_URL</code> is set to Supabase&apos;s{" "}
+        <strong>Transaction pooler</strong> connection string (port{" "}
+        <code className="font-mono">6543</code>), not the direct one — locally in{" "}
+        <code className="font-mono">.env.local</code>, and on Vercel in Project Settings →
+        Environment Variables. The direct hostname is IPv6-only and is unreachable from Vercel
+        and from many home networks. See docs/GETTING-STARTED.md.
+      </p>
+    </div>
+  );
+}
+
+export default async function InsightsPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "report.read")) return <AccessDenied />;
 
@@ -50,23 +71,37 @@ export default async function ReportsPage() {
         ? and(isNull(leads.deletedAt), inArray(leads.centerId, user.centerIds))
         : and(isNull(leads.deletedAt), eq(leads.assignedTo, user.id));
 
-  const [leadRows, stageRows, centerRows, profileRows] = await Promise.all([
-    db
-      .select({
-        id: leads.id,
-        assignedTo: leads.assignedTo,
-        centerId: leads.centerId,
-        stageId: leads.stageId,
-        firstTouchSource: leads.firstTouchSource,
-      })
-      .from(leads)
-      .where(leadWhere),
-    db
-      .select({ id: pipelineStages.id, name: pipelineStages.name, sortOrder: pipelineStages.sortOrder, stageType: pipelineStages.stageType })
-      .from(pipelineStages),
-    db.select({ id: centers.id, name: centers.name }).from(centers),
-    db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles),
-  ]);
+  // This is the only *page* in the app that reads over a direct Postgres
+  // socket (everything else goes through Supabase's HTTP API), so it is
+  // also the only page that breaks when DATABASE_URL is wrong or points
+  // at a host this environment can't route to. That made a config problem
+  // look like a broken page. Catch it here and say so plainly; anything
+  // else is a real bug and still throws. See docs/DECISIONS.md.
+  let data;
+  try {
+    data = await Promise.all([
+      db
+        .select({
+          id: leads.id,
+          assignedTo: leads.assignedTo,
+          centerId: leads.centerId,
+          stageId: leads.stageId,
+          firstTouchSource: leads.firstTouchSource,
+        })
+        .from(leads)
+        .where(leadWhere),
+      db
+        .select({ id: pipelineStages.id, name: pipelineStages.name, sortOrder: pipelineStages.sortOrder, stageType: pipelineStages.stageType })
+        .from(pipelineStages),
+      db.select({ id: centers.id, name: centers.name }).from(centers),
+      db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles),
+    ]);
+  } catch (error) {
+    if (isDatabaseUnreachable(error)) return <DatabaseUnreachable />;
+    throw error;
+  }
+
+  const [leadRows, stageRows, centerRows, profileRows] = data;
 
   const centerNameById = new Map(centerRows.map((c) => [c.id, c.name]));
   const userNameById = new Map(profileRows.map((p) => [p.id, p.fullName]));

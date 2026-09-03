@@ -2316,3 +2316,40 @@ production. If it still fails, the client-side-filter theory is wrong and the ea
 "0 bytes transferred" network error needs re-diagnosing from scratch (e.g. checking whether
 his Mac has AdGuard/Little Snitch/antivirus web-shield software installed, or testing the
 production URL from a different network entirely, like his phone's cellular data).
+
+## Session 26 — Real root cause of the Insights page: unreachable `DATABASE_URL`
+
+The rename in Session 25 did **not** fix it, which disproved the client-side-filter theory and
+forced a proper diagnosis. Found it:
+
+`insights/page.tsx` is the only *page* that reads over a direct Postgres socket — every other
+importer of `@/lib/db/client` is a cron route, a webhook route, or a Server Action, none of
+which run on a browser page load, and every other page reads through Supabase's HTTP API. So
+it is the only screen that breaks when `DATABASE_URL` is unreachable, which it was in *both*
+of Leon's environments (the IPv6-only Supabase direct hostname: unroutable from his home
+network, and unreachable from Vercel's functions). Same class of cause in two places — which
+is exactly why it looked like a shared client-side problem.
+
+Why it was silent instead of erroring, measured rather than assumed: a refused connection
+throws in ~7ms, but an unreachable host stalls for postgres.js's `connect_timeout` — **30s by
+default**. Locally: `✓ Compiled` then no GET line, because the request truly hadn't finished.
+On Vercel: functions die at ~10-15s, so it was killed mid-request → "network error", **0 bytes
+transferred**, nothing in the logs.
+
+**Shipped:**
+- `connect_timeout: 8` in `src/lib/db/client.ts` — fails *inside* a Vercel function's lifetime
+  so a real error page can render instead of the function being killed. Verified: 8.0s exactly.
+- `isDatabaseUnreachable()` + a `DatabaseUnreachable` panel on the Insights page that names
+  `DATABASE_URL` and the pooler connection string, so this config problem can never again
+  present as a mystery dead page. Matches socket errors only — never SQLSTATE query errors,
+  which must keep crashing as the real bugs they are.
+- `tests/db-unreachable.spec.ts` — 9 tests pinning that boundary in both directions.
+
+**Verified:** `npx tsc --noEmit` clean, `npx eslint` clean, `npm run build` succeeds, new
+suite 9/9 green. Timeout behaviour confirmed by direct probe against a blackholed address
+(30.0s before → 8.0s after, code `CONNECT_TIMEOUT`).
+
+**Still needs Leon (config, not code):** set `DATABASE_URL` to Supabase's **Transaction
+pooler** string (port `6543`) in *both* `.env.local` (then fully restart `npm run dev`) and
+Vercel → Settings → Environment Variables (then redeploy). The code change makes the page
+*tell* him if it's still wrong instead of hanging.
