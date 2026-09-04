@@ -2,7 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db/client";
-import { leads, whatsappBroadcastRecipients, whatsappBroadcasts } from "@/lib/db/schema";
+import { whatsappBroadcastRecipients, whatsappBroadcasts } from "@/lib/db/schema";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { sendTemplateMessage } from "@/lib/integrations/whatsapp/client";
 
@@ -50,11 +50,13 @@ export async function GET(request: Request) {
       templateName: whatsappBroadcasts.templateName,
       templateLanguage: whatsappBroadcasts.templateLanguage,
       bodyParam: whatsappBroadcasts.bodyParam,
-      assignedTo: leads.assignedTo,
     })
     .from(whatsappBroadcastRecipients)
     .innerJoin(whatsappBroadcasts, eq(whatsappBroadcasts.id, whatsappBroadcastRecipients.broadcastId))
-    .innerJoin(leads, eq(leads.id, whatsappBroadcastRecipients.leadId))
+    // No join to `leads` any more: an audience can be students, and the
+    // number to send to was snapshotted onto the recipient row when the
+    // broadcast was composed. Joining would have quietly dropped every
+    // student recipient.
     .where(and(eq(whatsappBroadcastRecipients.status, "queued"), eq(whatsappBroadcasts.status, "sending")))
     .limit(BATCH_SIZE);
 

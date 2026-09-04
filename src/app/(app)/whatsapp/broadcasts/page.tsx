@@ -13,6 +13,7 @@ interface BroadcastRow {
   name: string;
   template_name: string;
   status: "draft" | "sending" | "completed" | "failed";
+  audience_entity: "lead" | "student";
   total_recipients: number;
   sent_count: number;
   failed_count: number;
@@ -33,22 +34,19 @@ export default async function WhatsAppBroadcastsPage() {
   const supabase = await createClient();
   const { data: broadcasts } = await supabase
     .from("whatsapp_broadcasts")
-    .select("id, name, template_name, status, total_recipients, sent_count, failed_count, started_at")
+    .select("id, name, template_name, status, audience_entity, total_recipients, sent_count, failed_count, started_at")
     .order("created_at", { ascending: false })
     .returns<BroadcastRow[]>();
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">WhatsApp Broadcasts</h1>
-          <p className="text-sm text-muted-foreground">
-            Send an approved template to every lead carrying a tag. A background job sends
-            each recipient a few at a time — refresh to see progress.
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-4">
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          An approved template sent to a slice of your leads or students, picked with the same
+          filters as Insights. A background job sends a few at a time — refresh to see progress.
+        </p>
         <Button asChild>
-          <Link href="/settings/whatsapp-broadcasts/new">New broadcast</Link>
+          <Link href="/whatsapp/broadcasts/new">New broadcast</Link>
         </Button>
       </div>
 

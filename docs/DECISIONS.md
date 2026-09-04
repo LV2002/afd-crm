@@ -2221,3 +2221,40 @@ campaign-holders can see these rows at all. Matched threads stay masked like eve
 **Only the assigned counsellor is notified.** `whatsapp.reply_received` ships with
 `defaultNotifyOwner: true` and no roles: exactly the rule Leon gave, and an admin can widen it in
 Settings without a deploy.
+
+## 2026-09-04 — Broadcast audiences reuse the Insights filter grammar
+
+The audience was one lead tag. Leon asked for what Insights does — every variable, over leads and
+students.
+
+`lib/whatsapp/audience.ts` calls `applyPivotFilters()` directly rather than growing a second
+filter language. Two implementations of "Kannur, Meta, NIFT" would eventually disagree, and the
+person composing a broadcast is usually the person who just looked at the same slice on Insights.
+It also means a custom field is a targeting option the moment an admin adds it, with no deploy —
+the same property the rest of the field system has.
+
+Everything runs through the caller's RLS-bound client, so a centre head's audience is their centre.
+The scoping is the same policies as every list they can already read, not a rule this module
+invents.
+
+Three judgement calls in the resolver:
+
+- **One message per number, not per record.** A parent whose number is on two siblings' records
+  gets one broadcast. The count on screen says how many were folded together, so it doesn't look
+  like leads went missing.
+- **`do_not_contact` is applied in SQL**, not left to whoever composes the audience — a broadcast
+  is precisely the unsolicited contact the flag exists to block. `consent_status`/
+  `opted_out_channels` are still not checked: they govern ad-platform retargeting, a different
+  consent question, and remain flagged for when WhatsApp-specific consent tracking exists.
+- **`select("*")`** on the audience query, against the usual instinct, because the fields are
+  configuration: an admin's new custom field has to be filterable without a code change. Nothing
+  is rendered from it — only names and numbers reach the recipient snapshot.
+
+**Students needed a real schema change**, not a lead lookup. `whatsapp_broadcast_recipients` now
+carries `student_id` alongside `lead_id` with a `num_nonnulls(...) = 1` check, because a student
+whose originating lead was deleted still has a phone, and their number can differ from the lead's.
+The sweep stopped joining `leads` — it uses the phone snapshotted on the recipient row, which is
+what it should have used from the start and is the only thing that works for a student audience.
+
+**Only approved templates are offered.** An unapproved one is a send that fails at Meta's door, and
+the failure reaches nobody who could act on it.

@@ -113,12 +113,6 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     description: "Connect Meta, Google, WhatsApp and telephony — plug in credentials, no deploy",
     permissions: ["settings.manage"],
   },
-  {
-    href: "/settings/whatsapp-broadcasts",
-    label: "WhatsApp Broadcasts",
-    description: "Send a template message to every lead carrying a tag",
-    permissions: ["whatsapp.campaign"],
-  },
 ];
 
 export function settingsNavFor(user: SessionUser): SettingsNavItem[] {
