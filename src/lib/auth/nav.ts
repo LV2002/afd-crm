@@ -11,6 +11,7 @@ export type NavIconKey =
   | "leads"
   | "pipeline"
   | "accounts"
+  | "finance"
   | "students"
   | "profile-forms"
   | "insights"
@@ -56,6 +57,15 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
   { href: "/pipeline", iconKey: "pipeline", permission: "lead.read", label: "Pipeline" },
   { href: "/accounts", iconKey: "accounts", permission: "payment.read", label: "Accounts" },
   { href: "/students", iconKey: "students", permission: "student.read", label: "Students" },
+  {
+    // The institute's own money. Gated on finance.read, which a counsellor
+    // does not hold — so the whole section is invisible to them, not just
+    // disabled.
+    href: "/finance",
+    iconKey: "finance",
+    permission: "finance.read",
+    label: "Finance",
+  },
   {
     href: "/profile-forms",
     iconKey: "profile-forms",

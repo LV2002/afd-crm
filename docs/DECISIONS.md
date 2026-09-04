@@ -1874,3 +1874,72 @@ are implied by it, and three messages about one lead say nothing the last one do
 The ladder's `unassign` action is now implemented too (the lead returns to the orphan queue).
 `requeue` is still not, deliberately and on the record: the data model defines no queue for it to
 mean anything against, and implementing a guess would be worse than the honest gap.
+
+2026-09-04 · [feature] The finance workbook, rebuilt inside the CRM.
+
+Leon shared AFD's live Google Sheet and its Apps Script — a genuinely well-built append-only
+ledger with intake forms, per-account balances, collections, timeliness and a full set of reports.
+The brief was to reproduce it here, editable, visible only to centre heads, accounts and
+admin/co-admins.
+
+**Its core design is kept, because it is the right one.** One ledger records every rupee; every
+balance, statement and report is a derived view of it; nothing is ever edited or deleted; a
+mistake is corrected by appending a mirrored negative row so totals net out on their own. That is
+the same rule `payments` already followed (CLAUDE.md § 7), now extended from student fees to the
+whole business.
+
+**Two departures, both deliberate.**
+
+The workbook kept a `Status` column it rewrote in place when a transaction was reversed — the one
+spot where it broke its own append-only rule. Here "reversed" is DERIVED: a row is reversed when
+another row points at it via `reverses_transaction_id`. So there is no UPDATE policy on
+`finance_transactions` for anybody, admin included, and nothing to rewrite. A partial unique index
+allows exactly one reversal per entry, because two people hitting reverse at once would otherwise
+each append a mirror row and take the account down twice.
+
+The workbook wrote allocation rows joining payments to instalments, and had to unwind them on
+every reversal. Here allocation is computed at read time from the two append-only tables
+(`allocatePayments()`), oldest-instalment-first, with reversals as negative amounts. A reversed
+payment therefore un-settles the instalment it covered with no cleanup step to forget.
+
+**Fee payments post to the same ledger, in the same database transaction as the receipt.** One
+write or neither: a receipt without a cash entry is not a state the database can be left in. That
+is strictly better than the spreadsheet, which had the same coupling with none of the guarantee.
+`accountId` is optional on `recordPayment()` so payments recorded before the ledger existed stay
+valid history; those appear on the reports under an explicit "not attributed to an account" line
+rather than quietly missing.
+
+**Transfers are excluded from income AND expenses**, which is the single most important rule in
+the module and the easiest to get wrong. Moving ₹50,000 from the bank to the cash box is the same
+money in a different drawer; counting it would inflate both halves of every report and make the
+profit figure meaningless.
+
+**The GST memo back-calculates** the tax already inside gross collections — gross × r / (1 + r),
+not gross × r. Getting that backwards overstates the liability by the rate squared, which at 18%
+is a 3% error on a figure a CA will read. It remains a memo: not a return, no input credit, no
+record of what has been remitted, exactly as the workbook said.
+
+**Every breakdown carries an "other / uncategorised" reconciling line.** It looks like pedantry
+until the month somebody renames a category, at which point it is the only thing standing between
+a tidy-looking report and a wrong one.
+
+**Access.** Three new primitives: `finance.read`, `finance.record`, `finance.manage` — separate
+from `payment.*`, which is about one student's fees and which a counsellor legitimately holds.
+Centre heads get read + record at centre scope; accounts gets all three; admin and co-admin hold
+everything. Counsellors and academics hold none, so the nav item is absent and the RLS policies
+return them nothing. `own` scope cannot match, on purpose: "your own bank account" is not a
+meaningful idea, and a role configured that way should see nothing rather than everything.
+
+This is the part the spreadsheet could not do. Its own comment admits it: "protection blocks
+editing, not viewing. Staff can still read every sheet and can copy the file."
+
+**Not carried over.** The workbook's Config had an "Active Centre" filter that scoped every report
+globally; here the centre boundary is RLS, so a centre head simply cannot see another centre and
+needs no filter to say so. The three fixed ledgers became rows in `finance_accounts`, so a second
+bank or a new centre is data rather than a code change. Admission intake is not duplicated — the
+CRM already has enrolments, and a second door into the same record is how a receipt ends up
+without a payment behind it.
+
+2026-09-04 · [schema] `org_settings.gst_rate` as `numeric(6,4)`, not a float. A rate that drifts by
+1e-16 changes a printed total on a fee agreement. It comes back from both postgres-js and PostgREST
+as a string precisely so nobody loses that precision silently; `getFinanceConfig()` parses it once.

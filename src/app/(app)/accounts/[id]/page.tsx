@@ -10,6 +10,8 @@ import { maskPhone } from "@/lib/leads/mask-phone";
 import { createClient } from "@/lib/supabase/server";
 
 import { RevealPhoneButton } from "../../leads/reveal-phone-button";
+import { getAccounts } from "@/lib/finance/get-finance";
+
 import { RecordPaymentForm } from "./record-payment-form";
 
 interface EnrolmentDetail {
@@ -57,6 +59,11 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
     .maybeSingle<EnrolmentDetail>();
 
   if (!enrolment) notFound();
+
+  // Accounts staff hold finance.read, so this returns their centre's
+  // accounts; if a role somehow does not, RLS returns nothing and the
+  // picker simply does not render.
+  const financeAccounts = (await getAccounts(supabase)).map((a) => ({ id: a.id, name: a.name }));
 
   const [{ data: paymentRows }, { data: receiptRows }] = await Promise.all([
     supabase
@@ -159,7 +166,9 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
           </div>
         </div>
 
-        <div className="flex flex-col gap-4">{canRecordPayment && <RecordPaymentForm enrolmentId={id} />}</div>
+        <div className="flex flex-col gap-4">
+          {canRecordPayment && <RecordPaymentForm enrolmentId={id} accounts={financeAccounts} />}
+        </div>
       </div>
     </div>
   );

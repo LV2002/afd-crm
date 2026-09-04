@@ -58,6 +58,8 @@ export async function recordPaymentAction(
   const referenceRaw = formData.get("reference");
   const reference = typeof referenceRaw === "string" && referenceRaw.trim() ? referenceRaw.trim() : null;
 
+  const accountId = String(formData.get("accountId") ?? "").trim();
+
   const [enrolment] = await db.select().from(enrolments).where(eq(enrolments.id, enrolmentId));
   if (!enrolment || enrolment.deletedAt) {
     return { error: "This enrolment no longer exists." };
@@ -76,7 +78,17 @@ export async function recordPaymentAction(
   let result;
   try {
     result = await db.transaction((tx) =>
-      recordPayment(tx, { enrolmentId, amountPaise, method, reference, recordedBy: user.id }),
+      recordPayment(tx, {
+        enrolmentId,
+        amountPaise,
+        method,
+        reference,
+        recordedBy: user.id,
+        // Empty when the institute has no finance accounts set up yet.
+        // The payment is still recorded; the finance reports show it under
+        // "not attributed to an account" rather than pretending otherwise.
+        accountId: accountId || null,
+      }),
     );
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not record payment." };

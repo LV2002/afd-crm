@@ -1,4 +1,4 @@
-import { boolean, integer, jsonb, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, numeric, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
 
 import { idColumn, softDelete, timestamps } from "./_helpers";
 
@@ -12,6 +12,18 @@ export const orgSettings = pgTable("org_settings", {
   currency: text("currency").notNull().default("INR"),
   locale: text("locale").notNull().default("en-IN"),
   fiscalYearStartMonth: integer("fiscal_year_start_month").notNull().default(4),
+  /**
+   * GST applied to (course fee − discounts), as a fraction: 0.18 is 18%.
+   * `numeric` rather than a float — a rate that drifts by 1e-16 changes a
+   * printed total on a fee agreement.
+   *
+   * Configuration, not a constant, because it is a rate a government
+   * changes and an institute's CA has an opinion about. The finance
+   * reports treat it as a memo only: they back-calculate the GST inside
+   * gross collections. Nothing here is a return, and nothing here tracks
+   * input credit or what has actually been remitted.
+   */
+  gstRate: numeric("gst_rate", { precision: 6, scale: 4 }).notNull().default("0.18"),
   dateFormat: text("date_format").notNull().default("dd/MM/yyyy"),
   /** docs/01-DATA-MODEL.md § Temperature: how long a counsellor's manual temperature override beats the recompute cron. */
   temperatureOverrideDays: integer("temperature_override_days").notNull().default(3),

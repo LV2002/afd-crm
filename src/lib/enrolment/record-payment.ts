@@ -2,6 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import type { DbExecutor } from "@/lib/db/client";
 import { enrolments, leads, payments, receipts, students } from "@/lib/db/schema";
+import { FEE_CATEGORY, postEntry } from "@/lib/finance/post";
 
 export interface RecordPaymentInput {
   enrolmentId: string;
@@ -9,6 +10,18 @@ export interface RecordPaymentInput {
   method: "cash" | "upi" | "card" | "neft" | "cheque" | "other";
   reference?: string | null;
   recordedBy: string | null;
+  /**
+   * Which bank account or cash box the money landed in.
+   *
+   * When given, this payment also posts to the finance ledger, in the SAME
+   * transaction, so a student's receipt and the institute's cash position
+   * can never disagree — one write or neither. The screens always supply
+   * it; it stays optional here so payments recorded before the ledger
+   * existed remain valid history. Those show up on the finance reports as
+   * an explicit "not attributed to an account" line rather than quietly
+   * missing.
+   */
+  accountId?: string | null;
 }
 
 export interface RecordPaymentResult {
@@ -17,6 +30,8 @@ export interface RecordPaymentResult {
   receiptNo: number;
   isFirstPayment: boolean;
   studentId: string | null;
+  /** The cash-ledger entry this payment created, when an account was given. */
+  financeTransactionId: string | null;
 }
 
 /**
@@ -67,6 +82,30 @@ export async function recordPayment(tx: DbExecutor, input: RecordPaymentInput): 
     })
     .returning({ id: receipts.id, receiptNo: receipts.receiptNo });
 
+  // The cash side of the same event. Inside this transaction, so a receipt
+  // without a ledger entry — or the reverse — is not a state the database
+  // can be left in.
+  let financeTransactionId: string | null = null;
+  if (input.accountId) {
+    const posted = await postEntry(tx, {
+      occurredOn: new Date().toISOString().slice(0, 10),
+      direction: "in",
+      kind: "fee",
+      accountId: input.accountId,
+      category: FEE_CATEGORY,
+      amountPaise: input.amountPaise,
+      description: `Fee payment — receipt #${receipt.receiptNo}`,
+      reference: input.reference ?? null,
+      paymentId: payment.id,
+      enrolmentId: input.enrolmentId,
+      studentId: enrolment.studentId,
+      course: enrolment.course,
+      recordedBy: input.recordedBy,
+      source: "payment",
+    });
+    financeTransactionId = posted.id;
+  }
+
   const priorCredits = await tx
     .select({ id: payments.id })
     .from(payments)
@@ -82,6 +121,7 @@ export async function recordPayment(tx: DbExecutor, input: RecordPaymentInput): 
       receiptNo: receipt.receiptNo,
       isFirstPayment: false,
       studentId: enrolment.studentId,
+      financeTransactionId,
     };
   }
 
@@ -123,5 +163,6 @@ export async function recordPayment(tx: DbExecutor, input: RecordPaymentInput): 
     receiptNo: receipt.receiptNo,
     isFirstPayment: true,
     studentId: student.id,
+    financeTransactionId,
   };
 }

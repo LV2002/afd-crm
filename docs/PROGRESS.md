@@ -2601,3 +2601,57 @@ the six settings rows; without it the events still fire on their built-in defaul
 settings screen shows "Using defaults" until you save one.
 
 **Next:** collections (who owes what and since when), or telephony once a provider is chosen.
+
+## Session 35 — The finance workbook, inside the CRM
+
+Leon shared AFD's live finance Google Sheet and its Apps Script. This rebuilds it here — editable,
+and visible only to centre heads, accounts and admin/co-admins.
+
+**One ledger for every rupee.** Fees, other income, expenses, transfers between your own accounts.
+Nothing is ever edited or deleted: a mistake is reversed by posting its mirror image, so totals
+correct themselves and the trail stays. `finance_transactions` has no UPDATE or DELETE policy for
+anybody, admin included — the database enforces it, not everyone's memory.
+
+**Accounts** — every bank account, cash box and petty cash float, per centre, with an opening
+balance and a live balance that is always opening + ledger, never a stored counter. Petty cash
+below a fifth of its float gets flagged, as in the workbook.
+
+**Screens:** Dashboard (cash by account, month and year income/expense/net, outstanding, top
+expenses, six-month trend) · Collections (what's owed, ageing buckets, on-time rate, worst delays)
+· Monthly report (income and expenses by category with shares, fees by account, who paid this
+month) · Yearly (year-on-year, fee revenue by course, expenses by category, GST memo) · Cash flow
+(twelve months across your fiscal year) · Transactions (with reverse and correct on each row) ·
+Account ledger (statement with a running balance and a reconciliation check) · Record entry
+(expense / other income / transfer).
+
+**Fee payments now post to the ledger too**, in the same database transaction as the receipt —
+one write or neither, so a student's receipt and the institute's bank balance cannot disagree. The
+payment form gained a "Received into" picker.
+
+**Access:** three new permissions — `finance.read`, `finance.record`, `finance.manage`. Centre
+heads read and post for their own centre; accounts gets all three; admins get everything;
+counsellors and academics get none and cannot see the section exists. This is the thing the
+spreadsheet could not do — its protection stopped editing but not reading, and anyone with the
+link could copy the file.
+
+**Categories** (expense heads, other-income heads) are ordinary dropdown rows in Settings →
+Dropdowns, seeded from the workbook's own lists. GST rate is in Settings → Organisation.
+
+**Tests:** `tests/finance.spec.ts` (34, no database) covers balances, reversal netting, the
+transfer exclusion, GST back-calculation, fiscal-year months, category reconciliation, payment
+allocation and timeliness. `tests/rls.spec.ts` gains 12 assertions that a counsellor sees nothing,
+a centre head sees one centre, and nobody — admin included — can edit or delete a posted entry.
+
+**Verified:** `npx tsc --noEmit` clean, `next lint` clean (one pre-existing warning), `npm run
+build` succeeds with all nine finance routes, and every test that does not need a database passes.
+The database-backed specs, including the new RLS assertions, need a run against real Postgres;
+this container has none.
+
+**Needs Leon:** `npm run db:migrate` (0039–0040) and `npm run db:seed`. Then set each account's
+opening balance under Finance → Accounts — that is the balance on the day the CRM takes over, and
+everything after it is the ledger's own arithmetic.
+
+**Not carried over, deliberately:** the workbook's admission intake (the CRM already has
+enrolments — a second door into the same record is how a receipt ends up without a payment behind
+it) and its "Active Centre" report filter (RLS already means a centre head cannot see another
+centre).

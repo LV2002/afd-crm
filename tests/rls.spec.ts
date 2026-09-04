@@ -1143,3 +1143,186 @@ describe("notifications are readable only by their own recipient", () => {
     expect(rows).toHaveLength(0);
   });
 });
+
+/**
+ * Finance is visible to centre heads, accounts and admins — nobody else.
+ *
+ * Leon's requirement, and the one thing the spreadsheet could not do: its
+ * protection stopped editing but not reading, so any staff member with the
+ * link could open the Dashboard and read the bank balance. These tests are
+ * that requirement, executed.
+ */
+describe("the finance ledger is scoped by finance.read, and hidden from counsellors", () => {
+  let kochiAccountId: string;
+  let kannurAccountId: string;
+  let kochiTxnId: string;
+  let kannurTxnId: string;
+
+  beforeAll(async () => {
+    const [kochiAcct] = await owner<Array<{ id: string }>>`
+      insert into finance_accounts (name, center_id, type, opening_balance_paise)
+      values ('RlsSpecTest Kochi Bank', ${centerIds.kochi}, 'bank', 100000)
+      returning id
+    `;
+    kochiAccountId = kochiAcct.id;
+
+    const [kannurAcct] = await owner<Array<{ id: string }>>`
+      insert into finance_accounts (name, center_id, type, opening_balance_paise)
+      values ('RlsSpecTest Kannur Bank', ${centerIds.kannur}, 'bank', 100000)
+      returning id
+    `;
+    kannurAccountId = kannurAcct.id;
+
+    const [kochiTxn] = await owner<Array<{ id: string }>>`
+      insert into finance_transactions
+        (occurred_on, direction, kind, account_id, center_id, category, amount_paise, description)
+      values (current_date, 'out', 'expense', ${kochiAccountId}, ${centerIds.kochi}, 'Rent', 5000000, 'RlsSpecTest Kochi rent')
+      returning id
+    `;
+    kochiTxnId = kochiTxn.id;
+
+    const [kannurTxn] = await owner<Array<{ id: string }>>`
+      insert into finance_transactions
+        (occurred_on, direction, kind, account_id, center_id, category, amount_paise, description)
+      values (current_date, 'out', 'expense', ${kannurAccountId}, ${centerIds.kannur}, 'Rent', 5000000, 'RlsSpecTest Kannur rent')
+      returning id
+    `;
+    kannurTxnId = kannurTxn.id;
+  });
+
+  afterAll(async () => {
+    await owner`delete from finance_transactions where description like 'RlsSpecTest%'`;
+    await owner`delete from finance_accounts where name like 'RlsSpecTest%'`;
+  });
+
+  it("a counsellor sees no accounts and no ledger at all", async () => {
+    // The whole point of the module. Their own leads' fees, yes; the
+    // institute's bank balance and salary bill, no.
+    const accounts = await asUser(fx.counsellor_kochi, (tx) =>
+      tx<Array<{ id: string }>>`select id from finance_accounts`,
+    );
+    const entries = await asUser(fx.counsellor_kochi, (tx) =>
+      tx<Array<{ id: string }>>`select id from finance_transactions`,
+    );
+    expect(accounts).toHaveLength(0);
+    expect(entries).toHaveLength(0);
+  });
+
+  it("academics sees nothing either", async () => {
+    const entries = await asUser(fx.academics_a, (tx) =>
+      tx<Array<{ id: string }>>`select id from finance_transactions`,
+    );
+    expect(entries).toHaveLength(0);
+  });
+
+  it("a centre head sees their own centre and not the other", async () => {
+    const rows = await asUser(fx.centerhead_kochi, (tx) =>
+      tx<Array<{ id: string }>>`
+        select id from finance_transactions where id in (${kochiTxnId}, ${kannurTxnId})
+      `,
+    );
+    expect(rows.map((r) => r.id)).toEqual([kochiTxnId]);
+  });
+
+  it("accounts sees both centres", async () => {
+    // Seeded at centre scope but a member of both, which is how AFD runs
+    // it — one accounts person for the whole institute.
+    const rows = await asUser(fx.accounts_a, (tx) =>
+      tx<Array<{ id: string }>>`
+        select id from finance_transactions where id in (${kochiTxnId}, ${kannurTxnId})
+      `,
+    );
+    expect(rows).toHaveLength(2);
+  });
+
+  it("an admin sees everything", async () => {
+    const rows = await asUser(fx.admin_a, (tx) =>
+      tx<Array<{ id: string }>>`
+        select id from finance_transactions where id in (${kochiTxnId}, ${kannurTxnId})
+      `,
+    );
+    expect(rows).toHaveLength(2);
+  });
+
+  it("nobody can edit a posted entry — not even an admin", async () => {
+    // CLAUDE.md non-negotiable #7, enforced by the absence of an UPDATE
+    // policy rather than by everyone remembering. A wrong entry is
+    // reversed and re-posted, which leaves a trail.
+    await asUser(fx.admin_a, (tx) =>
+      tx`update finance_transactions set amount_paise = 1 where id = ${kochiTxnId}`,
+    ).catch(() => undefined);
+
+    const [row] = await owner<Array<{ amount_paise: string }>>`
+      select amount_paise from finance_transactions where id = ${kochiTxnId}
+    `;
+    expect(Number(row.amount_paise)).toBe(5000000);
+  });
+
+  it("nobody can delete a posted entry either", async () => {
+    await asUser(fx.admin_a, (tx) =>
+      tx`delete from finance_transactions where id = ${kochiTxnId}`,
+    ).catch(() => undefined);
+
+    const rows = await owner<Array<{ id: string }>>`
+      select id from finance_transactions where id = ${kochiTxnId}
+    `;
+    expect(rows).toHaveLength(1);
+  });
+
+  it("a counsellor cannot post an entry", async () => {
+    await expect(
+      asUser(fx.counsellor_kochi, (tx) =>
+        tx`insert into finance_transactions
+             (occurred_on, direction, kind, account_id, center_id, category, amount_paise, description)
+           values (current_date, 'out', 'expense', ${kochiAccountId}, ${centerIds.kochi}, 'Rent', 1, 'RlsSpecTest forged')`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("a centre head cannot post into another centre's account", async () => {
+    await expect(
+      asUser(fx.centerhead_kochi, (tx) =>
+        tx`insert into finance_transactions
+             (occurred_on, direction, kind, account_id, center_id, category, amount_paise, description)
+           values (current_date, 'out', 'expense', ${kannurAccountId}, ${centerIds.kannur}, 'Rent', 1, 'RlsSpecTest cross-centre')`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("a centre head cannot add or edit an account — that needs finance.manage", async () => {
+    await expect(
+      asUser(fx.centerhead_kochi, (tx) =>
+        tx`insert into finance_accounts (name, center_id, type)
+           values ('RlsSpecTest sneaky', ${centerIds.kochi}, 'bank')`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("rejects a zero-amount entry, which would be a no-op row in a ledger", async () => {
+    await expect(
+      owner`
+        insert into finance_transactions
+          (occurred_on, direction, kind, account_id, center_id, category, amount_paise, description)
+        values (current_date, 'out', 'expense', ${kochiAccountId}, ${centerIds.kochi}, 'Rent', 0, 'RlsSpecTest zero')
+      `,
+    ).rejects.toThrow(/finance_txn_amount_nonzero/);
+  });
+
+  it("allows only one reversal per entry", async () => {
+    // Two people hitting reverse at the same moment would otherwise each
+    // append a mirror row, and the account would end up short twice.
+    await owner`
+      insert into finance_transactions
+        (occurred_on, direction, kind, account_id, center_id, category, amount_paise, description, reverses_transaction_id)
+      values (current_date, 'out', 'expense', ${kannurAccountId}, ${centerIds.kannur}, 'Rent', -5000000, 'RlsSpecTest reversal', ${kannurTxnId})
+    `;
+
+    await expect(
+      owner`
+        insert into finance_transactions
+          (occurred_on, direction, kind, account_id, center_id, category, amount_paise, description, reverses_transaction_id)
+        values (current_date, 'out', 'expense', ${kannurAccountId}, ${centerIds.kannur}, 'Rent', -5000000, 'RlsSpecTest double reversal', ${kannurTxnId})
+      `,
+    ).rejects.toThrow(/finance_txn_reverses_uq/);
+  });
+});
