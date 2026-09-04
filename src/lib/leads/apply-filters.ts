@@ -6,14 +6,14 @@ export type LeadFilterValues = Record<string, string>;
 /** URL search params use this prefix for per-field filters, so `search`/`page`/etc. don't collide with a field key. */
 export const FILTER_PARAM_PREFIX = "f_";
 
-export function filterParamKey(field: FieldSchemaEntry): string {
+export function filterParamKey(field: Pick<FieldSchemaEntry, "key">): string {
   return `${FILTER_PARAM_PREFIX}${field.key}`;
 }
 
 /** Reads this request's filter values (one per filterable field) out of the URL search params. */
 export function readFilterValues(
   searchParams: Record<string, string | string[] | undefined>,
-  filterableFields: FieldSchemaEntry[],
+  filterableFields: Array<Pick<FieldSchemaEntry, "key">>,
 ): LeadFilterValues {
   const values: LeadFilterValues = {};
   for (const field of filterableFields) {

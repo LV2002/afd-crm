@@ -1976,3 +1976,57 @@ same agreement from two screens.
 
 The queue also splits into "New admissions" (awaiting first payment, the default) and "All",
 which is what Leon asked for and what the job actually looks like.
+
+## 2026-09-04 — Insights: a pivot instead of report templates
+
+Phase 2 asked for a "generic pivot widget over nine dimensions"; what shipped was four fixed
+reports and a note saying so. Leon asked for the original thing, in his own words: "adjust the
+parameters ... like Google Sheets where I can filter each variable of a column."
+
+Built as one grammar (`lib/reports/pivot.ts`) rather than more reports: every lead variable is a
+filter, any one of them is the breakdown, and both go through the same bucketing — so a filter
+always matches exactly what the chart would have drawn. The four old reports are now settings of
+it. `aggregate-leads.ts` stays because the AI analyst's tools use it.
+
+**Which variables count as dimensions, and why it matters here more than elsewhere.** The page
+reads over the direct Postgres connection, bypassing RLS, because `report.read` is meant to give
+aggregate counts to roles that do not hold `lead.read` at all. The old page was safe because it
+selected five hardcoded columns. It now selects whatever an admin has configured, so the
+guarantee had to become a rule: phone, email, URL, file, long text, currency and lead_ref are
+never dimensions, and neither are the four fields whose value simply *is* the person
+(`student_name`, `father_name`, `mother_name`, `address_line`), however they are typed. City,
+school, state, exam year and every custom select stay available — a group label like "Ernakulam,
+42" is an aggregate; "Anjali Menon, 1" is just the lead with extra steps.
+
+Dates bucket to months rather than days: a per-day breakdown of ~200 leads a month is a list, not
+a report. Multiselect variables put a lead in every bucket it belongs to, which is the honest
+reading of "leads by exam" and does mean the column sums past the lead count — the page says so
+when it happens rather than quietly under-counting.
+
+Filtering happens in memory over the scoped rows; only the date range is pushed into SQL, because
+that is what actually bounds how many rows come back. At AFD's volume this is the cheaper and
+simpler side of the trade, and it keeps the whole grammar testable without a database.
+
+## 2026-09-04 — Profile form answers as sortable columns
+
+Leon wanted to search a student's name and sort the sheet by batch, city, state. The list had
+search over everything and sorting over three fixed columns.
+
+The columns are the questions: any question the form asks can be ticked on as a column, sorted,
+and filtered from its own control. Nothing in the code names a question, so rewriting the form in
+Settings brings its own columns. The opening column set is the "Show in list" tick that already
+exists on every field definition — reusing it beat inventing a second preference, and it means
+the default is admin-editable like everything else.
+
+Three judgement calls:
+
+- **Sorting compares what is displayed.** A batch is stored as a uuid; sorting by uuid would look
+  random. Option-backed answers sort by their resolved label; numbers sort numerically and dates
+  chronologically, which string sorting gets wrong.
+- **Unanswered always sinks to the bottom**, in both directions. A blank is missing, not smallest,
+  and flipping the sort to hunt for it is nobody's intent — so "Not answered" is a filter value
+  instead.
+- **Phone-typed answers cannot be columns.** A sheet of them is precisely the bulk contact export
+  CLAUDE.md non-negotiable #6 exists to prevent. They stay on the expanded row, and are now masked
+  there unless the viewer holds `lead.reveal_phone` — which was a real leak: the expanded row had
+  been printing all four numbers in full to anyone with `lead.read`.

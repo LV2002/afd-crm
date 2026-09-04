@@ -2682,3 +2682,42 @@ now explains that rather than leaving it looking like a bug.
 
 **Verified:** `npx tsc --noEmit` clean, `next lint` clean (one pre-existing warning), `npm run
 build` succeeds, all non-database tests pass.
+
+## Session 37 — Insights becomes a pivot, and the profile forms become a sheet
+
+Two fixes Leon asked for: Insights had fixed report templates when he wanted to set the
+parameters himself, and the Student Profile Forms list could not be searched by name or sorted on
+the answers.
+
+**Insights is now one query, not four reports.** Pick any lead variable to break the results down
+by, filter on every other one, and set a created-date range. "Leads by source", the counsellor
+scorecard and centre performance were three fixed screens; they are now three settings of the
+same screen, alongside questions nobody would have had a report written for ("which exams do
+Kannur's walk-ins want", "how did Meta do in July"). Every setting lives in the URL, so a view
+worth keeping can be bookmarked or sent to someone.
+
+The dimensions come from `field_definitions`, so a custom field an admin adds in Settings is a
+filter and a breakdown the moment it exists — no code change. `lib/reports/pivot.ts` holds the
+whole grammar (bucketing, filtering, grouping) as pure functions: 29 tests, no database.
+
+**The PII guarantee moved into code.** This page reads over the direct Postgres connection rather
+than through RLS, deliberately (see the page comment). That used to be safe because it selected
+five fixed columns; now that the admin decides what it selects, `isDimension()` decides what may
+be selected — never a phone, email, file, URL, free-text note, or the name of a person — and the
+page still renders only counts, never a row.
+
+**Student Profile Forms is now a sheet.** Search a student by name, lead number or any answer;
+tick any question to add it as a column; sort on it; filter each column from its own dropdown or
+search box, including "Not answered". Batches, centres and dropdown answers show and sort by
+their names, not the ids stored behind them. Which columns open by default is the "Show in list"
+tick already on each question in Settings → Custom Fields — configuration, not a hardcoded list.
+
+**One bug fixed on the way:** the expanded row printed the student's four phone numbers in full to
+anyone with `lead.read`. They are masked now unless the viewer holds `lead.reveal_phone`, and
+phone-typed answers can't be made columns at all (CLAUDE.md non-negotiable #6).
+
+**Verified:** `npx tsc --noEmit` clean, `next lint` clean (one pre-existing warning), `npm run
+build` succeeds, and the full suite runs 406 passing tests across 32 files — including 51 new ones
+in `tests/pivot.spec.ts` and `tests/profile-form-sheet.spec.ts`. The 21 failing files are all
+`ECONNREFUSED 127.0.0.1:5432`: the database-backed specs still need a run against real Postgres,
+and this container has none.
