@@ -11,6 +11,7 @@ import {
   aggregateScorecard,
 } from "@/lib/reports/aggregate-leads";
 
+import { findPeople, personHistory, refuseUnlessOrgWide } from "./person-history";
 import { allowedCenterIds, analystScope, leadScopeWhere } from "./scope";
 
 /**
@@ -31,6 +32,13 @@ import { allowedCenterIds, analystScope, leadScopeWhere } from "./scope";
  *  2. It returns AGGREGATES ONLY — counts, rates, group labels. No name, no
  *     phone, no email ever enters a tool result, so nothing here can turn
  *     into a bulk export of contact details (CLAUDE.md § Non-negotiables 6).
+ *
+ * `find_person` and `person_history` are the deliberate exception to (2),
+ * added at Leon's request so that "give me the full history on this
+ * student" is answerable. They return one named individual at a time and
+ * refuse anybody without org-wide report access — the same people who can
+ * already open that lead, enrolment and student record by clicking. See
+ * ./person-history.ts.
  */
 
 export interface AnalystContext {
@@ -91,6 +99,57 @@ async function stageRows() {
 }
 
 export const ANALYST_TOOLS: AnalystTool[] = [
+  {
+    name: "find_person",
+    description:
+      "Find a specific lead or student by name, phone number or lead number. Returns a short list of candidates with their id — call person_history with the id for the full record. Use this first whenever a question names an individual.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        // Deliberately not called `query`: no tool argument may be named
+        // anything a query could hide behind, and tests/ai-analyst.spec.ts
+        // enforces that by name.
+        nameOrPhone: { type: "string", description: "A name, phone number, or lead number." },
+      },
+      required: ["nameOrPhone"],
+      additionalProperties: false,
+    },
+    async run(rawArgs, ctx) {
+      const refusal = refuseUnlessOrgWide(ctx);
+      if (refusal) return refusal;
+      const args = z.object({ nameOrPhone: z.string().min(1) }).parse(rawArgs ?? {});
+      const matches = await findPeople(args.nameOrPhone);
+      return {
+        matches,
+        note:
+          matches.length === 0
+            ? "Nobody matched. Try a different spelling, or the phone number."
+            : undefined,
+      };
+    },
+  },
+  {
+    name: "person_history",
+    description:
+      "Everything the CRM knows about one person: profile, when they first enquired and from where, how long they took to join, their fee plan and instalments, every payment and the balance, and whether they are currently studying. Takes the leadId returned by find_person.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        leadId: { type: "string", description: "The leadId from find_person." },
+      },
+      required: ["leadId"],
+      additionalProperties: false,
+    },
+    async run(rawArgs, ctx) {
+      const refusal = refuseUnlessOrgWide(ctx);
+      if (refusal) return refusal;
+      const args = z.object({ leadId: z.string().uuid() }).parse(rawArgs ?? {});
+      // The caller holds org-wide report access to get here; whether they
+      // see a full phone number is still their own lead.reveal_phone.
+      const canReveal = ctx.user.permissions["lead.reveal_phone" as keyof typeof ctx.user.permissions] !== undefined;
+      return personHistory(args.leadId, canReveal);
+    },
+  },
   {
     name: "leads_by_source",
     description:

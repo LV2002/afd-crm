@@ -269,11 +269,17 @@ export const PERMISSIONS = [
     category: "Reports",
     description: "See reports across every center.",
   },
+  // Seeded to admin and co-admin only. The analyst can pull one person's
+  // whole file — profile, fee plan, payments, whether they are still
+  // studying — and those tools refuse anybody without org-wide report
+  // access, so granting this to a narrower role would produce a menu item
+  // that exists to say no. Still an ordinary editable grant.
   {
     code: "ai.query",
     label: "Use AI analyst",
     category: "Reports",
-    description: "Ask the /ask AI analyst questions over scoped data.",
+    description:
+      "Ask the /ask AI analyst questions, including the full history of one named lead or student.",
   },
 
   // Administration
