@@ -72,6 +72,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage"],
   },
   {
+    href: "/settings/discount-limits",
+    label: "Discount Authority",
+    description: "How much each role can take off a fee before it needs approval",
+    permissions: ["settings.manage"],
+  },
+  {
     href: "/settings/tags",
     label: "Tags",
     description: "Labels a lead can carry, for segmentation and retargeting audiences",

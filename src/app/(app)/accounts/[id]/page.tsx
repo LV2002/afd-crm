@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { RevealPhoneButton } from "../../leads/reveal-phone-button";
 import { AgreedPlan } from "@/components/enrolment/agreed-plan";
+import { PendingDiscount } from "@/components/enrolment/pending-discount";
 import { getAccounts } from "@/lib/finance/get-finance";
 
 import { OpenFileButton } from "@/components/files/open-file-button";
@@ -34,6 +35,8 @@ interface EnrolmentDetail {
   status: string;
   dropped_at: string | null;
   drop_reason: string | null;
+  pending_discount_paise: number | null;
+  pending_discount_at: string | null;
   enrolled_at: string;
   sales_to_accounts_at: string | null;
   accounts_to_academics_at: string | null;
@@ -62,7 +65,7 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
   const { data: enrolment } = await supabase
     .from("enrolments")
     .select(
-      "id, lead_id, course, mode, academic_year, total_fee_paise, discount_paise, discount_name, down_payment_paise, fee_notes, net_fee_paise, status, dropped_at, drop_reason, enrolled_at, sales_to_accounts_at, accounts_to_academics_at, student_id, leads(student_name, primary_phone), centers(name)",
+      "id, lead_id, course, mode, academic_year, total_fee_paise, discount_paise, discount_name, down_payment_paise, fee_notes, net_fee_paise, status, dropped_at, drop_reason, pending_discount_paise, pending_discount_at, enrolled_at, sales_to_accounts_at, accounts_to_academics_at, student_id, leads(student_name, primary_phone), centers(name)",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -163,6 +166,21 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
             separately.
           </p>
         </div>
+      )}
+
+      {/*
+        Accounts see it too: it is the reason the balance they are chasing
+        is higher than the figure the student was quoted.
+      */}
+      {enrolment.pending_discount_paise !== null && (
+        <PendingDiscount
+          enrolmentId={id}
+          pendingPaise={enrolment.pending_discount_paise}
+          requestedBy={null}
+          requestedAt={enrolment.pending_discount_at}
+          totalFeePaise={enrolment.total_fee_paise}
+          canDecide={can(user, "discount.approve")}
+        />
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">

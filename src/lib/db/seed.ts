@@ -16,6 +16,7 @@ import { ensurePermissionsSeeded } from "../auth/seed-permissions";
 import { db } from "./client";
 import {
   centers,
+  discountLimits,
   dropdownCategories,
   dropdownOptions,
   fieldDefinitions,
@@ -262,6 +263,53 @@ const ROLE_SEEDS: RoleSeed[] = [
     ],
   },
 ];
+
+/**
+ * Starting discount authority for the six shipped roles.
+ *
+ * These are deliberate figures, not placeholders, because the absence of a
+ * row means NO authority — so shipping the feature without them would put
+ * every discount in the institute behind an approval overnight. Leon can
+ * change any of them in Settings → Fees without a deploy.
+ *
+ * Inserted only when missing: an admin who has since lowered the
+ * counsellor limit to 5% must not have it silently reset to 10% by the
+ * next seed run, which is why this is onConflictDoNothing and not the
+ * upsert every other seed uses.
+ */
+const DISCOUNT_LIMIT_SEEDS: Record<
+  string,
+  { maxPercent: number | null; maxAmountPaise: number | null; isUnlimited: boolean }
+> = {
+  // Approve what was escalated to them, so no ceiling.
+  admin: { maxPercent: null, maxAmountPaise: null, isUnlimited: true },
+  co_admin: { maxPercent: null, maxAmountPaise: null, isUnlimited: true },
+  // A centre head settles the ordinary cases without troubling an admin.
+  center_head: { maxPercent: 25, maxAmountPaise: 25_000_00, isUnlimited: false },
+  // Enough for the everyday "give them a little off" without a phone call.
+  counsellor: { maxPercent: 10, maxAmountPaise: 5_000_00, isUnlimited: false },
+  // Accounts hold discount.approve so they can settle a request; the same
+  // ceiling as a centre head, since that is the level they act at.
+  accounts: { maxPercent: 25, maxAmountPaise: 25_000_00, isUnlimited: false },
+  // Academics never set a fee, so nothing to give away.
+  academics: { maxPercent: 0, maxAmountPaise: 0, isUnlimited: false },
+};
+
+async function seedDiscountLimits(roleIds: Record<string, string>) {
+  for (const [code, limit] of Object.entries(DISCOUNT_LIMIT_SEEDS)) {
+    const roleId = roleIds[code];
+    if (!roleId) continue;
+    await db
+      .insert(discountLimits)
+      .values({
+        roleId,
+        maxPercent: limit.maxPercent,
+        maxAmountPaise: limit.maxAmountPaise,
+        isUnlimited: limit.isUnlimited,
+      })
+      .onConflictDoNothing({ target: discountLimits.roleId });
+  }
+}
 
 async function seedRoles() {
   const roleIds: Record<string, string> = {};
@@ -979,6 +1027,7 @@ async function main() {
   await seedPipelineStages();
   await seedFieldDefinitions();
   await seedNotificationSettings(roleIds);
+  await seedDiscountLimits(roleIds);
   await seedFinanceAccounts(centerIds);
   await seedUsers(roleIds, centerIds);
   console.log("done");

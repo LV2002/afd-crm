@@ -351,6 +351,13 @@
       "when": 1788555362461,
       "tag": "0049_broadcast_header_media",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1788556743201,
+      "tag": "0050_discount_authority",
+      "breakpoints": true
     }
   ]
 }

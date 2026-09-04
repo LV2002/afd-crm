@@ -6,8 +6,10 @@ import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { leads } from "@/lib/db/schema";
+import { enrolments, leads } from "@/lib/db/schema";
 import { confirmAdmission } from "@/lib/enrolment/confirm-admission";
+import { resolveDiscount } from "@/lib/enrolment/discount-authority";
+import { getDiscountLimit } from "@/lib/enrolment/get-discount-limit";
 import { fieldColumn } from "@/lib/fields/field-column";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import { parseRupeesToPaise } from "@/lib/format/currency";
@@ -302,20 +304,65 @@ export async function confirmAdmissionAction(
     return { error: "This lead has no centre assigned yet — set one before confirming admission." };
   }
 
+  // The same authority check the fee panel applies. Confirming an
+  // admission is the OTHER way a discount gets set, and leaving it open
+  // would make the whole limit theatre: type the figure here instead.
+  // There is no approved discount to fall back on yet, so anything above
+  // the confirmer's ceiling is simply not applied and waits.
+  const discountOutcome = resolveDiscount({
+    limit: await getDiscountLimit(user),
+    totalFeePaise: totalFeePaiseOverride ?? 0,
+    requestedPaise: discountPaise,
+    alreadyApprovedPaise: 0,
+  });
+
   let result;
   try {
-    result = await db.transaction((tx) =>
-      confirmAdmission(tx, {
+    result = await db.transaction(async (tx) => {
+      const confirmed = await confirmAdmission(tx, {
         leadId,
         course,
         centerId: lead.centerId!,
         mode,
         academicYear: academicYear.trim(),
         totalFeePaiseOverride,
-        discountPaise,
+        discountPaise: discountOutcome.appliedDiscountPaise,
         confirmedBy: user.id,
-      }),
-    );
+      });
+
+      if (discountOutcome.pendingDiscountPaise !== null) {
+        // Re-checked against the fee confirmAdmission actually resolved,
+        // which may have come from fee_structures rather than the form —
+        // a percentage limit is meaningless against a fee of zero.
+        const recheck = resolveDiscount({
+          limit: await getDiscountLimit(user),
+          totalFeePaise: confirmed.totalFeePaise,
+          requestedPaise: discountPaise,
+          alreadyApprovedPaise: 0,
+        });
+        if (recheck.needsApproval) {
+          await tx
+            .update(enrolments)
+            .set({
+              pendingDiscountPaise: recheck.pendingDiscountPaise,
+              pendingDiscountBy: user.id,
+              pendingDiscountAt: new Date(),
+            })
+            .where(eq(enrolments.id, confirmed.enrolmentId));
+        } else {
+          // Within authority after all once the real fee was known.
+          await tx
+            .update(enrolments)
+            .set({
+              discountPaise: recheck.appliedDiscountPaise,
+              netFeePaise: confirmed.totalFeePaise - recheck.appliedDiscountPaise,
+            })
+            .where(eq(enrolments.id, confirmed.enrolmentId));
+        }
+      }
+
+      return confirmed;
+    });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not confirm admission." };
   }
