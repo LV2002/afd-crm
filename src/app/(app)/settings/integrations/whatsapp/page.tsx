@@ -15,9 +15,11 @@ export default async function WhatsAppIntegrationPage() {
       <div>
         <h1 className="text-2xl font-semibold">WhatsApp</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          One WhatsApp Business API number for the whole institute. Every conversation on it is
-          filed against the lead it belongs to, readable by whoever owns that lead and by centre
-          heads and admins across their scope.
+          One WhatsApp Business API number for the whole institute, used for marketing and
+          broadcasts. Replies to it are matched to the lead they belong to and that lead&apos;s
+          counsellor is notified; a reply from a number nobody has entered shows up under
+          &quot;Not in the CRM&quot; on the WhatsApp screen rather than becoming a lead of its
+          own.
         </p>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           This is <strong>not</strong> the WhatsApp Business app on anyone&apos;s phone. A number

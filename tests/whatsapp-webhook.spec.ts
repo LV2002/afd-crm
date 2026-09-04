@@ -29,7 +29,7 @@ if (!process.env.INTEGRATION_ENCRYPTION_KEY) {
 
 const { GET, POST } = await import("../src/app/api/webhooks/whatsapp/route");
 const { db } = await import("../src/lib/db/client");
-const { leads, profiles, roles, webhookEvents, whatsappMessages } = await import("../src/lib/db/schema");
+const { leadIdentifiers, leads, profiles, roles, webhookEvents, whatsappMessages } = await import("../src/lib/db/schema");
 const { setIntegrationCredential, deleteIntegrationCredential } = await import("../src/lib/integrations/credentials");
 
 const APP_SECRET = "test-wa-app-secret";
@@ -170,8 +170,17 @@ describe("POST /api/webhooks/whatsapp (inbound messages)", () => {
     expect(row.status).toBe("failed");
   });
 
-  it("processes a validly-signed inbound message into a real lead + whatsapp_messages row, filed to whoever owns the lead", async () => {
-    const body = messagePayload({ from: "919847500302", name: `${MARKER} New Contact` });
+  /**
+   * The number is a broadcasting channel, not a way in: AFD's enquiries
+   * reach the counsellors' own phones and are typed in by hand. A reply
+   * from somebody nobody has entered is real, and worth seeing, but it is
+   * not an enquiry — so it is recorded with no lead rather than
+   * manufacturing one.
+   */
+  it("records a reply from an unknown number WITHOUT inventing a lead", async () => {
+    const before = await db.select({ id: leads.id }).from(leads);
+
+    const body = messagePayload({ from: "919847500302", name: `${MARKER} Stranger` });
     const req = new Request("https://example.com/api/webhooks/whatsapp", {
       method: "POST",
       headers: { "x-hub-signature-256": sign(body, APP_SECRET) },
@@ -180,19 +189,49 @@ describe("POST /api/webhooks/whatsapp (inbound messages)", () => {
     const res = await POST(req);
     expect(res.status).toBe(200);
 
-    const [lead] = await db.select().from(leads).where(eq(leads.studentName, `${MARKER} New Contact`));
-    expect(lead).toBeDefined();
-    expect(lead.firstTouchSource).toBe("whatsapp");
+    const after = await db.select({ id: leads.id }).from(leads);
+    expect(after).toHaveLength(before.length);
 
-    const [message] = await db.select().from(whatsappMessages).where(eq(whatsappMessages.leadId, lead.id));
-    expect(message.direction).toBe("inbound");
-    expect(message.status).toBe("received");
+    const [message] = await db
+      .select()
+      .from(whatsappMessages)
+      .where(eq(whatsappMessages.fromPhone, "+919847500302"));
+    expect(message).toBeDefined();
+    expect(message.leadId).toBeNull();
+    expect(message.counsellorId).toBeNull();
     expect(message.body).toBe("Hi, interested in NID coaching");
-    // The invariant that survives any assignment configuration: the
-    // message belongs to whoever owns the person, including when the
-    // rules engine has left that nobody. Asserting a specific counsellor
-    // would be asserting the seeded assignment rules, not the webhook.
-    expect(message.counsellorId).toBe(lead.assignedTo);
+  });
+
+  it("files a reply from a number the CRM already has onto that lead, and onto its counsellor", async () => {
+    const [existing] = await db
+      .insert(leads)
+      .values({
+        studentName: `${MARKER} Known Lead`,
+        primaryPhone: "+919847500401",
+        assignedTo: COUNSELLOR_ID,
+      })
+      .returning({ id: leads.id });
+    await db.insert(leadIdentifiers).values({
+      leadId: existing.id,
+      kind: "phone",
+      valueNormalised: "+919847500401",
+      isPrimary: true,
+    });
+
+    const body = messagePayload({ from: "919847500401", name: `${MARKER} Known Lead` });
+    const req = new Request("https://example.com/api/webhooks/whatsapp", {
+      method: "POST",
+      headers: { "x-hub-signature-256": sign(body, APP_SECRET) },
+      body,
+    });
+    expect((await POST(req)).status).toBe(200);
+
+    const [message] = await db
+      .select()
+      .from(whatsappMessages)
+      .where(eq(whatsappMessages.leadId, existing.id));
+    expect(message.direction).toBe("inbound");
+    expect(message.counsellorId).toBe(COUNSELLOR_ID);
   });
 
   it("does not create a second lead or message when the same wamid is delivered twice", async () => {

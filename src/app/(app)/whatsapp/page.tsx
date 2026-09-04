@@ -7,51 +7,50 @@ import { WhatsAppPanel } from "@/components/whatsapp/whatsapp-panel";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { formatDateIST } from "@/lib/format/date";
 import { maskPhone } from "@/lib/leads/mask-phone";
-import { getWhatsAppThread, isWithinCustomerServiceWindow } from "@/lib/whatsapp/get-thread";
+import {
+  getWhatsAppThread,
+  getWhatsAppThreadByPhone,
+  isWithinCustomerServiceWindow,
+} from "@/lib/whatsapp/get-thread";
 import { getWhatsAppThreads } from "@/lib/whatsapp/get-threads";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
 /**
- * The WhatsApp Business API inbox.
+ * Replies to the institute's WhatsApp Business API broadcasts.
  *
- * Named for the platform on purpose. This is not the WhatsApp Business
- * app on anybody's phone and cannot read it: a phone number is either
- * registered to the Cloud API or in use by that app, never both. What
- * shows here is every conversation on the number(s) AFD has connected to
- * the API, and nothing else.
+ * This number is an outbound marketing channel, not a way in. AFD's
+ * enquiries reach the counsellors' own WhatsApp Business apps and are
+ * typed into the CRM by hand, so nothing here creates a lead: an inbound
+ * message is matched to a lead that already exists, or filed with none.
  *
- * Every thread belongs to a lead — the webhook resolves an inbound
- * message to one through the same `resolveOrCreateLead()` every other
- * source goes through, so the tagging Leon asked for is not a step anyone
- * has to remember. Which threads a person sees falls out of that: RLS
- * scopes `whatsapp_messages` through its lead, so a counsellor's inbox is
- * their own leads and a centre head's is their centre's, with no
- * "whose inbox" control to get wrong.
- *
- * The composer stays on the lead page as well as living here. Both send
- * through the same API; this screen is for working down a list of
- * conversations, the lead page is for when you are already looking at the
- * person.
+ * Which threads a person sees needs no mechanism of its own. RLS scopes
+ * `whatsapp_messages` through the lead, so a counsellor's list is their
+ * own leads and a centre head's is their centre's. The replies that
+ * matched nobody go to whoever runs campaigns — they sent the broadcast,
+ * and they are the only person who can act on it by adding the sender.
  */
 export default async function WhatsAppInboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ lead?: string; q?: string; filter?: string }>;
+  searchParams: Promise<{ thread?: string; q?: string; filter?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.read")) return <AccessDenied />;
 
-  const { lead: selectedLeadId, q, filter } = await searchParams;
+  const { thread: selectedKey, q, filter } = await searchParams;
   const search = (q ?? "").trim().toLowerCase();
   const onlyAwaiting = filter === "awaiting";
+  const onlyUnmatched = filter === "unmatched";
 
   const supabase = await createClient();
   const threads = await getWhatsAppThreads(supabase);
 
-  const awaitingCount = threads.filter((thread) => thread.awaitingReply).length;
+  const awaitingCount = threads.filter((t) => t.awaitingReply).length;
+  const unmatchedCount = threads.filter((t) => t.leadId === null).length;
   const visible = threads.filter((thread) => {
     if (onlyAwaiting && !thread.awaitingReply) return false;
+    if (onlyUnmatched && thread.leadId !== null) return false;
     if (!search) return true;
     return (
       thread.leadName.toLowerCase().includes(search) ||
@@ -60,45 +59,44 @@ export default async function WhatsAppInboxPage({
     );
   });
 
-  // Selecting a thread that isn't in this caller's scope reads as "no
-  // messages" rather than as an error — RLS returns nothing either way,
-  // and the list beside it never offered the row.
-  const selected = selectedLeadId
-    ? (threads.find((thread) => thread.leadId === selectedLeadId) ?? null)
-    : null;
+  const selected = selectedKey ? (threads.find((t) => t.key === selectedKey) ?? null) : null;
 
   const [messages, withinWindow] = selected
-    ? await Promise.all([
-        getWhatsAppThread(supabase, selected.leadId),
-        isWithinCustomerServiceWindow(supabase, selected.leadId),
-      ])
+    ? selected.leadId
+      ? await Promise.all([
+          getWhatsAppThread(supabase, selected.leadId),
+          isWithinCustomerServiceWindow(supabase, selected.leadId),
+        ])
+      : [await getWhatsAppThreadByPhone(supabase, selected.phone), false]
     : [[], false];
 
   function href(params: Record<string, string | undefined>): string {
     const next = new URLSearchParams();
-    if (params.lead ?? selectedLeadId) next.set("lead", params.lead ?? selectedLeadId!);
-    if (params.q ?? q) next.set("q", params.q ?? q!);
-    if (params.filter ?? (onlyAwaiting ? "awaiting" : undefined)) {
-      next.set("filter", params.filter ?? "awaiting");
-    }
-    const query = next.toString();
-    return query ? `/whatsapp?${query}` : "/whatsapp";
+    const thread = params.thread ?? selectedKey;
+    const query = params.q ?? q;
+    const nextFilter = params.filter ?? filter;
+    if (thread) next.set("thread", thread);
+    if (query) next.set("q", query);
+    if (nextFilter) next.set("filter", nextFilter);
+    const search = next.toString();
+    return search ? `/whatsapp?${search}` : "/whatsapp";
   }
 
   return (
     <div className="flex flex-col gap-4">
       <p className="max-w-3xl text-sm text-muted-foreground">
-        Every thread is already tied to a lead — open one to reply, or open the lead for their
-        full history. You see the threads for the leads you can see. A free-form reply only
+        Replies to what this number has sent out. Nothing here creates a lead — enquiries come to
+        the counsellors&apos; own phones and are entered in the CRM by hand — so a reply is matched
+        to a lead you already have, and the assigned counsellor is told. A free-form reply only
         reaches someone who has messaged in the last 24 hours; after that, message them from the
-        WhatsApp Business app on your own phone.
+        WhatsApp Business app on your phone.
       </p>
 
       <div className="grid gap-4 lg:grid-cols-[22rem_1fr]">
         <div className="flex flex-col gap-3">
           <form action="/whatsapp" method="get" className="flex flex-col gap-2">
-            {selectedLeadId && <input type="hidden" name="lead" value={selectedLeadId} />}
-            {onlyAwaiting && <input type="hidden" name="filter" value="awaiting" />}
+            {selectedKey && <input type="hidden" name="thread" value={selectedKey} />}
+            {filter && <input type="hidden" name="filter" value={filter} />}
             <Input
               name="q"
               defaultValue={q ?? ""}
@@ -107,46 +105,35 @@ export default async function WhatsAppInboxPage({
             />
           </form>
 
-          <div className="flex items-center gap-2 text-sm">
-            <Link
-              href={href({ filter: "" })}
-              className={cn(
-                "rounded-md px-3 py-1.5",
-                onlyAwaiting
-                  ? "text-muted-foreground hover:bg-accent/50"
-                  : "bg-accent font-medium",
-              )}
-            >
+          <div className="flex flex-wrap items-center gap-1 text-sm">
+            <FilterLink href={href({ filter: "" })} active={!onlyAwaiting && !onlyUnmatched}>
               All ({threads.length})
-            </Link>
-            <Link
-              href={href({ filter: "awaiting" })}
-              className={cn(
-                "rounded-md px-3 py-1.5",
-                onlyAwaiting
-                  ? "bg-accent font-medium"
-                  : "text-muted-foreground hover:bg-accent/50",
-              )}
-            >
+            </FilterLink>
+            <FilterLink href={href({ filter: "awaiting" })} active={onlyAwaiting}>
               Needs a reply ({awaitingCount})
-            </Link>
+            </FilterLink>
+            {unmatchedCount > 0 && (
+              <FilterLink href={href({ filter: "unmatched" })} active={onlyUnmatched}>
+                Not in the CRM ({unmatchedCount})
+              </FilterLink>
+            )}
           </div>
 
           <div className="flex max-h-[70vh] flex-col overflow-y-auto rounded-lg border">
             {visible.length === 0 ? (
               <p className="p-6 text-center text-sm text-muted-foreground">
                 {threads.length === 0
-                  ? "No WhatsApp conversations yet. They appear here as soon as somebody messages a connected number, or a counsellor sends the first message from a lead's page."
+                  ? "Nothing yet. Replies to your broadcasts appear here."
                   : "Nothing matches."}
               </p>
             ) : (
               visible.map((thread) => (
                 <Link
-                  key={thread.leadId}
-                  href={href({ lead: thread.leadId })}
+                  key={thread.key}
+                  href={href({ thread: thread.key })}
                   className={cn(
                     "flex flex-col gap-0.5 border-b p-3 last:border-b-0 hover:bg-accent/40",
-                    thread.leadId === selectedLeadId && "bg-accent",
+                    thread.key === selectedKey && "bg-accent",
                   )}
                 >
                   <div className="flex items-baseline justify-between gap-2">
@@ -160,17 +147,28 @@ export default async function WhatsAppInboxPage({
                     {thread.lastMessagePreview}
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
-                    {/* A bulk, scrollable list of numbers is exactly what
-                        CLAUDE.md non-negotiable #6 is about. */}
+                    {/*
+                      A matched thread's number is masked, same as every
+                      other bulk list (CLAUDE.md non-negotiable #6). An
+                      unmatched one isn't: the number IS the thread's only
+                      identity, it is the thing you copy into a new lead,
+                      and these rows are only visible to whoever runs
+                      campaigns in the first place (migration 0042).
+                    */}
                     <span className="text-xs text-muted-foreground">
-                      {maskPhone(thread.phone)}
+                      {thread.leadId ? maskPhone(thread.phone) : thread.phone}
                     </span>
                     {thread.counsellorName && (
                       <span className="text-xs text-muted-foreground">
                         · {thread.counsellorName}
                       </span>
                     )}
-                    {thread.awaitingReply && (
+                    {thread.leadId === null && (
+                      <Badge variant="outline" className="ml-auto">
+                        Not a lead
+                      </Badge>
+                    )}
+                    {thread.leadId !== null && thread.awaitingReply && (
                       <Badge variant="outline" className="ml-auto">
                         Reply
                       </Badge>
@@ -193,27 +191,101 @@ export default async function WhatsAppInboxPage({
                     {selected.counsellorName ? ` · ${selected.counsellorName}` : ""}
                   </p>
                 </div>
-                <Link
-                  href={`/leads/${selected.leadId}`}
-                  className="text-sm font-medium underline"
-                >
-                  Open the lead
-                </Link>
+                {selected.leadId && (
+                  <Link href={`/leads/${selected.leadId}`} className="text-sm font-medium underline">
+                    Open the lead
+                  </Link>
+                )}
               </div>
-              <WhatsAppPanel
-                leadId={selected.leadId}
-                toPhone={selected.phone}
-                messages={messages}
-                canSend={can(user, "whatsapp.send")}
-                withinWindow={withinWindow}
-              />
+
+              {selected.leadId ? (
+                <WhatsAppPanel
+                  leadId={selected.leadId}
+                  toPhone={selected.phone}
+                  messages={messages}
+                  canSend={can(user, "whatsapp.send")}
+                  withinWindow={withinWindow}
+                />
+              ) : (
+                <UnmatchedThread phone={selected.phone} messages={messages} />
+              )}
             </>
           ) : (
             <div className="flex h-full min-h-64 items-center justify-center rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              Pick a conversation to read and reply.
+              Pick a conversation to read.
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function FilterLink({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "rounded-md px-3 py-1.5",
+        active ? "bg-accent font-medium" : "text-muted-foreground hover:bg-accent/50",
+      )}
+    >
+      {children}
+    </Link>
+  );
+}
+
+/**
+ * A reply from somebody the CRM has never heard of.
+ *
+ * Read-only, and deliberately so: replying would need a lead to record
+ * the message against, and this system does not invent leads from
+ * broadcast replies. The useful action is to add them properly, which is
+ * a human decision — they may be an existing student's parent, a wrong
+ * number, or a genuine enquiry.
+ */
+function UnmatchedThread({
+  phone,
+  messages,
+}: {
+  phone: string;
+  messages: Awaited<ReturnType<typeof getWhatsAppThread>>;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border p-4">
+      <div className="rounded-md border border-dashed p-3">
+        <p className="text-sm font-medium">
+          {phone} isn&apos;t in the CRM.
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          They replied to something you sent, but no lead has this number, so nobody was notified.
+          Add them from{" "}
+          <Link href="/leads/new" className="font-medium underline">
+            Leads → New
+          </Link>{" "}
+          if they&apos;re worth following up; from then on their replies reach their counsellor.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {messages.map((message) => (
+          <div key={message.id} className="flex flex-col gap-0.5 items-start">
+            <div className="max-w-[80%] rounded-lg bg-muted px-3 py-2 text-sm">
+              {message.body ?? <span className="italic opacity-80">(no text)</span>}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {formatDateIST(message.occurredAt, "d MMM yyyy, h:mm a")}
+            </p>
+          </div>
+        ))}
       </div>
     </div>
   );

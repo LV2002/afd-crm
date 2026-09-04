@@ -2849,3 +2849,43 @@ old per-counsellor numbers are ignored; they can be left in place.
 **Still to come, in order:** scheduled broadcasts; an audience builder that reuses the Insights
 filter grammar over leads *and* students instead of targeting by a single tag; automation flows and
 handling quick-reply button taps as branches.
+
+## Session 41 — The WhatsApp API number is a broadcasting channel, not a way in
+
+Leon's context: enquiries reach the counsellors' own WhatsApp Business apps and get typed into the
+CRM by hand. The API number is for marketing and broadcasts. But when somebody replies to a
+broadcast, the assigned counsellor should hear about it.
+
+That inverts what the webhook did. It used to call `resolveOrCreateLead()` on every inbound
+message, which under this arrangement would fill the pipeline with people who pressed a button and
+stamp "whatsapp" on the first-touch source of leads that actually came from Meta.
+
+**Inbound messages now match, never create.** A new `findLeadByPhone()` — the deliberate
+counterpart to `resolveOrCreateLead()` — looks the sender up through `lead_identifiers`, so a
+reply from a parent's number still finds the right lead, and a merged duplicate still resolves to
+the survivor. `whatsapp_messages.lead_id` is nullable now (migration 0042): a reply from a number
+nobody has entered is recorded with no lead rather than thrown away or turned into one.
+
+**Replies notify the counsellor, and only them.** New `whatsapp.reply_received` event —
+`defaultNotifyOwner: true`, no roles — so out of the box exactly the person Leon named hears about
+it, and an admin can widen that in Settings without a deploy. An unmatched reply notifies nobody,
+because there is nobody to notify.
+
+**The inbox shows those unmatched replies** under "Not in the CRM", visible only to whoever holds
+`whatsapp.campaign` (migration 0042's RLS: every other row still inherits visibility from its
+lead). Read-only, with the number shown in full — it is the thread's only identity and the thing
+you copy into a new lead — and a link to add them properly.
+
+The section and settings copy now say what this number is: outbound marketing, replies land here,
+enquiries come to the counsellors' phones.
+
+`buildResolveLeadInput()` and `resolveContactName()` in the WhatsApp mapper are deleted along with
+their tests — with no lead ever created from this source they had no caller, and the absence is
+commented where they were.
+
+**Verified:** `npx tsc --noEmit` clean, `next lint` clean (one pre-existing warning), `npm run
+build` succeeds, 130 non-database tests pass. `tests/whatsapp-webhook.spec.ts` now asserts the new
+contract both ways — an unknown number creates no lead, a known number files onto its lead and
+counsellor — but like the rest of the database-backed suite it has no Postgres here.
+
+**Needs Leon:** `npm run db:migrate` (0042) and `npm run db:seed` (for the new notification row).

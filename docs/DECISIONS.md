@@ -2181,3 +2181,43 @@ multiple choice" flows Leon asked for: a tap arrives back through the ordinary w
 inbound message carrying the button's exact text, so it already lands on the lead's thread. What
 does not exist yet is the branching — reading that reply and deciding what happens next — which is
 the automation-flow engine, deferred with scheduling and the audience builder.
+
+## 2026-09-04 — WhatsApp inbound matches a lead, and never creates one
+
+Leon: the WhatsApp Business API number is a marketing and broadcasting tool. Enquiries arrive on
+the counsellors' own WhatsApp Business apps and are entered in the CRM by hand. But a reply to a
+broadcast should notify that lead's counsellor.
+
+This reverses the webhook's original design, which ran every inbound message through
+`resolveOrCreateLead()`. Under Leon's arrangement that would be wrong twice: it would fill the
+pipeline with people who tapped a button on a bulk message, and it would overwrite the first-touch
+source of somebody who actually came from Meta with "whatsapp".
+
+So `findLeadByPhone()` exists as the deliberate counterpart to `resolveOrCreateLead()`. CLAUDE.md
+non-negotiable #8 says every lead entering the system goes through one ingestion path; this does
+not contradict it, because no lead enters here at all — the source stopped being an ingestion path
+when Leon said enquiries come in elsewhere.
+
+It matches through `lead_identifiers` rather than `leads.primary_phone`, so a reply from the
+parent's number reaches the right lead, and follows one `merged_into_lead_id` hop so a reply to a
+merged duplicate lands on the survivor.
+
+**Unmatched replies are kept, not dropped.** `whatsapp_messages.lead_id` became nullable
+(migration 0042). Dropping them would lose the only record that somebody answered; creating a lead
+is what Leon has ruled out. So they are stored with no lead and shown under "Not in the CRM",
+where the person who sent the broadcast can decide — it may be an existing student's parent, a
+wrong number, or a real enquiry, and that is a human call.
+
+Those rows have no lead to inherit visibility from, so the RLS policy gained a second arm: a
+message with no lead is visible to anyone holding `whatsapp.campaign` at any scope. That is the
+person who sent the broadcast being replied to and the only person who can act on it. Every other
+row keeps exactly the policy it had. INSERT and UPDATE still require a lead, so a browser session
+cannot manufacture an unmatched row — only the webhook, on the direct connection, can.
+
+Their number is shown unmasked, against the general rule (CLAUDE.md non-negotiable #6), because
+the number is the thread's only identity and the thing you copy into a new lead — and only
+campaign-holders can see these rows at all. Matched threads stay masked like every other list.
+
+**Only the assigned counsellor is notified.** `whatsapp.reply_received` ships with
+`defaultNotifyOwner: true` and no roles: exactly the rule Leon gave, and an admin can widen it in
+Settings without a deploy.

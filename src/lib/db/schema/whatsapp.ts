@@ -53,9 +53,21 @@ export const whatsappMessages = pgTable(
   "whatsapp_messages",
   {
     id: idColumn(),
-    leadId: uuid("lead_id")
-      .notNull()
-      .references(() => leads.id, { onDelete: "cascade" }),
+    /**
+     * Nullable, because this number is a broadcasting channel rather than
+     * a way in.
+     *
+     * AFD's enquiries arrive on the counsellors' own WhatsApp Business
+     * apps and are typed into the CRM by hand; the API number only sends
+     * marketing and receives the replies to it. So an inbound message is
+     * matched to an EXISTING lead by phone and never creates one — a
+     * reply from a number nobody has entered yet is real and worth
+     * seeing, but it is not an enquiry, and manufacturing a lead from it
+     * would fill the pipeline with people who only pressed a button.
+     * Those rows land here with no lead, visible to whoever runs
+     * campaigns (migration 0042).
+     */
+    leadId: uuid("lead_id").references(() => leads.id, { onDelete: "cascade" }),
     counsellorId: uuid("counsellor_id").references(() => profiles.id, { onDelete: "set null" }),
     direction: interactionDirectionEnum("direction").notNull(),
     waMessageId: text("wa_message_id"),

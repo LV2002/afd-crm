@@ -4,11 +4,12 @@ import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db/client";
-import { leads, whatsappMessages, webhookEvents } from "@/lib/db/schema";
+import { whatsappMessages, webhookEvents } from "@/lib/db/schema";
+import { findLeadByPhone } from "@/lib/identity/find-lead-by-phone";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
-import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
+import { notify } from "@/lib/notifications/notify";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
-import { buildResolveLeadInput, mapMessageContent, resolveContactName, type WhatsAppContact, type WhatsAppInboundMessage } from "@/lib/integrations/whatsapp/map-inbound";
+import { mapMessageContent, type WhatsAppContact, type WhatsAppInboundMessage } from "@/lib/integrations/whatsapp/map-inbound";
 import { verifyMetaSignature } from "@/lib/integrations/meta/verify-signature";
 
 export const dynamic = "force-dynamic";
@@ -113,28 +114,20 @@ export async function POST(request: Request) {
         if (!inserted) continue; // already processed on a previous delivery of this same message id
 
         try {
-          const contact = value.contacts?.find((c) => c.wa_id === message.from);
-          const contactName = resolveContactName(contact, message.from);
-
-          // AFD runs one WhatsApp Business API number for the whole
-          // institute, so the number a message arrives on says nothing
-          // about who should own it. The lead's own counsellor does —
-          // assigned by the rules engine on a new lead, already set on an
-          // existing one — so the message is filed to whoever owns the
-          // person, which is also what decides who can see the thread.
-          const { leadId } = await resolveOrCreateLead(
-            buildResolveLeadInput(message, contactName, null),
-          );
-          const [owner] = await db
-            .select({ assignedTo: leads.assignedTo })
-            .from(leads)
-            .where(eq(leads.id, leadId));
-          const counsellorId = owner?.assignedTo ?? null;
+          // This number sends marketing and receives the replies to it —
+          // it is not a way into the pipeline. AFD's enquiries arrive on
+          // the counsellors' own WhatsApp Business apps and are entered
+          // by hand, so an inbound message here is matched to a lead that
+          // already exists and NEVER creates one. Creating leads from
+          // broadcast replies would fill the pipeline with people who
+          // pressed a button, and would put "whatsapp" on the
+          // first-touch source of someone who actually came from Meta.
+          const matched = await findLeadByPhone(message.from);
 
           const content = mapMessageContent(message);
           await db.insert(whatsappMessages).values({
-            leadId,
-            counsellorId,
+            leadId: matched?.id ?? null,
+            counsellorId: matched?.assignedTo ?? null,
             direction: "inbound",
             waMessageId: message.id,
             fromPhone: normalizePhone(message.from) ?? message.from,
@@ -151,6 +144,30 @@ export async function POST(request: Request) {
             .update(webhookEvents)
             .set({ status: "done", processedAt: new Date(), attempts: sql`${webhookEvents.attempts} + 1` })
             .where(eq(webhookEvents.id, inserted.id));
+
+          // Leon's rule: a broadcast reply is the assigned counsellor's
+          // to answer, and nobody else's business. notify() honours the
+          // per-event settings, so an admin can widen that later without
+          // a deploy — the default is the owner alone.
+          //
+          // An unmatched reply notifies nobody: there is no counsellor to
+          // tell, and it is visible to whoever runs campaigns on the
+          // WhatsApp inbox instead.
+          if (matched) {
+            await notify({
+              eventKey: "whatsapp.reply_received",
+              context: {
+                lead_name: matched.studentName,
+                lead_number: matched.leadNumber,
+                message: content.body ?? "(no text)",
+              },
+              href: `/leads/${matched.id}`,
+              entityType: "leads",
+              entityId: matched.id,
+              centerId: matched.centerId,
+              ownerId: matched.assignedTo,
+            });
+          }
         } catch (err) {
           allOk = false;
           await db
@@ -179,6 +196,7 @@ export async function POST(request: Request) {
             .update(webhookEvents)
             .set({ status: "done", processedAt: new Date(), attempts: sql`${webhookEvents.attempts} + 1` })
             .where(eq(webhookEvents.id, inserted.id));
+
         } catch (err) {
           allOk = false;
           await db

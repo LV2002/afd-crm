@@ -79,6 +79,18 @@ export const NOTIFICATION_EVENTS = [
     defaultNotifyRoleCodes: ["center_head", "co_admin"],
   },
   {
+    key: "whatsapp.reply_received",
+    label: "WhatsApp reply",
+    description:
+      "Somebody replied to a message sent from the institute's WhatsApp Business API number. Only the lead's own counsellor is told by default — a reply is a conversation for whoever owns that person, not an announcement.",
+    category: "Leads",
+    variables: ["lead_name", "lead_number", "message", "center_name"],
+    defaultTitle: "{{lead_name}} replied on WhatsApp",
+    defaultBody: "{{message}}",
+    defaultNotifyOwner: true,
+    defaultNotifyRoleCodes: [],
+  },
+  {
     key: "admission.confirmed",
     label: "Admission confirmed",
     description:
