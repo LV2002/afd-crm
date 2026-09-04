@@ -2928,3 +2928,18 @@ build` succeeds, 152 non-database tests pass.
 **Needs Leon:** `npm run db:migrate` (0043).
 
 **Still to come:** scheduled sends; automation flows; handling a quick-reply button tap as a branch.
+
+## Session 43 — A written backlog
+
+Leon asked for everything outstanding, in priority order, so "what's next?" has a standing answer.
+It lives in `docs/BACKLOG.md` and is mirrored as tasks #140–#156 (telephony is the pre-existing
+#121, still blocked on Exotel vs Ozonetel).
+
+The order optimises for risk retired per session rather than for finishing phases in sequence.
+The top two are not features: running the database-backed test suite against real Postgres for the
+first time, and WhatsApp opt-out handling. Everything after that is new work; those two are about
+whether what already exists holds, legally and technically.
+
+Also added one line to the Admissions page pointing at where a drop is recorded — it lives on the
+individual admission, next to the payment form, because it needs a reason typed in, and a list
+with no per-row actions gives no hint of that.
