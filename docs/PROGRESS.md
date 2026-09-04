@@ -3171,3 +3171,44 @@ photo sent in conversation is not a document of record, and the lead's Files
 section is now about one document only. What is kept is the fact of the send —
 the row, its media id and its type. Downloading *inbound* media is still the
 separate, already-tracked piece of work it was.
+
+## Session 36 — What the advertising costs, and what it produced
+
+**Shipped**
+
+- **`/marketing` — Ad performance.** `ad_spend_daily` has been syncing nightly
+  from Meta and Google since those integrations shipped and nothing read it.
+  This is the join: spend per campaign against the leads and admissions it
+  produced, with cost per lead, cost per admission, ROAS and LTV:CAC.
+- **`src/lib/reports/ad-performance.ts`** — all of the arithmetic, pure and
+  tested against worked examples, because it decides a budget.
+- Nav entry **Ad Performance**, under Insights.
+
+**Three decisions that change the numbers**
+
+- **The join is campaign id through the *first* enquiry.** A campaign is the
+  grain a budget decision is made at, and CLAUDE.md is explicit that
+  first-touch is never overwritten — the campaign that *found* somebody earned
+  the admission, even if they later filled in the website form.
+- **A lead is counted in the period it arrived; its admission counts whenever
+  it happened.** Filtering admissions by the same range as the spend would
+  report March's ads as having produced nothing, because a March lead enrols in
+  May — every recent month would look catastrophic and improve on its own weeks
+  later. The page says the recent numbers are incomplete rather than hiding the
+  problem in a formula.
+- **The page needs `report.org`.** Spend is charged per campaign and a
+  campaign's leads land at both centres, so there is no honest way to show a
+  centre head "their" share. Apportioning by lead count would be a confident
+  number with nothing behind it. Insights stays centre-scoped, because counting
+  leads per centre is a question that has a real answer.
+
+**Details worth keeping**
+
+- A campaign with spend and no leads still appears — an inner join would hide
+  the single most useful row on the page.
+- Every division returns null, never `Infinity`, so an empty month renders as
+  dashes rather than "₹Infinity".
+- The total row is summed from the rows above it, not recomputed, so the table
+  can never disagree with its own bottom line.
+- **Booked** (net fee agreed) and **collected** (actually received) are both
+  shown; for instalment plans they are never the same number.
