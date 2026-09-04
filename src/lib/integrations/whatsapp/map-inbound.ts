@@ -1,5 +1,3 @@
-import type { ResolveLeadInput } from "@/lib/identity/resolve-or-create-lead";
-
 export interface WhatsAppInboundMessage {
   id: string;
   from: string;
@@ -18,39 +16,15 @@ export interface WhatsAppContact {
   wa_id: string;
 }
 
-/**
- * WhatsApp's contact "profile name" is whatever the user set as their own
- * display name — not a claim of their real name, and not always present.
- * Used only as a friendlier starting point than a bare phone number; a
- * counsellor is expected to correct it once they know who they're talking
- * to, the same way any placeholder studentName elsewhere in this system
- * gets corrected by a human, not guessed harder by the ingestion path.
+/*
+ * There is no buildResolveLeadInput() here, unlike the Meta and Google
+ * lead webhooks, and that absence is the point: this number never
+ * creates a lead. It sends the institute's marketing and receives the
+ * replies to it — AFD's enquiries arrive on the counsellors' own
+ * WhatsApp Business apps and are entered by hand — so an inbound message
+ * is matched to an existing lead by findLeadByPhone() or filed with no
+ * lead at all. See docs/DECISIONS.md.
  */
-export function resolveContactName(contact: WhatsAppContact | undefined, fromPhone: string): string {
-  const profileName = contact?.profile?.name?.trim();
-  return profileName || `WhatsApp Lead ${fromPhone.slice(-4)}`;
-}
-
-/**
- * Composes an inbound message into exactly what `resolveOrCreateLead()`
- * needs. `assignedTo` is set by the caller to the counsellor who owns the
- * number the message arrived on (per the "one number per counsellor"
- * model) — a customer messaging a specific counsellor's number is a
- * stronger routing signal than any assignment rule, so it's passed through
- * as an explicit assignment rather than left to `applyAssignment()`. See
- * docs/DECISIONS.md.
- */
-export function buildResolveLeadInput(message: WhatsAppInboundMessage, contactName: string, assignedTo: string | null): ResolveLeadInput {
-  return {
-    studentName: contactName,
-    primaryPhone: message.from,
-    source: "whatsapp",
-    raw: message as unknown as Record<string, unknown>,
-    dedupeKey: message.id,
-    assignedTo: assignedTo ?? undefined,
-    receivedAt: new Date(Number(message.timestamp) * 1000),
-  };
-}
 
 export interface MappedMessageContent {
   messageType: "text" | "template" | "media";

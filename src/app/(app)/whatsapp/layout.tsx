@@ -20,8 +20,11 @@ export default async function WhatsAppLayout({ children }: { children: React.Rea
       <div>
         <h1 className="text-2xl font-semibold">WhatsApp</h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
-          The institute&apos;s WhatsApp Business API number. Not the WhatsApp Business app on
-          anyone&apos;s phone — a number belongs to one or the other, never both.
+          The institute&apos;s WhatsApp Business API number — a marketing and broadcasting
+          channel. Enquiries don&apos;t arrive here: they reach the counsellors&apos; own WhatsApp
+          Business apps and are entered in the CRM by hand. What arrives here are replies to what
+          you send, and each one is matched to the lead it belongs to so their counsellor hears
+          about it.
         </p>
       </div>
       <WhatsAppNav canCampaign={can(user, "whatsapp.campaign")} />

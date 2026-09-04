@@ -23,9 +23,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 const MESSAGE_SCAN_LIMIT = 3000;
 
 export interface WhatsAppThreadSummary {
-  leadId: string;
+  /** Stable id for the thread — a lead id, or the contact's number when nobody in the CRM has it. */
+  key: string;
+  /** Null when the reply came from a number that isn't a lead yet. */
+  leadId: string | null;
+  /** The lead's name, or the bare number when there is no lead. */
   leadName: string;
-  /** E.164. The caller masks it — this is a bulk list (CLAUDE.md non-negotiable #6). */
+  /** E.164, as stored. */
   phone: string;
   assignedTo: string | null;
   counsellorName: string | null;
@@ -39,7 +43,8 @@ export interface WhatsAppThreadSummary {
 }
 
 interface MessageRow {
-  lead_id: string;
+  lead_id: string | null;
+  from_phone: string;
   direction: "inbound" | "outbound";
   message_type: "text" | "template" | "media";
   body: string | null;
@@ -61,7 +66,7 @@ export async function getWhatsAppThreads(
 ): Promise<WhatsAppThreadSummary[]> {
   const { data: messageRows } = await supabase
     .from("whatsapp_messages")
-    .select("lead_id, direction, message_type, body, template_name, media_mime_type, occurred_at")
+    .select("lead_id, from_phone, direction, message_type, body, template_name, media_mime_type, occurred_at")
     .is("deleted_at", null)
     .order("occurred_at", { ascending: false })
     .limit(MESSAGE_SCAN_LIMIT)
@@ -70,24 +75,42 @@ export async function getWhatsAppThreads(
   const messages = messageRows ?? [];
   if (messages.length === 0) return [];
 
-  // Rows arrive newest first, so the first one seen for a lead is that
-  // thread's latest message and everything after it is history.
+  // A thread is keyed by the lead when there is one, and by the contact's
+  // own number when there isn't — a reply from somebody nobody has
+  // entered yet is still one conversation, and losing it would be losing
+  // the only record that they answered.
+  const threadKey = (row: MessageRow): string =>
+    row.lead_id ? `lead:${row.lead_id}` : `phone:${row.from_phone}`;
+
+  // Rows arrive newest first, so the first one seen for a thread is its
+  // latest message and everything after it is history.
   const latest = new Map<string, MessageRow>();
   const counts = new Map<string, number>();
   for (const row of messages) {
-    if (!latest.has(row.lead_id)) latest.set(row.lead_id, row);
-    counts.set(row.lead_id, (counts.get(row.lead_id) ?? 0) + 1);
+    const key = threadKey(row);
+    if (!latest.has(key)) latest.set(key, row);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
 
-  const leadIds = Array.from(latest.keys());
-  const { data: leadRows } = await supabase
-    .from("leads")
-    .select("id, student_name, primary_phone, assigned_to")
-    .in("id", leadIds)
-    .is("deleted_at", null)
-    .returns<
-      Array<{ id: string; student_name: string; primary_phone: string; assigned_to: string | null }>
-    >();
+  const leadIds = Array.from(
+    new Set(messages.map((row) => row.lead_id).filter((id): id is string => id !== null)),
+  );
+  const { data: leadRows } =
+    leadIds.length > 0
+      ? await supabase
+          .from("leads")
+          .select("id, student_name, primary_phone, assigned_to")
+          .in("id", leadIds)
+          .is("deleted_at", null)
+          .returns<
+            Array<{
+              id: string;
+              student_name: string;
+              primary_phone: string;
+              assigned_to: string | null;
+            }>
+          >()
+      : { data: [] };
 
   const leadById = new Map((leadRows ?? []).map((lead) => [lead.id, lead]));
 
@@ -108,24 +131,24 @@ export async function getWhatsAppThreads(
     for (const profile of profileRows ?? []) nameById.set(profile.id, profile.full_name);
   }
 
-  return leadIds
-    .map((leadId): WhatsAppThreadSummary | null => {
-      const lead = leadById.get(leadId);
-      const message = latest.get(leadId);
-      // A message whose lead is soft-deleted or outside this caller's
-      // scope simply isn't a thread they have.
-      if (!lead || !message) return null;
+  return Array.from(latest.entries())
+    .map(([key, message]): WhatsAppThreadSummary | null => {
+      const lead = message.lead_id ? leadById.get(message.lead_id) : undefined;
+      // A message whose lead is soft-deleted simply isn't a thread any
+      // more; an unmatched one has no lead by design and stays.
+      if (message.lead_id && !lead) return null;
       return {
-        leadId,
-        leadName: lead.student_name,
-        phone: lead.primary_phone,
-        assignedTo: lead.assigned_to,
-        counsellorName: lead.assigned_to ? (nameById.get(lead.assigned_to) ?? null) : null,
+        key,
+        leadId: lead?.id ?? null,
+        leadName: lead?.student_name ?? message.from_phone,
+        phone: lead?.primary_phone ?? message.from_phone,
+        assignedTo: lead?.assigned_to ?? null,
+        counsellorName: lead?.assigned_to ? (nameById.get(lead.assigned_to) ?? null) : null,
         lastMessageAt: message.occurred_at,
         lastDirection: message.direction,
         lastMessagePreview: preview(message),
         awaitingReply: message.direction === "inbound",
-        messageCount: counts.get(leadId) ?? 0,
+        messageCount: counts.get(key) ?? 0,
       };
     })
     .filter((thread): thread is WhatsAppThreadSummary => thread !== null)
