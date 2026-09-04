@@ -21,7 +21,7 @@ const TABS: Tab[] = [
   { href: "/finance/transactions", label: "Transactions" },
   { href: "/finance/ledger", label: "Account ledger" },
   { href: "/finance/record", label: "Record entry", needs: "record" },
-  { href: "/finance/accounts", label: "Accounts", needs: "manage" },
+  { href: "/finance/accounts", label: "Bank & cash accounts", needs: "manage" },
 ];
 
 export function FinanceNav({

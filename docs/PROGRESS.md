@@ -2655,3 +2655,30 @@ everything after it is the ledger's own arithmetic.
 enrolments — a second door into the same record is how a receipt ends up without a payment behind
 it) and its "Active Centre" report filter (RLS already means a centre head cannot see another
 centre).
+
+## Session 36 — Admissions vs Finance, and showing accounts what to collect
+
+Leon asked whether Accounts and Finance both need to exist, and described the handoff he wants.
+On inspection that handoff was already built — what was wrong was the naming, and one screen was
+missing the information it needed to do its job.
+
+**Renamed for clarity.** Three things were called "accounts": the fee-collection queue, the new
+finance section, and the bank accounts inside it. Now **Admissions** (`/accounts`), **Finance**,
+and **Bank & cash accounts**.
+
+**The real fix:** the enrolment screen showed accounts the total fee and the net, but not the
+instalment schedule, down payment, discount name or notes the counsellor agreed. They were being
+asked "has the fee been collected?" without being shown what to collect. There is now a read-only
+**Agreed fee plan** panel: every instalment with its due date, what has been received against it,
+what is still owed, and whether it is overdue — computed with the same allocation the collections
+report uses, so the two can't disagree. Read-only because accounts records payments against the
+plan, they don't renegotiate it; that stays with the counsellor.
+
+**The queue splits** into "New admissions" (awaiting first payment — the default) and "All".
+
+**Already true, now said out loud:** academics cannot see a student before the first payment,
+because the `students` row is created at Gate 2 and does not exist until then. The Students page
+now explains that rather than leaving it looking like a bug.
+
+**Verified:** `npx tsc --noEmit` clean, `next lint` clean (one pre-existing warning), `npm run
+build` succeeds, all non-database tests pass.

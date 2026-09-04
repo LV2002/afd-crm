@@ -1943,3 +1943,36 @@ without a payment behind it.
 2026-09-04 · [schema] `org_settings.gst_rate` as `numeric(6,4)`, not a float. A rate that drifts by
 1e-16 changes a printed total on a fee agreement. It comes back from both postgres-js and PostgREST
 as a string precisely so nobody loses that precision silently; `getFinanceConfig()` parses it once.
+
+2026-09-04 · [ux] Leon asked whether Accounts and Finance both need to exist. They do, but the
+naming was wrong and one screen was missing what it needed.
+
+They are two different jobs. **Admissions** (formerly "Accounts", `/accounts`) is the per-student
+fee-collection queue — one row per confirmed admission, and the question on each is "has this fee
+arrived?". **Finance** is the institute's own books — expenses, cash position, profit and loss. A
+centre head reads both; nobody would want them merged, because a page that mixes one student's
+instalment with the electricity bill answers neither question.
+
+What WAS wrong: three different things were called "accounts" — the queue, the section, and the
+bank accounts inside Finance. Renamed to Admissions, Finance, and "Bank & cash accounts".
+
+The workflow Leon described was, on inspection, already the one that is built: the counsellor
+confirms an admission (Gate 1), it lands in the accounts queue, accounts is notified, accounts
+records the payment, the first payment creates the `students` row (Gate 2) and academics can see
+them. Academics genuinely cannot see an unpaid student — the row does not exist until Gate 2, so
+it is structural rather than a filter someone could get wrong. The Students page now says so out
+loud, because a rule nobody can see reads as a bug.
+
+The real gap was on the enrolment screen: accounts saw the total fee, the discount and the net,
+but NOT the instalment schedule, down payment, discount name or notes the counsellor agreed. They
+were being asked "has the fee been collected?" without being shown what was supposed to be
+collected. Added a read-only `AgreedPlan` panel showing each instalment with what has been
+received against it, using the same `allocatePayments()` the collections report uses — so the two
+screens cannot disagree.
+
+Read-only on purpose. Accounts records payments against the plan; they do not renegotiate it.
+Changing the terms stays with the counsellor on the lead, which keeps two people from editing the
+same agreement from two screens.
+
+The queue also splits into "New admissions" (awaiting first payment, the default) and "All",
+which is what Leon asked for and what the job actually looks like.

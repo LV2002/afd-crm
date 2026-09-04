@@ -32,7 +32,17 @@ interface EnrolmentQueueRow {
  * an already-active enrolment gets recorded. Rows still waiting on Gate 2
  * sort first, since that's the more time-sensitive case.
  */
-export default async function AccountsQueuePage() {
+export default async function AccountsQueuePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string }>;
+}) {
+  const { filter } = await searchParams;
+  // Defaults to the new admissions, because that is the job: a confirmed
+  // admission sitting unpaid is somebody waiting to be chased. The full
+  // list is one click away for recording a later instalment.
+  const showAll = filter === "all";
+
   const user = await getCurrentUser();
   if (!user || !can(user, "payment.read")) return <AccessDenied />;
 
@@ -76,11 +86,41 @@ export default async function AccountsQueuePage() {
     return (a.sales_to_accounts_at ?? "").localeCompare(b.sales_to_accounts_at ?? "");
   });
 
+  const newAdmissions = sorted.filter((row) => row.accounts_to_academics_at === null);
+  const visible = showAll ? sorted : newAdmissions;
+
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold">Accounts</h1>
-        <p className="text-sm text-muted-foreground">Confirmed admissions awaiting payment.</p>
+        <h1 className="text-2xl font-semibold">Admissions</h1>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Admissions a counsellor has confirmed and handed over. Your job on each one is to say
+          whether the fee has actually been collected — recording the first payment creates the
+          student record and hands them on to academics.
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 text-sm">
+        <Link
+          href="/accounts"
+          className={
+            showAll
+              ? "rounded-md px-3 py-1.5 text-muted-foreground hover:bg-accent/50"
+              : "rounded-md bg-accent px-3 py-1.5 font-medium"
+          }
+        >
+          New admissions{newAdmissions.length > 0 ? ` (${newAdmissions.length})` : ""}
+        </Link>
+        <Link
+          href="/accounts?filter=all"
+          className={
+            showAll
+              ? "rounded-md bg-accent px-3 py-1.5 font-medium"
+              : "rounded-md px-3 py-1.5 text-muted-foreground hover:bg-accent/50"
+          }
+        >
+          All ({sorted.length})
+        </Link>
       </div>
 
       <Table>
@@ -96,7 +136,7 @@ export default async function AccountsQueuePage() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sorted.map((row) => {
+          {visible.map((row) => {
             const paid = paidByEnrolmentId.get(row.id) ?? 0;
             return (
               <TableRow key={row.id}>
@@ -125,10 +165,12 @@ export default async function AccountsQueuePage() {
               </TableRow>
             );
           })}
-          {sorted.length === 0 && (
+          {visible.length === 0 && (
             <TableRow>
               <TableCell colSpan={7} className="text-center text-muted-foreground">
-                Nothing in the accounts queue.
+                {showAll
+                  ? "Nothing here yet."
+                  : "No new admissions waiting. Everything confirmed has had its first payment recorded."}
               </TableCell>
             </TableRow>
           )}
