@@ -13,6 +13,7 @@ export type NavIconKey =
   | "accounts"
   | "finance"
   | "students"
+  | "whatsapp"
   | "profile-forms"
   | "insights"
   | "ask"
@@ -73,6 +74,15 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     iconKey: "finance",
     permission: "finance.read",
     label: "Finance",
+  },
+  {
+    // The WhatsApp Business API inbox. Named for the platform, not for
+    // "messages", because the whole point of the screen is that it is a
+    // different thing from the WhatsApp Business app on somebody's phone.
+    href: "/whatsapp",
+    iconKey: "whatsapp",
+    permission: "whatsapp.read",
+    label: "WhatsApp",
   },
   {
     href: "/profile-forms",

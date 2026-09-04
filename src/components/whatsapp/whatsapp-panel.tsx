@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { WhatsAppThreadMessage } from "@/lib/whatsapp/get-thread";
 
-import { sendWhatsAppMessage, sendWhatsAppTemplate, type WhatsAppSendState } from "./whatsapp-actions";
+import { sendWhatsAppMessage, sendWhatsAppTemplate, type WhatsAppSendState } from "@/lib/whatsapp/send-actions";
 
 const STATUS_LABEL: Record<WhatsAppThreadMessage["status"], string> = {
   queued: "Sending…",
