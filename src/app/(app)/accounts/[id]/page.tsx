@@ -13,6 +13,7 @@ import { RevealPhoneButton } from "../../leads/reveal-phone-button";
 import { AgreedPlan } from "@/components/enrolment/agreed-plan";
 import { getAccounts } from "@/lib/finance/get-finance";
 
+import { DropAdmissionForm } from "./drop-admission-form";
 import { RecordPaymentForm } from "./record-payment-form";
 
 interface EnrolmentDetail {
@@ -28,6 +29,8 @@ interface EnrolmentDetail {
   fee_notes: string | null;
   net_fee_paise: number;
   status: string;
+  dropped_at: string | null;
+  drop_reason: string | null;
   enrolled_at: string;
   sales_to_accounts_at: string | null;
   accounts_to_academics_at: string | null;
@@ -56,7 +59,7 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
   const { data: enrolment } = await supabase
     .from("enrolments")
     .select(
-      "id, lead_id, course, mode, academic_year, total_fee_paise, discount_paise, discount_name, down_payment_paise, fee_notes, net_fee_paise, status, enrolled_at, sales_to_accounts_at, accounts_to_academics_at, student_id, leads(student_name, primary_phone), centers(name)",
+      "id, lead_id, course, mode, academic_year, total_fee_paise, discount_paise, discount_name, down_payment_paise, fee_notes, net_fee_paise, status, dropped_at, drop_reason, enrolled_at, sales_to_accounts_at, accounts_to_academics_at, student_id, leads(student_name, primary_phone), centers(name)",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -104,6 +107,8 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
 
   const canRecordPayment = can(user, "payment.record");
   const canRevealPhone = can(user, "lead.reveal_phone");
+  const canDrop = can(user, "enrolment.drop");
+  const isDropped = enrolment.dropped_at !== null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -115,12 +120,38 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {isDropped && <Badge variant="destructive">Dropped</Badge>}
           <Badge variant={enrolment.accounts_to_academics_at ? "secondary" : "outline"}>
             {enrolment.accounts_to_academics_at ? enrolment.status : "awaiting first payment"}
           </Badge>
           {enrolment.centers?.name && <Badge variant="outline">{enrolment.centers.name}</Badge>}
         </div>
       </div>
+
+      {/*
+        Said once, loudly, at the top. Everything below it — the fee plan,
+        the balance, the ledger — reads as an active admission otherwise,
+        and somebody chases a student who left.
+      */}
+      {isDropped && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4">
+          <p className="text-sm font-semibold text-destructive">
+            This student dropped the course on{" "}
+            {formatDateIST(enrolment.dropped_at, "d MMM yyyy")}.
+          </p>
+          {enrolment.drop_reason && (
+            <p className="mt-1 text-sm">
+              <span className="text-muted-foreground">Reason: </span>
+              {enrolment.drop_reason}
+            </p>
+          )}
+          <p className="mt-1 text-xs text-muted-foreground">
+            The outstanding balance is no longer chased and the admission no longer counts as a
+            conversion. Fees already collected stay on the books — a refund is recorded
+            separately.
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
@@ -206,6 +237,7 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
 
         <div className="flex flex-col gap-4">
           {canRecordPayment && <RecordPaymentForm enrolmentId={id} accounts={financeAccounts} />}
+          {canDrop && <DropAdmissionForm enrolmentId={id} isDropped={isDropped} />}
         </div>
       </div>
     </div>

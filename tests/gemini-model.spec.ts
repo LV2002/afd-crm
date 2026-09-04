@@ -17,9 +17,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // an override that skips discovery entirely, which is the point of it.
 delete process.env.GEMINI_MODEL;
 
-const { forgetResolvedModel, generateWithTools, listUsableModels, resolveModel } = await import(
-  "../src/lib/ai/gemini"
-);
+const {
+  forgetResolvedModel,
+  generateWithTools,
+  listUsableModels,
+  resolveModel,
+  resolveModelCandidates,
+} = await import("../src/lib/ai/gemini");
 
 const GENERATE = ["generateContent"];
 
@@ -247,5 +251,112 @@ describe("generateWithTools", () => {
 
     expect(turn.text).toBe("You had 42 leads last month.");
     expect(turn.parts).toHaveLength(2);
+  });
+});
+
+/**
+ * Leon's analyst was down for two days on a 503:
+ *
+ *   Gemini returned 503 for model "gemini-3.8-flash":
+ *   "This model is currently experiencing high demand."
+ *
+ * Nothing was wrong with the key or the question. Picking the single best
+ * model made the feature exactly as available as the newest flash model,
+ * which is the least available thing on the free tier precisely because
+ * it is newest — while the model one step down sat idle.
+ */
+describe("falling through to another model", () => {
+  const args = {
+    apiKey: "k",
+    systemInstruction: "be useful",
+    contents: [{ role: "user" as const, parts: [{ text: "how many leads?" }] }],
+    tools: [],
+  };
+
+  const answer = {
+    ok: true,
+    status: 200,
+    json: async () => ({ candidates: [{ content: { parts: [{ text: "42 leads." }] } }] }),
+  };
+
+  const busy = (status: number) => ({
+    ok: false,
+    status,
+    text: async () => `{"error":{"code":${status},"status":"UNAVAILABLE"}}`,
+  });
+
+  /** Serves the listing, then one response per generate call, in order. */
+  function stubSequence(names: string[], generates: unknown[]) {
+    let call = 0;
+    const spy = vi.fn(async (url: string) => {
+      if (!url.includes(":generateContent")) return modelListing(names);
+      const next = generates[Math.min(call, generates.length - 1)];
+      call += 1;
+      return next;
+    });
+    vi.stubGlobal("fetch", spy);
+    return spy;
+  }
+
+  it("offers several models, best first", async () => {
+    stubFetch(modelListing(["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-pro"]));
+    const candidates = await resolveModelCandidates("k");
+    expect(candidates[0]).toBe("gemini-3.8-flash");
+    expect(candidates).toContain("gemini-2.5-flash");
+  });
+
+  it("answers from the next model when the best one is overloaded", async () => {
+    const spy = stubSequence(["gemini-3.8-flash", "gemini-2.5-flash"], [busy(503), answer]);
+
+    const turn = await generateWithTools(args);
+
+    expect(turn.text).toBe("42 leads.");
+    const generateUrls = spy.mock.calls
+      .map(([url]) => String(url))
+      .filter((url) => url.includes(":generateContent"));
+    expect(generateUrls[0]).toContain("gemini-3.8-flash");
+    expect(generateUrls[1]).toContain("gemini-2.5-flash");
+  });
+
+  // A per-model daily quota is exactly that — per model. Another model has
+  // its own, so 429 is a reason to step down rather than to give up.
+  it("steps down on an exhausted quota too", async () => {
+    stubSequence(["gemini-3.8-flash", "gemini-2.5-flash"], [busy(429), answer]);
+    await expect(generateWithTools(args)).resolves.toMatchObject({ text: "42 leads." });
+  });
+
+  it("sticks with the model that answered, so the tool loop stops knocking on the busy one", async () => {
+    const spy = stubSequence(["gemini-3.8-flash", "gemini-2.5-flash"], [busy(503), answer]);
+    await generateWithTools(args);
+
+    const before = spy.mock.calls.length;
+    await generateWithTools(args);
+    const after = spy.mock.calls
+      .slice(before)
+      .map(([url]) => String(url))
+      .filter((url) => url.includes(":generateContent"));
+
+    expect(after).toHaveLength(1);
+    expect(after[0]).toContain("gemini-2.5-flash");
+  });
+
+  it("reports the last failure when every model is busy", async () => {
+    stubSequence(["gemini-3.8-flash", "gemini-2.5-flash"], [busy(503)]);
+    await expect(generateWithTools(args)).rejects.toMatchObject({ status: 503 });
+  });
+
+  // A bad key or a malformed request is not going to work any better on
+  // another model, and trying three of them just delays the real message.
+  it("does not shop around for a request that is simply wrong", async () => {
+    const spy = stubSequence(
+      ["gemini-3.8-flash", "gemini-2.5-flash"],
+      [{ ok: false, status: 403, text: async () => "bad key" }],
+    );
+
+    await expect(generateWithTools(args)).rejects.toMatchObject({ status: 403 });
+    const generateCalls = spy.mock.calls
+      .map(([url]) => String(url))
+      .filter((url) => url.includes(":generateContent"));
+    expect(generateCalls).toHaveLength(1);
   });
 });

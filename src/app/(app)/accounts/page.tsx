@@ -17,6 +17,7 @@ interface EnrolmentQueueRow {
   course: string;
   net_fee_paise: number;
   status: string;
+  dropped_at: string | null;
   sales_to_accounts_at: string | null;
   accounts_to_academics_at: string | null;
   leads: { student_name: string; primary_phone: string } | null;
@@ -40,8 +41,11 @@ export default async function AccountsQueuePage({
   const { filter } = await searchParams;
   // Defaults to the new admissions, because that is the job: a confirmed
   // admission sitting unpaid is somebody waiting to be chased. The full
-  // list is one click away for recording a later instalment.
+  // list is one click away for recording a later instalment, and the
+  // students who left have their own list rather than being scattered
+  // through the working one.
   const showAll = filter === "all";
+  const showDropped = filter === "dropped";
 
   const user = await getCurrentUser();
   if (!user || !can(user, "payment.read")) return <AccessDenied />;
@@ -52,7 +56,7 @@ export default async function AccountsQueuePage({
   const { data: enrolmentRows, error } = await supabase
     .from("enrolments")
     .select(
-      "id, lead_id, course, net_fee_paise, status, sales_to_accounts_at, accounts_to_academics_at, leads(student_name, primary_phone), centers(name)",
+      "id, lead_id, course, net_fee_paise, status, dropped_at, sales_to_accounts_at, accounts_to_academics_at, leads(student_name, primary_phone), centers(name)",
     )
     .is("deleted_at", null)
     .order("sales_to_accounts_at", { ascending: true })
@@ -86,8 +90,13 @@ export default async function AccountsQueuePage({
     return (a.sales_to_accounts_at ?? "").localeCompare(b.sales_to_accounts_at ?? "");
   });
 
-  const newAdmissions = sorted.filter((row) => row.accounts_to_academics_at === null);
-  const visible = showAll ? sorted : newAdmissions;
+  const dropped = sorted.filter((row) => row.dropped_at !== null);
+  // A student who left is not waiting to be chased, so they never appear
+  // in the work queue however unpaid they are.
+  const newAdmissions = sorted.filter(
+    (row) => row.accounts_to_academics_at === null && row.dropped_at === null,
+  );
+  const visible = showDropped ? dropped : showAll ? sorted : newAdmissions;
 
   return (
     <div className="flex flex-col gap-4">
@@ -104,7 +113,7 @@ export default async function AccountsQueuePage({
         <Link
           href="/accounts"
           className={
-            showAll
+            showAll || showDropped
               ? "rounded-md px-3 py-1.5 text-muted-foreground hover:bg-accent/50"
               : "rounded-md bg-accent px-3 py-1.5 font-medium"
           }
@@ -120,6 +129,16 @@ export default async function AccountsQueuePage({
           }
         >
           All ({sorted.length})
+        </Link>
+        <Link
+          href="/accounts?filter=dropped"
+          className={
+            showDropped
+              ? "rounded-md bg-accent px-3 py-1.5 font-medium"
+              : "rounded-md px-3 py-1.5 text-muted-foreground hover:bg-accent/50"
+          }
+        >
+          Dropped ({dropped.length})
         </Link>
       </div>
 
@@ -157,9 +176,13 @@ export default async function AccountsQueuePage({
                 <TableCell>{formatINR(row.net_fee_paise)}</TableCell>
                 <TableCell>{formatINR(paid)}</TableCell>
                 <TableCell>
-                  <Badge variant={row.accounts_to_academics_at ? "secondary" : "outline"}>
-                    {row.accounts_to_academics_at ? row.status : "awaiting first payment"}
-                  </Badge>
+                  {row.dropped_at ? (
+                    <Badge variant="destructive">Dropped</Badge>
+                  ) : (
+                    <Badge variant={row.accounts_to_academics_at ? "secondary" : "outline"}>
+                      {row.accounts_to_academics_at ? row.status : "awaiting first payment"}
+                    </Badge>
+                  )}
                 </TableCell>
                 <TableCell>{formatDateIST(row.sales_to_accounts_at, "d MMM yyyy")}</TableCell>
               </TableRow>
@@ -168,9 +191,11 @@ export default async function AccountsQueuePage({
           {visible.length === 0 && (
             <TableRow>
               <TableCell colSpan={7} className="text-center text-muted-foreground">
-                {showAll
-                  ? "Nothing here yet."
-                  : "No new admissions waiting. Everything confirmed has had its first payment recorded."}
+                {showDropped
+                  ? "Nobody has dropped out."
+                  : showAll
+                    ? "Nothing here yet."
+                    : "No new admissions waiting. Everything confirmed has had its first payment recorded."}
               </TableCell>
             </TableRow>
           )}

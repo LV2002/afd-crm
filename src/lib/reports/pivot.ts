@@ -179,26 +179,54 @@ export interface PivotRow {
   total: number;
   won: number;
   lost: number;
+  dropped: number;
 }
 
 export interface PivotTotals {
   total: number;
   won: number;
   lost: number;
+  dropped: number;
 }
+
+/**
+ * Which of "won", "lost", "dropped" or none this lead counts as.
+ *
+ * Dropped wins over the stage, which is the whole point: a student who
+ * left is sitting in the Admission Confirmed stage and would otherwise go
+ * on counting as a conversion for as long as the record exists. It stays
+ * in the total — the lead was real, the work happened — but it is not a
+ * win, and it is not a loss either, because it was won and then undone.
+ */
+function outcomeOf(
+  lead: PivotLead,
+  stageTypeById: ReadonlyMap<string, string>,
+  droppedLeadIds: ReadonlySet<string>,
+): "won" | "lost" | "dropped" | null {
+  if (droppedLeadIds.has(lead.id)) return "dropped";
+  const stageType = lead.stageId ? stageTypeById.get(lead.stageId) : undefined;
+  if (stageType === "won") return "won";
+  if (stageType === "lost") return "lost";
+  return null;
+}
+
+const NONE_DROPPED: ReadonlySet<string> = new Set<string>();
 
 export function summarise(
   leads: PivotLead[],
   stageTypeById: ReadonlyMap<string, string>,
+  droppedLeadIds: ReadonlySet<string> = NONE_DROPPED,
 ): PivotTotals {
   let won = 0;
   let lost = 0;
+  let dropped = 0;
   for (const lead of leads) {
-    const stageType = lead.stageId ? stageTypeById.get(lead.stageId) : undefined;
-    if (stageType === "won") won += 1;
-    if (stageType === "lost") lost += 1;
+    const outcome = outcomeOf(lead, stageTypeById, droppedLeadIds);
+    if (outcome === "won") won += 1;
+    if (outcome === "lost") lost += 1;
+    if (outcome === "dropped") dropped += 1;
   }
-  return { total: leads.length, won, lost };
+  return { total: leads.length, won, lost, dropped };
 }
 
 /**
@@ -211,13 +239,14 @@ export function groupLeads(
   field: PivotField,
   stageTypeById: ReadonlyMap<string, string>,
   optionLabels: ReadonlyMap<string, string>,
+  droppedLeadIds: ReadonlySet<string> = NONE_DROPPED,
 ): PivotRow[] {
   const rows = new Map<string, PivotRow>();
 
   for (const lead of leads) {
     const buckets = bucketsFor(field, lead.values[field.key]);
     const keys = buckets.length === 0 ? [NOT_SET] : buckets;
-    const stageType = lead.stageId ? stageTypeById.get(lead.stageId) : undefined;
+    const outcome = outcomeOf(lead, stageTypeById, droppedLeadIds);
 
     for (const bucket of keys) {
       const row = rows.get(bucket) ?? {
@@ -226,10 +255,12 @@ export function groupLeads(
         total: 0,
         won: 0,
         lost: 0,
+        dropped: 0,
       };
       row.total += 1;
-      if (stageType === "won") row.won += 1;
-      if (stageType === "lost") row.lost += 1;
+      if (outcome === "won") row.won += 1;
+      if (outcome === "lost") row.lost += 1;
+      if (outcome === "dropped") row.dropped += 1;
       rows.set(bucket, row);
     }
   }

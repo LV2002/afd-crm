@@ -20,6 +20,7 @@ export async function AdminWidget() {
       .from("enrolments")
       .select("id", { count: "exact", head: true })
       .is("deleted_at", null)
+      .is("dropped_at", null)
       .gte("sales_to_accounts_at", monthStart),
   ]);
 

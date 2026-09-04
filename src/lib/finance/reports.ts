@@ -211,7 +211,12 @@ export async function getCollections(
   let enrolmentQuery = supabase
     .from("enrolments")
     .select("id, course, center_id, lead_id, student_id, leads(student_name), students(full_name)")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    // A student who left is not a debtor to chase. Their instalments stop
+    // appearing here the moment they are marked dropped; what they already
+    // paid stays in the ledger and in the revenue reports, because it was
+    // genuinely received. A refund, if there is one, is its own entry.
+    .is("dropped_at", null);
   if (options.centerId) enrolmentQuery = enrolmentQuery.eq("center_id", options.centerId);
 
   const [{ data: enrolments }, { data: instalments }, { data: paymentRows }] = await Promise.all([

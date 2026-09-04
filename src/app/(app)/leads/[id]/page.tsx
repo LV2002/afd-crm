@@ -35,6 +35,8 @@ interface EnrolmentRow {
   course: string;
   net_fee_paise: number;
   status: string;
+  dropped_at: string | null;
+  drop_reason: string | null;
   sales_to_accounts_at: string | null;
 }
 
@@ -82,7 +84,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     canCreateEnrolment ? getDropdownOptions(supabase, "preferred_mode") : Promise.resolve([]),
     supabase
       .from("enrolments")
-      .select("id, course, net_fee_paise, status, sales_to_accounts_at")
+      .select("id, course, net_fee_paise, status, dropped_at, drop_reason, sales_to_accounts_at")
       .eq("lead_id", id)
       .is("deleted_at", null)
       .maybeSingle<EnrolmentRow>(),
@@ -171,19 +173,48 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         </div>
 
         <div className="flex flex-col gap-4">
-          {canCreateEnrolment &&
-            (enrolment ? (
-              <div className="flex flex-col gap-1 rounded-lg border p-4">
-                <h3 className="text-sm font-semibold">Admission confirmed</h3>
-                <p className="text-sm text-muted-foreground">{enrolment.course}</p>
-                <p className="text-sm">{formatINR(enrolment.net_fee_paise)}</p>
-                <p className="text-xs text-muted-foreground">
-                  {formatDateIST(enrolment.sales_to_accounts_at, "d MMM yyyy, h:mm a")}
-                </p>
-              </div>
-            ) : (
-              <ConfirmAdmissionForm leadId={id} courses={courseOptions} modes={modeOptions} />
-            ))}
+          {/*
+            An existing admission shows to anyone who may read enrolments,
+            not only to whoever could have created it: a counsellor asked
+            why their conversion disappeared from the numbers needs to see
+            that the student dropped, and they are not the person who
+            records it.
+          */}
+          {enrolment
+            ? canReadFees && (
+                <div
+                  className={
+                    enrolment.dropped_at
+                      ? "flex flex-col gap-1 rounded-lg border border-destructive/50 bg-destructive/5 p-4"
+                      : "flex flex-col gap-1 rounded-lg border p-4"
+                  }
+                >
+                  <h3 className="text-sm font-semibold">
+                    {enrolment.dropped_at ? "Dropped out" : "Admission confirmed"}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">{enrolment.course}</p>
+                  <p className="text-sm">{formatINR(enrolment.net_fee_paise)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Confirmed {formatDateIST(enrolment.sales_to_accounts_at, "d MMM yyyy, h:mm a")}
+                  </p>
+                  {enrolment.dropped_at && (
+                    <>
+                      <p className="text-xs text-destructive">
+                        Left {formatDateIST(enrolment.dropped_at, "d MMM yyyy")}
+                      </p>
+                      {enrolment.drop_reason && (
+                        <p className="text-sm">
+                          <span className="text-muted-foreground">Reason: </span>
+                          {enrolment.drop_reason}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )
+            : canCreateEnrolment && (
+                <ConfirmAdmissionForm leadId={id} courses={courseOptions} modes={modeOptions} />
+              )}
           {can(user, "interaction.create") && (
             <InteractionForm leadId={id} types={interactionTypes} outcomes={interactionOutcomes} />
           )}
