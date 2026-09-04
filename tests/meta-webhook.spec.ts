@@ -143,8 +143,11 @@ describe("POST /api/webhooks/meta-leads (lead ingestion)", () => {
     expect(lead.firstTouchSource).toBe("meta");
     expect(lead.firstTouchCampaign).toBe("campaign1");
 
-    const [identifier] = await db.select().from(leadIdentifiers).where(eq(leadIdentifiers.leadId, lead.id));
-    expect(identifier.valueNormalised).toBe("+919847500101");
+    // A Meta lead carries a phone AND an email, so two identifier rows are
+    // written and their order is whatever Postgres feels like returning.
+    // Assert on the set; taking the first row was a coin flip.
+    const identifiers = await db.select().from(leadIdentifiers).where(eq(leadIdentifiers.leadId, lead.id));
+    expect(identifiers.map((row) => row.valueNormalised)).toContain("+919847500101");
 
     const [event] = await db.select().from(webhookEvents).where(eq(webhookEvents.externalId, leadgenId));
     expect(event.status).toBe("done");

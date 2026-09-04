@@ -42,7 +42,9 @@ function systemPrompt(scope: string, centreCount: number): string {
     "- Use the tools. Never guess a number, and never state a figure a tool did not return.",
     "- If the tools cannot answer the question, say so plainly and say what you would need.",
     `- The person asking has '${scope}' report access${scope === "center" ? ` across ${centreCount} centre(s)` : ""}. Results are already limited to what they may see; do not speculate about the rest of the organisation.`,
-    "- Answer in a few sentences. Give the number first, then what it means.",
+    "- When a question names an individual, call find_person first, then person_history with the id it returns. If several people match, list them and ask which.",
+    "- A person_history result may be quoted in full: this caller can already open that record. Do not repeat a phone number that came back masked as though it were complete.",
+    "- Answer in a few sentences. Give the number first, then what it means. For one person's history, a short list of facts reads better than a paragraph.",
     "- Amounts are Indian rupees; dates are Asia/Kolkata.",
     "- Where a number suggests an obvious action, say it in one line. Do not invent targets or benchmarks.",
   ].join("\n");
@@ -124,6 +126,23 @@ export async function POST(request: Request) {
       for (const call of result.functionCalls) {
         toolsUsed.push(call.name);
         const outcome = await runAnalystTool(call.name, call.args, { user });
+        // Reading one person's whole file is the one thing the analyst does
+        // that isn't an aggregate, so it gets its own row against that lead
+        // rather than being buried in the question text — the same reason a
+        // phone reveal and an export are audited (CLAUDE.md § Non-negotiables 5).
+        if (call.name === "person_history" && outcome.ok) {
+          const leadId = (call.args as { leadId?: unknown } | null)?.leadId;
+          if (typeof leadId === "string") {
+            const supabase = await createClient();
+            await writeAuditLog(supabase, {
+              actorId: user.id,
+              action: "ai.person_history",
+              entityType: "lead",
+              entityId: leadId,
+              after: { question: parsed.data.question },
+            });
+          }
+        }
         responses.push({
           functionResponse: {
             name: call.name,

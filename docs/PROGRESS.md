@@ -3058,3 +3058,47 @@ sets `released_at`.
 `next lint` clean (one pre-existing warning), `npm run build` succeeds.
 
 **Needs Leon:** `npm run db:migrate` (0045–0046) and `npm run db:seed` (the keyword lists).
+
+## Session 33 — The analyst can read one person's whole file
+
+**Shipped**
+
+- **`find_person` and `person_history` analyst tools** (`src/lib/ai/tools/person-history.ts`).
+  Ask "give me the full history on Anjali" and the analyst returns her profile,
+  when she first enquired and from where, how long she took to join, her fee plan
+  and instalments, every payment and the outstanding balance, and whether she is
+  currently studying. Assembled from `leads`, `enquiries`, `enrolments`,
+  `enrolment_instalments`, `payments`/`receipts` and `students`.
+- **The analyst is now admin and co-admin only.** `ai.query` was removed from
+  `center_head`, `counsellor` and `academics` in the seed, and migration
+  `0047_ai_query_admins_only.sql` revokes it on installs that already have it
+  (the seed upserts and never revokes, so the migration is what actually changes
+  a live database).
+- **Both new tools refuse anybody without org-wide report access**, checked in
+  code rather than assumed from the seeded roles — roles are editable rows, and
+  somebody may grant `ai.query` more widely tomorrow.
+- **Every person lookup writes an `ai.person_history` audit row** against that
+  lead, from the route handler where the request has a Supabase client.
+
+**Why these two tools break the aggregates-only rule deliberately**
+
+Every other analyst tool returns counts and rates and nothing else, because a
+tool that returns people is a tool that can be turned into a contact export
+(CLAUDE.md § Non-negotiables 6). These two are safe for a different reason: not
+what they withhold, but who can reach them. They answer only for people who can
+already open that lead, enrolment and student record by clicking. The analyst is
+not a way around a permission; it is a faster way to use one somebody has.
+
+**Also fixed**
+
+- `find_person`'s argument was called `query`, which tripped the standing guard
+  test that no tool may take an argument a query could hide behind. Renamed to
+  `nameOrPhone` — the guard was right, the tool was wrong.
+- `tests/meta-webhook.spec.ts` asserted on the first of two identifier rows with
+  no `ORDER BY`. It passed or failed on Postgres's mood; now it asserts on the set.
+
+**Still stubbed / not done**
+
+- WhatsApp media (image and video) send.
+- Signed-agreement upload replacing the general per-lead file upload, and
+  accountant visibility of the instalment agreement.
