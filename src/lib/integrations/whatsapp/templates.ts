@@ -184,6 +184,32 @@ export function templateBody(template: MessageTemplate): string {
 }
 
 /** The quick-reply button labels, if it has any. */
+/**
+ * "image", "video", "document" — or null when the header is text or there
+ * is no header at all.
+ *
+ * A template's header format is fixed at approval time: Meta rejects a
+ * media header component on a TEXT-header template and rejects a send that
+ * omits one on a media-header template. So this is what decides whether a
+ * broadcast even offers a file field, rather than letting somebody attach
+ * a video to a template that cannot carry one.
+ */
+export function templateHeaderMediaKind(
+  template: MessageTemplate,
+): "image" | "video" | "document" | null {
+  const header = template.components.find((component) => component.type === "HEADER");
+  switch (header?.format) {
+    case "IMAGE":
+      return "image";
+    case "VIDEO":
+      return "video";
+    case "DOCUMENT":
+      return "document";
+    default:
+      return null;
+  }
+}
+
 export function templateQuickReplies(template: MessageTemplate): string[] {
   const buttons = template.components.find((component) => component.type === "BUTTONS")?.buttons;
   return (buttons ?? []).filter((b) => b.type === "QUICK_REPLY").map((b) => b.text);

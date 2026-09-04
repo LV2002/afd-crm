@@ -126,7 +126,10 @@ describe("GET /api/cron/whatsapp-broadcast-sweep", () => {
     expect(recipient.status).toBe("sent");
     expect(recipient.waMessageId).toBe("wamid.sent123");
 
-    expect(sendTemplateMessage).toHaveBeenCalledWith(`${MARKER}-phone-number-id`, "fake-access-token", "+919847600401", "demo_followup", "en_US", undefined);
+    // The trailing `undefined` is the media header: a broadcast without
+    // one must send no header component at all, since Meta rejects one on
+    // a template whose header is text.
+    expect(sendTemplateMessage).toHaveBeenCalledWith(`${MARKER}-phone-number-id`, "fake-access-token", "+919847600401", "demo_followup", "en_US", undefined, undefined);
   });
 
   it("marks the broadcast completed once its only recipient is done", async () => {
@@ -169,10 +172,62 @@ describe("GET /api/cron/whatsapp-broadcast-sweep", () => {
       "demo_followup",
       "en_US",
       undefined,
+      undefined,
     );
 
     const [broadcast] = await db.select().from(whatsappBroadcasts).where(eq(whatsappBroadcasts.id, broadcastId));
     expect(broadcast.status).toBe("completed");
+  });
+
+  it("passes the broadcast's header media to every recipient", async () => {
+    // Uploaded once when the campaign was composed, then reused: a
+    // 400-person send pushes the video across the wire once, not 400
+    // times. If this stopped being passed through, every message would
+    // arrive without the picture and Meta would reject the send outright.
+    vi.mocked(sendTemplateMessage).mockResolvedValue("wamid.media1");
+
+    const broadcastId = await makeBroadcast("with-header");
+    await db
+      .update(whatsappBroadcasts)
+      .set({ headerMediaId: "media-abc", headerMediaKind: "image", headerMediaFilename: "poster.jpg" })
+      .where(eq(whatsappBroadcasts.id, broadcastId));
+    const leadId = await makeLead("with-header", "+919847600405", counsellorId);
+    await db.insert(whatsappBroadcastRecipients).values({ broadcastId, leadId, phone: "+919847600405", status: "queued" });
+
+    await GET(request());
+
+    expect(sendTemplateMessage).toHaveBeenCalledWith(
+      `${MARKER}-phone-number-id`,
+      "fake-access-token",
+      "+919847600405",
+      "demo_followup",
+      "en_US",
+      undefined,
+      { kind: "image", mediaId: "media-abc" },
+    );
+  });
+
+  it("sends without a header when the stored kind is not one Meta knows", async () => {
+    // The kind column is plain text, so a nonsense value drops the header
+    // rather than throwing away the whole batch.
+    vi.mocked(sendTemplateMessage).mockResolvedValue("wamid.media2");
+
+    const broadcastId = await makeBroadcast("bad-header-kind");
+    await db
+      .update(whatsappBroadcasts)
+      .set({ headerMediaId: "media-def", headerMediaKind: "sticker" })
+      .where(eq(whatsappBroadcasts.id, broadcastId));
+    const leadId = await makeLead("bad-header-kind", "+919847600406", counsellorId);
+    await db.insert(whatsappBroadcastRecipients).values({ broadcastId, leadId, phone: "+919847600406", status: "queued" });
+
+    await GET(request());
+
+    const [recipient] = await db
+      .select()
+      .from(whatsappBroadcastRecipients)
+      .where(eq(whatsappBroadcastRecipients.leadId, leadId));
+    expect(recipient.status).toBe("sent");
+    expect(vi.mocked(sendTemplateMessage).mock.calls[0][6]).toBeUndefined();
   });
 
   it("never touches a recipient whose broadcast isn't in 'sending' status", async () => {

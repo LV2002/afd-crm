@@ -16,6 +16,7 @@ import {
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 import { NOT_SET, NOT_SET_LABEL, type PivotField } from "@/lib/reports/pivot";
 import type { AudienceEntity } from "@/lib/whatsapp/audience";
+import { WHATSAPP_MEDIA_EXTENSIONS } from "@/lib/whatsapp/media";
 import { cn } from "@/lib/utils";
 
 import { createBroadcast, previewAudience, type AudiencePreview, type BroadcastFormState } from "../actions";
@@ -35,6 +36,8 @@ export interface TemplateChoice {
   language: string;
   body: string;
   placeholders: number;
+  /** Set when the template was approved with an image, video or document header. */
+  headerMediaKind: "image" | "video" | "document" | null;
 }
 
 /**
@@ -250,6 +253,34 @@ export function NewBroadcastForm({
         </div>
 
         <input type="hidden" name="templateLanguage" value={template?.language ?? "en_US"} />
+
+        {template?.headerMediaKind && (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="broadcast-header-media">
+              {template.headerMediaKind === "image"
+                ? "Header image"
+                : template.headerMediaKind === "video"
+                  ? "Header video"
+                  : "Header document"}
+            </Label>
+            <Input
+              id="broadcast-header-media"
+              name="headerMedia"
+              type="file"
+              accept={WHATSAPP_MEDIA_EXTENSIONS}
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              This template was approved with a {template.headerMediaKind} header, so every
+              message carries one. It is uploaded once and reused for the whole audience.
+              {template.headerMediaKind === "image"
+                ? " JPG or PNG, up to 5 MB."
+                : template.headerMediaKind === "video"
+                  ? " MP4 or 3GP, up to 16 MB."
+                  : " PDF."}
+            </p>
+          </div>
+        )}
 
         {template && template.placeholders > 0 && (
           <div className="flex flex-col gap-2">

@@ -5,10 +5,16 @@ import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { getIntegrationCredential } from "@/lib/integrations/credentials";
-import { sendTemplateMessage, sendTextMessage } from "@/lib/integrations/whatsapp/client";
+import {
+  sendMediaMessage,
+  sendTemplateMessage,
+  sendTextMessage,
+  uploadMedia,
+} from "@/lib/integrations/whatsapp/client";
 import { MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
 import { createClient } from "@/lib/supabase/server";
 import { isWithinCustomerServiceWindow } from "@/lib/whatsapp/get-thread";
+import { mediaKindFor, trimCaption, validateWhatsAppMedia } from "@/lib/whatsapp/media";
 
 export interface WhatsAppSendState {
   error?: string;
@@ -26,7 +32,13 @@ export interface WhatsAppSendState {
 async function recordAndSend(
   leadId: string,
   toPhone: string,
-  insertFields: { messageType: "text" | "template"; body: string | null; templateName: string | null },
+  insertFields: {
+    messageType: "text" | "template" | "media";
+    body: string | null;
+    templateName: string | null;
+    mediaId?: string | null;
+    mediaMimeType?: string | null;
+  },
   send: (phoneNumberId: string, accessToken: string) => Promise<string>,
 ): Promise<WhatsAppSendState> {
   const user = await getCurrentUser();
@@ -58,6 +70,8 @@ async function recordAndSend(
       message_type: insertFields.messageType,
       body: insertFields.body,
       template_name: insertFields.templateName,
+      media_id: insertFields.mediaId ?? null,
+      media_mime_type: insertFields.mediaMimeType ?? null,
       status: "queued",
     })
     .select("id")
@@ -140,5 +154,89 @@ export async function sendWhatsAppTemplate(
 
   return recordAndSend(leadId, toPhone, { messageType: "template", body: null, templateName: templateName.trim() }, (phoneNumberId, accessToken) =>
     sendTemplateMessage(phoneNumberId, accessToken, toPhone, templateName.trim(), languageCode.trim() || "en_US", bodyParam.trim() ? [bodyParam.trim()] : undefined),
+  );
+}
+
+/**
+ * An image, video or PDF, sent into an open conversation.
+ *
+ * Same 24-hour rule as a text message, for the same reason: Meta accepts
+ * free-form content only inside the window the lead's own message opens.
+ * Outside it, a media message needs a template with an approved media
+ * header, which is a broadcast decision rather than a counsellor's — see
+ * sendWhatsAppTemplate.
+ *
+ * The bytes go straight to Meta and are NOT written to the CRM's own
+ * bucket. A photo of a fee receipt or a campus video sent in conversation
+ * is not a document of record; storing every one of them would fill
+ * private storage with things nobody will ever open again, and the lead's
+ * Files section is now deliberately about one document only. What is kept
+ * is the fact of the send: the row, its media id, and its type.
+ */
+export async function sendWhatsAppMedia(
+  leadId: string,
+  toPhone: string,
+  formData: FormData,
+): Promise<WhatsAppSendState> {
+  const file = formData.get("file");
+  if (!(file instanceof File)) return { error: "Choose a file to send." };
+
+  const invalid = validateWhatsAppMedia(file);
+  if (invalid) return { error: invalid };
+
+  const kind = mediaKindFor(file.type);
+  // validateWhatsAppMedia has already rejected an unknown type; this is
+  // the type system catching up rather than a second check.
+  if (!kind) return { error: "WhatsApp cannot send that kind of file." };
+
+  const captionRaw = formData.get("caption");
+  const caption = typeof captionRaw === "string" ? trimCaption(captionRaw) : "";
+
+  const supabase = await createClient();
+  const withinWindow = await isWithinCustomerServiceWindow(supabase, leadId);
+  if (!withinWindow) {
+    return {
+      error:
+        "This lead hasn't messaged in the last 24 hours, so WhatsApp won't accept a file from here. Send it from the WhatsApp Business app on your phone — the window reopens as soon as they write back.",
+    };
+  }
+
+  // Uploaded before the row is written so a rejected file never produces a
+  // 'failed' message on the thread: a 12 MB photo is the user's mistake to
+  // fix, not an event in the conversation.
+  const phoneNumberId = await getIntegrationCredential("whatsapp", "phone_number_id");
+  const accessToken = await getIntegrationCredential("whatsapp", "access_token");
+  if (!phoneNumberId || !accessToken) {
+    return { error: "WhatsApp isn't connected yet — an admin sets it up in Settings → Integrations → WhatsApp." };
+  }
+
+  let mediaId: string;
+  try {
+    mediaId = await uploadMedia(phoneNumberId, accessToken, file, file.name);
+  } catch (err) {
+    const message = err instanceof MetaGraphApiError ? err.message : "Could not reach WhatsApp.";
+    return { error: `Upload failed: ${message}` };
+  }
+
+  return recordAndSend(
+    leadId,
+    toPhone,
+    {
+      messageType: "media",
+      // The caption is the message's readable content, so it goes in the
+      // body — that is what the thread renders and what a later search
+      // over the conversation would find.
+      body: caption || null,
+      templateName: null,
+      mediaId,
+      mediaMimeType: file.type,
+    },
+    (id, token) =>
+      sendMediaMessage(id, token, toPhone, {
+        kind,
+        mediaId,
+        caption: caption || undefined,
+        fileName: file.name,
+      }),
   );
 }

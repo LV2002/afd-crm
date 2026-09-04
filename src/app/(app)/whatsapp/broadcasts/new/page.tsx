@@ -8,7 +8,11 @@ import {
   resolveFieldOptions,
   type FieldOption,
 } from "@/lib/fields/resolve-field-options";
-import { templateBody, templatePlaceholderCount } from "@/lib/integrations/whatsapp/templates";
+import {
+  templateBody,
+  templateHeaderMediaKind,
+  templatePlaceholderCount,
+} from "@/lib/integrations/whatsapp/templates";
 import { audienceFields, type AudienceEntity } from "@/lib/whatsapp/audience";
 import { createClient } from "@/lib/supabase/server";
 
@@ -80,6 +84,10 @@ export default async function NewWhatsAppBroadcastPage() {
             language: template.language,
             body: templateBody(template),
             placeholders: templatePlaceholderCount(template),
+            // Decides whether the form offers a file at all: Meta rejects
+            // a media header on a text-header template, and rejects a send
+            // that omits one on a media-header template.
+            headerMediaKind: templateHeaderMediaKind(template),
           }))
       : [];
 
