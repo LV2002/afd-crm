@@ -14,6 +14,7 @@
     "db:studio": "drizzle-kit studio",
     "db:check": "tsx src/lib/db/check-connection.ts",
     "db:seed": "tsx src/lib/db/seed.ts",
+    "db:local-shim": "psql \"$DATABASE_URL\" -f scripts/local-supabase-shim.sql",
     "db:config-import": "tsx src/lib/db/import-config-cli.ts",
     "test": "vitest run"
   },

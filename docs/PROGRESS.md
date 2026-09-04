@@ -2943,3 +2943,67 @@ whether what already exists holds, legally and technically.
 Also added one line to the Admissions page pointing at where a drop is recorded — it lives on the
 individual admission, next to the payment form, because it needs a reason typed in, and a list
 with no per-row actions gives no hint of that.
+
+## Session 44 — The database-backed suite runs, and it found a real bug
+
+Backlog item #1. About twenty spec files — every RLS policy, both handoff gates, the
+append-only ledger, all four webhooks, identity resolution — had never executed, because no
+environment had a Postgres to point them at. They do now, and they are green: **627 tests
+across 55 files, twice in a row.**
+
+Getting there also proved something nobody had checked: **all 44 migrations apply cleanly to
+an empty database**, and the seed runs on top of them. 0035–0043 had only ever been applied
+incrementally to an already-populated instance.
+
+### The real bug: dismissing a notification was impossible
+
+`notifications_select` was `recipient_id = auth.uid() and deleted_at is null`, and
+`notifications_update` checked only the recipient on the new row. Migration 0037 reasoned
+about the update policy alone and concluded a dismissal would pass. It doesn't: an UPDATE
+whose WHERE clause reads the table is gated by the SELECT policy too, and the row a dismissal
+produces — `deleted_at` now set — fails it. Postgres refuses the statement outright:
+
+    new row violates row-level security policy for table "notifications"
+
+So the one operation that policy existed to allow was the one operation it refused. Fixed in
+**migration 0044**: RLS decides whose rows you may see; whether you have dismissed your own
+notification is application state, and every read already filters `deleted_at is null`.
+Nothing becomes visible to anybody else.
+
+### Everything else was wrong tests, not wrong code
+
+- **Two RLS tests asserted across a rolled-back transaction.** `asUser()` always rolls back,
+  so a write made inside it and read afterwards on the owner connection looks like a policy
+  failure and isn't. Both now assert inside the simulated session.
+- **The finance test's fixture never gave the accounts user a centre.** Their `finance.read`
+  is centre-scoped, so with no `user_centers` rows they correctly saw nothing — while the
+  test's own comment claimed they were "a member of both". An earlier describe adds and then
+  removes those rows in its `afterAll`; the finance block now adds its own.
+- **Five WhatsApp tests still asserted the per-counsellor-number model** removed two sessions
+  ago. Updated to the one-institute-number contract — including one that used to assert a
+  lead with no counsellor *fails* a broadcast, which is now the opposite: on one number there
+  is nothing to look up, so an unowned lead is reached like anybody else.
+- **`tests/db-unreachable.spec.ts` called itself "pure logic — no database needed"** and
+  couldn't run without one: importing `db/client.ts` opens a connection pool and throws on a
+  missing `DATABASE_URL`. The three pure error-classification helpers moved to
+  `src/lib/db/errors.ts` (re-exported from `client.ts`, so no caller changed).
+- **One test leaked state between runs.** An inbound message from a number the CRM doesn't
+  have is now stored with no lead, and the file's sweep deleted messages *by lead* — so a
+  leftover from the previous run looked exactly like a webhook processing the same delivery
+  twice. Caught by running the suite a second time, which is why it was run a second time.
+
+### Repeatable from here
+
+`scripts/local-supabase-shim.sql` + `npm run db:local-shim` stand in for the pieces of a real
+Supabase project the migrations assume — the `auth` schema, `auth.uid()`, and the
+anon/authenticated/service_role roles with their table grants. Previous sessions built this by
+hand and threw it away; it is now committed, commented, and documented in
+docs/GETTING-STARTED.md, with the warning it needs: **never run it against a real Supabase
+project.**
+
+**Verified:** 627/627 tests pass on two consecutive full runs against Postgres 16,
+`npx tsc --noEmit` clean, `next lint` clean (one pre-existing warning), `npm run build`
+succeeds.
+
+**Needs Leon:** `npm run db:migrate` — 0044 is the notification-dismissal fix and matters to
+anyone using the bell.

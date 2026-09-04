@@ -161,3 +161,44 @@ your counsellors can use.
 Until you import real data, just reset and re-seed rather than writing careful migrations.
 Stop doing that the day real data lands — from then on, Supabase backup before every
 migration, no exceptions.
+
+---
+
+## Running the database-backed tests
+
+Most of the suite is pure logic and needs nothing. About twenty spec files are integration
+tests — RLS policies, both handoff gates, the append-only ledger, all four webhooks, identity
+resolution — and those need a real Postgres with the migrations applied.
+
+**Never point them at your Supabase project.** They create and delete fixture rows, including
+roles and `auth.users` entries. Use a throwaway database.
+
+```bash
+# 1. A local Postgres 16 (any install; on Ubuntu the packaged one is fine)
+pg_ctlcluster 16 main start
+createdb afd_verify
+
+export DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/afd_verify
+
+# 2. Stand in for the parts of Supabase the migrations assume exist:
+#    the auth schema, auth.uid(), and the anon/authenticated/service_role
+#    roles with the table grants Supabase provisions automatically.
+npm run db:local-shim
+
+# 3. Apply the migrations, then run the shim again so the tables the
+#    migration just created inherit the grants.
+npm run db:migrate
+npm run db:local-shim
+
+# 4. Seed, then run everything.
+npm run db:seed
+npm test
+```
+
+`scripts/local-supabase-shim.sql` carries the same warning at the top: it is a test harness,
+never a migration. A real Supabase project already has genuine versions of all of it, and
+shipping a fake `auth` schema into a real project's migration history would be actively
+harmful.
+
+The suite runs with file parallelism off (`vitest.config.ts`) because every spec file shares
+one physical database.

@@ -14,7 +14,7 @@
 import { createHmac, randomUUID } from "node:crypto";
 
 import { config as loadEnv } from "dotenv";
-import { eq, like, sql } from "drizzle-orm";
+import { and, eq, isNull, like, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 loadEnv({ path: ".env" });
@@ -102,11 +102,21 @@ function statusPayload(wamid: string, status: "sent" | "delivered" | "read" | "f
   });
 }
 
+/** Every number this file sends from, so the sweep can find rows that have no lead to find them by. */
+const TEST_PHONE_PREFIX = "+9198475";
+
 async function sweep() {
   const testLeads = await db.select({ id: leads.id }).from(leads).where(like(leads.studentName, `${MARKER}%`));
   for (const lead of testLeads) {
     await db.delete(whatsappMessages).where(eq(whatsappMessages.leadId, lead.id));
   }
+  // An inbound message from a number the CRM doesn't have is stored with
+  // NO lead, so deleting by lead leaves it behind — and a leftover from a
+  // previous run then looks exactly like a webhook that processed the
+  // same delivery twice. Found by that test failing on the second run.
+  await db
+    .delete(whatsappMessages)
+    .where(and(isNull(whatsappMessages.leadId), like(whatsappMessages.fromPhone, `${TEST_PHONE_PREFIX}%`)));
   await db.delete(leads).where(like(leads.studentName, `${MARKER}%`));
   await db.delete(webhookEvents).where(eq(webhookEvents.source, "whatsapp"));
 }
@@ -247,18 +257,24 @@ describe("POST /api/webhooks/whatsapp (inbound messages)", () => {
     await POST(makeRequest());
     await POST(makeRequest());
 
-    const leadsFound = await db.select().from(leads).where(eq(leads.studentName, `${MARKER} Replay Contact`));
-    expect(leadsFound).toHaveLength(1);
-    const messagesFound = await db.select().from(whatsappMessages).where(eq(whatsappMessages.leadId, leadsFound[0].id));
+    // No lead is created from this number at all, so the thing to count
+    // is the message: one delivery, one row, however many times Meta
+    // retries the same wamid.
+    const messagesFound = await db
+      .select()
+      .from(whatsappMessages)
+      .where(eq(whatsappMessages.fromPhone, "+919847500303"));
     expect(messagesFound).toHaveLength(1);
   });
 
   it("updates an existing outbound message's status on a delivery-status callback", async () => {
-    const body = messagePayload({ from: "919847500304", name: `${MARKER} Status Contact` });
-    await POST(
-      new Request("https://example.com/api/webhooks/whatsapp", { method: "POST", headers: { "x-hub-signature-256": sign(body, APP_SECRET) }, body }),
-    );
-    const [lead] = await db.select().from(leads).where(eq(leads.studentName, `${MARKER} Status Contact`));
+    // An outbound message always belongs to a lead — somebody had to open
+    // that lead to send it — so this fixture creates one rather than
+    // relying on an inbound message to conjure it.
+    const [lead] = await db
+      .insert(leads)
+      .values({ studentName: `${MARKER} Status Contact`, primaryPhone: "+919847500304" })
+      .returning({ id: leads.id });
 
     const outboundWamid = `wamid.${randomUUID()}`;
     await db.insert(whatsappMessages).values({

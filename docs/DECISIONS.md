@@ -2258,3 +2258,37 @@ what it should have used from the start and is the only thing that works for a s
 
 **Only approved templates are offered.** An unapproved one is a send that fails at Meta's door, and
 the failure reaches nobody who could act on it.
+
+## 2026-09-04 — An UPDATE is gated by the SELECT policy too
+
+Found by the first full run of the database-backed suite. `notifications_select` carried
+`and deleted_at is null`; dismissing a notification is an UPDATE that sets `deleted_at`; and
+Postgres rejected it with "new row violates row-level security policy". The row the update
+produced no longer satisfied the SELECT policy, and an UPDATE whose WHERE clause reads the
+table is checked against that policy as well as the UPDATE one.
+
+Migration 0037's comment explicitly considered this and got it wrong — it reasoned about the
+UPDATE policy's own WITH CHECK, concluded a dismissal was allowed, and never tested it.
+
+The general rule this leaves behind: **RLS decides whose rows you may see, not which of your
+own you have tidied away.** A soft-delete flag in a SELECT policy silently makes the row
+un-soft-deletable by the person it belongs to. Filter `deleted_at` in queries, where it is a
+display concern, and keep policies to the access boundary. Migration 0044 does that; every
+read already filtered, so nothing changed except that dismissal now works.
+
+## 2026-09-04 — The local Supabase shim is committed, not rebuilt each time
+
+Three previous sessions hand-built a stand-in for the parts of Supabase the migrations assume
+(the `auth` schema, `auth.uid()`, the three roles and their grants), verified something, and
+threw it away — which is why the suite went unrun for about forty sessions afterwards.
+
+It is now `scripts/local-supabase-shim.sql`, run via `npm run db:local-shim`, with the
+sequence documented in docs/GETTING-STARTED.md. It stays out of `src/lib/db/migrations/`
+deliberately and says so loudly at the top: a real Supabase project has genuine versions of
+all of it, and shipping a fake `auth` schema into a real project's migration history would be
+actively harmful.
+
+Run it twice — once before `db:migrate` so the roles and default privileges exist, once after
+so the tables the migration created inherit the grants. A missing grant does not look like a
+missing grant: every query fails with "permission denied for table X", which reads as an RLS
+failure and is not one.
