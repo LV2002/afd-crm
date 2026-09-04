@@ -16,6 +16,7 @@ export type NavIconKey =
   | "whatsapp"
   | "profile-forms"
   | "insights"
+  | "marketing"
   | "ask"
   | "settings";
 
@@ -91,6 +92,15 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     label: "Student Profile Forms",
   },
   { href: "/insights", iconKey: "insights", permission: "report.read", label: "Insights" },
+  {
+    // Gated on report.read like Insights so it appears for the same people,
+    // and the page itself turns away anyone without report.org — spend
+    // cannot honestly be split by centre. See the page's module comment.
+    href: "/marketing",
+    iconKey: "marketing",
+    permission: "report.read",
+    label: "Ad Performance",
+  },
   { href: "/ask", iconKey: "ask", permission: "ai.query", label: "Ask AI" },
   { href: "/settings", iconKey: "settings", permission: "settings.manage", label: "Settings" },
 ];

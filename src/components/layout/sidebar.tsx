@@ -12,6 +12,7 @@ import {
   Sparkles,
   Sun,
   Users,
+  TrendingUp,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -38,6 +39,7 @@ const ICON_MAP: Record<NavIconKey, LucideIcon> = {
   whatsapp: MessageCircle,
   "profile-forms": ClipboardList,
   insights: BarChart3,
+  marketing: TrendingUp,
   ask: Sparkles,
   settings: Settings,
 };
