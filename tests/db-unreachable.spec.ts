@@ -5,10 +5,15 @@
  * behind a misleading config message, so the boundary is pinned here.
  *
  * Pure logic — no database needed:  npm test -- db-unreachable
+ *
+ * Imported from `db/errors` rather than `db/client` for exactly that
+ * reason: `client.ts` opens a connection pool and throws on a missing
+ * DATABASE_URL the moment it is imported, which made this "pure" spec
+ * fail before a single assertion ran.
  */
 import { describe, expect, it } from "vitest";
 
-import { isDatabaseUnreachable, isDeadlineExceeded, withDeadline } from "../src/lib/db/client";
+import { isDatabaseUnreachable, isDeadlineExceeded, withDeadline } from "../src/lib/db/errors";
 
 function errorWithCode(code: string): Error {
   return Object.assign(new Error(`connect ${code} 10.255.255.1:5432`), { code });

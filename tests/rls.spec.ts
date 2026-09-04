@@ -1099,13 +1099,18 @@ describe("notifications are readable only by their own recipient", () => {
   });
 
   it("the recipient can mark their own read", async () => {
-    await asUser(fx.counsellor_kochi, (tx) =>
-      tx`update notifications set read_at = now() where id = ${toCounsellorKochi}`,
+    // Asserted INSIDE the simulated session: asUser() always rolls back,
+    // so reading the row afterwards on the owner connection would find
+    // the write undone and fail a policy that is working perfectly.
+    const rows = await asUser(fx.counsellor_kochi, (tx) =>
+      tx<Array<{ read_at: Date | null }>>`
+        update notifications set read_at = now()
+        where id = ${toCounsellorKochi}
+        returning read_at
+      `,
     );
-    const [row] = await owner<Array<{ read_at: Date | null }>>`
-      select read_at from notifications where id = ${toCounsellorKochi}
-    `;
-    expect(row.read_at).not.toBeNull();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].read_at).not.toBeNull();
   });
 
   it("nobody can hand their notification to somebody else", async () => {
@@ -1133,14 +1138,30 @@ describe("notifications are readable only by their own recipient", () => {
     ).rejects.toThrow();
   });
 
-  it("a dismissed notification stops being readable", async () => {
-    await asUser(fx.admin_a, (tx) =>
-      tx`update notifications set deleted_at = now() where id = ${toAdmin}`,
-    );
-    const rows = await asUser(fx.admin_a, (tx) =>
-      tx<Array<{ id: string }>>`select id from notifications where id = ${toAdmin}`,
-    );
-    expect(rows).toHaveLength(0);
+  /**
+   * This one found a real bug (fixed in migration 0044). The SELECT
+   * policy used to carry `and deleted_at is null`, and an UPDATE whose
+   * WHERE clause reads the table is gated by the SELECT policy as well as
+   * the UPDATE one — so the row a dismissal produces failed it and
+   * Postgres refused the statement outright. Dismissing your own
+   * notification was impossible in production.
+   *
+   * Both halves run in one simulated session because asUser() rolls back.
+   */
+  it("the recipient can dismiss their own, and it then disappears", async () => {
+    const { updated, stillVisible } = await asUser(fx.admin_a, async (tx) => {
+      const updated = await tx<Array<{ id: string }>>`
+        update notifications set deleted_at = now() where id = ${toAdmin} returning id
+      `;
+      // The app filters dismissed rows out on read; RLS decides whose
+      // rows you may see, not which of your own you have tidied away.
+      const stillVisible = await tx<Array<{ id: string }>>`
+        select id from notifications where id = ${toAdmin} and deleted_at is null
+      `;
+      return { updated, stillVisible };
+    });
+    expect(updated).toHaveLength(1);
+    expect(stillVisible).toHaveLength(0);
   });
 });
 
@@ -1159,6 +1180,18 @@ describe("the finance ledger is scoped by finance.read, and hidden from counsell
   let kannurTxnId: string;
 
   beforeAll(async () => {
+    // Accounts and the centre head need real centre memberships: their
+    // finance.read is scoped to 'center', so with no `user_centers` rows
+    // they correctly see nothing — which is not what these tests are
+    // about, and is how "accounts sees both centres" failed the first
+    // time this suite ran. An earlier describe adds and then removes the
+    // same rows in its own afterAll, so they have to be re-added here.
+    await owner`
+      insert into user_centers (user_id, center_id)
+      values (${fx.accounts_a}, ${centerIds.kochi}), (${fx.accounts_a}, ${centerIds.kannur})
+      on conflict do nothing
+    `;
+
     const [kochiAcct] = await owner<Array<{ id: string }>>`
       insert into finance_accounts (name, center_id, type, opening_balance_paise)
       values ('RlsSpecTest Kochi Bank', ${centerIds.kochi}, 'bank', 100000)
@@ -1193,6 +1226,7 @@ describe("the finance ledger is scoped by finance.read, and hidden from counsell
   afterAll(async () => {
     await owner`delete from finance_transactions where description like 'RlsSpecTest%'`;
     await owner`delete from finance_accounts where name like 'RlsSpecTest%'`;
+    await owner`delete from user_centers where user_id = ${fx.accounts_a}`;
   });
 
   it("a counsellor sees no accounts and no ledger at all", async () => {

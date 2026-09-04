@@ -82,7 +82,10 @@ beforeAll(async () => {
   await db.execute(sql`insert into auth.users (id, email) values (${counsellorId}, ${email})`);
   await db.insert(profiles).values({ id: counsellorId, fullName: `${MARKER} Counsellor`, email, roleId: counsellorRole.id });
   await setIntegrationCredential("whatsapp", "access_token", "fake-access-token");
-  await setIntegrationCredential("whatsapp", "phone_number_id", `${MARKER}-phone-number-id`, counsellorId);
+  // One org-level number for the whole institute, not one per
+  // counsellor — a number on the Cloud API can no longer be used in the
+  // WhatsApp Business app, and AFD's counsellors keep those.
+  await setIntegrationCredential("whatsapp", "phone_number_id", `${MARKER}-phone-number-id`);
 
   const [tag] = await db.insert(tags).values({ name: `${MARKER} Tag ${randomUUID().slice(0, 8)}` }).returning({ id: tags.id });
   tagId = tag.id;
@@ -91,7 +94,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await sweep();
   await deleteIntegrationCredential("whatsapp", "access_token");
-  await deleteIntegrationCredential("whatsapp", "phone_number_id", counsellorId);
+  await deleteIntegrationCredential("whatsapp", "phone_number_id");
   await db.delete(tags).where(eq(tags.id, tagId));
   await db.delete(profiles).where(eq(profiles.id, counsellorId));
   await db.execute(sql`delete from auth.users where id = ${counsellorId}`);
@@ -107,7 +110,7 @@ describe("GET /api/cron/whatsapp-broadcast-sweep", () => {
     expect(res.status).toBe(401);
   });
 
-  it("sends a queued recipient from their lead's assigned counsellor's number and marks it sent", async () => {
+  it("sends a queued recipient on the institute number and marks it sent", async () => {
     vi.mocked(sendTemplateMessage).mockResolvedValue("wamid.sent123");
 
     const broadcastId = await makeBroadcast("basic");
@@ -141,24 +144,35 @@ describe("GET /api/cron/whatsapp-broadcast-sweep", () => {
     expect(broadcast.completedAt).not.toBeNull();
   });
 
-  it("fails a recipient whose lead has no assigned counsellor, without calling the API", async () => {
+  /**
+   * A lead with no counsellor used to fail the send, because the sweep
+   * looked up that counsellor's own number. On one institute number
+   * there is nothing to look up, so an unowned lead is reached like
+   * anybody else — which is the point of a broadcast.
+   */
+  it("still reaches a lead who has no assigned counsellor", async () => {
+    vi.mocked(sendTemplateMessage).mockResolvedValue("wamid.sent789");
+
     const broadcastId = await makeBroadcast("unassigned");
     const leadId = await makeLead("unassigned", "+919847600403", null);
     await db.insert(whatsappBroadcastRecipients).values({ broadcastId, leadId, phone: "+919847600403", status: "queued" });
 
     const res = await GET(request());
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.failed).toBeGreaterThanOrEqual(1);
 
     const [recipient] = await db.select().from(whatsappBroadcastRecipients).where(eq(whatsappBroadcastRecipients.leadId, leadId));
-    expect(recipient.status).toBe("failed");
-    expect(recipient.errorMessage).toMatch(/no assigned counsellor/i);
-    expect(sendTemplateMessage).not.toHaveBeenCalled();
+    expect(recipient.status).toBe("sent");
+    expect(sendTemplateMessage).toHaveBeenCalledWith(
+      `${MARKER}-phone-number-id`,
+      "fake-access-token",
+      "+919847600403",
+      "demo_followup",
+      "en_US",
+      undefined,
+    );
 
     const [broadcast] = await db.select().from(whatsappBroadcasts).where(eq(whatsappBroadcasts.id, broadcastId));
-    expect(broadcast.failedCount).toBe(1);
-    expect(broadcast.status).toBe("completed"); // no queued recipients left, even though this one failed
+    expect(broadcast.status).toBe("completed");
   });
 
   it("never touches a recipient whose broadcast isn't in 'sending' status", async () => {
