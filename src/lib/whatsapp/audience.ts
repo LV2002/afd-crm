@@ -5,7 +5,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SessionUser } from "@/lib/auth/session";
 import { getRawFieldValue } from "@/lib/fields/field-column";
 import { getFieldSchema, type FieldEntity } from "@/lib/fields/get-field-schema";
+import { db } from "@/lib/db/client";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
+import { suppressedAmong } from "@/lib/whatsapp/opt-out";
 import { applyPivotFilters, dimensionFields, type PivotField } from "@/lib/reports/pivot";
 
 /**
@@ -53,6 +55,7 @@ export interface AudienceResult {
     noPhone: number;
     doNotContact: number;
     duplicatePhone: number;
+    optedOut: number;
   };
 }
 
@@ -123,9 +126,22 @@ export async function resolveAudience(
   const nameKey = spec.entity === "lead" ? "student_name" : "full_name";
   const phoneKey = spec.entity === "lead" ? "primary_phone" : "phone";
 
+  // One query for the whole audience rather than one per person: a
+  // broadcast to four hundred people would otherwise be four hundred
+  // round trips before it sent anything.
+  const suppressed = await suppressedAmong(
+    db,
+    matched
+      .map((lead) => {
+        const value = rowById.get(lead.id)?.[phoneKey];
+        return typeof value === "string" ? value : "";
+      })
+      .filter(Boolean),
+  );
+
   const members: AudienceMember[] = [];
   const seenPhones = new Set<string>();
-  const skipped = { noPhone: 0, doNotContact: 0, duplicatePhone: 0 };
+  const skipped = { noPhone: 0, doNotContact: 0, duplicatePhone: 0, optedOut: 0 };
 
   for (const lead of matched) {
     const row = rowById.get(lead.id);
@@ -143,6 +159,14 @@ export async function resolveAudience(
     const key = normalizePhone(phone) ?? phone;
     if (seenPhones.has(key)) {
       skipped.duplicatePhone += 1;
+      continue;
+    }
+
+    // Somebody who told us to stop. Checked here so the count on screen
+    // is what will actually be sent, and again at send time, because a
+    // person can opt out between composing a broadcast and it going out.
+    if (suppressed.has(key)) {
+      skipped.optedOut += 1;
       continue;
     }
     seenPhones.add(key);

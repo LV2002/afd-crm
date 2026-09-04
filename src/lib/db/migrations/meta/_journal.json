@@ -316,6 +316,20 @@
       "when": 1788529799369,
       "tag": "0044_notifications_dismissable",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1788530886549,
+      "tag": "0045_whatsapp_suppressions",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1788530902245,
+      "tag": "0046_whatsapp_suppressions_rls",
+      "breakpoints": true
     }
   ]
 }

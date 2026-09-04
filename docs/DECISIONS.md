@@ -2292,3 +2292,43 @@ Run it twice — once before `db:migrate` so the roles and default privileges ex
 so the tables the migration created inherit the grants. A missing grant does not look like a
 missing grant: every query fails with "permission denied for table X", which reads as an RLS
 failure and is not one.
+
+## 2026-09-04 — Opt-out matches the whole message, and is keyed by phone
+
+Two calls in the opt-out matcher, both about which mistake is worse.
+
+**The message must BE the keyword, not contain it.** Matching a substring would unsubscribe
+somebody for writing "stop by the centre tomorrow" or "can you stop calling in the morning" —
+and that failure is silent: they never hear from their counsellor again and never know why. A
+missed opt-out is loud by comparison; the person repeats it, usually more firmly. So the strict
+rule is right, and multi-word keywords ("stop promotions") work the same way.
+
+**Suppression is by phone number, not by lead.** Somebody typing STOP is speaking for the number
+in their hand. They may not be a lead at all — this number sends marketing and AFD's enquiries
+arrive on the counsellors' own phones — and a parent whose number sits on two siblings' records
+should be suppressed once, not twice, which keying on the lead would get wrong.
+
+**The keywords are `dropdown_options`.** CLAUDE.md § 10: before hardcoding a list, ask whether an
+admin would ever want it different. An institute in Kerala will want a Malayalam word, and one
+running a different kind of campaign may want STOP to mean nothing.
+
+**Checked at compose time and again at send time.** The audience is snapshotted when a broadcast
+is created, deliberately, so a stage change mid-send doesn't move the goalposts — but an opt-out
+is not a goalpost. Somebody who says STOP after the queue is built must not receive the message,
+so the sweep re-checks before each send. It is one query for the batch, not one per recipient.
+
+**`released_at` rather than a delete.** "We stopped messaging them on the 3rd, they asked to come
+back on the 9th" is the answer to a complaint; a deleted row answers nothing. The partial unique
+index is on live suppressions only, so somebody can opt out, back in, and out again.
+
+## 2026-09-04 — Combining marks are letters too
+
+The opt-out normaliser stripped everything outside `\p{L}\p{N}\s`, which is the reflex, and it
+mangles most Indic scripts: Malayalam writes vowels and the virama as combining marks (`\p{M}`),
+so "നിർത്തുക" normalised to "ന ർത ത ക". A keyword added in Malayalam would have matched nothing,
+forever, with no error anywhere.
+
+Worth remembering beyond this one function: any "strip the punctuation" regex in a codebase whose
+users write Malayalam needs `\p{M}` in the keep-set. The test that caught it says so in a comment
+rather than just asserting a string, because the next person to write one of these will reach for
+the same reflex.

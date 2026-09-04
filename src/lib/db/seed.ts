@@ -520,6 +520,34 @@ const DROPDOWN_SEEDS: DropdownSeed[] = [
     ],
   },
   {
+    // The words a student can send to stop hearing from us. Rows, not
+    // constants: an institute that wants a Malayalam word, or wants STOP
+    // to mean nothing, edits this list rather than waiting for a deploy.
+    // The whole message has to BE one of these — "stop by tomorrow" is an
+    // appointment, not an opt-out. See lib/whatsapp/opt-out.ts.
+    key: "whatsapp_optout_keyword",
+    label: "WhatsApp opt-out keywords",
+    isSystem: true,
+    options: [
+      { value: "stop", label: "STOP" },
+      { value: "unsubscribe", label: "UNSUBSCRIBE" },
+      { value: "stop promotions", label: "STOP PROMOTIONS" },
+      { value: "opt out", label: "OPT OUT" },
+      { value: "do not message", label: "DO NOT MESSAGE" },
+    ],
+  },
+  {
+    /** The way back in, for somebody who changed their mind. */
+    key: "whatsapp_optin_keyword",
+    label: "WhatsApp opt-in keywords",
+    isSystem: true,
+    options: [
+      { value: "start", label: "START" },
+      { value: "subscribe", label: "SUBSCRIBE" },
+      { value: "resume", label: "RESUME" },
+    ],
+  },
+  {
     key: "task_type",
     label: "Task type",
     isSystem: true,

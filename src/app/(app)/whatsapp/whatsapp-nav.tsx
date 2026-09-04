@@ -16,6 +16,7 @@ const TABS: Tab[] = [
   { href: "/whatsapp", label: "Inbox" },
   { href: "/whatsapp/templates", label: "Templates", needs: "campaign" },
   { href: "/whatsapp/broadcasts", label: "Broadcasts", needs: "campaign" },
+  { href: "/whatsapp/suppressions", label: "Opted out", needs: "campaign" },
 ];
 
 export function WhatsAppNav({ canCampaign }: { canCampaign: boolean }) {

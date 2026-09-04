@@ -6,6 +6,14 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
 import { whatsappMessages, webhookEvents } from "@/lib/db/schema";
 import { findLeadByPhone } from "@/lib/identity/find-lead-by-phone";
+import {
+  OPT_IN_KEYWORD_CATEGORY,
+  OPT_OUT_KEYWORD_CATEGORY,
+  matchesKeyword,
+  releasePhone,
+  suppressPhone,
+} from "@/lib/whatsapp/opt-out";
+import { activeDropdownValues } from "@/lib/config/dropdown-values";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 import { notify } from "@/lib/notifications/notify";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
@@ -100,6 +108,13 @@ export async function POST(request: Request) {
 
   let allOk = true;
 
+  // Read once per delivery rather than per message: a batch can carry
+  // several, and this is two small config reads either way.
+  const [optOutKeywords, optInKeywords] = await Promise.all([
+    activeDropdownValues(OPT_OUT_KEYWORD_CATEGORY),
+    activeDropdownValues(OPT_IN_KEYWORD_CATEGORY),
+  ]);
+
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
       const value = change.value;
@@ -125,6 +140,23 @@ export async function POST(request: Request) {
           const matched = await findLeadByPhone(message.from);
 
           const content = mapMessageContent(message);
+
+          // Before anything else. WhatsApp expects a business to honour
+          // an opt-out, and a number that ignores one loses its quality
+          // rating and eventually its access — which, on one institute
+          // number, is the whole institute's marketing. The keywords are
+          // dropdown_options, so an admin changes them without a deploy.
+          const optOut = matchesKeyword(content.body, optOutKeywords);
+          const optIn = optOut ? null : matchesKeyword(content.body, optInKeywords);
+          if (optOut) {
+            await suppressPhone(db, {
+              phone: message.from,
+              reason: optOut,
+              source: "keyword",
+            });
+          } else if (optIn) {
+            await releasePhone(db, { phone: message.from });
+          }
           await db.insert(whatsappMessages).values({
             leadId: matched?.id ?? null,
             counsellorId: matched?.assignedTo ?? null,
