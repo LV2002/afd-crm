@@ -34,10 +34,15 @@ async function recordAndSend(
     return { error: "You don't have permission to do that." };
   }
 
-  const phoneNumberId = await getIntegrationCredential("whatsapp", "phone_number_id", user.id);
+  // One number for the whole institute, not one per counsellor. A number
+  // registered to the Cloud API can no longer be used in the WhatsApp
+  // Business app, and AFD's counsellors keep those apps on their own
+  // phones — so the CRM owns exactly one number, and who sent what is
+  // recorded here rather than implied by which number it left from.
+  const phoneNumberId = await getIntegrationCredential("whatsapp", "phone_number_id");
   const accessToken = await getIntegrationCredential("whatsapp", "access_token");
   if (!phoneNumberId || !accessToken) {
-    return { error: "You don't have a WhatsApp number assigned yet — ask an admin to set one up in Settings → Integrations → WhatsApp." };
+    return { error: "WhatsApp isn't connected yet — an admin sets it up in Settings → Integrations → WhatsApp." };
   }
 
   const supabase = await createClient();
@@ -90,7 +95,15 @@ export async function sendWhatsAppMessage(leadId: string, toPhone: string, body:
   const supabase = await createClient();
   const withinWindow = await isWithinCustomerServiceWindow(supabase, leadId);
   if (!withinWindow) {
-    return { error: "This lead hasn't messaged in the last 24 hours — send a template message to reopen the conversation." };
+    // Meta only accepts a free-form reply inside the 24-hour window the
+    // lead's own message opens. Outside it the only API route is a paid
+    // template, which is deliberately not a counsellor's decision (see
+    // sendWhatsAppTemplate) — so the honest instruction is the one Leon
+    // gave: message them from your own phone.
+    return {
+      error:
+        "This lead hasn't messaged in the last 24 hours, so WhatsApp won't accept a reply from here. Message them from the WhatsApp Business app on your phone — the window reopens as soon as they write back.",
+    };
   }
 
   return recordAndSend(leadId, toPhone, { messageType: "text", body: body.trim(), templateName: null }, (phoneNumberId, accessToken) =>
@@ -100,11 +113,14 @@ export async function sendWhatsAppMessage(leadId: string, toPhone: string, body:
 
 /**
  * A pre-approved WhatsApp template — the only message type Meta accepts
- * outside the 24-hour window, so this is how a counsellor (re)opens a
- * conversation with a lead who hasn't messaged first. `templateName`/
- * `languageCode` are typed in by the counsellor (matching what's approved
- * in WhatsApp Manager) rather than picked from a fetched list — a real,
- * documented gap (see docs/DECISIONS.md), not an oversight.
+ * outside the 24-hour window.
+ *
+ * Gated on `whatsapp.campaign`, not `whatsapp.send`. Leon's rule: a
+ * counsellor whose window has closed uses their own phone, and template
+ * sends stay with whoever is allowed to broadcast. That is not
+ * bureaucracy — every template send is billed and counts against the
+ * number's quality rating, and one number now carries the whole
+ * institute's reputation.
  */
 export async function sendWhatsAppTemplate(
   leadId: string,
@@ -113,6 +129,13 @@ export async function sendWhatsAppTemplate(
   languageCode: string,
   bodyParam: string,
 ): Promise<WhatsAppSendState> {
+  const sender = await getCurrentUser();
+  if (!sender || !can(sender, "whatsapp.campaign")) {
+    return {
+      error:
+        "Template messages are sent by whoever runs WhatsApp campaigns. Message this lead from the WhatsApp Business app on your phone instead.",
+    };
+  }
   if (!templateName.trim()) return { error: "Template name is required." };
 
   return recordAndSend(leadId, toPhone, { messageType: "template", body: null, templateName: templateName.trim() }, (phoneNumberId, accessToken) =>

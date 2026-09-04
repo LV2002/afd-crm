@@ -2805,3 +2805,47 @@ moved actions file).
 **Open, and Leon's to decide:** which numbers go on the API. See docs/DECISIONS.md — a number
 cannot be on the WhatsApp Business app and the Cloud API at the same time, and his counsellors are
 currently using the app.
+
+## Session 40 — One WhatsApp number, and a template manager
+
+Leon settled the number question and asked for an AiSensy-style console on top of it.
+
+**One number, not one per counsellor.** The per-counsellor `phone_number_id` model is gone — the
+constraint that killed it is that a number registered to the Cloud API can no longer be used in
+the WhatsApp Business app, and AFD's counsellors keep those apps on their own phones. The CRM now
+holds one org-level number. The webhook files an inbound message to the lead's own counsellor
+instead of deriving one from the number it arrived on; the broadcast sweep no longer fails on a
+lead with no counsellor; Settings → Integrations → WhatsApp is one number with a Test connection
+button instead of a per-counsellor roster. `findScopeIdByCredentialValue()`, which existed only
+for that routing, is deleted.
+
+**Reply rules, as Leon described them.** Inside Meta's 24-hour window a counsellor replies freely
+from the CRM. Outside it the CRM says so plainly and tells them to use the WhatsApp Business app
+on their own phone — because the only API route is a paid template, and template sends are now
+gated on `whatsapp.campaign`, not `whatsapp.send`. One number carries the whole institute's
+quality rating; that is not a per-counsellor decision any more.
+
+**Templates: `/whatsapp/templates`**, gated on `whatsapp.campaign`. Lists every template on the
+WhatsApp Business Account with its approval status, category, body, quick-reply buttons, how many
+values a send has to fill in, and Meta's rejection reason when there is one. Create a template —
+name, language, category, optional header and footer, body with `{{1}}` placeholders, up to three
+quick-reply buttons — and it goes straight to Meta for approval. Delete removes it.
+
+Read live from Meta on every page load, never mirrored into our database: Meta owns approval state
+and changes it without telling us, so a local copy would be confidently wrong. Needs a new
+credential, `waba_id` (the WhatsApp Business Account the number sits under — templates live there,
+not on the number).
+
+The WhatsApp section now has its own tab strip (Inbox · Templates).
+
+**Verified:** `npx tsc --noEmit` clean, `next lint` clean (one pre-existing warning), `npm run
+build` succeeds, 191 non-database tests pass including 10 new template-helper tests. No schema
+change, no migration.
+
+**Needs Leon:** in Settings → Integrations → WhatsApp, set the **Phone Number ID** (the institute
+number, org-level now) and the **WhatsApp Business Account ID**, then press Test connection. The
+old per-counsellor numbers are ignored; they can be left in place.
+
+**Still to come, in order:** scheduled broadcasts; an audience builder that reuses the Insights
+filter grammar over leads *and* students instead of targeting by a single tag; automation flows and
+handling quick-reply button taps as branches.

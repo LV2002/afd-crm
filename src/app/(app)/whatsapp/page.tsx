@@ -87,14 +87,12 @@ export default async function WhatsAppInboxPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold">WhatsApp</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Conversations on the WhatsApp Business API numbers connected to this CRM. Every thread is
-          already tied to a lead — open one to reply, or open the lead for their full history.
-          You see the threads for the leads you can see.
-        </p>
-      </div>
+      <p className="max-w-3xl text-sm text-muted-foreground">
+        Every thread is already tied to a lead — open one to reply, or open the lead for their
+        full history. You see the threads for the leads you can see. A free-form reply only
+        reaches someone who has messaged in the last 24 hours; after that, message them from the
+        WhatsApp Business app on your own phone.
+      </p>
 
       <div className="grid gap-4 lg:grid-cols-[22rem_1fr]">
         <div className="flex flex-col gap-3">

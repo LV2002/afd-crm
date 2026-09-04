@@ -134,34 +134,6 @@ export async function deleteIntegrationCredential(
     .where(and(eq(integrationCredentials.provider, provider), eq(integrationCredentials.key, key), scopeCondition(scopeId)));
 }
 
-/**
- * Reverse lookup: given a credential's decrypted value, find which scope
- * (e.g. which counsellor's profile id) it belongs to — needed to route an
- * inbound WhatsApp webhook delivery to the counsellor who owns the
- * `phone_number_id` it arrived on. Decrypts every scoped row for
- * `(provider, key)` to compare, since encryption is non-deterministic
- * (a fresh IV each time) and can't be searched by ciphertext. Fine at this
- * system's real scale — a handful of counsellors, not thousands — and
- * only ever called once per inbound webhook delivery, not in a hot path.
- */
-export async function findScopeIdByCredentialValue(
-  provider: IntegrationProvider,
-  key: string,
-  value: string,
-): Promise<string | null> {
-  const rows = await db
-    .select({ scopeId: integrationCredentials.scopeId, valueEncrypted: integrationCredentials.valueEncrypted })
-    .from(integrationCredentials)
-    .where(and(eq(integrationCredentials.provider, provider), eq(integrationCredentials.key, key)));
-
-  for (const row of rows) {
-    if (row.scopeId && decrypt(row.valueEncrypted) === value) {
-      return row.scopeId;
-    }
-  }
-  return null;
-}
-
 /** True if a credential has been set — for a settings screen to show "Connected" without ever decrypting the value. */
 export async function hasIntegrationCredential(
   provider: IntegrationProvider,

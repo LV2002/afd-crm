@@ -7,17 +7,21 @@ import { profiles } from "./auth";
 import { leads } from "./leads";
 
 /**
- * "One number per counsellor" (Leon's explicit call, overriding this
- * session's own recommended shared-number-with-attribution model): every
- * counsellor who sends/receives WhatsApp has their own
- * `integration_credentials` row (`provider = 'whatsapp'`, `key =
- * 'phone_number_id'`, `scope_id = <their profile id>`), all sharing one
- * org-wide access token (a single WhatsApp Business Account System User
- * token can act on any phone number under it — that's how Meta's Cloud
- * API actually works, so there's no need for N separate tokens to get N
- * separate numbers). `counsellor_id` here is the number's owner, resolved
- * either from `metadata.phone_number_id` on an inbound webhook delivery or
- * from the sender's own session on an outbound message.
+ * ONE WhatsApp Business API number for the whole institute — a single
+ * org-level `integration_credentials` row (`provider = 'whatsapp'`,
+ * `key = 'phone_number_id'`, no `scope_id`).
+ *
+ * This replaced an earlier "one number per counsellor" design once the
+ * constraint behind it became clear: a number registered to the Cloud API
+ * can no longer be used in the WhatsApp Business app, and AFD's
+ * counsellors keep those apps on their own phones. Per-counsellor API
+ * numbers would have taken those away, or required a second SIM each.
+ *
+ * So the number no longer says who a conversation belongs to.
+ * `counsellor_id` is the lead's own counsellor — read from the lead on an
+ * inbound message, and the sender's session on an outbound one — which is
+ * also what RLS scopes the thread by. `sent_by` records the individual
+ * who actually pressed send.
  */
 export const whatsappMessageTypeEnum = pgEnum("whatsapp_message_type", ["text", "template", "media"]);
 
