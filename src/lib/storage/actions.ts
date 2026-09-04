@@ -10,7 +10,10 @@ import { createSignedUrl } from "./attachments";
 import {
   ATTACHMENTS_BUCKET,
   buildStoragePath,
+  isAttachmentKind,
+  SIGNED_AGREEMENT_LABEL,
   validateUpload,
+  type AttachmentKind,
   type AttachmentParent,
 } from "./shared";
 
@@ -60,8 +63,27 @@ export async function uploadAttachment(_prev: UploadState, formData: FormData): 
   const invalid = validateUpload(file);
   if (invalid) return { error: invalid };
 
+  // Absent or unrecognised means an ordinary document. A form cannot talk
+  // its way into a kind the code does not know about.
+  const kindRaw = formData.get("kind");
+  const kind: AttachmentKind = isAttachmentKind(kindRaw) ? kindRaw : "document";
+
+  // A signed agreement is only ever a lead's. Attaching one to a student
+  // would put it on the wrong side of the accounts→academics handoff, where
+  // nobody chasing an instalment would ever look for it.
+  if (kind === "signed_agreement" && parent.kind !== "lead") {
+    return { error: "A signed agreement belongs on the lead, not the student record." };
+  }
+
   const labelRaw = formData.get("label");
-  const label = typeof labelRaw === "string" && labelRaw.trim().length > 0 ? labelRaw.trim() : null;
+  const label =
+    kind === "signed_agreement"
+      ? // Named by the system, so the list reads the same however it was
+        // uploaded and nobody has to remember the phrasing.
+        SIGNED_AGREEMENT_LABEL
+      : typeof labelRaw === "string" && labelRaw.trim().length > 0
+        ? labelRaw.trim()
+        : null;
 
   const supabase = await createClient();
   const storagePath = buildStoragePath(parent, file.name);
@@ -83,6 +105,7 @@ export async function uploadAttachment(_prev: UploadState, formData: FormData): 
       mime_type: file.type,
       size_bytes: file.size,
       label,
+      kind,
       uploaded_by: user.id,
     })
     .select("id")
@@ -98,10 +121,14 @@ export async function uploadAttachment(_prev: UploadState, formData: FormData): 
     action: "attachment.upload",
     entityType: "attachments",
     entityId: inserted.id,
-    after: { parent, fileName: file.name, sizeBytes: file.size, label },
+    after: { parent, fileName: file.name, sizeBytes: file.size, label, kind },
   });
 
   revalidatePath(parent.kind === "lead" ? `/leads/${parent.id}` : `/students/${parent.id}`);
+  // Accounts reads the agreement off their own enrolment screen, whose id
+  // this action does not know. Revalidating the segment covers whichever
+  // enrolment page is showing this lead's agreement.
+  if (kind === "signed_agreement") revalidatePath("/accounts", "layout");
   return { success: `Uploaded ${file.name}.` };
 }
 
@@ -144,6 +171,7 @@ export async function removeAttachment(_prev: UploadState, formData: FormData): 
   });
 
   revalidatePath(parent.kind === "lead" ? `/leads/${parent.id}` : `/students/${parent.id}`);
+  revalidatePath("/accounts", "layout");
   return { success: `Removed ${data.file_name}.` };
 }
 

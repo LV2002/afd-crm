@@ -940,6 +940,58 @@ describe("attachments are scoped by their PARENT lead/student, via file.* primit
     expect(rows).toHaveLength(1);
   });
 
+  it("accounts sees the signed agreement on a lead in their centre", async () => {
+    // Leon's requirement: "the accountant should be able to see the uploaded
+    // instalment agreement". No accounts-specific policy was added for it —
+    // the accounts role already holds file.read at centre scope, and
+    // can_access_lead_files is security definer precisely so a role holding
+    // file.read WITHOUT lead.read still reaches its own files. This test is
+    // here because that reasoning is easy to state and easy to be wrong
+    // about.
+    const [agreement] = await owner<Array<{ id: string }>>`
+      insert into attachments (lead_id, storage_path, file_name, mime_type, size_bytes, kind, label)
+      values (
+        ${fileLeadId},
+        ${`lead/${fileLeadId}/rls-agreement.pdf`},
+        'rls-agreement.pdf', 'application/pdf', 4096,
+        'signed_agreement', 'Signed instalment agreement'
+      )
+      returning id
+    `;
+    await owner`
+      insert into user_centers (user_id, center_id)
+      values (${fx.accounts_a}, ${centerIds.kochi})
+      on conflict do nothing
+    `;
+    try {
+      const rows = await asUser(fx.accounts_a, (tx) =>
+        tx<Array<{ id: string; kind: string }>>`
+          select id, kind from attachments
+          where lead_id = ${fileLeadId} and kind = 'signed_agreement' and deleted_at is null
+        `,
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].id).toBe(agreement.id);
+
+      // A counsellor at the other centre still sees nothing, so the row
+      // above is genuinely centre-scoped rather than visible to everyone.
+      const other = await asUser(fx.counsellor_kannur, (tx) =>
+        tx<Array<{ id: string }>>`select id from attachments where id = ${agreement.id}`,
+      );
+      expect(other).toHaveLength(0);
+    } finally {
+      await owner`delete from attachments where id = ${agreement.id}`;
+      await owner`delete from user_centers where user_id = ${fx.accounts_a} and center_id = ${centerIds.kochi}`;
+    }
+  });
+
+  it("kind defaults to 'document' so files predating the column stay ordinary documents", async () => {
+    const rows = await owner<Array<{ kind: string }>>`
+      select kind from attachments where id = ${fileAttachmentId}
+    `;
+    expect(rows[0].kind).toBe("document");
+  });
+
   it("a soft-deleted file disappears even from someone who could otherwise read it", async () => {
     // Removal is an UPDATE setting deleted_at, never a DELETE — so the
     // select policy's `deleted_at is null` is what actually hides it.

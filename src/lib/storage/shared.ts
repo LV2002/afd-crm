@@ -33,6 +33,25 @@ export const ALLOWED_EXTENSIONS = ".jpg,.jpeg,.png,.webp,.heic,.pdf";
 
 export type AttachmentParent = { kind: "lead"; id: string } | { kind: "student"; id: string };
 
+/**
+ * What a file is to the system. Two values, both enforcement points:
+ * `signed_agreement` is the one document a counsellor is asked for and the
+ * one accounts looks for before chasing an instalment; everything else is
+ * a `document`. Deliberately NOT admin-configurable — the code branches on
+ * these, so a new value would be a value nothing knows how to act on
+ * (CLAUDE.md § What is configurable, "fixed in code" list). The
+ * human-facing description of a file is `label`, which is free text.
+ */
+export const ATTACHMENT_KINDS = ["signed_agreement", "document"] as const;
+export type AttachmentKind = (typeof ATTACHMENT_KINDS)[number];
+
+export function isAttachmentKind(value: unknown): value is AttachmentKind {
+  return typeof value === "string" && (ATTACHMENT_KINDS as readonly string[]).includes(value);
+}
+
+/** Written on upload so the list reads sensibly without a special case. */
+export const SIGNED_AGREEMENT_LABEL = "Signed instalment agreement";
+
 export interface AttachmentRow {
   id: string;
   storage_path: string;
@@ -40,8 +59,22 @@ export interface AttachmentRow {
   mime_type: string;
   size_bytes: number;
   label: string | null;
+  kind: string;
   created_at: string;
   uploaded_by: string | null;
+}
+
+/** The current signed agreement is the most recent one; the rest are superseded. */
+export function currentSignedAgreement(rows: AttachmentRow[]): AttachmentRow | null {
+  const agreements = rows
+    .filter((row) => row.kind === "signed_agreement")
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return agreements[0] ?? null;
+}
+
+/** Everything that is not the signed agreement, newest first. */
+export function otherDocuments(rows: AttachmentRow[]): AttachmentRow[] {
+  return rows.filter((row) => row.kind !== "signed_agreement");
 }
 
 /**
@@ -83,8 +116,4 @@ export function validateUpload(file: { size: number; type: string; name: string 
     return "Only images (JPG, PNG, WebP, HEIC) and PDFs can be uploaded.";
   }
   return null;
-}
-
-function parentColumn(parent: AttachmentParent): "lead_id" | "student_id" {
-  return parent.kind === "lead" ? "lead_id" : "student_id";
 }

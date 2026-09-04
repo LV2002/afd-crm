@@ -11,10 +11,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   ALLOWED_MIME_TYPES,
+  ATTACHMENT_KINDS,
   MAX_FILE_BYTES,
   buildStoragePath,
+  currentSignedAgreement,
+  isAttachmentKind,
+  otherDocuments,
   sanitiseFileName,
   validateUpload,
+  type AttachmentRow,
 } from "../src/lib/storage/shared";
 
 const UUID_PREFIX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/;
@@ -115,5 +120,95 @@ describe("validateUpload", () => {
     expect(validateUpload({ ...ok, type: "image/svg+xml" })).toMatch(/Only images/);
     expect(validateUpload({ ...ok, type: "application/x-msdownload" })).toMatch(/Only images/);
     expect(validateUpload({ ...ok, type: "" })).toMatch(/Only images/);
+  });
+});
+
+/**
+ * Which file is "the signed agreement".
+ *
+ * This used to be answered by searching the free-text label for the word
+ * "instalment", so a counsellor who typed "Signed agreement" produced a
+ * lead the system believed was unsigned. Two screens now read the answer —
+ * the counsellor's and the accountant's — so they have to agree.
+ */
+function row(overrides: Partial<AttachmentRow> & { id: string }): AttachmentRow {
+  return {
+    storage_path: `lead/x/${overrides.id}-file.pdf`,
+    file_name: "file.pdf",
+    mime_type: "application/pdf",
+    size_bytes: 1024,
+    label: null,
+    kind: "document",
+    created_at: "2026-01-01T00:00:00.000Z",
+    uploaded_by: null,
+    ...overrides,
+  };
+}
+
+describe("isAttachmentKind", () => {
+  it("accepts exactly the kinds the code knows how to act on", () => {
+    for (const kind of ATTACHMENT_KINDS) expect(isAttachmentKind(kind)).toBe(true);
+  });
+
+  it("rejects anything else, so a posted form cannot invent a kind", () => {
+    // uploadAttachment falls back to "document" on a false here. A kind the
+    // code does not branch on would be a file nobody's screen looks for.
+    expect(isAttachmentKind("agreement")).toBe(false);
+    expect(isAttachmentKind("SIGNED_AGREEMENT")).toBe(false);
+    expect(isAttachmentKind("")).toBe(false);
+    expect(isAttachmentKind(null)).toBe(false);
+    expect(isAttachmentKind(undefined)).toBe(false);
+    expect(isAttachmentKind(7)).toBe(false);
+  });
+});
+
+describe("currentSignedAgreement", () => {
+  it("finds the agreement among ordinary documents", () => {
+    const rows = [
+      row({ id: "a" }),
+      row({ id: "b", kind: "signed_agreement" }),
+      row({ id: "c" }),
+    ];
+    expect(currentSignedAgreement(rows)?.id).toBe("b");
+  });
+
+  it("returns the newest when the agreement has been re-uploaded", () => {
+    // Replacing a badly-scanned page must not leave accounts looking at the
+    // old one, and the old row is deliberately kept rather than deleted.
+    const rows = [
+      row({ id: "old", kind: "signed_agreement", created_at: "2026-01-01T00:00:00.000Z" }),
+      row({ id: "new", kind: "signed_agreement", created_at: "2026-03-04T09:30:00.000Z" }),
+    ];
+    expect(currentSignedAgreement(rows)?.id).toBe("new");
+  });
+
+  it("is null when nothing has been signed yet", () => {
+    expect(currentSignedAgreement([row({ id: "a" })])).toBeNull();
+    expect(currentSignedAgreement([])).toBeNull();
+  });
+
+  it("does not treat a document merely labelled like one as the agreement", () => {
+    // The exact failure the kind column exists to prevent, in reverse: a
+    // note about the agreement is not the agreement.
+    const rows = [row({ id: "a", label: "Draft instalment agreement (unsigned)" })];
+    expect(currentSignedAgreement(rows)).toBeNull();
+  });
+});
+
+describe("otherDocuments", () => {
+  it("is everything that is not an agreement", () => {
+    const rows = [
+      row({ id: "a" }),
+      row({ id: "b", kind: "signed_agreement" }),
+      row({ id: "c" }),
+    ];
+    expect(otherDocuments(rows).map((r) => r.id)).toEqual(["a", "c"]);
+  });
+
+  it("keeps files uploaded before the general uploader was removed", () => {
+    // Narrowing what a counsellor may upload must not take away access to
+    // what they already uploaded.
+    const rows = [row({ id: "old-id-proof", label: "ID proof" })];
+    expect(otherDocuments(rows)).toHaveLength(1);
   });
 });

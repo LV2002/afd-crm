@@ -13,6 +13,9 @@ import { RevealPhoneButton } from "../../leads/reveal-phone-button";
 import { AgreedPlan } from "@/components/enrolment/agreed-plan";
 import { getAccounts } from "@/lib/finance/get-finance";
 
+import { OpenFileButton } from "@/components/files/open-file-button";
+import { getSignedAgreement } from "@/lib/storage/attachments";
+
 import { DropAdmissionForm } from "./drop-admission-form";
 import { RecordPaymentForm } from "./record-payment-form";
 
@@ -104,6 +107,15 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
     0,
   );
   const balancePaise = enrolment.net_fee_paise - paidPaise;
+
+  // The agreement the instalments on this screen come from. Accounts hold
+  // `file.read` at centre scope, so the same policy that shows it to the
+  // counsellor shows it to them — there is no accounts-specific rule here,
+  // only a place to see it. Before this it lived solely on the lead page,
+  // which accounts have no reason to open.
+  const signedAgreement = can(user, "file.read")
+    ? await getSignedAgreement(supabase, enrolment.lead_id)
+    : null;
 
   const canRecordPayment = can(user, "payment.record");
   const canRevealPhone = can(user, "lead.reveal_phone");
@@ -236,6 +248,24 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
         </div>
 
         <div className="flex flex-col gap-4">
+          {can(user, "file.read") && (
+            <div className="flex flex-col gap-2 rounded-lg border p-4">
+              <h2 className="text-sm font-semibold">Signed agreement</h2>
+              {signedAgreement ? (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Uploaded {formatDateIST(signedAgreement.created_at, "d MMM yyyy")}
+                  </p>
+                  <OpenFileButton attachmentId={signedAgreement.id} variant="outline" label="Open agreement" />
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Not uploaded yet. The counsellor uploads it on the lead; it appears here as soon
+                  as they do.
+                </p>
+              )}
+            </div>
+          )}
           {canRecordPayment && <RecordPaymentForm enrolmentId={id} accounts={financeAccounts} />}
           {canDrop && <DropAdmissionForm enrolmentId={id} isDropped={isDropped} />}
         </div>

@@ -337,6 +337,13 @@
       "when": 1788554112997,
       "tag": "0047_ai_query_admins_only",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1788554793620,
+      "tag": "0048_attachment_kind",
+      "breakpoints": true
     }
   ]
 }
