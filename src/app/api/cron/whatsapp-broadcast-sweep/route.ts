@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db/client";
 import { leads, whatsappBroadcastRecipients, whatsappBroadcasts } from "@/lib/db/schema";
-import { getIntegrationCredential, getIntegrationCredentials } from "@/lib/integrations/credentials";
+import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { sendTemplateMessage } from "@/lib/integrations/whatsapp/client";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +36,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { access_token: accessToken } = await getIntegrationCredentials("whatsapp", ["access_token"]);
+  const { access_token: accessToken, phone_number_id: phoneNumberId } =
+    await getIntegrationCredentials("whatsapp", ["access_token", "phone_number_id"]);
   if (!accessToken) {
     return NextResponse.json({ error: "WhatsApp access_token not configured" }, { status: 200 });
   }
@@ -64,9 +65,9 @@ export async function GET(request: Request) {
   for (const row of rows) {
     touchedBroadcastIds.add(row.broadcastId);
     try {
-      if (!row.assignedTo) throw new Error("Lead has no assigned counsellor to send from.");
-      const phoneNumberId = await getIntegrationCredential("whatsapp", "phone_number_id", row.assignedTo);
-      if (!phoneNumberId) throw new Error("Assigned counsellor has no WhatsApp number configured.");
+      // One institute number, so a lead with no counsellor is no longer a
+      // reason a broadcast can't reach them.
+      if (!phoneNumberId) throw new Error("No WhatsApp number is connected — see Settings → Integrations → WhatsApp.");
 
       const waMessageId = await sendTemplateMessage(
         phoneNumberId,

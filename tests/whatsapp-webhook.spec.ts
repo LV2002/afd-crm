@@ -35,14 +35,10 @@ const { setIntegrationCredential, deleteIntegrationCredential } = await import("
 const APP_SECRET = "test-wa-app-secret";
 const VERIFY_TOKEN = "test-wa-verify-token";
 const MARKER = "WhatsAppWebhookTest";
-// Unique to this file — findScopeIdByCredentialValue() does a reverse
-// lookup by decrypted VALUE across every scoped credential for
-// (provider, key), so a value shared with another test file's fixture
-// (e.g. tests/whatsapp-broadcast-sweep.spec.ts also registering a
-// "phone_number_id") is a real race under Vitest's parallel file
-// execution: whichever row the query happens to return first "wins",
-// silently routing this test's webhook call to the OTHER file's
-// counsellor. Caught as an intermittent CI-only flake, not a logic bug.
+// AFD runs ONE WhatsApp Business API number for the whole institute, so
+// this is the org-level credential, not a per-counsellor one. The number
+// a message arrives on no longer says anything about who owns the
+// conversation — the lead's own counsellor does.
 const PHONE_NUMBER_ID = `${MARKER}-phone-number-id`;
 
 // leads.assigned_to carries a real FK to profiles, so the counsellor this
@@ -131,14 +127,14 @@ beforeAll(async () => {
 
   await setIntegrationCredential("whatsapp", "app_secret", APP_SECRET);
   await setIntegrationCredential("whatsapp", "verify_token", VERIFY_TOKEN);
-  await setIntegrationCredential("whatsapp", "phone_number_id", PHONE_NUMBER_ID, COUNSELLOR_ID);
+  await setIntegrationCredential("whatsapp", "phone_number_id", PHONE_NUMBER_ID);
 });
 
 afterAll(async () => {
   await sweep();
   await deleteIntegrationCredential("whatsapp", "app_secret");
   await deleteIntegrationCredential("whatsapp", "verify_token");
-  await deleteIntegrationCredential("whatsapp", "phone_number_id", COUNSELLOR_ID);
+  await deleteIntegrationCredential("whatsapp", "phone_number_id");
   await db.delete(profiles).where(eq(profiles.id, COUNSELLOR_ID));
   await db.execute(sql`delete from auth.users where id = ${COUNSELLOR_ID}`);
 });
@@ -174,7 +170,7 @@ describe("POST /api/webhooks/whatsapp (inbound messages)", () => {
     expect(row.status).toBe("failed");
   });
 
-  it("processes a validly-signed inbound message into a real lead + whatsapp_messages row, routed to the number's owning counsellor", async () => {
+  it("processes a validly-signed inbound message into a real lead + whatsapp_messages row, filed to whoever owns the lead", async () => {
     const body = messagePayload({ from: "919847500302", name: `${MARKER} New Contact` });
     const req = new Request("https://example.com/api/webhooks/whatsapp", {
       method: "POST",
@@ -187,13 +183,16 @@ describe("POST /api/webhooks/whatsapp (inbound messages)", () => {
     const [lead] = await db.select().from(leads).where(eq(leads.studentName, `${MARKER} New Contact`));
     expect(lead).toBeDefined();
     expect(lead.firstTouchSource).toBe("whatsapp");
-    expect(lead.assignedTo).toBe(COUNSELLOR_ID);
 
     const [message] = await db.select().from(whatsappMessages).where(eq(whatsappMessages.leadId, lead.id));
     expect(message.direction).toBe("inbound");
     expect(message.status).toBe("received");
     expect(message.body).toBe("Hi, interested in NID coaching");
-    expect(message.counsellorId).toBe(COUNSELLOR_ID);
+    // The invariant that survives any assignment configuration: the
+    // message belongs to whoever owns the person, including when the
+    // rules engine has left that nobody. Asserting a specific counsellor
+    // would be asserting the seeded assignment rules, not the webhook.
+    expect(message.counsellorId).toBe(lead.assignedTo);
   });
 
   it("does not create a second lead or message when the same wamid is delivered twice", async () => {

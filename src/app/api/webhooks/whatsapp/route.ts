@@ -4,10 +4,10 @@ import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db/client";
-import { whatsappMessages, webhookEvents } from "@/lib/db/schema";
+import { leads, whatsappMessages, webhookEvents } from "@/lib/db/schema";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
-import { findScopeIdByCredentialValue, getIntegrationCredentials } from "@/lib/integrations/credentials";
+import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { buildResolveLeadInput, mapMessageContent, resolveContactName, type WhatsAppContact, type WhatsAppInboundMessage } from "@/lib/integrations/whatsapp/map-inbound";
 import { verifyMetaSignature } from "@/lib/integrations/meta/verify-signature";
 
@@ -113,13 +113,23 @@ export async function POST(request: Request) {
         if (!inserted) continue; // already processed on a previous delivery of this same message id
 
         try {
-          const counsellorId = value.metadata?.phone_number_id
-            ? await findScopeIdByCredentialValue("whatsapp", "phone_number_id", value.metadata.phone_number_id)
-            : null;
           const contact = value.contacts?.find((c) => c.wa_id === message.from);
           const contactName = resolveContactName(contact, message.from);
 
-          const { leadId } = await resolveOrCreateLead(buildResolveLeadInput(message, contactName, counsellorId));
+          // AFD runs one WhatsApp Business API number for the whole
+          // institute, so the number a message arrives on says nothing
+          // about who should own it. The lead's own counsellor does —
+          // assigned by the rules engine on a new lead, already set on an
+          // existing one — so the message is filed to whoever owns the
+          // person, which is also what decides who can see the thread.
+          const { leadId } = await resolveOrCreateLead(
+            buildResolveLeadInput(message, contactName, null),
+          );
+          const [owner] = await db
+            .select({ assignedTo: leads.assignedTo })
+            .from(leads)
+            .where(eq(leads.id, leadId));
+          const counsellorId = owner?.assignedTo ?? null;
 
           const content = mapMessageContent(message);
           await db.insert(whatsappMessages).values({

@@ -2134,3 +2134,50 @@ which the message body and the WhatsApp display name can address.
 No code change is needed to take that option: "one number per counsellor" and "one number for the
 institute" differ only in how many `phone_number_id` credential rows exist. Left as Leon's
 decision; nothing in the CRM assumes either.
+
+## 2026-09-04 — One WhatsApp number for the institute
+
+The CRM had been built to "one number per counsellor". That is buildable, but it takes each of
+those numbers out of the WhatsApp Business app on the counsellor's phone — a number belongs to the
+app or to the Cloud API, never both — and Leon wants those apps kept. Per-counsellor API numbers
+would have meant a second SIM each, and in practice students messaging whichever number they
+happened to have, leaving half the history off the CRM.
+
+So: **one org-level `phone_number_id`**. Consequences, each of which was a real code change rather
+than a setting:
+
+- The inbound webhook can no longer infer an owner from the number a message arrived on. It
+  resolves the lead first and files the message to the lead's own counsellor — which is also what
+  RLS scopes the thread by, so ownership has one definition instead of two.
+- `resolveOrCreateLead()` no longer gets a counsellor hint from the number, so a brand-new
+  WhatsApp lead is assigned by the rules engine like every other source. That is CLAUDE.md
+  non-negotiable #8 working as intended; the old hint was a quiet second assignment path.
+- `findScopeIdByCredentialValue()` existed only for that routing and is deleted rather than left
+  as an unused reverse lookup over decrypted credentials.
+- The broadcast sweep no longer refuses a lead with no assigned counsellor.
+
+**Template sends moved from `whatsapp.send` to `whatsapp.campaign`.** Leon's rule was that a
+counsellor whose 24-hour window has closed messages from their own phone. The technical reason
+agrees with him: a template is billed and counts against the number's quality rating, and one
+number now carries the whole institute's reputation rather than one counsellor's. Free-form
+replies inside the window stay with `whatsapp.send`, where they belong.
+
+## 2026-09-04 — Templates are read from Meta, never mirrored
+
+A template must be approved by Meta before it can be sent, and until now a counsellor typed the
+name from memory and found out it was wrong when the send failed.
+
+`/whatsapp/templates` lists them live from `/{waba_id}/message_templates` on every page load. No
+local copy, deliberately: Meta owns the approval state and changes it without telling us — approved
+overnight, or paused later for poor feedback — so a mirrored table would be wrong more often than
+right, and the wrongness would be invisible. The cost is one Graph call per page view, which at
+AFD's volume is nothing.
+
+This needed a new credential, `waba_id`. Templates live on the WhatsApp Business Account, not on
+the phone number, which is why sending needs `phone_number_id` and this needs the account.
+
+Quick-reply buttons are supported at creation. They are also the first half of the "click to
+multiple choice" flows Leon asked for: a tap arrives back through the ordinary webhook as an
+inbound message carrying the button's exact text, so it already lands on the lead's thread. What
+does not exist yet is the branching — reading that reply and deciding what happens next — which is
+the automation-flow engine, deferred with scheduling and the audience builder.
