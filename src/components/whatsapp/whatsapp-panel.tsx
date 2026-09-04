@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Paperclip } from "lucide-react";
+import { useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { FormMessage } from "@/components/layout/form-message";
@@ -9,7 +10,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { WhatsAppThreadMessage } from "@/lib/whatsapp/get-thread";
 
-import { sendWhatsAppMessage, sendWhatsAppTemplate, type WhatsAppSendState } from "@/lib/whatsapp/send-actions";
+import { WHATSAPP_MEDIA_EXTENSIONS, validateWhatsAppMedia } from "@/lib/whatsapp/media";
+import {
+  sendWhatsAppMedia,
+  sendWhatsAppMessage,
+  sendWhatsAppTemplate,
+  type WhatsAppSendState,
+} from "@/lib/whatsapp/send-actions";
 
 const STATUS_LABEL: Record<WhatsAppThreadMessage["status"], string> = {
   queued: "Sending…",
@@ -31,8 +38,19 @@ function MessageBubble({ message }: { message: WhatsAppThreadMessage }) {
         )}
       >
         {message.messageType === "media" ? (
-          <span className="italic opacity-80">
-            {message.mediaMimeType?.split("/")[0] ?? "Media"} attachment received — preview not yet available.
+          <span className="flex flex-col gap-1">
+            <span className="text-xs uppercase opacity-70">
+              {/*
+                Inbound media still has no preview — the bytes sit on
+                Meta's servers behind the access token and downloading
+                them is separate work. Outbound media we sent ourselves,
+                so saying so is honest and useful; the caption is the
+                part worth showing either way.
+              */}
+              {message.mediaMimeType?.split("/")[0] ?? "Media"}{" "}
+              {isOutbound ? "sent" : "received — preview not yet available"}
+            </span>
+            {message.body && <span>{message.body}</span>}
           </span>
         ) : message.messageType === "template" ? (
           <span>
@@ -65,6 +83,8 @@ export function WhatsAppPanel({
   withinWindow: boolean;
 }) {
   const [body, setBody] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState("");
   const [languageCode, setLanguageCode] = useState("en_US");
   const [bodyParam, setBodyParam] = useState("");
@@ -91,10 +111,34 @@ export function WhatsAppPanel({
             className="flex flex-col gap-2"
             onSubmit={(e) => {
               e.preventDefault();
+              const file = fileInputRef.current?.files?.[0] ?? null;
+
+              // The same check the Server Action runs, so a 40 MB video is
+              // refused here rather than after uploading it twice.
+              if (file) {
+                const invalid = validateWhatsAppMedia(file);
+                if (invalid) {
+                  setState({ error: invalid });
+                  return;
+                }
+              }
+
               startTransition(async () => {
-                const result = await sendWhatsAppMessage(leadId, toPhone, body);
+                let result: WhatsAppSendState;
+                if (file) {
+                  const formData = new FormData();
+                  formData.append("file", file);
+                  formData.append("caption", body);
+                  result = await sendWhatsAppMedia(leadId, toPhone, formData);
+                } else {
+                  result = await sendWhatsAppMessage(leadId, toPhone, body);
+                }
                 setState(result);
-                if (!result.error) setBody("");
+                if (!result.error) {
+                  setBody("");
+                  setFileName(null);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }
               });
             }}
           >
@@ -102,14 +146,51 @@ export function WhatsAppPanel({
               <Textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                placeholder="Type a message…"
+                placeholder={fileName ? "Add a caption (optional)…" : "Type a message…"}
                 className="min-h-10 flex-1"
                 rows={2}
               />
-              <Button type="submit" disabled={isPending || !body.trim()} className="self-end">
-                Send
-              </Button>
+              <div className="flex flex-col gap-1 self-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Attach a photo, video or PDF"
+                >
+                  <Paperclip className="size-4" />
+                </Button>
+                <Button type="submit" disabled={isPending || (!body.trim() && !fileName)}>
+                  Send
+                </Button>
+              </div>
             </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={WHATSAPP_MEDIA_EXTENSIONS}
+              className="hidden"
+              onChange={(e) => {
+                setState({});
+                setFileName(e.target.files?.[0]?.name ?? null);
+              }}
+            />
+            {fileName && (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Paperclip className="size-3" />
+                {fileName}
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => {
+                    setFileName(null);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                >
+                  remove
+                </button>
+              </p>
+            )}
             <FormMessage error={state.error} success={state.success} />
           </form>
         ) : (

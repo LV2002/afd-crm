@@ -5,7 +5,11 @@ import { redirect } from "next/navigation";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { getIntegrationCredential } from "@/lib/integrations/credentials";
+import { MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
+import { uploadMedia } from "@/lib/integrations/whatsapp/client";
 import { resolveAudience, type AudienceEntity, type AudienceSpec } from "@/lib/whatsapp/audience";
+import { mediaKindFor, validateWhatsAppMedia } from "@/lib/whatsapp/media";
 import { createClient } from "@/lib/supabase/server";
 
 export interface BroadcastFormState {
@@ -132,6 +136,37 @@ export async function createBroadcast(
     return { error: "Nobody matches those filters — nothing would be sent." };
   }
 
+  // The header image or video, if this template was approved with one.
+  //
+  // Uploaded ONCE, here, rather than per recipient: Meta's media id is
+  // reusable for 30 days, so a campus video reaches four hundred people
+  // having been pushed across the wire a single time. Doing it before the
+  // broadcast row is written also means a rejected file leaves no
+  // half-created campaign behind.
+  let headerMedia: { id: string; kind: string; fileName: string } | null = null;
+  const headerFile = formData.get("headerMedia");
+  if (headerFile instanceof File && headerFile.size > 0) {
+    const invalid = validateWhatsAppMedia(headerFile);
+    if (invalid) return { error: invalid };
+
+    const kind = mediaKindFor(headerFile.type);
+    if (!kind) return { error: "WhatsApp cannot send that kind of file." };
+
+    const phoneNumberId = await getIntegrationCredential("whatsapp", "phone_number_id");
+    const accessToken = await getIntegrationCredential("whatsapp", "access_token");
+    if (!phoneNumberId || !accessToken) {
+      return { error: "WhatsApp isn't connected yet — an admin sets it up in Settings → Integrations → WhatsApp." };
+    }
+
+    try {
+      const mediaId = await uploadMedia(phoneNumberId, accessToken, headerFile, headerFile.name);
+      headerMedia = { id: mediaId, kind, fileName: headerFile.name };
+    } catch (err) {
+      const message = err instanceof MetaGraphApiError ? err.message : "Could not reach WhatsApp.";
+      return { error: `Could not upload the header image: ${message}` };
+    }
+  }
+
   const { data: broadcast, error: insertError } = await supabase
     .from("whatsapp_broadcasts")
     .insert({
@@ -145,6 +180,9 @@ export async function createBroadcast(
           ? templateLanguage.trim()
           : "en_US",
       body_param: typeof bodyParam === "string" && bodyParam.trim() ? bodyParam.trim() : null,
+      header_media_id: headerMedia?.id ?? null,
+      header_media_kind: headerMedia?.kind ?? null,
+      header_media_filename: headerMedia?.fileName ?? null,
       status: "sending",
       created_by: user.id,
       total_recipients: audience.members.length,
@@ -180,6 +218,7 @@ export async function createBroadcast(
       filters: spec.filters,
       tagId: spec.tagId,
       templateName: templateName.trim(),
+      headerMedia: headerMedia?.fileName ?? null,
       recipients: audience.members.length,
     },
   });

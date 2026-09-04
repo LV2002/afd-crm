@@ -52,6 +52,15 @@ export const whatsappBroadcasts = pgTable("whatsapp_broadcasts", {
   templateName: text("template_name").notNull(),
   templateLanguage: text("template_language").notNull().default("en_US"),
   bodyParam: text("body_param"),
+  /**
+   * The file filling the template's media header on this send, if it has
+   * one. Meta's media id from the /media upload, not a file of ours — it
+   * is uploaded once per broadcast and reused for every recipient, and
+   * expires on Meta's side after 30 days.
+   */
+  headerMediaId: text("header_media_id"),
+  headerMediaKind: text("header_media_kind"),
+  headerMediaFilename: text("header_media_filename"),
   status: whatsappBroadcastStatusEnum("status").notNull().default("draft"),
   createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
   totalRecipients: integer("total_recipients").notNull().default(0),

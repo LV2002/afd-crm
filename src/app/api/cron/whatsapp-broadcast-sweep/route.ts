@@ -32,6 +32,15 @@ const BATCH_SIZE = 50;
  * configured, fails that one recipient with a clear reason rather than
  * silently skipping it forever.
  */
+/**
+ * The kind column is plain text (Meta's own vocabulary, not ours), so it
+ * is narrowed here rather than trusted. A row with a nonsense kind sends
+ * without a header instead of throwing the whole batch away.
+ */
+function isHeaderKind(value: string | null): value is "image" | "video" | "document" {
+  return value === "image" || value === "video" || value === "document";
+}
+
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
@@ -52,6 +61,8 @@ export async function GET(request: Request) {
       templateName: whatsappBroadcasts.templateName,
       templateLanguage: whatsappBroadcasts.templateLanguage,
       bodyParam: whatsappBroadcasts.bodyParam,
+      headerMediaId: whatsappBroadcasts.headerMediaId,
+      headerMediaKind: whatsappBroadcasts.headerMediaKind,
     })
     .from(whatsappBroadcastRecipients)
     .innerJoin(whatsappBroadcasts, eq(whatsappBroadcasts.id, whatsappBroadcastRecipients.broadcastId))
@@ -103,6 +114,13 @@ export async function GET(request: Request) {
         row.templateName,
         row.templateLanguage,
         row.bodyParam ? [row.bodyParam] : undefined,
+        // Uploaded once when the broadcast was composed; the same id goes
+        // to every recipient. Only sent when the operator actually
+        // attached one — Meta rejects a header component on a template
+        // whose header is text.
+        row.headerMediaId && isHeaderKind(row.headerMediaKind)
+          ? { kind: row.headerMediaKind, mediaId: row.headerMediaId }
+          : undefined,
       );
 
       await db

@@ -3138,3 +3138,36 @@ stage, that is a purpose-built slot to add, not a return to the free-form form.
 **Still stubbed / not done**
 
 - WhatsApp media (image and video) send.
+
+## Session 35 — Images and video over the Business API
+
+**Shipped**
+
+- **`lib/whatsapp/media.ts`** — Meta's accepted types and per-kind size limits in
+  one place, so the composer refuses a 40 MB video before uploading it and the
+  Server Action refuses the same file again on the server. The limits differ by
+  kind (5 MB image, 16 MB video, 100 MB PDF), so a single number would have had
+  to be the smallest and would have ruled out video entirely.
+- **`uploadMedia` and `sendMediaMessage`** on the Cloud API client. The bytes go
+  to Meta directly rather than by signed URL: the CRM's bucket is private, and
+  handing Meta a signed URL would mean giving a third party a bearer token for
+  that file to cache as long as it likes.
+- **A paperclip on the lead's WhatsApp composer** — attach a photo, video or PDF
+  with an optional caption, inside the 24-hour window, on the same rules as a
+  text reply. Media the CRM sent now renders as sent rather than as the blanket
+  "preview not yet available", which was only ever true of inbound media.
+- **A media header on a broadcast** (migration `0049_broadcast_header_media.sql`).
+  Outside the window Meta accepts only templates, so the way an image reaches a
+  broadcast audience is the media header of a template approved with one. The
+  file is uploaded **once** per broadcast and the same media id goes to every
+  recipient — a 400-person campaign pushes the video across the wire once. The
+  form offers the field only for a template whose header really is media, because
+  Meta rejects a header component on a text-header template.
+
+**Deliberately not done**
+
+The bytes of a sent media message are not copied into the CRM's own bucket. A
+photo sent in conversation is not a document of record, and the lead's Files
+section is now about one document only. What is kept is the fact of the send —
+the row, its media id and its type. Downloading *inbound* media is still the
+separate, already-tracked piece of work it was.

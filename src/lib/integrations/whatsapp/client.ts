@@ -42,6 +42,87 @@ export async function sendTextMessage(phoneNumberId: string, accessToken: string
   });
 }
 
+/**
+ * Puts a file on Meta's servers and returns the media id to send it by.
+ *
+ * The alternative — passing a public URL and letting Meta fetch it — is
+ * not available here and would not be wanted if it were: the CRM's bucket
+ * is private, and the only way to hand Meta a URL would be to mint a
+ * signed one, which is a bearer token for that file given to a third party
+ * and cached for as long as they like. Uploading the bytes directly keeps
+ * the file's only public existence the one WhatsApp shows the recipient.
+ *
+ * The id is valid for 30 days and can be reused, which is what makes a
+ * broadcast affordable: one upload, then the same id on every recipient's
+ * message rather than the same file pushed a thousand times.
+ */
+export async function uploadMedia(
+  phoneNumberId: string,
+  accessToken: string,
+  file: Blob,
+  fileName: string,
+): Promise<string> {
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  // Meta reads the type from the part, not from a separate field; getting
+  // it wrong is a 400 rather than a wrong-looking message.
+  form.append("type", file.type);
+  form.append("file", file, fileName);
+
+  const response = await fetch(`${GRAPH_BASE_URL}/${phoneNumberId}/media`, {
+    method: "POST",
+    // Deliberately no Content-Type header: fetch sets it with the
+    // multipart boundary, and setting it by hand breaks the upload.
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: form,
+  });
+  const body = await response.json();
+  if (!response.ok) {
+    throw new MetaGraphApiError(
+      `WhatsApp Cloud API returned ${response.status} uploading media`,
+      response.status,
+      body,
+    );
+  }
+  const id = (body as { id?: string }).id;
+  if (!id) {
+    throw new MetaGraphApiError("WhatsApp accepted the upload but returned no media id", 502, body);
+  }
+  return id;
+}
+
+export interface WhatsAppMediaPayload {
+  /** Meta's own message type — "image", "video" or "document". */
+  kind: "image" | "video" | "document";
+  /** From `uploadMedia`. */
+  mediaId: string;
+  /** Shown under the media. Documents also take a filename. */
+  caption?: string;
+  fileName?: string;
+}
+
+/**
+ * An image, video or document message. Same 24-hour customer service
+ * window rule as `sendTextMessage`, enforced by the caller.
+ */
+export async function sendMediaMessage(
+  phoneNumberId: string,
+  accessToken: string,
+  toE164: string,
+  media: WhatsAppMediaPayload,
+): Promise<string> {
+  const payload: Record<string, unknown> = { id: media.mediaId };
+  if (media.caption) payload.caption = media.caption;
+  // Only documents carry a filename; sending one on an image is rejected.
+  if (media.kind === "document" && media.fileName) payload.filename = media.fileName;
+
+  return postMessage(phoneNumberId, accessToken, {
+    to: toE164.replace(/\D/g, ""),
+    type: media.kind,
+    [media.kind]: payload,
+  });
+}
+
 export interface PhoneNumberInfo {
   display_phone_number?: string;
   verified_name?: string;
@@ -74,16 +155,34 @@ export async function sendTemplateMessage(
   templateName: string,
   languageCode: string,
   bodyParams?: string[],
+  /**
+   * Fills the template's media header. Only valid for a template whose
+   * header was approved as IMAGE, VIDEO or DOCUMENT — Meta rejects a
+   * header component on a text-header template, so the caller only passes
+   * this when the operator attached a file.
+   */
+  headerMedia?: { kind: "image" | "video" | "document"; mediaId: string },
 ): Promise<string> {
+  const components: Array<Record<string, unknown>> = [];
+  if (headerMedia) {
+    components.push({
+      type: "header",
+      parameters: [{ type: headerMedia.kind, [headerMedia.kind]: { id: headerMedia.mediaId } }],
+    });
+  }
+  if (bodyParams && bodyParams.length > 0) {
+    components.push({ type: "body", parameters: bodyParams.map((text) => ({ type: "text", text })) });
+  }
+
   return postMessage(phoneNumberId, accessToken, {
     to: toE164.replace(/\D/g, ""),
     type: "template",
     template: {
       name: templateName,
       language: { code: languageCode },
-      ...(bodyParams && bodyParams.length > 0
-        ? { components: [{ type: "body", parameters: bodyParams.map((text) => ({ type: "text", text })) }] }
-        : {}),
+      // The header component must come before the body one; Meta reads
+      // them in order and 400s on a header that arrives second.
+      ...(components.length > 0 ? { components } : {}),
     },
   });
 }
