@@ -2,7 +2,8 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { applyAssignment } from "@/lib/assignment/apply-assignment";
 import { db } from "@/lib/db/client";
-import { enquiries, leadIdentifiers, leads, mergeReviewQueue, pipelineStages } from "@/lib/db/schema";
+import { centers, enquiries, leadIdentifiers, leads, mergeReviewQueue, pipelineStages } from "@/lib/db/schema";
+import { notify } from "@/lib/notifications/notify";
 
 import { normalizeEmail } from "./normalize-email";
 import { normalizePhone } from "./normalize-phone";
@@ -38,6 +39,13 @@ export interface ResolveLeadInput {
   coursesInterested?: string[] | null;
   centerId?: string | null;
   assignedTo?: string | null;
+
+  /**
+   * Whoever is doing this, when a person is. Used only so a counsellor
+   * creating a lead for themselves isn't told they have a new lead —
+   * ingestion from a webhook or a cron has no actor and passes nothing.
+   */
+  actorId?: string | null;
 }
 
 export interface ResolveLeadResult {
@@ -64,6 +72,68 @@ export interface ResolveLeadResult {
  * as the seed script. See docs/DECISIONS.md.
  */
 export async function resolveOrCreateLead(input: ResolveLeadInput): Promise<ResolveLeadResult> {
+  const result = await resolveOrCreateLeadInTransaction(input);
+
+  // Notified AFTER the transaction commits, never inside it. `db`'s pool is
+  // max: 1 (see lib/db/client.ts), so a second connection opened while the
+  // transaction still holds the first would deadlock — and a notification
+  // about a lead that then fails to commit would be a lie besides.
+  if (result.isNewLead) {
+    await notifyLeadAssigned(result.leadId, input.source, input.actorId ?? null);
+  }
+
+  return result;
+}
+
+/**
+ * The lead was just created and assigned — by a rule inside the
+ * transaction, or explicitly by the caller. Reads the committed row rather
+ * than threading the assignment back out through two return branches: one
+ * small query on the create path, and it cannot disagree with what was
+ * actually stored.
+ */
+async function notifyLeadAssigned(
+  leadId: string,
+  source: string,
+  actorId: string | null,
+): Promise<void> {
+  const [row] = await db
+    .select({
+      assignedTo: leads.assignedTo,
+      centerId: leads.centerId,
+      studentName: leads.studentName,
+      leadNumber: leads.leadNumber,
+      centerName: centers.name,
+    })
+    .from(leads)
+    .leftJoin(centers, eq(centers.id, leads.centerId))
+    .where(eq(leads.id, leadId));
+
+  // An unassigned lead has nobody to tell. It is not lost: the orphan
+  // queue is what surfaces those, and telling a role about every unmatched
+  // lead would drown the very people who work that queue.
+  if (!row?.assignedTo) return;
+
+  await notify({
+    eventKey: "lead.assigned",
+    context: {
+      lead_name: row.studentName,
+      lead_number: row.leadNumber,
+      source,
+      center_name: row.centerName,
+    },
+    href: `/leads/${leadId}`,
+    entityType: "leads",
+    entityId: leadId,
+    centerId: row.centerId,
+    ownerId: row.assignedTo,
+    actorId,
+  });
+}
+
+async function resolveOrCreateLeadInTransaction(
+  input: ResolveLeadInput,
+): Promise<ResolveLeadResult> {
   const normalizedPhone = normalizePhone(input.primaryPhone);
   if (!normalizedPhone) {
     throw new Error(`resolveOrCreateLead: could not normalise primary phone "${input.primaryPhone}"`);

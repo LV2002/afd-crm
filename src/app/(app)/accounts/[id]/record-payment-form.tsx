@@ -21,7 +21,14 @@ const METHODS = [
   { value: "other", label: "Other" },
 ];
 
-export function RecordPaymentForm({ enrolmentId }: { enrolmentId: string }) {
+export function RecordPaymentForm({
+  enrolmentId,
+  accounts,
+}: {
+  enrolmentId: string;
+  /** Active finance accounts the money could have landed in. */
+  accounts: Array<{ id: string; name: string }>;
+}) {
   const [state, formAction, pending] = useActionState(recordPaymentAction.bind(null, enrolmentId), initialState);
 
   return (
@@ -49,6 +56,30 @@ export function RecordPaymentForm({ enrolmentId }: { enrolmentId: string }) {
           </Select>
         </div>
       </div>
+
+      {accounts.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="payment-account">Received into</Label>
+          {/*
+            The cash side of the receipt. Posting it here means a student's
+            receipt and the institute's bank balance come from one write —
+            they cannot end up disagreeing. Native select rather than the
+            styled one: this form has no client state and does not need any.
+          */}
+          <select
+            id="payment-account"
+            name="accountId"
+            className="h-9 rounded-md border bg-transparent px-3 text-sm"
+            required
+          >
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="payment-reference">Reference (optional)</Label>

@@ -84,6 +84,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage"],
   },
   {
+    href: "/settings/notifications",
+    label: "Notifications",
+    description: "Which events notify which roles, and in what words",
+    permissions: ["settings.manage"],
+  },
+  {
     href: "/settings/profile-form",
     label: "Student Profile Form",
     description: "Compose the questions students answer on their own profile form",

@@ -18,6 +18,7 @@ export const PERMISSION_CATEGORIES = [
   "WhatsApp",
   "Enrolment",
   "Payments",
+  "Finance",
   "Academics",
   "Files",
   "Reports",
@@ -167,6 +168,33 @@ export const PERMISSIONS = [
     label: "Approve discounts",
     category: "Payments",
     description: "Approve a discount request beyond a counsellor's authority limit.",
+  },
+
+  // Finance
+  //
+  // Separate from `payment.*` on purpose. Those are about ONE student's
+  // fees — a counsellor can see what a lead has paid. These are about the
+  // institute's own money: bank and cash balances, salaries, rent, ad
+  // spend, the profit and loss. A counsellor has no business in it, and
+  // the split is what lets an admin grant one without the other.
+  {
+    code: "finance.read",
+    label: "View finance",
+    category: "Finance",
+    description: "See account balances, the cash ledger and the finance reports.",
+  },
+  {
+    code: "finance.record",
+    label: "Record finance entries",
+    category: "Finance",
+    description: "Post an expense, other income, or a transfer between accounts.",
+  },
+  {
+    code: "finance.manage",
+    label: "Manage finance setup",
+    category: "Finance",
+    description:
+      "Add and edit accounts and opening balances, and reverse or correct a posted entry.",
   },
 
   // Academics

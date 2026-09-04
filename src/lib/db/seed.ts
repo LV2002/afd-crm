@@ -11,6 +11,7 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import { eq } from "drizzle-orm";
 
 import { PERMISSIONS, type PermissionCode, type PermissionScope } from "../auth/permissions";
+import { NOTIFICATION_EVENTS } from "../notifications/events";
 import { ensurePermissionsSeeded } from "../auth/seed-permissions";
 import { db } from "./client";
 import {
@@ -18,6 +19,8 @@ import {
   dropdownCategories,
   dropdownOptions,
   fieldDefinitions,
+  financeAccounts,
+  notificationSettings,
   orgSettings,
   pipelineStages,
   profiles,
@@ -161,6 +164,12 @@ const ROLE_SEEDS: RoleSeed[] = [
           "enrolment.update",
           "payment.read",
           "discount.approve",
+          // Leon's requirement: a centre head sees their own centre's
+          // finance. They can post day-to-day entries but not add
+          // accounts or reverse a posted one — that stays with accounts
+          // and the admins.
+          "finance.read",
+          "finance.record",
           "student.read",
           "batch.manage",
           "report.read",
@@ -218,6 +227,9 @@ const ROLE_SEEDS: RoleSeed[] = [
           "payment.record",
           "payment.refund",
           "discount.approve",
+          "finance.read",
+          "finance.record",
+          "finance.manage",
           "enrolment.read",
           "student.read",
           "report.read",
@@ -465,6 +477,44 @@ const DROPDOWN_SEEDS: DropdownSeed[] = [
       { value: "not_interested", label: "Not Interested" },
       { value: "demo_scheduled", label: "Demo Scheduled" },
       { value: "converted", label: "Converted" },
+    ],
+  },
+  {
+    // The workbook's Categories sheet, tab for tab. Admin-editable rows,
+    // never a hardcoded list (CLAUDE.md § 10) — a different institute has
+    // different expense heads, and AFD will add their own.
+    key: "finance_expense_category",
+    label: "Expense category",
+    isSystem: false,
+    options: [
+      { value: "salaries", label: "Salaries" },
+      { value: "rent", label: "Rent" },
+      { value: "mobile_wifi", label: "Mobile Bills & WiFi" },
+      { value: "electricity", label: "Electricity" },
+      { value: "printing", label: "Printing" },
+      { value: "google_ads", label: "Google Ads" },
+      { value: "meta_ads", label: "Meta Ads" },
+      { value: "other_marketing", label: "Other Marketing" },
+      { value: "bank_charges", label: "Bank Charges" },
+      { value: "stationery", label: "Stationery & Office Supplies" },
+      { value: "travel", label: "Travel & Conveyance" },
+      { value: "repairs", label: "Repairs & Maintenance" },
+      { value: "software", label: "Software & Subscriptions" },
+      { value: "professional_fees", label: "Professional Fees (CA/Legal)" },
+      { value: "other_expenses", label: "Other Expenses" },
+    ],
+  },
+  {
+    key: "finance_income_category",
+    label: "Other income category",
+    isSystem: false,
+    options: [
+      { value: "study_material", label: "Study Material Sales" },
+      { value: "test_series", label: "Test Series Sales" },
+      { value: "workshop", label: "Workshop / Seminar Income" },
+      { value: "late_fee", label: "Late Fee / Penalty Collected" },
+      { value: "sponsorship", label: "Sponsorship / Grant" },
+      { value: "other_income", label: "Other Income" },
     ],
   },
   {
@@ -830,6 +880,68 @@ async function seedUsers(
   console.log(`seeded ${USER_SEEDS.length} users (password: ${SEED_PASSWORD})`);
 }
 
+/**
+ * One settings row per event in NOTIFICATION_EVENTS.
+ *
+ * Insert-only on conflict: an admin who has rewritten the copy or changed
+ * which roles hear about a breach must not have that undone by a re-seed.
+ * A new event added in code does get its row on the next seed, which is the
+ * one thing this needs to do to an existing install — and `notify()` falls
+ * back to these same defaults meanwhile, so a fresh event works on deploy
+ * whether or not anyone remembers to run the seed.
+ */
+async function seedNotificationSettings(roleIds: Record<string, string>) {
+  for (const event of NOTIFICATION_EVENTS) {
+    await db
+      .insert(notificationSettings)
+      .values({
+        eventKey: event.key,
+        isEnabled: true,
+        notifyRoles: event.defaultNotifyRoleCodes
+          .map((code) => roleIds[code])
+          .filter((id): id is string => Boolean(id)),
+        notifyOwner: event.defaultNotifyOwner,
+        channels: ["in_app"],
+        titleTemplate: event.defaultTitle,
+        bodyTemplate: event.defaultBody,
+      })
+      .onConflictDoNothing({ target: notificationSettings.eventKey });
+  }
+  console.log(`seeded ${NOTIFICATION_EVENTS.length} notification settings`);
+}
+
+/**
+ * Three standard accounts per centre — Bank, Cash, Petty Cash — exactly
+ * what the workbook's "Add a centre" step created. Insert-only on
+ * conflict: opening balances are set by whoever does the handover, and a
+ * re-seed must never zero them.
+ */
+async function seedFinanceAccounts(centerIds: Record<string, string>) {
+  const types = [
+    { type: "bank" as const, label: "Bank" },
+    { type: "cash" as const, label: "Cash" },
+    { type: "petty_cash" as const, label: "Petty Cash", floatPaise: 500000 },
+  ];
+  let made = 0;
+  for (const [centerName, centerId] of Object.entries(centerIds)) {
+    for (const t of types) {
+      const inserted = await db
+        .insert(financeAccounts)
+        .values({
+          name: `${centerName} — ${t.label}`,
+          centerId,
+          type: t.type,
+          openingBalancePaise: 0,
+          floatPaise: t.floatPaise ?? null,
+        })
+        .onConflictDoNothing()
+        .returning({ id: financeAccounts.id });
+      made += inserted.length;
+    }
+  }
+  console.log(`seeded ${made} finance accounts`);
+}
+
 async function main() {
   await seedOrgSettings();
   await seedTerminology();
@@ -839,6 +951,8 @@ async function main() {
   await seedDropdowns();
   await seedPipelineStages();
   await seedFieldDefinitions();
+  await seedNotificationSettings(roleIds);
+  await seedFinanceAccounts(centerIds);
   await seedUsers(roleIds, centerIds);
   console.log("done");
   process.exit(0);
