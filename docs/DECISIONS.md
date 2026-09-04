@@ -2094,3 +2094,43 @@ just delays the real message.
 This is preferred to switching provider. The 503 is one model shedding load, not Gemini failing,
 and the analyst never sends lead data to the model anyway — the tools return aggregates, scoped to
 the caller, and only those aggregates reach the API.
+
+## 2026-09-04 — WhatsApp: the inbox, and the number question underneath it
+
+Leon asked for a WhatsApp tab in the left menu and asked whether a lead's chat panel shows that
+lead's messages or the counsellor's whole account.
+
+**It is per-lead, and always was.** The Cloud API delivers every message to our webhook tagged
+with the contact's number; the webhook resolves it to a lead through `resolveOrCreateLead()`. So
+a thread is a property of the lead, not a slice of an account someone has to filter.
+
+**The inbox needed no new access model.** RLS on `whatsapp_messages` already scopes rows through
+the lead, so "the threads you can see" is exactly "the leads you can see". A counsellor picker for
+centre heads — which Leon floated — would have been a second, weaker copy of that: it is not
+needed, and the inbox is identical whether AFD runs one number or ten.
+
+**The composer stays on the lead page** as well as in the inbox, at Leon's call. Same API either
+way; the inbox is for working down a list, the lead page is for when you are already there.
+
+### The unresolved part: which numbers go on the API
+
+A phone number is registered to the WhatsApp Business **app** or to the **Cloud API**, never both.
+Registering a number to the API ends its use in the app. There is no supported way to read a
+counsellor's WhatsApp Business app conversations into a CRM, and unofficial ones get the number
+banned.
+
+The schema was built to Leon's earlier "one number per counsellor" call — a `phone_number_id`
+credential per counsellor under one WhatsApp Business Account, sharing a single system-user token.
+That still works, but it means each of those numbers leaves the app, which Leon has now said he
+does not want.
+
+Recommended instead: **one institute number on the Cloud API**, with counsellors' own numbers left
+alone in the app. Every CRM message — templates, broadcasts, the inbox, the lead panel — runs on
+that one number and is attributed in-app to the counsellor who sent it, so AFD owns the history
+instead of it walking out with whoever leaves (the concern behind CLAUDE.md non-negotiable #6).
+The cost is that students see an institute number rather than their counsellor's personal one,
+which the message body and the WhatsApp display name can address.
+
+No code change is needed to take that option: "one number per counsellor" and "one number for the
+institute" differ only in how many `phone_number_id` credential rows exist. Left as Leon's
+decision; nothing in the CRM assumes either.

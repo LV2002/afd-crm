@@ -2770,3 +2770,38 @@ suite, has no Postgres to run against here.
 **Needs Leon:** `npm run db:migrate` (0041) and `npm run db:seed` — the seed is what grants
 `enrolment.drop` to Accounts and Centre Head and adds the `admission.dropped` notification row.
 Counsellors deliberately do not get it; change that in Settings → Roles if you disagree.
+
+## Session 39 — A WhatsApp inbox in the sidebar
+
+Leon asked for the WhatsApp Business API to be its own tab in the left menu, and asked a fair
+question underneath it: does a lead's chat panel show that lead's messages, or the counsellor's
+whole account?
+
+**It shows only that lead's messages.** Every message the Cloud API delivers arrives at our own
+webhook tagged with the contact's number, and the webhook resolves it to a lead through the same
+`resolveOrCreateLead()` every other source uses. `whatsapp_messages` has carried `lead_id` since
+it was built, so the tagging Leon asked for was already automatic, including creating a lead when
+an unknown number writes in.
+
+**New: `/whatsapp`**, gated on `whatsapp.read`. A thread list — newest activity first, with the
+last message, the masked number, the counsellor, and a "Needs a reply" filter for threads where
+the lead wrote last — beside the existing chat panel and composer.
+
+Who sees which threads needed no new mechanism: `whatsapp_messages` RLS already scopes every row
+through its lead, so a counsellor's inbox is their own leads and a centre head's is their centre's.
+There is no "whose inbox" control to get wrong, which is also why the inbox works unchanged
+whether AFD ends up on one institute number or one per counsellor.
+
+The composer stays on the lead page too, at Leon's call: both send through the same API, and
+removing it would mean opening a second screen to answer someone you are already looking at.
+
+`whatsapp-panel.tsx` moved to `src/components/whatsapp/` and `whatsapp-actions.ts` to
+`src/lib/whatsapp/send-actions.ts` so both screens share one implementation rather than a copy.
+
+**Verified:** `npx tsc --noEmit` clean, `next lint` clean (one pre-existing warning), `npm run
+build` succeeds, non-database tests pass (119, including the `use-server` export guard over the
+moved actions file).
+
+**Open, and Leon's to decide:** which numbers go on the API. See docs/DECISIONS.md — a number
+cannot be on the WhatsApp Business app and the Cloud API at the same time, and his counsellors are
+currently using the app.

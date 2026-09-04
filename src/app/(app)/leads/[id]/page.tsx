@@ -28,7 +28,7 @@ import { InteractionForm } from "./interaction-form";
 import { LeadEditForm } from "./lead-edit-form";
 import { LeadTagsPanel, type TagOption } from "./lead-tags-panel";
 import { TasksPanel, type TaskRow } from "./tasks-panel";
-import { WhatsAppPanel } from "./whatsapp-panel";
+import { WhatsAppPanel } from "@/components/whatsapp/whatsapp-panel";
 
 interface EnrolmentRow {
   id: string;
