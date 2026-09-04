@@ -3102,3 +3102,39 @@ not a way around a permission; it is a faster way to use one somebody has.
 - WhatsApp media (image and video) send.
 - Signed-agreement upload replacing the general per-lead file upload, and
   accountant visibility of the instalment agreement.
+
+## Session 34 — One upload on a lead, and accounts can see it
+
+**Shipped**
+
+- **`attachments.kind`** (migration `0048_attachment_kind.sql`) — `signed_agreement`
+  or `document`. Whether a lead had a signed instalment agreement used to be
+  decided by searching the free-text label for the word "instalment", so a
+  counsellor who typed "Signed agreement" produced a lead the system believed
+  was unsigned. Existing files whose label mentions an agreement are backfilled.
+- **The lead page's general file uploader is gone**, replaced by
+  `SignedAgreementPanel`: one purpose, a plain "on file / not uploaded yet" at
+  the top, upload or replace beneath it. Documents uploaded before this change
+  are still listed and still open — narrowing what a counsellor may upload must
+  not take away access to what they already uploaded.
+- **Accounts see the signed agreement** on `/accounts/[id]`, next to the
+  instalments it sets out. No new policy: the accounts role already holds
+  `file.read` at centre scope, and `can_access_lead_files` is `security definer`
+  precisely so a role holding `file.read` without `lead.read` still reaches its
+  own files. `tests/rls.spec.ts` now proves that rather than assuming it.
+- **`OpenFileButton`** extracted, so the lead page, the student page and the
+  accounts screen all mint a signed URL the same way and all pay the same audit
+  cost for opening a document.
+
+**One thing worth flagging**
+
+Leon's instruction was that the signed agreement is the only thing a counsellor
+uploads on a lead, and that is what shipped. The student record keeps its
+general uploader — academics genuinely attach several kinds of thing there
+(photo, ID proof, marksheet, portfolio), and the profile-form photo lives in
+that flow. If ID proofs and marksheets should also be collected at the lead
+stage, that is a purpose-built slot to add, not a return to the free-form form.
+
+**Still stubbed / not done**
+
+- WhatsApp media (image and video) send.

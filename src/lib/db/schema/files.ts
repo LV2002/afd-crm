@@ -49,6 +49,16 @@ export const attachments = pgTable(
      * doesn't need a migration; the upload UI offers the common ones.
      */
     label: text("label"),
+    /**
+     * What the file is to the SYSTEM, as opposed to what `label` says it is
+     * to a person: `signed_agreement` or `document`. A small set the code
+     * knows and branches on — the lead page and the accounts screen both
+     * ask "is the signed instalment agreement here?" and must get the same
+     * answer — so unlike `label` it is not admin-configurable. Before this
+     * existed, that question was answered by searching the label for the
+     * word "instalment", which was true only for one exact phrasing.
+     */
+    kind: text("kind").notNull().default("document"),
     uploadedBy: uuid("uploaded_by").references(() => profiles.id, { onDelete: "set null" }),
     ...timestamps(),
     ...softDelete(),
@@ -56,6 +66,7 @@ export const attachments = pgTable(
   (table) => [
     index("attachments_lead_idx").on(table.leadId),
     index("attachments_student_idx").on(table.studentId),
+    index("attachments_lead_kind_idx").on(table.leadId, table.kind),
     // Exactly one parent. Without this a row could attach to both a lead
     // and a student (two different access boundaries at once) or to
     // neither (unreachable, and unauthorisable — no parent to check).

@@ -2,7 +2,12 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { ATTACHMENTS_BUCKET, type AttachmentParent, type AttachmentRow } from "./shared";
+import {
+  ATTACHMENTS_BUCKET,
+  currentSignedAgreement,
+  type AttachmentParent,
+  type AttachmentRow,
+} from "./shared";
 
 /**
  * Database and Storage access for attachments.
@@ -25,7 +30,7 @@ export async function listAttachments(
 ): Promise<AttachmentRow[]> {
   const { data, error } = await supabase
     .from("attachments")
-    .select("id, storage_path, file_name, mime_type, size_bytes, label, created_at, uploaded_by")
+    .select("id, storage_path, file_name, mime_type, size_bytes, label, kind, created_at, uploaded_by")
     .eq(parentColumn(parent), parent.id)
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
@@ -35,6 +40,23 @@ export async function listAttachments(
   // that would quietly show an empty tab on a lead that has documents.
   if (error) throw new Error(`Could not list attachments: ${error.message}`);
   return (data ?? []) as AttachmentRow[];
+}
+
+/**
+ * The signed instalment agreement for one lead, or null.
+ *
+ * Accounts needs this on the enrolment screen — they are the ones chasing
+ * the instalments the agreement sets out, and until now the only copy was
+ * on the lead page they have no reason to open. They hold `file.read` at
+ * centre scope, so the same RLS policy that shows the counsellor this file
+ * shows it to them; nothing here is a special case for accounts.
+ */
+export async function getSignedAgreement(
+  supabase: SupabaseClient,
+  leadId: string,
+): Promise<AttachmentRow | null> {
+  const rows = await listAttachments(supabase, { kind: "lead", id: leadId });
+  return currentSignedAgreement(rows);
 }
 
 /** Signed URLs expire; 5 minutes is long enough to open, short enough that a copied link dies quickly. */

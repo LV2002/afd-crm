@@ -15,10 +15,11 @@ import { getLeadDetail } from "@/lib/leads/get-lead-detail";
 import { formatDateIST } from "@/lib/format/date";
 import { formatINR } from "@/lib/format/currency";
 import { createClient } from "@/lib/supabase/server";
-import { AttachmentsPanel } from "@/components/files/attachments-panel";
+import { SignedAgreementPanel } from "@/components/files/signed-agreement-panel";
 import { FeePlanPanel } from "@/components/enrolment/fee-plan-panel";
 import { ProfileFormPanel } from "@/components/profile-form/profile-form-panel";
 import { listAttachments } from "@/lib/storage/attachments";
+import { currentSignedAgreement, otherDocuments } from "@/lib/storage/shared";
 import { getLeadFeePlan } from "@/lib/enrolment/get-fee-plan";
 import { getStudentFieldLabels } from "@/lib/profile-form/field-labels";
 import { getWhatsAppThread, isWithinCustomerServiceWindow } from "@/lib/whatsapp/get-thread";
@@ -116,11 +117,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   const canReadFiles = can(user, "file.read");
   const attachments = canReadFiles ? await listAttachments(supabase, { kind: "lead", id }) : [];
-  // The signed agreement is just an attachment labelled as such — the same
-  // storage and access rules as any other file, no separate mechanism.
-  const hasSignedAgreement = attachments.some((a) =>
-    (a.label ?? "").toLowerCase().includes("instalment"),
-  );
+  // The signed agreement is an ordinary attachment — same bucket, same RLS,
+  // no separate mechanism — distinguished by its `kind`. It used to be
+  // found by searching the free-text label for "instalment", which missed
+  // every other phrasing a counsellor might type.
+  const signedAgreement = currentSignedAgreement(attachments);
+  const hasSignedAgreement = signedAgreement !== null;
 
   const canReadFees = can(user, "enrolment.read");
   const feePlan = canReadFees ? await getLeadFeePlan(id) : null;
@@ -260,14 +262,13 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
       {canReadFiles && (
         <div className="flex flex-col gap-3">
-          <h2 className="text-lg font-semibold">Files</h2>
-          <AttachmentsPanel
-            parentKind="lead"
-            parentId={id}
-            attachments={attachments}
+          <h2 className="text-lg font-semibold">Signed agreement</h2>
+          <SignedAgreementPanel
+            leadId={id}
+            agreement={signedAgreement}
+            otherFiles={otherDocuments(attachments)}
             canUpload={can(user, "file.upload")}
             canDelete={can(user, "file.delete")}
-            labelSuggestions={["Signed instalment agreement", "ID proof", "Marksheet", "Fee receipt"]}
           />
         </div>
       )}

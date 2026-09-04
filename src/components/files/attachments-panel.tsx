@@ -1,14 +1,16 @@
 "use client";
 
-import { Download, FileText, ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
-import { useActionState, useState, useTransition } from "react";
+import { FileText, ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
+import { useActionState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getAttachmentUrl, removeAttachment, uploadAttachment, type UploadState } from "@/lib/storage/actions";
+import { removeAttachment, uploadAttachment, type UploadState } from "@/lib/storage/actions";
 import { ALLOWED_EXTENSIONS, MAX_FILE_BYTES, type AttachmentRow } from "@/lib/storage/shared";
+
+import { OpenFileButton } from "./open-file-button";
 
 const initialState: UploadState = {};
 
@@ -19,9 +21,12 @@ function formatSize(bytes: number): string {
 }
 
 /**
- * Shared by the lead detail page and the student profile — the two differ
- * only in which parent id they pass, and file access is decided by that
- * parent in Postgres either way, so one component serves both.
+ * The general "attach any document" panel, now used by the student record
+ * only. The lead page had one too until counsellors were narrowed to the
+ * single upload that matters there — see ./signed-agreement-panel.tsx.
+ * Academics genuinely do attach several kinds of thing to a student
+ * (photo, marksheet, portfolio), so the free-form form still earns its
+ * place here.
  */
 export function AttachmentsPanel({
   parentKind,
@@ -40,29 +45,6 @@ export function AttachmentsPanel({
 }) {
   const [uploadResult, uploadAction, uploading] = useActionState(uploadAttachment, initialState);
   const [removeResult, removeAction] = useActionState(removeAttachment, initialState);
-  const [opening, setOpening] = useState<string | null>(null);
-  const [openError, setOpenError] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
-
-  /**
-   * The signed URL is fetched on click rather than rendered into the list.
-   * It is a bearer token with a short life; putting one in the markup for
-   * every file would hand a working link to each document to anyone who
-   * views source, and leave them in history.
-   */
-  function open(attachmentId: string) {
-    setOpenError(null);
-    setOpening(attachmentId);
-    startTransition(async () => {
-      const result = await getAttachmentUrl(attachmentId);
-      setOpening(null);
-      if (result.url) {
-        window.open(result.url, "_blank", "noopener,noreferrer");
-      } else {
-        setOpenError(result.error ?? "Could not open that file.");
-      }
-    });
-  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -101,7 +83,6 @@ export function AttachmentsPanel({
 
       {removeResult.error && <FormMessage error={removeResult.error} />}
       {removeResult.success && <FormMessage success={removeResult.success} />}
-      {openError && <FormMessage error={openError} />}
 
       {attachments.length === 0 ? (
         <p className="text-sm text-muted-foreground">No files yet.</p>
@@ -129,20 +110,7 @@ export function AttachmentsPanel({
                     })}
                   </p>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => open(file.id)}
-                  disabled={opening === file.id}
-                >
-                  {opening === file.id ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Download className="size-4" />
-                  )}
-                  Open
-                </Button>
+                <OpenFileButton attachmentId={file.id} />
                 {canDelete && (
                   <form action={removeAction}>
                     <input type="hidden" name="parentKind" value={parentKind} />
