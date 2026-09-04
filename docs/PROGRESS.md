@@ -2889,3 +2889,42 @@ contract both ways — an unknown number creates no lead, a known number files o
 counsellor — but like the rest of the database-backed suite it has no Postgres here.
 
 **Needs Leon:** `npm run db:migrate` (0042) and `npm run db:seed` (for the new notification row).
+
+## Session 42 — Broadcast audiences, built like Insights
+
+Leon: "categorise the leads and students just like in insights with all the variables and customize
+who I want to send the message to."
+
+**The audience is now a filter set, not a tag.** `lib/whatsapp/audience.ts` runs the same
+`applyPivotFilters()` the Insights page uses, over leads *or* students, so a filter means the same
+thing in both places and a custom field an admin adds becomes a targeting option the moment it
+exists. A tag is still available as an extra narrowing, so every audience that worked before still
+works.
+
+**Check the audience before sending.** A broadcast is irreversible and billed per message, so the
+compose screen counts the recipients, names a few of them, and admits what it dropped: people with
+no number, people sharing a number with somebody already on the list (one message between them,
+not two), and the do-not-contact leads excluded everywhere.
+
+**Templates are picked, not typed.** The dropdown lists only APPROVED templates from the account,
+with the body shown — an unapproved one is a send that fails at Meta's door for reasons nobody on
+this side can see.
+
+**Students can be broadcast to.** `whatsapp_broadcast_recipients` gained `student_id`, `lead_id`
+became nullable, and a check constraint says exactly one is set. The sweep no longer joins `leads`
+— it uses the number snapshotted on the recipient row, which is what it should have used all along
+and is the only thing that works for a student.
+
+Broadcasts moved from Settings to **WhatsApp → Broadcasts**, where the rest of the WhatsApp
+console lives.
+
+**Migration 0043.** Enum `whatsapp_audience_entity`, `audience_entity`/`audience_filters` on
+broadcasts, `tag_id` nullable, `student_id` + partial unique indexes + the one-subject check on
+recipients.
+
+**Verified:** `npx tsc --noEmit` clean, `next lint` clean (one pre-existing warning), `npm run
+build` succeeds, 152 non-database tests pass.
+
+**Needs Leon:** `npm run db:migrate` (0043).
+
+**Still to come:** scheduled sends; automation flows; handling a quick-reply button tap as a branch.
