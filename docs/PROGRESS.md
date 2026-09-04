@@ -3212,3 +3212,52 @@ separate, already-tracked piece of work it was.
   can never disagree with its own bottom line.
 - **Booked** (net fee agreed) and **collected** (actually received) are both
   shown; for instalment plans they are never the same number.
+
+## Session 37 — Nobody gives away money they aren't entitled to
+
+**Shipped**
+
+- **`discount_limits`** (migration `0050_discount_authority.sql`) — how much each
+  role may take off a fee on its own, as a percentage, a cash figure, or both.
+  Keyed by role id, because roles are editable rows; a role created next year
+  appears in Settings the day it is created.
+- **Settings → Discount Authority**, so Leon changes any of it without a deploy.
+- **Enforcement at both places a discount can be set**: the fee plan panel and
+  the confirm-admission form. Closing only one would have made the whole thing
+  theatre — type the figure into the other.
+- **Approve / reject on the lead and on the accounts screen**, with the
+  requester's name, the amount and the percentage.
+- **Two notification events** — `discount.approval_requested` (centre heads and
+  admins by default) and `discount.decided` (the counsellor who agreed it, who
+  has to go back to the student either way).
+- Seeded starting figures: counsellor 10% or ₹5,000, centre head and accounts
+  25% or ₹25,000, admin and co-admin unlimited, academics none.
+
+**The decision that shapes everything else**
+
+An unapproved discount is **not applied**. The obvious design — apply it, flag
+it for approval afterwards — is the wrong way round for money: a discount
+already reducing the bill is one nobody has to hurry to approve, and if it is
+never approved then accounts have spent weeks collecting against a figure
+nobody agreed. So the student owes the full fee until somebody with the
+authority says otherwise, and the fee panel says so in as many words. The
+pressure lands where it belongs: on getting an answer.
+
+**Three ways round it, all closed**
+
+- **Approve small, then edit upward.** The applied figure is the ceiling for
+  what counts as already-granted, so raising it is a fresh request and the
+  original grant stands.
+- **Two colleagues on the same ceiling approving each other.** Approving needs
+  the permission *and* enough authority to have given the discount yourself.
+- **A role nobody configured.** No row means no authority, never unlimited.
+
+Reducing a discount, or clearing it, never needs approval — that is the student
+paying more.
+
+**Also**
+
+`discount_limits` is world-readable so the fee panel can tell a counsellor their
+ceiling *before* they type a number; only `settings.manage` can change it, which
+`tests/rls.spec.ts` now proves — including that a centre head who can approve a
+discount still cannot raise the limit.

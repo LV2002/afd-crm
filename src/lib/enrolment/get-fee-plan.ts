@@ -3,7 +3,7 @@ import "server-only";
 import { and, asc, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
-import { enrolmentInstalments, enrolments } from "@/lib/db/schema";
+import { enrolmentInstalments, enrolments, profiles } from "@/lib/db/schema";
 
 import type { FeePlanValues } from "@/components/enrolment/fee-plan-panel";
 
@@ -13,10 +13,19 @@ function paiseToInput(paise: number | null): string {
   return (paise / 100).toFixed(paise % 100 === 0 ? 0 : 2);
 }
 
+/** A discount asked for and not yet settled. Null when there is nothing outstanding. */
+export interface PendingDiscountInfo {
+  paise: number;
+  requestedBy: string | null;
+  requestedAt: string | null;
+}
+
 export interface LeadFeePlan {
   hasEnrolment: boolean;
   enrolmentId: string | null;
   values: FeePlanValues;
+  totalFeePaise: number;
+  pendingDiscount: PendingDiscountInfo | null;
 }
 
 const EMPTY: FeePlanValues = {
@@ -37,11 +46,33 @@ export async function getLeadFeePlan(leadId: string): Promise<LeadFeePlan> {
       discountName: enrolments.discountName,
       downPaymentPaise: enrolments.downPaymentPaise,
       feeNotes: enrolments.feeNotes,
+      pendingDiscountPaise: enrolments.pendingDiscountPaise,
+      pendingDiscountBy: enrolments.pendingDiscountBy,
+      pendingDiscountAt: enrolments.pendingDiscountAt,
     })
     .from(enrolments)
     .where(and(eq(enrolments.leadId, leadId), isNull(enrolments.deletedAt)));
 
-  if (!enrolment) return { hasEnrolment: false, enrolmentId: null, values: EMPTY };
+  if (!enrolment) {
+    return {
+      hasEnrolment: false,
+      enrolmentId: null,
+      values: EMPTY,
+      totalFeePaise: 0,
+      pendingDiscount: null,
+    };
+  }
+
+  // The requester's name, so the banner says who agreed the figure with
+  // the student rather than leaving an approver to go and find out.
+  const requester = enrolment.pendingDiscountBy
+    ? (
+        await db
+          .select({ fullName: profiles.fullName })
+          .from(profiles)
+          .where(eq(profiles.id, enrolment.pendingDiscountBy))
+      )[0]
+    : undefined;
 
   const instalments = await db
     .select({
@@ -56,6 +87,15 @@ export async function getLeadFeePlan(leadId: string): Promise<LeadFeePlan> {
   return {
     hasEnrolment: true,
     enrolmentId: enrolment.id,
+    totalFeePaise: enrolment.totalFeePaise,
+    pendingDiscount:
+      enrolment.pendingDiscountPaise === null
+        ? null
+        : {
+            paise: enrolment.pendingDiscountPaise,
+            requestedBy: requester?.fullName ?? null,
+            requestedAt: enrolment.pendingDiscountAt?.toISOString() ?? null,
+          },
     values: {
       courseFee: paiseToInput(enrolment.totalFeePaise),
       discount: paiseToInput(enrolment.discountPaise),

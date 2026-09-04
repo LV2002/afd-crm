@@ -17,6 +17,7 @@ import { formatINR } from "@/lib/format/currency";
 import { createClient } from "@/lib/supabase/server";
 import { SignedAgreementPanel } from "@/components/files/signed-agreement-panel";
 import { FeePlanPanel } from "@/components/enrolment/fee-plan-panel";
+import { PendingDiscount } from "@/components/enrolment/pending-discount";
 import { ProfileFormPanel } from "@/components/profile-form/profile-form-panel";
 import { listAttachments } from "@/lib/storage/attachments";
 import { currentSignedAgreement, otherDocuments } from "@/lib/storage/shared";
@@ -249,6 +250,21 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       {canReadFees && feePlan && (
         <div className="flex flex-col gap-3">
           <h2 className="text-lg font-semibold">Fees &amp; instalment agreement</h2>
+          {/*
+            Above the form, not inside it: an outstanding discount changes
+            what the numbers underneath mean, and the counsellor who asked
+            needs to see it is still unanswered.
+          */}
+          {feePlan.pendingDiscount && feePlan.enrolmentId && (
+            <PendingDiscount
+              enrolmentId={feePlan.enrolmentId}
+              pendingPaise={feePlan.pendingDiscount.paise}
+              requestedBy={feePlan.pendingDiscount.requestedBy}
+              requestedAt={feePlan.pendingDiscount.requestedAt}
+              totalFeePaise={feePlan.totalFeePaise}
+              canDecide={can(user, "discount.approve")}
+            />
+          )}
           <FeePlanPanel
             leadId={id}
             values={feePlan.values}

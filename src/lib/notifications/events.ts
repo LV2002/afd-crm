@@ -129,6 +129,33 @@ export const NOTIFICATION_EVENTS = [
     defaultNotifyRoleCodes: [],
   },
   {
+    key: "discount.approval_requested",
+    label: "Discount needs approval",
+    description:
+      "Somebody agreed a discount larger than their role allows. Until it is approved the student owes the full fee, so this is worth answering the same day.",
+    category: "Money",
+    variables: ["lead_name", "amount", "percent", "requested_by"],
+    defaultTitle: "Discount to approve: {{lead_name}}",
+    defaultBody:
+      "{{requested_by}} agreed {{amount}} off ({{percent}}%) for {{lead_name}}. It is not applied until you approve it.",
+    // The person who asked is told by the screen they asked on, and notify()
+    // never tells somebody about their own action anyway.
+    defaultNotifyOwner: false,
+    defaultNotifyRoleCodes: ["center_head", "admin"],
+  },
+  {
+    key: "discount.decided",
+    label: "Discount approved or rejected",
+    description:
+      "Somebody settled a discount request. The counsellor who agreed it with the student is the one who has to go back to them either way.",
+    category: "Money",
+    variables: ["lead_name", "amount", "decision", "decided_by", "note"],
+    defaultTitle: "Discount {{decision}}: {{lead_name}}",
+    defaultBody: "{{decided_by}} {{decision}} the {{amount}} discount for {{lead_name}}. {{note}}",
+    defaultNotifyOwner: true,
+    defaultNotifyRoleCodes: [],
+  },
+  {
     key: "payment.recorded",
     label: "Payment recorded",
     description:

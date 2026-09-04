@@ -18,7 +18,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { idColumn, softDelete, timestamps } from "./_helpers";
-import { profiles } from "./auth";
+import { profiles, roles } from "./auth";
 import { centers } from "./org";
 import { leads } from "./leads";
 
@@ -100,6 +100,28 @@ export const enrolments = pgTable("enrolments", {
    * instalment agreement, so it has to say what was actually agreed.
    */
   discountName: text("discount_name"),
+  /**
+   * A discount somebody asked for but is not authorised to give.
+   *
+   * Deliberately NOT applied to `net_fee_paise` while it sits here. An
+   * unauthorised discount that is already reducing the bill is one nobody
+   * has to hurry to approve — and if it is never approved, accounts have
+   * spent weeks collecting against a number that was never agreed. So the
+   * student owes the full fee until somebody with the authority says
+   * otherwise, and the fee panel says so in as many words.
+   *
+   * Null means there is nothing outstanding: either the discount given was
+   * within the giver's own limit, or it was approved and moved into
+   * `discount_paise`, or it was rejected.
+   */
+  pendingDiscountPaise: bigint("pending_discount_paise", { mode: "number" }),
+  pendingDiscountName: text("pending_discount_name"),
+  pendingDiscountBy: uuid("pending_discount_by").references(() => profiles.id, { onDelete: "set null" }),
+  pendingDiscountAt: timestamp("pending_discount_at", { withTimezone: true }),
+  /** Who settled the last request, and what they said. Kept after the fact. */
+  discountDecidedBy: uuid("discount_decided_by").references(() => profiles.id, { onDelete: "set null" }),
+  discountDecidedAt: timestamp("discount_decided_at", { withTimezone: true }),
+  discountDecisionNote: text("discount_decision_note"),
   netFeePaise: bigint("net_fee_paise", { mode: "number" }).notNull(),
   /**
    * The amount taken at the point of joining, before the instalment
@@ -313,3 +335,39 @@ export const enrolmentInstalments = pgTable(
     check("enrolment_instalments_amount_positive", sql`amount_paise > 0`),
   ],
 );
+
+/**
+ * How big a discount each role may give without asking anyone.
+ *
+ * CLAUDE.md lists "discount authority limits" among the things an admin
+ * changes at runtime, and roles are editable rows, so this is a table
+ * keyed by role rather than a constant keyed by role code. A new role
+ * created next year gets a limit the same way it gets permissions.
+ *
+ * Two limits, and a discount must satisfy BOTH that are set. A percentage
+ * alone lets 10% off a ₹2,00,000 consultancy through unnoticed; a cash cap
+ * alone makes ₹5,000 look reasonable on a ₹15,000 crash course. Institutes
+ * that only care about one leave the other null.
+ *
+ * NO ROW MEANS NO AUTHORITY. Failing closed is the whole point of the
+ * feature: a role nobody has thought about yet cannot quietly give money
+ * away, and the seed sets deliberate starting figures for the six shipped
+ * roles so nothing is a surprise on day one.
+ */
+export const discountLimits = pgTable("discount_limits", {
+  id: idColumn(),
+  roleId: uuid("role_id")
+    .notNull()
+    .unique()
+    .references(() => roles.id, { onDelete: "cascade" }),
+  /** 0-100. Null means percentage is not the constraint for this role. */
+  maxPercent: integer("max_percent"),
+  /** Null means no cash ceiling for this role. */
+  maxAmountPaise: bigint("max_amount_paise", { mode: "number" }),
+  /**
+   * Bypasses both limits. For admin and co-admin, who would otherwise be
+   * unable to approve the very requests that were escalated to them.
+   */
+  isUnlimited: boolean("is_unlimited").notNull().default(false),
+  ...timestamps(),
+});

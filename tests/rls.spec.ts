@@ -877,6 +877,91 @@ describe("whatsapp_messages is scoped by whatsapp.read/whatsapp.send, not lead.r
   });
 });
 
+describe("discount_limits: readable by everyone, changeable only by settings.manage", () => {
+  // Configuration, same shape as fee_structures. The read has to be open
+  // because the fee panel tells a counsellor their own ceiling BEFORE they
+  // type a number — and a counsellor holds no settings permission at all.
+  let counsellorRoleId: string;
+
+  beforeAll(async () => {
+    const [role] = await owner<Array<{ id: string }>>`
+      select id from roles where code = 'counsellor'
+    `;
+    counsellorRoleId = role.id;
+  });
+
+  it("a counsellor can read the limits, including their own", async () => {
+    const rows = await asUser(fx.counsellor_kochi, (tx) =>
+      tx<Array<{ max_percent: number | null }>>`
+        select max_percent from discount_limits where role_id = ${counsellorRoleId}
+      `,
+    );
+    expect(rows.length).toBe(1);
+  });
+
+  it("a counsellor CANNOT raise their own limit", async () => {
+    // The obvious attack on the whole feature.
+    await asUser(fx.counsellor_kochi, async (tx) => {
+      const updated = await tx`
+        update discount_limits set max_percent = 100 where role_id = ${counsellorRoleId} returning id
+      `;
+      expect(updated).toHaveLength(0);
+    });
+  });
+
+  it("a centre head cannot either — approving is not the same as setting the ceiling", async () => {
+    // center_head holds discount.approve but not settings.manage.
+    await asUser(fx.centerhead_kochi, async (tx) => {
+      const updated = await tx`
+        update discount_limits set is_unlimited = true where role_id = ${counsellorRoleId} returning id
+      `;
+      expect(updated).toHaveLength(0);
+    });
+  });
+
+  it("an admin can", async () => {
+    await asUser(fx.admin_a, async (tx) => {
+      const updated = await tx`
+        update discount_limits set max_percent = 15 where role_id = ${counsellorRoleId} returning id
+      `;
+      expect(updated).toHaveLength(1);
+    });
+  });
+
+  it("refuses a percentage outside 0-100", async () => {
+    await expect(
+      owner`update discount_limits set max_percent = 150 where role_id = ${counsellorRoleId}`,
+    ).rejects.toThrow(/discount_limits_percent_range/);
+  });
+
+  it("refuses a negative cash limit", async () => {
+    await expect(
+      owner`update discount_limits set max_amount_paise = -1 where role_id = ${counsellorRoleId}`,
+    ).rejects.toThrow(/discount_limits_amount_non_negative/);
+  });
+
+  it("refuses a negative pending discount on an enrolment", async () => {
+    const [lead] = await owner<Array<{ id: string }>>`
+      insert into leads (student_name, primary_phone, center_id)
+      values ('RlsSpecTest discount lead', '+919847100499', ${centerIds.kochi})
+      returning id
+    `;
+    const [enrolment] = await owner<Array<{ id: string }>>`
+      insert into enrolments (lead_id, center_id, course, mode, academic_year, total_fee_paise, net_fee_paise)
+      values (${lead.id}, ${centerIds.kochi}, 'Foundation', 'offline', '2026-27', 5000000, 5000000)
+      returning id
+    `;
+    try {
+      await expect(
+        owner`update enrolments set pending_discount_paise = -100 where id = ${enrolment.id}`,
+      ).rejects.toThrow(/enrolments_pending_discount_non_negative/);
+    } finally {
+      await owner`delete from enrolments where id = ${enrolment.id}`;
+      await owner`delete from leads where id = ${lead.id}`;
+    }
+  });
+});
+
 describe("attachments are scoped by their PARENT lead/student, via file.* primitives", () => {
   let fileLeadId: string;
   let fileAttachmentId: string;

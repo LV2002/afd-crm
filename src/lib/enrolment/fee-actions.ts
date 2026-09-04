@@ -7,8 +7,12 @@ import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { enrolmentInstalments, enrolments, leads } from "@/lib/db/schema";
+import { formatINR } from "@/lib/format/currency";
+import { notify } from "@/lib/notifications/notify";
 import { createClient } from "@/lib/supabase/server";
 
+import { discountPercent, resolveDiscount } from "./discount-authority";
+import { getDiscountLimit } from "./get-discount-limit";
 import {
   INSTALMENT_SLOTS,
   rupeesToPaise,
@@ -45,7 +49,12 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
   if (typeof leadId !== "string") return { error: "Missing lead reference." };
 
   const [lead] = await db
-    .select({ id: leads.id, centerId: leads.centerId, assignedTo: leads.assignedTo })
+    .select({
+      id: leads.id,
+      studentName: leads.studentName,
+      centerId: leads.centerId,
+      assignedTo: leads.assignedTo,
+    })
     .from(leads)
     .where(and(eq(leads.id, leadId), isNull(leads.deletedAt)));
   if (!lead) return { error: "Lead not found." };
@@ -61,7 +70,7 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
   }
 
   const [enrolment] = await db
-    .select({ id: enrolments.id })
+    .select({ id: enrolments.id, discountPaise: enrolments.discountPaise })
     .from(enrolments)
     .where(and(eq(enrolments.leadId, leadId), isNull(enrolments.deletedAt)));
   if (!enrolment) {
@@ -102,15 +111,45 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
   const problems = validatePlan(totalFeePaise, discountPaise, instalments);
   if (problems.length > 0) return { error: problems[0] };
 
+  // What this person may actually give. A discount above their ceiling is
+  // recorded as a request and NOT applied — see discount-authority.ts for
+  // why an unapproved discount must not already be reducing the bill.
+  // `enrolment.discountPaise` is what was previously granted, which is
+  // what stops the obvious way round: approve ₹5,000, then edit it to
+  // ₹25,000.
+  const outcome = resolveDiscount({
+    limit: await getDiscountLimit(user),
+    totalFeePaise,
+    requestedPaise: discountPaise,
+    alreadyApprovedPaise: enrolment.discountPaise,
+  });
+
+  // The instalments were validated against the figure the counsellor
+  // typed. If it is not being applied, they add up to less than the
+  // student now owes, so say so rather than writing a schedule that is
+  // quietly short.
+  if (outcome.needsApproval && instalments.length > 0) {
+    const scheduled = instalments.reduce((sum, i) => sum + i.amountPaise, 0);
+    if (scheduled < totalFeePaise - outcome.appliedDiscountPaise) {
+      return {
+        error: `${outcome.reason} Save the plan without the discount for now, or with instalments totalling the full fee — the discount can be applied once it is approved.`,
+      };
+    }
+  }
+
   await db.transaction(async (tx) => {
     await tx
       .update(enrolments)
       .set({
         totalFeePaise,
-        discountPaise,
+        discountPaise: outcome.appliedDiscountPaise,
         discountName,
         downPaymentPaise,
-        netFeePaise: totalFeePaise - discountPaise,
+        netFeePaise: totalFeePaise - outcome.appliedDiscountPaise,
+        pendingDiscountPaise: outcome.pendingDiscountPaise,
+        pendingDiscountName: outcome.pendingDiscountPaise === null ? null : discountName,
+        pendingDiscountBy: outcome.pendingDiscountPaise === null ? null : user.id,
+        pendingDiscountAt: outcome.pendingDiscountPaise === null ? null : new Date(),
         feeNotes,
         updatedAt: new Date(),
       })
@@ -135,9 +174,42 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
     action: "enrolment.fee_plan",
     entityType: "enrolments",
     entityId: enrolment.id,
-    after: { totalFeePaise, discountPaise, discountName, downPaymentPaise, instalments, feeNotes },
+    after: {
+      totalFeePaise,
+      discountRequestedPaise: discountPaise,
+      discountAppliedPaise: outcome.appliedDiscountPaise,
+      discountPendingPaise: outcome.pendingDiscountPaise,
+      discountName,
+      downPaymentPaise,
+      instalments,
+      feeNotes,
+    },
   });
 
+  if (outcome.needsApproval) {
+    // Somebody has to answer this, and nobody would find it otherwise —
+    // an unapproved discount is invisible unless you open the lead.
+    await notify({
+      eventKey: "discount.approval_requested",
+      context: {
+        lead_name: lead.studentName,
+        amount: formatINR(outcome.pendingDiscountPaise ?? 0),
+        percent: String(discountPercent(totalFeePaise, outcome.pendingDiscountPaise ?? 0)),
+        requested_by: user.fullName,
+      },
+      href: `/leads/${leadId}`,
+      entityType: "enrolments",
+      entityId: enrolment.id,
+      centerId: lead.centerId,
+      ownerId: lead.assignedTo,
+      actorId: user.id,
+    });
+  }
+
   revalidatePath(`/leads/${leadId}`);
-  return { success: "Fee plan saved." };
+  return outcome.needsApproval
+    ? {
+        success: `Fee plan saved. ${outcome.reason} The student owes the full fee until it is approved.`,
+      }
+    : { success: "Fee plan saved." };
 }
