@@ -107,6 +107,15 @@ export default async function AccountsQueuePage({
           whether the fee has actually been collected — recording the first payment creates the
           student record and hands them on to academics.
         </p>
+        {/*
+          The drop control lives on the individual admission, next to the
+          payment form, because it needs a reason typed in. Saying so here
+          saves hunting for it on a list that deliberately doesn't carry
+          per-row actions.
+        */}
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Open a student to record a payment, or to mark them as dropped if they leave.
+        </p>
       </div>
 
       <div className="flex items-center gap-2 text-sm">
