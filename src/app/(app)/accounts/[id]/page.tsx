@@ -10,6 +10,7 @@ import { maskPhone } from "@/lib/leads/mask-phone";
 import { createClient } from "@/lib/supabase/server";
 
 import { RevealPhoneButton } from "../../leads/reveal-phone-button";
+import { AgreedPlan } from "@/components/enrolment/agreed-plan";
 import { getAccounts } from "@/lib/finance/get-finance";
 
 import { RecordPaymentForm } from "./record-payment-form";
@@ -22,6 +23,9 @@ interface EnrolmentDetail {
   academic_year: string;
   total_fee_paise: number;
   discount_paise: number;
+  discount_name: string | null;
+  down_payment_paise: number;
+  fee_notes: string | null;
   net_fee_paise: number;
   status: string;
   enrolled_at: string;
@@ -52,7 +56,7 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
   const { data: enrolment } = await supabase
     .from("enrolments")
     .select(
-      "id, lead_id, course, mode, academic_year, total_fee_paise, discount_paise, net_fee_paise, status, enrolled_at, sales_to_accounts_at, accounts_to_academics_at, student_id, leads(student_name, primary_phone), centers(name)",
+      "id, lead_id, course, mode, academic_year, total_fee_paise, discount_paise, discount_name, down_payment_paise, fee_notes, net_fee_paise, status, enrolled_at, sales_to_accounts_at, accounts_to_academics_at, student_id, leads(student_name, primary_phone), centers(name)",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -64,6 +68,17 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
   // accounts; if a role somehow does not, RLS returns nothing and the
   // picker simply does not render.
   const financeAccounts = (await getAccounts(supabase)).map((a) => ({ id: a.id, name: a.name }));
+
+  // The schedule the counsellor agreed. Accounts needs it to answer the
+  // one question this screen exists for — has the fee been collected? —
+  // and it lived only on the lead's page, which they have no reason to
+  // open.
+  const { data: instalmentRows } = await supabase
+    .from("enrolment_instalments")
+    .select("id, sequence, due_date, amount_paise")
+    .eq("enrolment_id", id)
+    .order("sequence")
+    .returns<Array<{ id: string; sequence: number; due_date: string; amount_paise: number }>>();
 
   const [{ data: paymentRows }, { data: receiptRows }] = await Promise.all([
     supabase
@@ -127,6 +142,29 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
               {enrolment.accounts_to_academics_at ? formatDateIST(enrolment.accounts_to_academics_at, "d MMM yyyy") : "—"}
             </Field>
           </div>
+
+          <AgreedPlan
+            totalFeePaise={enrolment.total_fee_paise}
+            discountPaise={enrolment.discount_paise}
+            discountName={enrolment.discount_name}
+            downPaymentPaise={enrolment.down_payment_paise}
+            netFeePaise={enrolment.net_fee_paise}
+            feeNotes={enrolment.fee_notes}
+            instalments={(instalmentRows ?? []).map((row) => ({
+              id: row.id,
+              sequence: row.sequence,
+              dueDate: row.due_date,
+              amountPaise: row.amount_paise,
+            }))}
+            payments={payments.map((p) => ({
+              id: p.id,
+              receivedOn: p.received_at.slice(0, 10),
+              // A debit is a reversal or refund, so it reduces what has
+              // been received and un-settles the instalment it covered.
+              amountPaise: p.direction === "credit" ? p.amount_paise : -p.amount_paise,
+            }))}
+            asOf={new Date().toISOString().slice(0, 10)}
+          />
 
           <div>
             <h2 className="mb-2 text-lg font-semibold">Payment ledger</h2>

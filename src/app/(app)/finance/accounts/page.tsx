@@ -47,7 +47,7 @@ export default async function FinanceAccountsPage() {
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Accounts
+          Bank &amp; cash accounts
         </h2>
         {accounts.length === 0 ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">

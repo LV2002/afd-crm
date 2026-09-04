@@ -69,7 +69,11 @@ export default async function StudentsPage({
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold">Students</h1>
-        <p className="text-sm text-muted-foreground">{(rows ?? []).length} student(s).</p>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          {(rows ?? []).length} student(s). A student appears here the moment accounts records
+          their first fee payment — before that they are still a lead, and there is no student
+          record to see.
+        </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

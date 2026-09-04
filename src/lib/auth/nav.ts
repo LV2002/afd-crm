@@ -55,7 +55,15 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     label: { term: "lead", form: "plural" },
   },
   { href: "/pipeline", iconKey: "pipeline", permission: "lead.read", label: "Pipeline" },
-  { href: "/accounts", iconKey: "accounts", permission: "payment.read", label: "Accounts" },
+  {
+    // "Admissions", not "Accounts": this is the per-student fee-collection
+    // queue, and the moment a Finance section existed the old name read as
+    // "the accounting area" — which is the other one.
+    href: "/accounts",
+    iconKey: "accounts",
+    permission: "payment.read",
+    label: "Admissions",
+  },
   { href: "/students", iconKey: "students", permission: "student.read", label: "Students" },
   {
     // The institute's own money. Gated on finance.read, which a counsellor
