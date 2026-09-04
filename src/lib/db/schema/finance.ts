@@ -111,6 +111,26 @@ export const enrolments = pgTable("enrolments", {
   /** Anything the counsellor needs on the record — prints on the agreement. */
   feeNotes: text("fee_notes"),
   status: enrolmentStatusEnum("status").notNull().default("pending_payment"),
+  /**
+   * The student left the course.
+   *
+   * A timestamp rather than a fifth `enrolment_status` value, because it
+   * is orthogonal to the other four: someone can drop having paid in full
+   * (`active`) or having paid nothing (`pending_payment`), and collapsing
+   * the two would lose which. Same shape as `leads.lost_at` and the
+   * derived "reversed" on `finance_transactions` — the state is
+   * `dropped_at is not null`, and there is no second column that can
+   * disagree with it.
+   *
+   * Money already received is NOT undone by this. The payments ledger is
+   * append-only and a fee that was collected was collected; a refund is
+   * its own reversal entry. What a drop does change is what is still
+   * chased (nothing) and what counts as a conversion (it doesn't).
+   */
+  droppedAt: timestamp("dropped_at", { withTimezone: true }),
+  droppedBy: uuid("dropped_by").references(() => profiles.id, { onDelete: "set null" }),
+  /** Why they left, in the words of whoever recorded it. Read by three departments, so it is never optional in the UI. */
+  dropReason: text("drop_reason"),
   enrolledAt: timestamp("enrolled_at", { withTimezone: true }).notNull().defaultNow(),
   salesToAccountsAt: timestamp("sales_to_accounts_at", { withTimezone: true }),
   salesToAccountsBy: uuid("sales_to_accounts_by").references(() => profiles.id, { onDelete: "set null" }),

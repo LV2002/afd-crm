@@ -184,7 +184,7 @@ describe("summarise", () => {
       lead("c", "stage-new", {}),
       lead("d", null, {}),
     ];
-    expect(summarise(leads, STAGE_TYPES)).toEqual({ total: 4, won: 1, lost: 1 });
+    expect(summarise(leads, STAGE_TYPES)).toEqual({ total: 4, won: 1, lost: 1, dropped: 0 });
   });
 });
 
@@ -257,5 +257,50 @@ describe("groupLeads", () => {
     );
     expect(rows[0].label).toBe("Kochi");
     expect(rows[0].bucket).toBe("uuid-1");
+  });
+});
+
+/**
+ * A student who dropped out is still sitting in the Admission Confirmed
+ * stage, so without this they go on counting as a conversion for as long
+ * as the record exists — which is exactly what Leon asked to stop.
+ */
+describe("dropped students", () => {
+  const leads = [
+    lead("a", "stage-won", { lead_source: "Meta" }),
+    lead("b", "stage-won", { lead_source: "Meta" }),
+    lead("c", "stage-lost", { lead_source: "Walk-in" }),
+  ];
+  const dropped = new Set(["b"]);
+
+  it("stops counting a dropped student as won, without hiding the lead", () => {
+    expect(summarise(leads, STAGE_TYPES, dropped)).toEqual({
+      total: 3,
+      won: 1,
+      lost: 1,
+      dropped: 1,
+    });
+  });
+
+  // Won and then undone is neither a win nor a loss — calling it lost
+  // would flatter the lost-reason reports with a reason nobody gave.
+  it("does not turn a drop into a loss", () => {
+    const bothWon = [lead("a", "stage-won", {}), lead("b", "stage-won", {})];
+    expect(summarise(bothWon, STAGE_TYPES, new Set(["b"]))).toEqual({
+      total: 2,
+      won: 1,
+      lost: 0,
+      dropped: 1,
+    });
+  });
+
+  it("carries the drop into the breakdown rows", () => {
+    const rows = groupLeads(leads, SOURCE, STAGE_TYPES, new Map(), dropped);
+    const meta = rows.find((row) => row.label === "Meta");
+    expect(meta).toMatchObject({ total: 2, won: 1, dropped: 1 });
+  });
+
+  it("counts everything the old way when nothing has been dropped", () => {
+    expect(summarise(leads, STAGE_TYPES)).toEqual({ total: 3, won: 2, lost: 1, dropped: 0 });
   });
 });

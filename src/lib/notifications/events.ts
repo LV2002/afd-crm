@@ -92,6 +92,20 @@ export const NOTIFICATION_EVENTS = [
     defaultNotifyRoleCodes: ["accounts", "center_head"],
   },
   {
+    key: "admission.dropped",
+    label: "Admission dropped",
+    description:
+      "A student left the course. Sales stop counting it as a conversion, accounts stop chasing the fee, academics take them off the register.",
+    category: "Admissions",
+    variables: ["student_name", "course", "reason", "recorded_by", "center_name"],
+    defaultTitle: "Dropped: {{student_name}}",
+    defaultBody: "{{student_name}} has dropped {{course}}. Reason given: {{reason}}.",
+    // The counsellor who sold it is the one person who will be asked
+    // about it, so they hear by default even though they can't record it.
+    defaultNotifyOwner: true,
+    defaultNotifyRoleCodes: ["accounts", "center_head", "academics"],
+  },
+  {
     key: "profile_form.submitted",
     label: "Student profile form submitted",
     description: "A student filled in the profile form their counsellor sent them.",

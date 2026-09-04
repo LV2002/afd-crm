@@ -143,6 +143,19 @@ export const PERMISSIONS = [
     category: "Enrolment",
     description: "Edit an enrolment's course, batch or fee plan.",
   },
+  // Deliberately separate from enrolment.update. Marking an admission
+  // dropped removes it from the conversion numbers and stops the fee
+  // being chased, so it is not the same authority as correcting a fee.
+  // Not granted to counsellors out of the box — a counsellor should not
+  // be able to quietly retire their own conversion — but roles are
+  // ordinary editable rows, so an institute that disagrees can change it.
+  {
+    code: "enrolment.drop",
+    label: "Mark admissions dropped",
+    category: "Enrolment",
+    description:
+      "Record that a student left the course, and restore one marked dropped by mistake.",
+  },
 
   // Payments
   {

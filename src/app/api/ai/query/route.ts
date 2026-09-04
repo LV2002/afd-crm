@@ -144,10 +144,26 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof GeminiError) {
+      // Both of these mean every model the key can reach was busy or out
+      // of quota — generateWithTools() has already stepped down through
+      // them. Nothing here is worth an operator's attention, so say what
+      // a counsellor should actually do.
       if (error.status === 429) {
         return NextResponse.json(
-          { error: "The free Gemini quota is used up for now. Try again in a few minutes." },
+          {
+            error:
+              "Every free Gemini model this key can use is out of quota for now. The free tier resets daily; try again in a few minutes, or later today.",
+          },
           { status: 429 },
+        );
+      }
+      if (error.status === 503 || error.status === 500 || error.status === 502) {
+        return NextResponse.json(
+          {
+            error:
+              "Google's free models are all busy right now. This clears on its own — try the question again in a minute.",
+          },
+          { status: 503 },
         );
       }
       if (error.status === 400 || error.status === 403) {

@@ -162,6 +162,7 @@ const ROLE_SEEDS: RoleSeed[] = [
           "enrolment.read",
           "enrolment.create",
           "enrolment.update",
+          "enrolment.drop",
           "payment.read",
           "discount.approve",
           // Leon's requirement: a centre head sees their own centre's
@@ -231,6 +232,7 @@ const ROLE_SEEDS: RoleSeed[] = [
           "finance.record",
           "finance.manage",
           "enrolment.read",
+          "enrolment.drop",
           "student.read",
           "report.read",
           "report.center",

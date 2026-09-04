@@ -1,4 +1,4 @@
-import { and, eq, getTableColumns, gte, inArray, isNull, lte } from "drizzle-orm";
+import { and, eq, getTableColumns, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { DatabaseZap } from "lucide-react";
 
@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db, isDatabaseUnreachable, isDeadlineExceeded, withDeadline } from "@/lib/db/client";
-import { centers, leads, pipelineStages, profiles } from "@/lib/db/schema";
+import { centers, enrolments, leads, pipelineStages, profiles } from "@/lib/db/schema";
 import { fieldColumn } from "@/lib/fields/field-column";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import { OPTION_BEARING_TYPES, resolveFieldOptions, type FieldOption } from "@/lib/fields/resolve-field-options";
@@ -240,7 +240,7 @@ export default async function InsightsPage({
   if (needsCustom) selection.custom = leads.custom;
 
   let leadRows: Array<Record<string, unknown>>;
-  let stageRows, centerRows, profileRows;
+  let stageRows, centerRows, profileRows, droppedRows;
   try {
     leadRows = (await timedQuery("leads", () =>
       db
@@ -258,6 +258,15 @@ export default async function InsightsPage({
     );
     profileRows = await timedQuery("profiles", () =>
       db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles),
+    );
+    // Lead ids only — no name, no fee, nothing this page couldn't already
+    // count. Without it a student who left goes on counting as a
+    // conversion for as long as the record exists.
+    droppedRows = await timedQuery("dropped", () =>
+      db
+        .select({ leadId: enrolments.leadId })
+        .from(enrolments)
+        .where(and(isNotNull(enrolments.droppedAt), isNull(enrolments.deletedAt))),
     );
   } catch (error) {
     // Order matters: a deadline error also carries ETIMEDOUT, so check the
@@ -309,9 +318,16 @@ export default async function InsightsPage({
   });
 
   const stageTypeById = new Map(stageRows.map((s) => [s.id, s.stageType]));
+  const droppedLeadIds = new Set(droppedRows.map((row) => row.leadId));
   const filtered = applyPivotFilters(pivotLeads, dimensions, filters);
-  const totals = summarise(filtered, stageTypeById);
-  const rows = groupLeads(filtered, groupBy, stageTypeById, labelsFor(groupBy.key));
+  const totals = summarise(filtered, stageTypeById, droppedLeadIds);
+  const rows = groupLeads(
+    filtered,
+    groupBy,
+    stageTypeById,
+    labelsFor(groupBy.key),
+    droppedLeadIds,
+  );
   const funnel = aggregateFunnel(
     filtered.map((lead) => ({
       id: lead.id,
@@ -347,15 +363,24 @@ export default async function InsightsPage({
         activeCount={activeFilterCount}
       />
 
-      <section className="grid gap-4 sm:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-5">
         <Stat label="Leads in view" value={String(totals.total)} />
         <Stat label="Won" value={String(totals.won)} />
         <Stat label="Lost" value={String(totals.lost)} />
+        <Stat label="Dropped" value={String(totals.dropped)} />
         <Stat
           label="Conversion"
           value={totals.total > 0 ? `${((totals.won / totals.total) * 100).toFixed(0)}%` : "—"}
         />
       </section>
+
+      {totals.dropped > 0 && (
+        <p className="-mt-4 text-xs text-muted-foreground">
+          {totals.dropped} student{totals.dropped === 1 ? " has" : "s have"} dropped out. They are
+          still counted as leads that came in, but they are no longer counted as conversions — so
+          the conversion rate here is what actually stuck.
+        </p>
+      )}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-medium">By {groupBy.label.toLowerCase()}</h2>
@@ -384,6 +409,7 @@ export default async function InsightsPage({
                   <TableHead className="text-right">Leads</TableHead>
                   <TableHead className="text-right">Won</TableHead>
                   <TableHead className="text-right">Lost</TableHead>
+                  <TableHead className="text-right">Dropped</TableHead>
                   <TableHead className="text-right">Conversion</TableHead>
                   <TableHead className="text-right">Share</TableHead>
                 </TableRow>
@@ -395,6 +421,7 @@ export default async function InsightsPage({
                     <TableCell className="text-right">{row.total}</TableCell>
                     <TableCell className="text-right">{row.won}</TableCell>
                     <TableCell className="text-right">{row.lost}</TableCell>
+                    <TableCell className="text-right">{row.dropped}</TableCell>
                     <TableCell className="text-right">
                       {row.total > 0 ? `${((row.won / row.total) * 100).toFixed(0)}%` : "—"}
                     </TableCell>

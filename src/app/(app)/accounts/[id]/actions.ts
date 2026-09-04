@@ -9,6 +9,7 @@ import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { enrolments, leads } from "@/lib/db/schema";
 import { formatINR, parseRupeesToPaise } from "@/lib/format/currency";
+import { dropAdmission, restoreAdmission } from "@/lib/enrolment/drop-admission";
 import { recordPayment } from "@/lib/enrolment/record-payment";
 import { createClient } from "@/lib/supabase/server";
 
@@ -128,5 +129,107 @@ export async function recordPaymentAction(
     success: result.isFirstPayment
       ? `Payment recorded (receipt #${result.receiptNo}). Student record created.`
       : `Payment recorded (receipt #${result.receiptNo}).`,
+  };
+}
+
+/**
+ * Marks an admission dropped, or restores one marked by mistake.
+ *
+ * Same enforcement shape as recordPaymentAction above, for the same
+ * reason: dropAdmission() writes across `enrolments` and `students` on the
+ * direct db client (see its own doc comment), so this action is where the
+ * permission and the own/center/all scope are actually checked — against
+ * the enrolment's centre, or the underlying lead's owner at 'own' scope.
+ *
+ * `enrolment.drop` rather than `enrolment.update`: retiring a conversion
+ * and calling off a fee chase is not the same authority as correcting a
+ * fee, and the seeded counsellor role deliberately doesn't hold it.
+ */
+export async function dropAdmissionAction(
+  enrolmentId: string,
+  _prevState: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "enrolment.drop")) {
+    return { error: "You don't have permission to mark an admission dropped." };
+  }
+  const scope = scopeFor(user, "enrolment.drop");
+  if (!scope) {
+    return { error: "You don't have permission to mark an admission dropped." };
+  }
+
+  const restore = formData.get("intent") === "restore";
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!restore && !reason) {
+    return { error: "Say why they left — three departments read this." };
+  }
+
+  const [enrolment] = await db.select().from(enrolments).where(eq(enrolments.id, enrolmentId));
+  if (!enrolment || enrolment.deletedAt) {
+    return { error: "This enrolment no longer exists." };
+  }
+  if (scope === "center" && !user.centerIds.includes(enrolment.centerId)) {
+    return { error: "This enrolment is outside your access." };
+  }
+  if (scope === "own") {
+    const [lead] = await db.select().from(leads).where(eq(leads.id, enrolment.leadId));
+    if (!lead || lead.assignedTo !== user.id) {
+      return { error: "This enrolment is outside your access." };
+    }
+  }
+
+  let result;
+  try {
+    result = await db.transaction((tx) =>
+      restore
+        ? restoreAdmission(tx, { enrolmentId })
+        : dropAdmission(tx, { enrolmentId, reason, droppedBy: user.id }),
+    );
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not update this admission." };
+  }
+
+  const supabase = await createClient();
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: restore ? "enrolment.restore" : "enrolment.drop",
+    entityType: "enrolments",
+    entityId: enrolmentId,
+    before: { droppedAt: enrolment.droppedAt, dropReason: enrolment.dropReason },
+    after: restore ? { droppedAt: null } : { droppedAt: new Date().toISOString(), reason },
+  });
+
+  const [droppedLead] = await db.select().from(leads).where(eq(leads.id, enrolment.leadId));
+
+  // Only the drop notifies. A restore is a correction — the people who
+  // were told already know, and a second message saying "actually, no"
+  // reads as noise rather than news.
+  if (!restore) {
+    await notify({
+      eventKey: "admission.dropped",
+      context: {
+        student_name: droppedLead?.studentName ?? "Student",
+        course: result.course,
+        reason,
+        recorded_by: user.fullName,
+      },
+      href: `/accounts/${enrolmentId}`,
+      entityType: "enrolments",
+      entityId: enrolmentId,
+      centerId: enrolment.centerId,
+      ownerId: droppedLead?.assignedTo ?? null,
+      actorId: user.id,
+    });
+  }
+
+  revalidatePath(`/accounts/${enrolmentId}`);
+  revalidatePath("/accounts");
+  revalidatePath(`/leads/${enrolment.leadId}`);
+  revalidatePath("/students");
+  return {
+    success: restore
+      ? "Restored. This admission counts again, and the fee is back on the collections list."
+      : "Marked as dropped. Sales, accounts and academics will all see it.",
   };
 }

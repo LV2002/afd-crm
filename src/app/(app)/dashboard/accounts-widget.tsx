@@ -24,6 +24,8 @@ export async function AccountsWidget() {
       .from("enrolments")
       .select("id", { count: "exact", head: true })
       .is("deleted_at", null)
+      // Dropped admissions are nobody's queue — see reports.ts.
+      .is("dropped_at", null)
       .is("accounts_to_academics_at", null),
     supabase
       .from("payments")

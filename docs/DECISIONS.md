@@ -2030,3 +2030,67 @@ Three judgement calls:
   CLAUDE.md non-negotiable #6 exists to prevent. They stay on the expanded row, and are now masked
   there unless the viewer holds `lead.reveal_phone` — which was a real leak: the expanded row had
   been printing all four numbers in full to anyone with `lead.read`.
+
+## 2026-09-04 — "Dropped" is a timestamp on the enrolment, not a status
+
+Leon asked for a way to mark a student dropped so they drop out of reports and show as dropped to
+sales, accounts and admissions.
+
+**Where it lives: `enrolments.dropped_at`**, with `dropped_by` and `drop_reason` — not a fifth
+value on `enrolment_status`. The two are orthogonal: someone can drop having paid in full
+(`active`) or having paid nothing (`pending_payment`), and folding them into one column loses
+which. Same shape as `leads.lost_at` and the derived "reversed" on `finance_transactions`: the
+state is `dropped_at is not null`, and there is no second column that can disagree with it.
+
+It is on the **enrolment**, not the student, because a drop can happen before Gate 2 — admission
+confirmed, never paid, student changes their mind — when no `students` row exists yet. The
+enrolment is the only record that exists across the whole window.
+
+**It is reversible.** The two gates are one-way because they are handoffs; a drop is a fact about
+a person that can be recorded against the wrong one. Restoring puts the student back as `active`
+rather than to whatever they were before — a drop is not meant to be a way to park somebody
+(`on_hold` exists for that), so storing the prior status would be a column serving a workflow the
+system deliberately doesn't have.
+
+**A new permission, `enrolment.drop`.** Retiring a conversion and calling off a fee chase is not
+the same authority as correcting a fee, so it is not folded into `enrolment.update`. Seeded to
+admin, co-admin, centre head and accounts — not counsellors, who should not be able to quietly
+retire their own conversion. Roles are editable rows, so an institute that disagrees changes it in
+Settings.
+
+**Written on the direct db client, in one transaction**, with the permission and own/center/all
+scope re-checked in the Server Action — the same shape as `recordPayment()`/`confirmAdmission()`
+and for the same reason: the write spans `enrolments` and `students`, and the person recording a
+drop is usually accounts, who hold `enrolment.drop` but not `student.update`. Splitting it to
+satisfy RLS would allow an admission that is dropped while the student record still says active.
+
+**What "omitted from reports" turned out to mean**, once each report was looked at:
+
+- **Collections and the ageing buckets**: excluded. You do not chase a leaver.
+- **The finance reports (monthly, yearly, cash flow)**: unchanged. They are the ledger, and a fee
+  that was received was received. A refund is a reversal entry someone decides on; it is not
+  implied by the student leaving.
+- **Insights**: they stop counting as Won and get a Dropped column of their own. Removing them
+  from the lead count altogether would have been the other reading, but it is the wrong one — the
+  lead came in and the work happened, and hiding it would flatter cost-per-lead. Dropped is also
+  not folded into Lost, which would put a reason nobody gave into the lost-reason breakdown.
+- **Dashboard admission counts**: excluded, same reasoning as Collections.
+
+## 2026-09-04 — The AI analyst tries more than one model
+
+Leon: `503 … "This model is currently experiencing high demand"`, on every question, for two days.
+
+The driver resolved a single best model and used only it, so the feature was exactly as available
+as that one model. Google's newest Flash model is the least available thing on the free tier
+precisely because it is the newest, while the one below it answers instantly.
+
+`resolveModelCandidates()` now keeps the whole ranked list and `generateWithTools()` steps down
+through it on 429/500/502/503, then sticks with whichever answered for the rest of the process so
+the remaining tool round trips don't keep knocking on the busy door. A 429 is worth stepping down
+for too: the free tier's quota is per model, so another model has its own. A 400/403 still fails
+immediately — a malformed request or a bad key works no better on a second model, and trying three
+just delays the real message.
+
+This is preferred to switching provider. The 503 is one model shedding load, not Gemini failing,
+and the analyst never sends lead data to the model anyway — the tools return aggregates, scoped to
+the caller, and only those aggregates reach the API.

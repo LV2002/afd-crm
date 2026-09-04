@@ -2721,3 +2721,52 @@ build` succeeds, and the full suite runs 406 passing tests across 32 files — i
 in `tests/pivot.spec.ts` and `tests/profile-form-sheet.spec.ts`. The 21 failing files are all
 `ECONNREFUSED 127.0.0.1:5432`: the database-backed specs still need a run against real Postgres,
 and this container has none.
+
+## Session 38 — Dropping out, and an analyst that stops falling over
+
+Two things from Leon: a way to mark a student as dropped, and the AI analyst which had been
+returning a 503 every time for two days.
+
+**Marking a student dropped.** From an admission in Admissions → the student's page, anyone
+holding the new `enrolment.drop` permission records that they left, with a reason (required — three
+departments read it). It is reversible, because a drop recorded against the wrong student is a
+thing that happens.
+
+What it changes, everywhere at once:
+
+- **Sales** see "Dropped out" with the date and reason on the lead, in place of "Admission
+  confirmed". That panel now shows to anyone who may *read* enrolments, not just whoever could
+  have created one: a counsellor asking why their conversion vanished from the numbers is not the
+  person who records the drop.
+- **Admissions** get a "Dropped" tab of their own, and dropped rows leave the New admissions
+  queue — a student who left is not somebody waiting to be chased.
+- **Accounts** stop seeing the instalments in Collections and in the ageing buckets.
+- **Academics** see the student as `dropped`, because the drop writes `students.status` in the
+  same transaction. They read only `students`, so nothing less would reach them.
+- **Insights** stops counting them as a conversion. They keep their place in the lead count — the
+  lead was real and the work happened — but there is now a Dropped column beside Won and Lost, and
+  the conversion rate is what actually stuck.
+- Everyone on the configurable `admission.dropped` notification hears about it: accounts, the
+  centre head, academics, and the lead's own counsellor by default.
+
+What it deliberately does not change: `payments`, which is append-only and where a fee that was
+collected was collected — a refund is its own entry, not something implied by a student walking
+out; and `leads`, which stops changing at the first gate.
+
+**The AI analyst.** Leon's error was `503 … "This model is currently experiencing high demand"`,
+every time, for two days. Nothing was wrong with his key. The driver resolved one best model and
+used only that, so the analyst was exactly as available as the newest Flash model — which is the
+least available thing on the free tier precisely because it is newest, while the model one step
+down sat idle. It now keeps the whole ranked list and steps down through it on 429/500/502/503,
+sticks with whichever answered for the rest of the process, and still fails fast on a 400/403
+where another model would not help. The user-facing message for an all-busy or all-out-of-quota
+run now says what to do rather than quoting Google.
+
+**Verified:** `npx tsc --noEmit` clean, `next lint` clean (one pre-existing warning), `npm run
+build` succeeds, 196 non-database tests pass — including 6 new Gemini fallback tests and 4 new
+pivot tests. `tests/drop-admission.spec.ts` is written but, like the rest of the database-backed
+suite, has no Postgres to run against here.
+
+**Needs Leon:** `npm run db:migrate` (0041) and `npm run db:seed` — the seed is what grants
+`enrolment.drop` to Accounts and Centre Head and adds the `admission.dropped` notification row.
+Counsellors deliberately do not get it; change that in Settings → Roles if you disagree.
