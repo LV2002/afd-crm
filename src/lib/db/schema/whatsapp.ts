@@ -90,3 +90,47 @@ export const whatsappMessages = pgTable(
     uniqueIndex("whatsapp_messages_wa_message_id_uq").on(t.waMessageId).where(sql`wa_message_id is not null`),
   ],
 );
+
+/**
+ * People who have told us to stop.
+ *
+ * A suppression is by PHONE NUMBER, not by lead. Somebody who says STOP
+ * is speaking for the number in their hand, and the CRM may not have them
+ * as a lead at all — this number sends the institute's marketing, and a
+ * reply from a stranger is a reply from a stranger. Keying on the number
+ * also means a person on two records (a parent on two siblings') is
+ * suppressed once, which is what they asked for.
+ *
+ * `released_at` rather than a delete, for the reason every other
+ * consequential record in this system keeps its history: "we stopped
+ * messaging them on the 3rd, and they asked to be added back on the 9th"
+ * is the answer to a complaint. A row with `released_at` set no longer
+ * suppresses anything.
+ */
+export const whatsappSuppressions = pgTable(
+  "whatsapp_suppressions",
+  {
+    id: idColumn(),
+    /** E.164 via normalizePhone(), so a number matches however it was written. */
+    phone: text("phone").notNull(),
+    /** The keyword they sent, or a note when somebody records it by hand. */
+    reason: text("reason"),
+    /** 'keyword' when they messaged us; 'manual' when a person entered it. */
+    source: text("source").notNull().default("keyword"),
+    /** Null for a keyword opt-out — nobody in the CRM did it. */
+    createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
+    /** Set when they opt back in, or an admin lifts it. Null means live. */
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+    releasedBy: uuid("released_by").references(() => profiles.id, { onDelete: "set null" }),
+    ...timestamps(),
+  },
+  (t) => [
+    // One live suppression per number. A released row does not block a
+    // fresh opt-out later, which is exactly what somebody who opts out,
+    // back in, and out again should get.
+    uniqueIndex("whatsapp_suppressions_phone_live_uq")
+      .on(t.phone)
+      .where(sql`released_at is null`),
+    index("whatsapp_suppressions_phone_idx").on(t.phone),
+  ],
+);

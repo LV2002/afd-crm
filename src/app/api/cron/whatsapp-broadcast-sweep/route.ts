@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
 import { whatsappBroadcastRecipients, whatsappBroadcasts } from "@/lib/db/schema";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
+import { normalizePhone } from "@/lib/identity/normalize-phone";
+import { suppressedAmong } from "@/lib/whatsapp/opt-out";
 import { sendTemplateMessage } from "@/lib/integrations/whatsapp/client";
 
 export const dynamic = "force-dynamic";
@@ -62,11 +64,34 @@ export async function GET(request: Request) {
 
   let sent = 0;
   let failed = 0;
+  let suppressedCount = 0;
   const touchedBroadcastIds = new Set<string>();
+
+  // Re-checked here, not only when the broadcast was composed. Somebody
+  // can send STOP between a campaign being queued and this batch going
+  // out, and "we had already decided to message them" is not a defence
+  // anyone would accept.
+  const suppressed = await suppressedAmong(db, rows.map((row) => row.phone));
 
   for (const row of rows) {
     touchedBroadcastIds.add(row.broadcastId);
     try {
+      if (suppressed.has(normalizePhone(row.phone) ?? row.phone)) {
+        // Not a failure — nothing went wrong, we simply must not send.
+        // Marked failed with a plain reason so the broadcast can finish
+        // and the count on screen explains itself.
+        await db
+          .update(whatsappBroadcastRecipients)
+          .set({ status: "failed", errorMessage: "Opted out of WhatsApp messages." })
+          .where(eq(whatsappBroadcastRecipients.id, row.recipientId));
+        await db
+          .update(whatsappBroadcasts)
+          .set({ failedCount: sql`${whatsappBroadcasts.failedCount} + 1` })
+          .where(eq(whatsappBroadcasts.id, row.broadcastId));
+        suppressedCount += 1;
+        continue;
+      }
+
       // One institute number, so a lead with no counsellor is no longer a
       // reason a broadcast can't reach them.
       if (!phoneNumberId) throw new Error("No WhatsApp number is connected — see Settings → Integrations → WhatsApp.");
@@ -116,5 +141,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ processed: rows.length, sent, failed });
+  return NextResponse.json({ processed: rows.length, sent, failed, suppressed: suppressedCount });
 }

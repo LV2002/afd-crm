@@ -3007,3 +3007,54 @@ succeeds.
 
 **Needs Leon:** `npm run db:migrate` — 0044 is the notification-dismissal fix and matters to
 anyone using the bell.
+
+## Session 45 — Honouring "stop messaging me"
+
+Backlog item #2, and the one worth closing before a real broadcast goes out. WhatsApp expects a
+business to honour an opt-out; a number that doesn't loses its quality rating and eventually its
+access — which, on one institute number, is all of AFD's marketing.
+
+**Somebody who messages STOP is suppressed automatically.** The webhook checks every inbound
+message against a keyword list before doing anything else. Sending START (or SUBSCRIBE, or
+RESUME) lifts it again.
+
+**The keywords are `dropdown_options`, not constants** — Settings → Dropdowns, two new
+categories. An institute that wants a Malayalam word, or wants STOP to mean nothing, edits a
+list rather than waiting for a deploy.
+
+**The whole message must BE the keyword, not contain it.** "stop by the centre tomorrow" is
+somebody making an appointment; unsubscribing them for it would be worse than missing an
+opt-out, because a real opt-out gets repeated and a wrong one is silent.
+
+**Suppression is by phone number, not by lead.** Somebody typing STOP speaks for the number in
+their hand; they may not be a lead at all, and a parent whose number is on two siblings' records
+should be suppressed once.
+
+**Checked twice.** Once when a broadcast's audience is resolved, so the count on screen is what
+will actually be sent — the compose screen now says how many were dropped for opting out — and
+again in the sweep at send time, because somebody can send STOP between a campaign being queued
+and the batch going out.
+
+**Opting out is reversible and recorded.** `released_at` rather than a delete: "we stopped
+messaging them on the 3rd, they asked back on the 9th" is the answer to a complaint, and a
+deleted row answers nothing. **WhatsApp → Opted out** lists everyone, lets an admin lift one,
+and takes an opt-out somebody gave on a call or at the desk.
+
+### One bug the tests caught immediately
+
+The text normaliser stripped everything that wasn't a letter, digit or space — and Malayalam
+writes its vowels and the virama as combining *marks*, not letters. "നിർത്തുക" came out as
+"ന ർത ത ക", so a keyword an institute in Kerala added would silently never have matched, and
+nobody would have found out why. Fixed by keeping `\p{M}`; the test that found it is the one
+that spells out why.
+
+Also split the pure keyword logic into `lib/whatsapp/opt-out-keywords.ts` for the same reason
+`db/errors.ts` exists: comparing two words shouldn't require a database connection.
+
+**Migrations 0045 (table) and 0046 (RLS).** No DELETE policy anywhere — lifting a suppression
+sets `released_at`.
+
+**Verified:** 637 tests across 56 files pass against real Postgres, `npx tsc --noEmit` clean,
+`next lint` clean (one pre-existing warning), `npm run build` succeeds.
+
+**Needs Leon:** `npm run db:migrate` (0045–0046) and `npm run db:seed` (the keyword lists).
