@@ -1,4 +1,5 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, getTableColumns, gte, inArray, isNull, lte } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import { DatabaseZap } from "lucide-react";
 
 import { AccessDenied } from "@/components/layout/access-denied";
@@ -13,37 +14,62 @@ import {
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db, isDatabaseUnreachable, isDeadlineExceeded, withDeadline } from "@/lib/db/client";
 import { centers, leads, pipelineStages, profiles } from "@/lib/db/schema";
+import { fieldColumn } from "@/lib/fields/field-column";
+import { getFieldSchema } from "@/lib/fields/get-field-schema";
+import { OPTION_BEARING_TYPES, resolveFieldOptions, type FieldOption } from "@/lib/fields/resolve-field-options";
+import { readFilterValues } from "@/lib/leads/apply-filters";
+import { createClient } from "@/lib/supabase/server";
+import { aggregateFunnel } from "@/lib/reports/aggregate-leads";
 import {
-  aggregateCentrePerformance,
-  aggregateFunnel,
-  aggregateLeadsBySource,
-  aggregateScorecard,
-} from "@/lib/reports/aggregate-leads";
+  applyPivotFilters,
+  dimensionFields,
+  groupLeads,
+  oversubscribed,
+  summarise,
+  type PivotField,
+  type PivotLead,
+} from "@/lib/reports/pivot";
 
+import { BreakdownChart } from "./breakdown-chart";
 import { FunnelChart } from "./funnel-chart";
-import { LeadsBySourceChart } from "./leads-by-source-chart";
+import { InsightControls, type DimensionControl } from "./insight-controls";
 
 /**
- * docs/02-BUILD-PHASES.md § Phase 2: prebuilt dashboards. Runs on the
- * direct db client rather than the RLS-bound one deliberately: `leads`'
- * own RLS is gated on `lead.read`, but `report.read`/`report.center`/
- * `report.org` are meant to grant *aggregate counts* to roles that don't
- * necessarily hold `lead.read` at all (accounts, academics — see
- * docs/DECISIONS.md) without ever exposing an individual lead's PII.
- * This page only ever selects id/assignedTo/centerId/stageId/
- * firstTouchSource — never a name, phone, or email — so that boundary
- * holds regardless of which client fetches it.
- */
-/**
- * Vercel kills a function at its plan's limit and the browser then gets a
- * bare "network error" with no server log — the symptom that made this page
- * so hard to diagnose. Asking for headroom means a slow cold connection
- * fails as a readable error page instead of a severed request.
+ * docs/02-BUILD-PHASES.md § Phase 2 asked for a "generic pivot widget";
+ * this is that, replacing the four fixed reports that stood in for it.
+ * Every lead variable is a filter and every lead variable is a possible
+ * breakdown, so "leads by source" is one setting of the same screen that
+ * answers "which exams do Kannur's walk-ins want" — a question nobody
+ * would have got a report written for.
+ *
+ * Runs on the direct db client rather than the RLS-bound one deliberately:
+ * `leads`' own RLS is gated on `lead.read`, but `report.read`/
+ * `report.center`/`report.org` are meant to grant *aggregate counts* to
+ * roles that don't necessarily hold `lead.read` at all (accounts,
+ * academics — see docs/DECISIONS.md) without ever exposing an individual
+ * lead's PII.
+ *
+ * That last guarantee used to hold because the page selected five fixed
+ * columns. It now selects whatever the admin has configured, so the
+ * guarantee moved into lib/reports/pivot.ts: only *dimension* fields are
+ * ever selected — never a phone, email, file, free-text note, or the
+ * name of a person — and only counts per group are ever rendered. There
+ * is no row-level output on this page at all.
  */
 export const maxDuration = 30;
 
 const QUERY_TIMEOUT_MS = 10_000;
 const QUERY_ATTEMPTS = 2;
+
+/** The one variable that isn't a field_definitions row but is the one everybody wants to trend on. */
+const CREATED_AT_DIMENSION: PivotField = {
+  key: "created_at",
+  label: "Created (month)",
+  type: "datetime",
+  isCore: true,
+};
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Runs one query under its own deadline, retrying once, and logs how long
@@ -133,7 +159,11 @@ function DatabaseTooSlow() {
   );
 }
 
-export default async function InsightsPage() {
+export default async function InsightsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await getCurrentUser();
   if (!user || !can(user, "report.read")) return <AccessDenied />;
 
@@ -143,41 +173,81 @@ export default async function InsightsPage() {
   // scopeFor()'s per-permission scope attribute.
   const scope = can(user, "report.org") ? "all" : can(user, "report.center") ? "center" : "own";
 
-  const leadWhere =
+  const params = await searchParams;
+  const readOne = (key: string): string => {
+    const raw = params[key];
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    return typeof value === "string" ? value.trim() : "";
+  };
+
+  const supabase = await createClient();
+  // field_definitions is world-readable to any authenticated user
+  // (migration 0001), so this works for the report-only roles too — the
+  // whole point of reading the lead rows over the direct connection.
+  const schema = await getFieldSchema(supabase, "lead", user);
+  const dimensions: PivotField[] = [
+    CREATED_AT_DIMENSION,
+    ...dimensionFields(
+      schema.map((f) => ({ key: f.key, label: f.label, type: f.type, isCore: f.isCore })),
+    ),
+  ];
+
+  const filters = readFilterValues(params, dimensions);
+  const groupByKey = readOne("group");
+  const groupBy =
+    dimensions.find((d) => d.key === groupByKey) ??
+    dimensions.find((d) => d.key === "lead_source") ??
+    dimensions[0];
+
+  const from = DATE_ONLY.test(readOne("from")) ? readOne("from") : "";
+  const to = DATE_ONLY.test(readOne("to")) ? readOne("to") : "";
+
+  const scopeWhere =
     scope === "all"
       ? isNull(leads.deletedAt)
       : scope === "center"
         ? and(isNull(leads.deletedAt), inArray(leads.centerId, user.centerIds))
         : and(isNull(leads.deletedAt), eq(leads.assignedTo, user.id));
 
-  // This is the only *page* in the app that reads over a direct Postgres
-  // socket (everything else goes through Supabase's HTTP API), so it is
-  // also the only page that breaks when DATABASE_URL is wrong or points
-  // at a host this environment can't route to. That made a config problem
-  // look like a broken page. Catch it here and say so plainly; anything
-  // else is a real bug and still throws. See docs/DECISIONS.md.
-  // Run these one at a time rather than in a Promise.all. The db client is
-  // `max: 1`, so concurrency buys nothing — four queries serialise on the
-  // single connection either way — but issuing them together makes
-  // postgres.js *pipeline* them, and pipelining is where connection-pooler
-  // incompatibilities live (Supabase's transaction-mode pooler hands each
-  // transaction a different physical connection). Sequential costs the same
-  // wall-clock time here, avoids that class of stall, and names the query
-  // that is slow instead of hanging the whole page anonymously.
-  let leadRows, stageRows, centerRows, profileRows;
+  // The date range is the one filter pushed into SQL: it is what actually
+  // bounds how many rows come back. Everything else is applied in memory,
+  // where the same bucketing that draws the chart decides what matches —
+  // one definition of "Kochi" rather than two that can drift.
+  // Boundaries are Asia/Kolkata days, not UTC ones, because that is what
+  // "leads created on the 3rd" means to everyone using this.
+  const dateWhere = [
+    from ? gte(leads.createdAt, new Date(`${from}T00:00:00+05:30`)) : undefined,
+    to ? lte(leads.createdAt, new Date(`${to}T23:59:59.999+05:30`)) : undefined,
+  ].filter((clause): clause is NonNullable<typeof clause> => clause !== undefined);
+
+  // Only dimension columns are ever selected — see the module comment.
+  const leadColumns = getTableColumns(leads);
+  const columnByDbName = new Map(
+    Object.values(leadColumns).map((column) => [column.name, column as PgColumn]),
+  );
+  const selection: Record<string, PgColumn> = { id: leads.id, stageId: leads.stageId };
+  let needsCustom = false;
+  for (const field of dimensions) {
+    if (!field.isCore) {
+      needsCustom = true;
+      continue;
+    }
+    const column = columnByDbName.get(fieldColumn(field.key));
+    // A core field whose column was renamed or dropped simply stops being
+    // a dimension rather than breaking the page.
+    if (column) selection[`v_${field.key}`] = column;
+  }
+  if (needsCustom) selection.custom = leads.custom;
+
+  let leadRows: Array<Record<string, unknown>>;
+  let stageRows, centerRows, profileRows;
   try {
-    leadRows = await timedQuery("leads", () =>
+    leadRows = (await timedQuery("leads", () =>
       db
-        .select({
-          id: leads.id,
-          assignedTo: leads.assignedTo,
-          centerId: leads.centerId,
-          stageId: leads.stageId,
-          firstTouchSource: leads.firstTouchSource,
-        })
+        .select(selection)
         .from(leads)
-        .where(leadWhere),
-    );
+        .where(and(scopeWhere, ...dateWhere)),
+    )) as Array<Record<string, unknown>>;
     stageRows = await timedQuery("stages", () =>
       db
         .select({ id: pipelineStages.id, name: pipelineStages.name, sortOrder: pipelineStages.sortOrder, stageType: pipelineStages.stageType })
@@ -197,105 +267,164 @@ export default async function InsightsPage() {
     throw error;
   }
 
-  const centerNameById = new Map(centerRows.map((c) => [c.id, c.name]));
-  const userNameById = new Map(profileRows.map((p) => [p.id, p.fullName]));
+  // Stage, centre and counsellor names come from the same direct
+  // connection as the counts. resolveFieldOptions() would go through RLS,
+  // and `profiles` is only readable to whoever holds users.manage — a
+  // centre head would get a table of uuids where names belong.
+  const localOptions: Record<string, FieldOption[]> = {
+    stage_id: stageRows
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((s) => ({ value: s.id, label: s.name })),
+    center_id: centerRows.map((c) => ({ value: c.id, label: c.name })),
+  };
+  const staffOptions: FieldOption[] = profileRows
+    .map((p) => ({ value: p.id, label: p.fullName }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
-  const bySource = aggregateLeadsBySource(leadRows);
-  const funnel = aggregateFunnel(leadRows, stageRows);
-  const scorecard = scope !== "own" ? aggregateScorecard(leadRows, stageRows, userNameById) : [];
-  const centrePerformance = scope !== "own" ? aggregateCentrePerformance(leadRows, stageRows, centerNameById) : [];
+  const optionEntries = await Promise.all(
+    dimensions.map(async (field): Promise<[string, FieldOption[]]> => {
+      if (localOptions[field.key]) return [field.key, localOptions[field.key]];
+      if (field.type === "user_ref") return [field.key, staffOptions];
+      if (field.type === "boolean") {
+        return [field.key, [{ value: "true", label: "Yes" }, { value: "false", label: "No" }]];
+      }
+      if (!OPTION_BEARING_TYPES.has(field.type)) return [field.key, []];
+      const definition = schema.find((f) => f.key === field.key);
+      if (!definition) return [field.key, []];
+      return [field.key, await resolveFieldOptions(supabase, definition)];
+    }),
+  );
+  const optionsByKey = new Map(optionEntries);
+  const labelsFor = (key: string): ReadonlyMap<string, string> =>
+    new Map((optionsByKey.get(key) ?? []).map((option) => [option.value, option.label]));
+
+  const pivotLeads: PivotLead[] = leadRows.map((row) => {
+    const custom = (row.custom ?? null) as Record<string, unknown> | null;
+    const values: Record<string, unknown> = {};
+    for (const field of dimensions) {
+      values[field.key] = field.isCore ? (row[`v_${field.key}`] ?? null) : (custom?.[field.key] ?? null);
+    }
+    return { id: String(row.id), stageId: (row.stageId as string | null) ?? null, values };
+  });
+
+  const stageTypeById = new Map(stageRows.map((s) => [s.id, s.stageType]));
+  const filtered = applyPivotFilters(pivotLeads, dimensions, filters);
+  const totals = summarise(filtered, stageTypeById);
+  const rows = groupLeads(filtered, groupBy, stageTypeById, labelsFor(groupBy.key));
+  const funnel = aggregateFunnel(
+    filtered.map((lead) => ({
+      id: lead.id,
+      stageId: lead.stageId,
+      assignedTo: null,
+      centerId: null,
+      firstTouchSource: null,
+    })),
+    stageRows,
+  );
+
+  const controls: DimensionControl[] = dimensions.map((field) => ({
+    field,
+    options: optionsByKey.get(field.key) ?? [],
+  }));
+  const activeFilterCount = Object.values(filters).filter((v) => v.trim().length > 0).length;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold">Insights</h1>
         <p className="text-sm text-muted-foreground">
-          A current snapshot — {leadRows.length} lead{leadRows.length === 1 ? "" : "s"} in view.
-          Not yet filterable by date range; see docs/DECISIONS.md.
+          Filter on any lead variable, then break the result down by any other. Every setting is
+          in the address bar, so a view you like can be bookmarked or sent to someone.
         </p>
       </div>
 
+      <InsightControls
+        dimensions={controls}
+        groupBy={groupBy.key}
+        from={from}
+        to={to}
+        activeCount={activeFilterCount}
+      />
+
+      <section className="grid gap-4 sm:grid-cols-4">
+        <Stat label="Leads in view" value={String(totals.total)} />
+        <Stat label="Won" value={String(totals.won)} />
+        <Stat label="Lost" value={String(totals.lost)} />
+        <Stat
+          label="Conversion"
+          value={totals.total > 0 ? `${((totals.won / totals.total) * 100).toFixed(0)}%` : "—"}
+        />
+      </section>
+
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">Leads by source</h2>
-        {bySource.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No leads yet.</p>
+        <h2 className="text-lg font-medium">By {groupBy.label.toLowerCase()}</h2>
+        {rows.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+            No leads match these filters.
+          </p>
         ) : (
-          <LeadsBySourceChart data={bySource} />
+          <>
+            <BreakdownChart data={rows} />
+            {rows.length > 15 && (
+              <p className="text-xs text-muted-foreground">
+                The chart shows the 15 biggest; the table below has all {rows.length}.
+              </p>
+            )}
+            {oversubscribed(rows, totals.total) && (
+              <p className="text-xs text-muted-foreground">
+                {groupBy.label} can hold more than one value per lead, so these rows add up to
+                more than {totals.total}.
+              </p>
+            )}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{groupBy.label}</TableHead>
+                  <TableHead className="text-right">Leads</TableHead>
+                  <TableHead className="text-right">Won</TableHead>
+                  <TableHead className="text-right">Lost</TableHead>
+                  <TableHead className="text-right">Conversion</TableHead>
+                  <TableHead className="text-right">Share</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => (
+                  <TableRow key={row.bucket}>
+                    <TableCell className="font-medium">{row.label}</TableCell>
+                    <TableCell className="text-right">{row.total}</TableCell>
+                    <TableCell className="text-right">{row.won}</TableCell>
+                    <TableCell className="text-right">{row.lost}</TableCell>
+                    <TableCell className="text-right">
+                      {row.total > 0 ? `${((row.won / row.total) * 100).toFixed(0)}%` : "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {totals.total > 0 ? `${((row.total / totals.total) * 100).toFixed(0)}%` : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </>
         )}
       </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-medium">Funnel</h2>
+        <p className="text-sm text-muted-foreground">
+          The same filtered set, by pipeline stage.
+        </p>
         <FunnelChart data={funnel} />
       </section>
+    </div>
+  );
+}
 
-      {scope !== "own" && (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-lg font-medium">Counsellor scorecard</h2>
-          {scorecard.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No leads assigned to anyone yet.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Counsellor</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">Won</TableHead>
-                  <TableHead className="text-right">Lost</TableHead>
-                  <TableHead className="text-right">Conversion</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {scorecard.map((row) => (
-                  <TableRow key={row.ownerId}>
-                    <TableCell className="font-medium">{row.name}</TableCell>
-                    <TableCell className="text-right">{row.total}</TableCell>
-                    <TableCell className="text-right">{row.won}</TableCell>
-                    <TableCell className="text-right">{row.lost}</TableCell>
-                    <TableCell className="text-right">
-                      {row.total > 0 ? `${((row.won / row.total) * 100).toFixed(0)}%` : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </section>
-      )}
-
-      {scope !== "own" && (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-lg font-medium">Centre performance</h2>
-          {centrePerformance.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No leads assigned to a centre yet.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Centre</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">Won</TableHead>
-                  <TableHead className="text-right">Lost</TableHead>
-                  <TableHead className="text-right">Conversion</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {centrePerformance.map((row) => (
-                  <TableRow key={row.centerId}>
-                    <TableCell className="font-medium">{row.name}</TableCell>
-                    <TableCell className="text-right">{row.total}</TableCell>
-                    <TableCell className="text-right">{row.won}</TableCell>
-                    <TableCell className="text-right">{row.lost}</TableCell>
-                    <TableCell className="text-right">
-                      {row.total > 0 ? `${((row.won / row.total) * 100).toFixed(0)}%` : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </section>
-      )}
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border p-4">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 text-xl font-semibold">{value}</p>
     </div>
   );
 }
