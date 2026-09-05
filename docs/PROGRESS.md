@@ -3261,3 +3261,43 @@ paying more.
 ceiling *before* they type a number; only `settings.manage` can change it, which
 `tests/rls.spec.ts` now proves — including that a centre head who can approve a
 discount still cannot raise the limit.
+
+## Session 38 — Batches finally have a screen
+
+**Shipped**
+
+- **`/batches`** — every batch with a live count of who is in it, seats left,
+  and which are still running. `batches` has had a table since Phase 4 and no
+  UI, so it sat empty and the Batch column on the students list was permanently
+  blank.
+- **Create and edit a batch** — name, centre, course, mode, academic year,
+  start and end dates, seats. Course and mode come from `dropdown_options`, not
+  a list in the code.
+- **A roster per batch** — add a student, remove one with a reason, and a
+  separate "left this batch" list underneath.
+- **`src/lib/batches/roster.ts`** — the rules, pure and tested.
+- Migration `0051_batch_management.sql`.
+
+**Three decisions**
+
+- **A student who LEFT does not count towards capacity.** The member count is
+  computed live from `student_batches` rather than stored on the batch: a stored
+  count is one more thing to keep in step and goes wrong silently the first time
+  somebody leaves.
+- **Going over capacity warns, it does not refuse.** Rooms take one more chair,
+  and a system that flatly blocks the 31st student in a batch of 30 gets worked
+  around by somebody editing the capacity — which loses the information
+  entirely. Over-capacity is shown in red on both screens instead.
+- **`batches_select` was widened.** It was gated on `batch.manage`, the
+  permission for *creating* batches, which made a batch's **name** invisible to
+  accounts and centre heads — the students list simply rendered the column
+  blank for them. Being able to make a batch and being able to read one are
+  different questions.
+
+**Also**
+
+A unique index means a student can be in a batch only once at a time, while
+re-joining after leaving stays possible — the old membership keeps its
+`left_at` and the history of both survives. Removing a student clears
+`current_batch_id` only if it still points at that batch, so tidying up an old
+membership cannot undo a move to a new one.
