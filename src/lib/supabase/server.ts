@@ -2,6 +2,7 @@ import "server-only";
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 /**
  * Server-side Supabase client for Server Components, Server Actions and
@@ -11,8 +12,14 @@ import { cookies } from "next/headers";
  *
  * Never importable from a client component: the `server-only` import
  * throws a build error if that happens.
+ *
+ * Wrapped in React's `cache()`, so one HTTP request builds ONE client no
+ * matter how many components ask for it. Before this, a page with a
+ * layout, a header widget and three server components built five clients
+ * and each of them re-read the cookie jar and re-authenticated — the
+ * single largest source of the "everything takes two seconds" feeling.
  */
-export async function createClient() {
+export const createClient = cache(async function createClient() {
   const cookieStore = await cookies();
 
   return createServerClient(
@@ -36,4 +43,4 @@ export async function createClient() {
       },
     },
   );
-}
+});

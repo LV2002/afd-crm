@@ -3564,3 +3564,66 @@ implemented it. Migration `0057`.
   deliberately, not one that falls out of a form being saved twice.
 - The usage counter moves only the first time an admission takes an offer, so
   re-saving the fee panel cannot burn four seats of a twenty-seat promotion.
+
+## Session 43 — Making it fast, and writing it down
+
+**Why it was slow**
+
+Three compounding causes, all measured rather than guessed at:
+
+1. **The session was fetched dozens of times per page.** `getCurrentUser()` is
+   called from ~165 places, and each call cost **four network round trips** —
+   `auth.getUser()` is an HTTP call to Supabase's auth server, not a local token
+   decode — plus the profile, the role's permissions and the user's centres.
+   Five callers on one page meant twenty round trips before a single row of real
+   data was fetched. At 60–100ms each, that is one to two seconds of nothing on
+   every click.
+2. **The connection pool was `max: 1`.** Every direct-`db` query serialised
+   behind every other, so a `Promise.all` of six independent queries ran strictly
+   one at a time.
+3. **The database had almost no indexes.** `leads` had three, all unique
+   constraints. No foreign key was indexed and neither was any hot filter, so
+   every list, board and join was a sequential scan — with an RLS
+   `can_access_center(...)` call executed once per row.
+
+And a fourth, which was most of the *felt* slowness: **there were no loading
+states at all.** Clicking a link left the old page frozen until the server
+finished. That reads as broken long before it reads as slow.
+
+**Fixed**
+
+- `getCurrentUser()`, `createClient()` and `getTerminologyMap()` wrapped in
+  React's `cache()` — once per request, free thereafter. Per-request only:
+  nothing is cached across requests, because stale permissions are a security
+  bug.
+- Pool raised to 5 with a 20s idle timeout. This also removes the nested-
+  transaction deadlock that `DbExecutor` existed to avoid.
+- Migration `0058` — 22 indexes across `leads`, `enquiries`, `interactions`,
+  `stage_history`, `lead_tags`, `audit_log`, `enrolments`, `payments` and
+  `students`, partial on `deleted_at is null` throughout, plus `ANALYZE` so the
+  planner uses them immediately rather than after the next autovacuum.
+- `(app)/loading.tsx` — a skeleton shown the instant a navigation starts.
+- The notification bell moved behind `<Suspense>`; it was blocking the header,
+  and therefore everything below it, on its own query.
+- The app layout fetches user and terminology in parallel.
+
+**Kept out of search engines**
+
+Three independent layers, because each covers what the others cannot: `robots`
+metadata (every HTML page), `src/app/robots.ts` (crawlers that read robots.txt
+first), and an `X-Robots-Tag` header (everything else — PDFs, JSON, files).
+"It needs a login anyway" is not sufficient: `/f/<token>` is reachable without
+one, and a crawled token would sit in an index.
+
+`next.config.ts` also now sets `X-Frame-Options: DENY`, `X-Content-Type-Options:
+nosniff` and `Referrer-Policy: strict-origin-when-cross-origin`.
+
+**Two handbooks**
+
+- `docs/HANDBOOK-STAFF.md` — training material. How the system thinks, then a
+  part per role, the workflows, the WhatsApp rules, the seven rules that apply
+  to everybody, a troubleshooting table and a glossary.
+- `docs/HANDBOOK-TECHNICAL.md` — for a maintainer who knows TypeScript and SQL
+  and nothing about this codebase. Architecture, the authorization model, the
+  migration traps that have already bitten, the cron-budget constraint, the
+  performance findings above, a runbook, and an honest list of the gaps.

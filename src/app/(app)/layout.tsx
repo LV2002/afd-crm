@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { NotificationBell } from "@/components/layout/notification-bell";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -8,13 +9,15 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { getTerminologyMap } from "@/lib/terminology/get-terminology";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await getCurrentUser();
+  // Fetched together, not one after the other. They do not depend on each
+  // other, and the layout runs on every single navigation — a sequential
+  // pair here is a round trip added to every click in the application.
+  const [user, terms] = await Promise.all([getCurrentUser(), getTerminologyMap()]);
 
   if (!user) {
     redirect("/login");
   }
 
-  const terms = await getTerminologyMap();
   const navItems = navItemsFor(user, terms);
 
   return (
@@ -29,7 +32,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <header className="flex h-14 items-center justify-between border-b px-4 print:hidden">
           <span className="text-sm font-medium md:hidden">AFD India CRM</span>
           <div className="ml-auto flex items-center gap-1">
-            <NotificationBell />
+            {/* Suspended so its unread count never delays the rest of
+                the page. The bell is the least urgent thing on screen and
+                it was blocking the header — and therefore everything
+                below it — on its own query. */}
+            <Suspense fallback={<div className="size-9" />}>
+              <NotificationBell />
+            </Suspense>
             <UserMenu user={user} />
           </div>
         </header>
