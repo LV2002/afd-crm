@@ -23,6 +23,7 @@ const GOOGLE_KEYS = [
   "developer_token",
   "customer_id",
   "login_customer_id",
+  "conversion_action",
 ] as const;
 type GoogleKey = (typeof GOOGLE_KEYS)[number];
 
@@ -33,6 +34,7 @@ const KEY_LABELS: Record<GoogleKey, string> = {
   refresh_token: "OAuth Refresh Token",
   developer_token: "Developer Token",
   customer_id: "Customer ID",
+  conversion_action: "Conversion Action",
   login_customer_id: "Manager (Login) Customer ID",
 };
 

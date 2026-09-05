@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowRightLeft,
   BarChart3,
   CalendarRange,
   ClipboardList,
@@ -42,6 +43,7 @@ const ICON_MAP: Record<NavIconKey, LucideIcon> = {
   "profile-forms": ClipboardList,
   insights: BarChart3,
   marketing: TrendingUp,
+  handovers: ArrowRightLeft,
   ask: Sparkles,
   settings: Settings,
 };

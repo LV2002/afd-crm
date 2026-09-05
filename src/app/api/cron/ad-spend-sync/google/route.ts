@@ -6,6 +6,7 @@ import { yesterdayDateStringIST } from "@/lib/format/date";
 import { getGoogleAdsAccessToken } from "@/lib/integrations/google/ads-client";
 import { fetchGoogleAdsSpend, mapGoogleAdsRow } from "@/lib/integrations/google/insights-client";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
+import { uploadConversions } from "@/lib/integrations/google/upload-conversions";
 
 export const dynamic = "force-dynamic";
 
@@ -40,12 +41,19 @@ export async function GET(request: Request) {
   ]);
 
   if (!clientId || !clientSecret || !refreshToken || !developerToken || !customerId) {
-    return NextResponse.json({ error: "Google Ads credentials not fully configured" }, { status: 200 });
+    return NextResponse.json(
+      { error: "Google Ads credentials not fully configured" },
+      { status: 200 },
+    );
   }
 
   const accessToken = await getGoogleAdsAccessToken(clientId, clientSecret, refreshToken);
   const date = yesterdayDateStringIST(new Date());
-  const rows = await fetchGoogleAdsSpend(customerId, { developerToken, accessToken, loginCustomerId }, date);
+  const rows = await fetchGoogleAdsSpend(
+    customerId,
+    { developerToken, accessToken, loginCustomerId },
+    date,
+  );
 
   let synced = 0;
   for (const row of rows) {
@@ -85,5 +93,20 @@ export async function GET(request: Request) {
     synced++;
   }
 
-  return NextResponse.json({ date, synced });
+  // Reporting admissions back to Google runs in the same job.
+  //
+  // It has its own route (/api/cron/google-conversions) and a dedicated
+  // cron should point there, but AFD's plan has no slots left. The
+  // pairing is a natural one anyway: the job that reads what Google
+  // charged and the job that tells Google what it bought belong
+  // together. It never throws into the spend sync — a conversion upload
+  // failing must not lose a day of spend data.
+  let conversions;
+  try {
+    conversions = await uploadConversions();
+  } catch (error) {
+    conversions = { error: error instanceof Error ? error.message : String(error) };
+  }
+
+  return NextResponse.json({ date, synced, conversions });
 }
