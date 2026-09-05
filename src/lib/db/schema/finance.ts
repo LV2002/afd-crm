@@ -371,3 +371,65 @@ export const discountLimits = pgTable("discount_limits", {
   isUnlimited: boolean("is_unlimited").notNull().default(false),
   ...timestamps(),
 });
+
+/**
+ * The overdue-chasing ladder: how long after an instalment's due date to
+ * remind somebody, and how.
+ *
+ * Rows rather than constants because CLAUDE.md puts notification timing
+ * and copy in the admin's hands. AFD chase on day 1, 7 and 21 today; an
+ * institute that wants day 3 and 10 changes two rows.
+ *
+ * `days_after_due` may be NEGATIVE, which is a reminder BEFORE the money
+ * is late — the cheapest collection there is, and the one an overdue-only
+ * design cannot express.
+ */
+export const paymentReminderRules = pgTable("payment_reminder_rules", {
+  id: idColumn(),
+  /** Shown in Settings; never sent to a student. */
+  name: text("name").notNull(),
+  /** Days after the due date. Negative fires before it falls due. */
+  daysAfterDue: integer("days_after_due").notNull(),
+  /**
+   * 'whatsapp' messages the student; 'notification' tells the staff who
+   * have to chase them. Most ladders use both at different rungs.
+   */
+  channel: text("channel").notNull().default("notification"),
+  /** Required for a whatsapp rung: the approved template to send. */
+  templateName: text("template_name"),
+  templateLanguage: text("template_language").notNull().default("en_US"),
+  isActive: boolean("is_active").notNull().default(true),
+  ...timestamps(),
+  ...softDelete(),
+});
+
+/**
+ * One row per rung actually fired against one instalment — which is what
+ * stops the same student being reminded every single night.
+ *
+ * The unique index is the whole mechanism: a rung fires ONCE per
+ * instalment, ever. A failed send is still recorded (with its error), on
+ * purpose: retrying a WhatsApp template that Meta rejected would fail
+ * identically every night and cost money each time. A person looks at the
+ * failure and decides.
+ */
+export const paymentRemindersSent = pgTable(
+  "payment_reminders_sent",
+  {
+    id: idColumn(),
+    instalmentId: uuid("instalment_id")
+      .notNull()
+      .references(() => enrolmentInstalments.id, { onDelete: "cascade" }),
+    ruleId: uuid("rule_id")
+      .notNull()
+      .references(() => paymentReminderRules.id, { onDelete: "cascade" }),
+    channel: text("channel").notNull(),
+    /** 'sent', 'failed' or 'skipped' (opted out, no phone, nothing owed any more). */
+    status: text("status").notNull(),
+    detail: text("detail"),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("payment_reminders_sent_instalment_rule_uq").on(t.instalmentId, t.ruleId),
+  ],
+);

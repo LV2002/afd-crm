@@ -877,6 +877,118 @@ describe("whatsapp_messages is scoped by whatsapp.read/whatsapp.send, not lead.r
   });
 });
 
+describe("payment_reminders_sent: what a student was told is part of their file", () => {
+  // Nothing writes to this from a browser — only the nightly cron on the
+  // direct connection — so there is deliberately no insert policy, and the
+  // read follows the money: payment.read, scoped by the enrolment's centre.
+  let reminderLeadId: string;
+  let reminderInstalmentId: string;
+  let reminderSentId: string;
+  let reminderRuleId: string;
+
+  beforeAll(async () => {
+    const [rule] = await owner<Array<{ id: string }>>`
+      insert into payment_reminder_rules (name, days_after_due, channel)
+      values ('RlsSpecTest rung', 7, 'notification')
+      returning id
+    `;
+    reminderRuleId = rule.id;
+
+    const [lead] = await owner<Array<{ id: string }>>`
+      insert into leads (student_name, primary_phone, center_id)
+      values ('RlsSpecTest reminder lead', '+919847100488', ${centerIds.kochi})
+      returning id
+    `;
+    reminderLeadId = lead.id;
+
+    const [enrolment] = await owner<Array<{ id: string }>>`
+      insert into enrolments (lead_id, center_id, course, mode, academic_year, total_fee_paise, net_fee_paise)
+      values (${lead.id}, ${centerIds.kochi}, 'Foundation', 'offline', '2026-27', 5000000, 5000000)
+      returning id
+    `;
+
+    const [instalment] = await owner<Array<{ id: string }>>`
+      insert into enrolment_instalments (enrolment_id, sequence, due_date, amount_paise)
+      values (${enrolment.id}, 1, '2026-03-01', 2500000)
+      returning id
+    `;
+    reminderInstalmentId = instalment.id;
+
+    const [sent] = await owner<Array<{ id: string }>>`
+      insert into payment_reminders_sent (instalment_id, rule_id, channel, status, detail)
+      values (${instalment.id}, ${rule.id}, 'notification', 'sent', '7 days overdue')
+      returning id
+    `;
+    reminderSentId = sent.id;
+  });
+
+  afterAll(async () => {
+    await owner`delete from payment_reminders_sent where id = ${reminderSentId}`;
+    await owner`delete from enrolment_instalments where id = ${reminderInstalmentId}`;
+    await owner`delete from enrolments where lead_id = ${reminderLeadId}`;
+    await owner`delete from leads where id = ${reminderLeadId}`;
+    await owner`delete from payment_reminder_rules where id = ${reminderRuleId}`;
+  });
+
+  it("the centre head can see what their centre's student was told", async () => {
+    const rows = await asUser(fx.centerhead_kochi, (tx) =>
+      tx<Array<{ id: string }>>`select id from payment_reminders_sent where id = ${reminderSentId}`,
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("a counsellor at the other centre cannot", async () => {
+    const rows = await asUser(fx.counsellor_kannur, (tx) =>
+      tx<Array<{ id: string }>>`select id from payment_reminders_sent where id = ${reminderSentId}`,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("nobody can write a reminder record from a session — only the cron does", async () => {
+    // No insert policy at all, on purpose: a row here is a claim that a
+    // student WAS contacted, and only the thing that contacted them may
+    // make it.
+    await asUser(fx.admin_a, async (tx) => {
+      await expect(
+        tx`
+          insert into payment_reminders_sent (instalment_id, rule_id, channel, status)
+          values (${reminderInstalmentId}, ${reminderRuleId}, 'whatsapp', 'sent')
+        `,
+      ).rejects.toThrow(/row-level security/i);
+    });
+  });
+
+  it("a rung cannot fire twice against the same instalment", async () => {
+    // The entire anti-spam mechanism, enforced in the database rather than
+    // trusted to the sweep's own bookkeeping.
+    await expect(
+      owner`
+        insert into payment_reminders_sent (instalment_id, rule_id, channel, status)
+        values (${reminderInstalmentId}, ${reminderRuleId}, 'notification', 'sent')
+      `,
+    ).rejects.toThrow(/payment_reminders_sent_instalment_rule_uq/);
+  });
+
+  it("refuses a whatsapp rung with no template", async () => {
+    // It would fail identically at 3am every night otherwise.
+    await expect(
+      owner`
+        insert into payment_reminder_rules (name, days_after_due, channel)
+        values ('RlsSpecTest bad rung', 3, 'whatsapp')
+      `,
+    ).rejects.toThrow(/payment_reminder_rules_template_required/);
+  });
+
+  it("a counsellor cannot change the ladder", async () => {
+    await asUser(fx.counsellor_kochi, async (tx) => {
+      const updated = await tx`
+        update payment_reminder_rules set days_after_due = 0 where id = ${reminderRuleId} returning id
+      `;
+      expect(updated).toHaveLength(0);
+    });
+  });
+});
+
 describe("discount_limits: readable by everyone, changeable only by settings.manage", () => {
   // Configuration, same shape as fee_structures. The read has to be open
   // because the fee panel tells a counsellor their own ceiling BEFORE they

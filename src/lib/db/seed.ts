@@ -23,6 +23,7 @@ import {
   financeAccounts,
   notificationSettings,
   orgSettings,
+  paymentReminderRules,
   pipelineStages,
   profiles,
   roles,
@@ -309,6 +310,39 @@ async function seedDiscountLimits(roleIds: Record<string, string>) {
       })
       .onConflictDoNothing({ target: discountLimits.roleId });
   }
+}
+
+/**
+ * A starting ladder for chasing unpaid fees.
+ *
+ * Staff-facing rungs only, deliberately. A WhatsApp rung needs a template
+ * Meta has approved, and seeding one that does not exist yet would produce
+ * a nightly failure on a fresh install — so the default ladder tells the
+ * people who chase, and Leon adds the student-facing rung once the
+ * template is approved.
+ *
+ * Inserted only when the table is empty: re-running the seed must not
+ * resurrect rungs an admin deliberately removed.
+ */
+const PAYMENT_REMINDER_SEEDS = [
+  { name: "Due in three days", daysAfterDue: -3, channel: "notification" },
+  { name: "Just overdue", daysAfterDue: 1, channel: "notification" },
+  { name: "A week late", daysAfterDue: 7, channel: "notification" },
+  { name: "A month late", daysAfterDue: 30, channel: "notification" },
+];
+
+async function seedPaymentReminders() {
+  const existing = await db.select({ id: paymentReminderRules.id }).from(paymentReminderRules).limit(1);
+  if (existing.length > 0) return;
+
+  await db.insert(paymentReminderRules).values(
+    PAYMENT_REMINDER_SEEDS.map((rule) => ({
+      name: rule.name,
+      daysAfterDue: rule.daysAfterDue,
+      channel: rule.channel,
+    })),
+  );
+  console.log(`seeded ${PAYMENT_REMINDER_SEEDS.length} payment reminder rungs`);
 }
 
 async function seedRoles() {
@@ -1028,6 +1062,7 @@ async function main() {
   await seedFieldDefinitions();
   await seedNotificationSettings(roleIds);
   await seedDiscountLimits(roleIds);
+  await seedPaymentReminders();
   await seedFinanceAccounts(centerIds);
   await seedUsers(roleIds, centerIds);
   console.log("done");
