@@ -26,11 +26,20 @@ image is recorded by Meta's media id and never downloaded, so it can't be viewed
 The raw delivery is in `webhook_events`, so nothing is lost — it is just not fetchable
 through the UI.
 
-### 3. A faster broadcast sweep
-Scheduling shipped in Session 40 but is only as precise as the cron that sends. The sweep now
-runs daily at 10:00 IST, so a broadcast scheduled for 3pm goes out the next morning. One line
-in `vercel.json` (`*/15 * * * *`) makes it accurate to the minute; Vercel's Hobby plan rejects
-sub-daily crons, so it needs Pro. **Leon's decision, not a code problem.**
+### 3. A faster broadcast sweep — **blocked on the hosting plan**
+Scheduling shipped in Session 40 but is only as precise as the cron that sends, and that cron
+runs **weekly, Sunday 01:00 UTC**. So a broadcast scheduled for Tuesday morning actually leaves
+the following Sunday, and a 400-person campaign at 100 sends a run takes four weeks.
+
+Leon's plan allows one cron a day at most, and he has asked for `vercel.json` to be left alone
+for now. One line (`"*/15 * * * *"`) makes both the delivery rate and the scheduled time
+accurate; nothing in the code changes with it, and `SWEEP_CADENCE_NOTE` in
+`lib/whatsapp/schedule.ts` is the one sentence on screen to update.
+
+The same cron budget is why the WhatsApp flow engine advances from inside this sweep rather
+than owning a schedule of its own. **A single `/api/cron/tick` route that runs every sweep in
+sequence would let one daily cron drive the whole system** — worth doing if the plan stays
+as it is.
 
 ---
 

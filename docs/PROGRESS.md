@@ -3408,12 +3408,16 @@ fallback, so nothing sent before today changes meaning.
 
 **The cadence caveat — for Leon**
 
-Scheduling is only as precise as the sweep that sends. `vercel.json` had the
-broadcast sweep on a **weekly** schedule, which meant a broadcast composed on
-Monday might not go out until Sunday; it is now **daily at 10:00 IST**, and the
-composer says so in as many words. Batch size is up from 50 to 100 per run.
+Scheduling is only as precise as the sweep that sends, and that sweep runs
+**weekly, Sunday 01:00 UTC**. A broadcast scheduled for Tuesday morning leaves
+the following Sunday. The composer says so in as many words rather than
+implying a precision that does not exist — `SWEEP_CADENCE_NOTE` in
+`lib/whatsapp/schedule.ts` is the single place that sentence lives.
 
-For to-the-minute delivery, one line changes:
-`"/api/cron/whatsapp-broadcast-sweep"` → `"*/15 * * * *"`. Vercel's Hobby plan
-rejects sub-daily crons, so that change needs Pro. Left as-is deliberately
-rather than risking a deploy failure.
+I raised the cron to daily and Leon asked for it to be put back: his hosting
+plan allows one cron a day at most. Reverted. Batch size stays up at 100 per
+run, which is the only part of the delivery rate that could be improved without
+touching the schedule.
+
+One line in `vercel.json` fixes it whenever the plan allows, and nothing in the
+code changes with it.

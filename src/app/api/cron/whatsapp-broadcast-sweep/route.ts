@@ -13,15 +13,15 @@ export const maxDuration = 60;
 
 // One run's worth of sends.
 //
-// Sized against the cron cadence, not against AFD's volume. The sweep
-// currently runs once a day (vercel.json, 04:30 UTC = 10:00 IST), so a
-// batch of 50 would take a 400-person campaign eight days to deliver.
+// Sized against the cron cadence, not against AFD's volume. The hosting
+// plan allows one cron a day at most and this one is set to Sunday, so a
+// batch of 50 would take a 400-person campaign eight WEEKS to deliver.
 // One hundred sequential sends fit inside the 60s budget above with room
-// to spare — Meta's send call is fast — and anything larger than that
-// should be answered by running the sweep more often rather than by
-// making one run longer. Raising the cron to `*/15 * * * *` (Vercel Pro)
-// turns this into 100 every quarter hour and is the single change that
-// makes scheduling accurate to the minute.
+// to spare — Meta's send call is fast — and anything larger should be
+// answered by running the sweep more often rather than by making one run
+// longer. Raising the cron in vercel.json is the single change that makes
+// both the delivery rate and scheduling accurate; nothing here needs to
+// change with it.
 const BATCH_SIZE = 100;
 
 /**

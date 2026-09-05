@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/whatsapp-broadcast-sweep",
-      "schedule": "30 4 * * *"
+      "schedule": "0 1 * * 0"
     },
     {
       "path": "/api/cron/recompute-temperature",

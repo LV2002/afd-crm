@@ -96,6 +96,25 @@ export function isDue(scheduledFor: Date | string | null, now: Date): boolean {
 }
 
 /**
+ * How often the job that actually sends runs, in words, for the composer
+ * to say out loud.
+ *
+ * Scheduling is only ever as precise as this. It lives here, in one
+ * place, because the truth of it is a line in `vercel.json` and a screen
+ * that quietly disagrees with that line is worse than a screen that says
+ * nothing: somebody schedules a message for Tuesday morning, it leaves on
+ * Sunday, and they stop trusting the feature.
+ *
+ * AFD's hosting plan allows one cron a day at most, and the broadcast
+ * sweep is currently set to Sunday ("0 1 * * 0"). Raising that line to a
+ * quarter-hourly schedule makes scheduling accurate to the minute and
+ * needs nothing else changed — including this sentence, which should then
+ * read "every fifteen minutes".
+ */
+export const SWEEP_CADENCE_NOTE =
+  "The job that actually sends currently runs once a week, early on Sunday. A broadcast goes out at the first run after the time you pick — so the time you set is the EARLIEST it can leave, not the exact moment.";
+
+/**
  * A sensible default for the picker: tomorrow at 10am IST.
  *
  * Not "in an hour". The reason to schedule at all is to land in working

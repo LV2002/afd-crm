@@ -19,7 +19,7 @@ import type { AudienceEntity } from "@/lib/whatsapp/audience";
 import { WHATSAPP_MEDIA_EXTENSIONS } from "@/lib/whatsapp/media";
 import { MERGE_VARIABLES, mergeVariablesFor } from "@/lib/whatsapp/merge-variables";
 import { fillTemplateBody, resolveParams, type ParamSource } from "@/lib/whatsapp/personalise";
-import { defaultScheduleValue } from "@/lib/whatsapp/schedule";
+import { SWEEP_CADENCE_NOTE, defaultScheduleValue } from "@/lib/whatsapp/schedule";
 import { cn } from "@/lib/utils";
 
 import {
@@ -525,10 +525,7 @@ export function NewBroadcastForm({
               gets it. Anybody who opts out in the meantime is dropped at send. You can stop it any
               time before it goes.
             </p>
-            <p className="text-xs text-muted-foreground">
-              The background job that sends runs once a day, at 10:00 am. A time later in the day
-              means it goes out the next morning.
-            </p>
+            <p className="text-xs text-muted-foreground">{SWEEP_CADENCE_NOTE}</p>
           </div>
         )}
       </section>
