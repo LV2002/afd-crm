@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNotNull, lte, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db/client";
@@ -9,13 +9,20 @@ import { suppressedAmong } from "@/lib/whatsapp/opt-out";
 import { sendTemplateMessage } from "@/lib/integrations/whatsapp/client";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-// One run's worth of sends — small enough to comfortably finish inside a
-// serverless function's request timeout, generous relative to AFD's real
-// volume (a tag rarely spans more than a few dozen leads). Repeated
-// hourly runs drain a larger broadcast over a few hours rather than one
-// run trying to send everything at once.
-const BATCH_SIZE = 50;
+// One run's worth of sends.
+//
+// Sized against the cron cadence, not against AFD's volume. The sweep
+// currently runs once a day (vercel.json, 04:30 UTC = 10:00 IST), so a
+// batch of 50 would take a 400-person campaign eight days to deliver.
+// One hundred sequential sends fit inside the 60s budget above with room
+// to spare — Meta's send call is fast — and anything larger than that
+// should be answered by running the sweep more often rather than by
+// making one run longer. Raising the cron to `*/15 * * * *` (Vercel Pro)
+// turns this into 100 every quarter hour and is the single change that
+// makes scheduling accurate to the minute.
+const BATCH_SIZE = 100;
 
 /**
  * Sends the next batch of queued broadcast recipients — never
@@ -47,10 +54,40 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Anything scheduled whose moment has passed starts now.
+  //
+  // This runs BEFORE the credential check, and before anything is sent,
+  // so a broadcast becomes visibly "sending" on the dashboard even on a
+  // run that then finds WhatsApp disconnected — the alternative is a
+  // campaign that sits at "scheduled" past its own time with no
+  // explanation anywhere.
+  //
+  // `<=`, never an equality on the minute: the sweep runs on a cron and
+  // will essentially never be looking at the exact scheduled minute, so a
+  // broadcast whose time passed while nobody was looking has to go late
+  // rather than never. Same reasoning as the payment reminder ladder.
+  const promoted = await db
+    .update(whatsappBroadcasts)
+    .set({ status: "sending", startedAt: new Date() })
+    .where(
+      and(
+        eq(whatsappBroadcasts.status, "scheduled"),
+        isNotNull(whatsappBroadcasts.scheduledFor),
+        lte(whatsappBroadcasts.scheduledFor, new Date()),
+      ),
+    )
+    .returning({ id: whatsappBroadcasts.id });
+
   const { access_token: accessToken, phone_number_id: phoneNumberId } =
     await getIntegrationCredentials("whatsapp", ["access_token", "phone_number_id"]);
   if (!accessToken) {
-    return NextResponse.json({ error: "WhatsApp access_token not configured" }, { status: 200 });
+    return NextResponse.json(
+      {
+        started: promoted.length,
+        error: "WhatsApp access_token not configured",
+      },
+      { status: 200 },
+    );
   }
 
   const rows = await db
@@ -61,16 +98,25 @@ export async function GET(request: Request) {
       templateName: whatsappBroadcasts.templateName,
       templateLanguage: whatsappBroadcasts.templateLanguage,
       bodyParam: whatsappBroadcasts.bodyParam,
+      params: whatsappBroadcastRecipients.params,
       headerMediaId: whatsappBroadcasts.headerMediaId,
       headerMediaKind: whatsappBroadcasts.headerMediaKind,
     })
     .from(whatsappBroadcastRecipients)
-    .innerJoin(whatsappBroadcasts, eq(whatsappBroadcasts.id, whatsappBroadcastRecipients.broadcastId))
+    .innerJoin(
+      whatsappBroadcasts,
+      eq(whatsappBroadcasts.id, whatsappBroadcastRecipients.broadcastId),
+    )
     // No join to `leads` any more: an audience can be students, and the
     // number to send to was snapshotted onto the recipient row when the
     // broadcast was composed. Joining would have quietly dropped every
     // student recipient.
-    .where(and(eq(whatsappBroadcastRecipients.status, "queued"), eq(whatsappBroadcasts.status, "sending")))
+    .where(
+      and(
+        eq(whatsappBroadcastRecipients.status, "queued"),
+        eq(whatsappBroadcasts.status, "sending"),
+      ),
+    )
     .limit(BATCH_SIZE);
 
   let sent = 0;
@@ -82,7 +128,10 @@ export async function GET(request: Request) {
   // can send STOP between a campaign being queued and this batch going
   // out, and "we had already decided to message them" is not a defence
   // anyone would accept.
-  const suppressed = await suppressedAmong(db, rows.map((row) => row.phone));
+  const suppressed = await suppressedAmong(
+    db,
+    rows.map((row) => row.phone),
+  );
 
   for (const row of rows) {
     touchedBroadcastIds.add(row.broadcastId);
@@ -93,7 +142,10 @@ export async function GET(request: Request) {
         // and the count on screen explains itself.
         await db
           .update(whatsappBroadcastRecipients)
-          .set({ status: "failed", errorMessage: "Opted out of WhatsApp messages." })
+          .set({
+            status: "failed",
+            errorMessage: "Opted out of WhatsApp messages.",
+          })
           .where(eq(whatsappBroadcastRecipients.id, row.recipientId));
         await db
           .update(whatsappBroadcasts)
@@ -105,7 +157,10 @@ export async function GET(request: Request) {
 
       // One institute number, so a lead with no counsellor is no longer a
       // reason a broadcast can't reach them.
-      if (!phoneNumberId) throw new Error("No WhatsApp number is connected — see Settings → Integrations → WhatsApp.");
+      if (!phoneNumberId)
+        throw new Error(
+          "No WhatsApp number is connected — see Settings → Integrations → WhatsApp.",
+        );
 
       const waMessageId = await sendTemplateMessage(
         phoneNumberId,
@@ -113,7 +168,15 @@ export async function GET(request: Request) {
         row.phone,
         row.templateName,
         row.templateLanguage,
-        row.bodyParam ? [row.bodyParam] : undefined,
+        // This recipient's own values, worked out when the audience was
+        // snapshotted. `bodyParam` is the pre-personalisation column and
+        // is still read for broadcasts composed before per-recipient
+        // values existed, so nothing sent back then changes meaning.
+        row.params && row.params.length > 0
+          ? row.params
+          : row.bodyParam
+            ? [row.bodyParam]
+            : undefined,
         // Uploaded once when the broadcast was composed; the same id goes
         // to every recipient. Only sent when the operator actually
         // attached one — Meta rejects a header component on a template
@@ -150,7 +213,12 @@ export async function GET(request: Request) {
     const [remaining] = await db
       .select({ count: sql<number>`count(*)` })
       .from(whatsappBroadcastRecipients)
-      .where(and(eq(whatsappBroadcastRecipients.broadcastId, broadcastId), eq(whatsappBroadcastRecipients.status, "queued")));
+      .where(
+        and(
+          eq(whatsappBroadcastRecipients.broadcastId, broadcastId),
+          eq(whatsappBroadcastRecipients.status, "queued"),
+        ),
+      );
     if (Number(remaining.count) === 0) {
       await db
         .update(whatsappBroadcasts)
@@ -159,5 +227,11 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ processed: rows.length, sent, failed, suppressed: suppressedCount });
+  return NextResponse.json({
+    started: promoted.length,
+    processed: rows.length,
+    sent,
+    failed,
+    suppressed: suppressedCount,
+  });
 }

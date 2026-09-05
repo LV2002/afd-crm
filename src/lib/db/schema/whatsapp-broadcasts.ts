@@ -1,5 +1,17 @@
 import { sql } from "drizzle-orm";
-import { check, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  check,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
+
+import type { ParamSource } from "@/lib/whatsapp/personalise";
 
 import { idColumn, timestamps } from "./_helpers";
 import { profiles } from "./auth";
@@ -9,9 +21,13 @@ import { tags } from "./tags";
 
 export const whatsappBroadcastStatusEnum = pgEnum("whatsapp_broadcast_status", [
   "draft",
+  /** Written, audience frozen, waiting for its moment. The sweep promotes it to `sending`. */
+  "scheduled",
   "sending",
   "completed",
   "failed",
+  /** Stopped by a person — as opposed to `failed`, which is Meta refusing it. */
+  "cancelled",
 ]);
 
 export const whatsappBroadcastRecipientStatusEnum = pgEnum("whatsapp_broadcast_recipient_status", [
@@ -51,7 +67,20 @@ export const whatsappBroadcasts = pgTable("whatsapp_broadcasts", {
   tagId: uuid("tag_id").references(() => tags.id, { onDelete: "restrict" }),
   templateName: text("template_name").notNull(),
   templateLanguage: text("template_language").notNull().default("en_US"),
+  /**
+   * The old single value for `{{1}}`, used for the whole audience. Kept
+   * for the rows that predate `bodyParams` and still read by the sweep as
+   * a fallback, so nothing sent before personalisation shipped changes
+   * meaning. New broadcasts write `bodyParams`.
+   */
   bodyParam: text("body_param"),
+  /**
+   * Where each of the template's `{{n}}` placeholders gets its words:
+   * fixed text, or a merge variable resolved from the recipient's own
+   * record. See `lib/whatsapp/personalise.ts` for the shape and
+   * `lib/whatsapp/merge-variables.ts` for what can be merged.
+   */
+  bodyParams: jsonb("body_params").$type<ParamSource[]>(),
   /**
    * The file filling the template's media header on this send, if it has
    * one. Meta's media id from the /media upload, not a file of ours — it
@@ -62,7 +91,20 @@ export const whatsappBroadcasts = pgTable("whatsapp_broadcasts", {
   headerMediaKind: text("header_media_kind"),
   headerMediaFilename: text("header_media_filename"),
   status: whatsappBroadcastStatusEnum("status").notNull().default("draft"),
-  createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
+  /**
+   * When this should leave, in UTC — a person picks 10:00 in Kochi and
+   * this holds 04:30Z. Set only while `status` is `scheduled`, which a
+   * check constraint enforces: a scheduled broadcast with no time is one
+   * that never sends and never says why.
+   */
+  scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelledBy: uuid("cancelled_by").references(() => profiles.id, {
+    onDelete: "set null",
+  }),
+  createdBy: uuid("created_by").references(() => profiles.id, {
+    onDelete: "set null",
+  }),
   totalRecipients: integer("total_recipients").notNull().default(0),
   sentCount: integer("sent_count").notNull().default(0),
   failedCount: integer("failed_count").notNull().default(0),
@@ -92,8 +134,19 @@ export const whatsappBroadcastRecipients = pgTable(
       .notNull()
       .references(() => whatsappBroadcasts.id, { onDelete: "cascade" }),
     leadId: uuid("lead_id").references(() => leads.id, { onDelete: "cascade" }),
-    studentId: uuid("student_id").references(() => students.id, { onDelete: "cascade" }),
+    studentId: uuid("student_id").references(() => students.id, {
+      onDelete: "cascade",
+    }),
     phone: text("phone").notNull(),
+    /**
+     * The strings that go into this person's `{{n}}` placeholders, in
+     * order, resolved when the audience was snapshotted rather than at
+     * send time — so the send loop stays one API call per person, and
+     * "what did we actually say to Anjali" is readable months later
+     * instead of recomputed against a record that has since changed.
+     * Same reasoning as snapshotting `phone`.
+     */
+    params: jsonb("params").$type<string[]>(),
     status: whatsappBroadcastRecipientStatusEnum("status").notNull().default("queued"),
     waMessageId: text("wa_message_id"),
     errorMessage: text("error_message"),
@@ -107,9 +160,6 @@ export const whatsappBroadcastRecipients = pgTable(
     uniqueIndex("whatsapp_broadcast_recipients_broadcast_id_student_id_uq")
       .on(t.broadcastId, t.studentId)
       .where(sql`student_id is not null`),
-    check(
-      "whatsapp_broadcast_recipients_one_subject",
-      sql`num_nonnulls(lead_id, student_id) = 1`,
-    ),
+    check("whatsapp_broadcast_recipients_one_subject", sql`num_nonnulls(lead_id, student_id) = 1`),
   ],
 );
