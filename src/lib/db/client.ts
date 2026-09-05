@@ -46,9 +46,38 @@ function getConnectionString() {
  * misconfigured DATABASE_URL surfaces as a readable error page (see
  * `isDatabaseUnreachable`) instead of an unexplained dead tab.
  */
+/**
+ * How many Postgres connections one running instance may hold.
+ *
+ * This was 1, and that single number was a bottleneck under everything:
+ * with a pool of one, every direct-db query in a request waited for the
+ * one before it to finish, so a page running six independent queries in
+ * `Promise.all` executed them strictly one after another and took six
+ * times as long as it needed to. It also made a nested transaction
+ * deadlock outright, which is why several modules take a `DbExecutor`
+ * instead of opening their own.
+ *
+ * Five is chosen against AFD's real shape, not a benchmark: a handful of
+ * staff, a few hundred leads a month, and a Supabase pooler whose
+ * connection budget is shared across every serverless instance Vercel
+ * happens to have warm. Enough for the widest `Promise.all` on any page,
+ * small enough that a dozen cold instances cannot exhaust the pooler.
+ */
+const MAX_CONNECTIONS = 5;
+
 const client =
   globalThis.__afdDbClient ??
-  postgres(getConnectionString(), { max: 1, prepare: false, connect_timeout: 8 });
+  postgres(getConnectionString(), {
+    max: MAX_CONNECTIONS,
+    prepare: false,
+    connect_timeout: 8,
+    /**
+     * Hand a connection back to the pooler after 20 idle seconds. A
+     * serverless instance that served one request at 9am and nothing
+     * since should not still be holding a connection at noon.
+     */
+    idle_timeout: 20,
+  });
 
 if (process.env.NODE_ENV !== "production") {
   globalThis.__afdDbClient = client;
@@ -59,9 +88,11 @@ export const db = drizzle(client, { schema });
 /**
  * A db handle that can be either the top-level `db` or a `tx` inside
  * `db.transaction(async (tx) => ...)`. Functions that need to compose into
- * a caller's existing transaction (rather than opening their own — `db`'s
- * connection pool is `max: 1`, so a nested `db.transaction()` call would
- * deadlock waiting for a connection the outer transaction is holding)
+ * a caller's existing transaction (rather than opening their own: while the
+ * pool was `max: 1` a nested `db.transaction()` call deadlocked outright,
+ * waiting for a connection the outer transaction was holding. The pool is
+ * larger now, so the deadlock is gone — but composing into the caller's
+ * transaction is still the right shape, because it keeps the work atomic)
  * should take this type and let the caller own the transaction boundary.
  */
 export type DbExecutor = typeof db | Parameters<Parameters<(typeof db)["transaction"]>[0]>[0];

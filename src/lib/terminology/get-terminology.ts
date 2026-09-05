@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { createClient } from "@/lib/supabase/server";
 
 import { DEFAULT_TERMINOLOGY, TERMINOLOGY_KEYS, type TerminologyKey, type TerminologyMap } from "./terms";
@@ -10,7 +12,7 @@ import { DEFAULT_TERMINOLOGY, TERMINOLOGY_KEYS, type TerminologyKey, type Termin
  * text — a broken terminology screen should never take down every other
  * page's labels.
  */
-export async function getTerminologyMap(): Promise<TerminologyMap> {
+export const getTerminologyMap = cache(async function getTerminologyMap(): Promise<TerminologyMap> {
   const supabase = await createClient();
 
   const { data } = await supabase
@@ -27,4 +29,4 @@ export async function getTerminologyMap(): Promise<TerminologyMap> {
   }
 
   return map;
-}
+});

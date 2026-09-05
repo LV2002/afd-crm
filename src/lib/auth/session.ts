@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import type { PermissionCode, PermissionScope } from "./permissions";
 import { createClient } from "@/lib/supabase/server";
 
@@ -31,8 +33,27 @@ function widestScope(a: PermissionScope, b: PermissionScope): PermissionScope {
  * — this helper reads no more than the user themselves is allowed to.
  *
  * Returns null when there is no session or the profile is inactive/missing.
+ *
+ * ## Cached per request, and that is not an optimisation detail
+ *
+ * This is called from 165 places. A single page load runs it from the
+ * layout, from the page, and from most components on it — and each run
+ * used to cost FOUR network round trips to Supabase: `auth.getUser()`
+ * (which is an HTTP call to the auth server, not a local token decode),
+ * then the profile, the role's permissions and the user's centres.
+ *
+ * Five callers on one page meant twenty round trips before a single row
+ * of actual data was fetched. At 60–100ms each from Vercel to Supabase
+ * that is one to two seconds of nothing, on every click.
+ *
+ * React's `cache()` makes it once per request and free thereafter. It is
+ * per-request only — a second visitor, or the same person's next click,
+ * re-reads everything — so a permission change still takes effect on the
+ * very next page load. Nothing is cached ACROSS requests on purpose:
+ * stale permissions are a security bug, and this is the check that stands
+ * between a counsellor and somebody else's leads.
  */
-export async function getCurrentUser(): Promise<SessionUser | null> {
+export const getCurrentUser = cache(async function getCurrentUser(): Promise<SessionUser | null> {
   const supabase = await createClient();
 
   const {
@@ -89,7 +110,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     centerIds: (userCenters ?? []).map((c) => c.center_id),
     permissions,
   };
-}
+});
 
 /** Returns the scope the user holds for a permission, or undefined. */
 export function scopeFor(user: SessionUser, code: PermissionCode): PermissionScope | undefined {
