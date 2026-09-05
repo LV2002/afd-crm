@@ -17,14 +17,37 @@ import type { FieldOption } from "@/lib/fields/resolve-field-options";
 import { NOT_SET, NOT_SET_LABEL, type PivotField } from "@/lib/reports/pivot";
 import type { AudienceEntity } from "@/lib/whatsapp/audience";
 import { WHATSAPP_MEDIA_EXTENSIONS } from "@/lib/whatsapp/media";
+import { MERGE_VARIABLES, mergeVariablesFor } from "@/lib/whatsapp/merge-variables";
+import { fillTemplateBody, resolveParams, type ParamSource } from "@/lib/whatsapp/personalise";
+import { SWEEP_CADENCE_NOTE, defaultScheduleValue } from "@/lib/whatsapp/schedule";
 import { cn } from "@/lib/utils";
 
-import { createBroadcast, previewAudience, type AudiencePreview, type BroadcastFormState } from "../actions";
+import {
+  createBroadcast,
+  previewAudience,
+  type AudiencePreview,
+  type BroadcastFormState,
+} from "../actions";
 
 const initialState: BroadcastFormState = {};
 
 /** shadcn's Select can't hold an empty-string item, so "no filter" needs a token of its own. */
 const ANY = "__any__";
+
+/** The same token trick for "this placeholder is fixed text, not a variable". */
+const FIXED_TEXT = "__text__";
+
+/**
+ * Stand-in values for the live preview before anybody has pressed "Check
+ * the audience". Showing "Hi {{1}}" while somebody is choosing what {{1}}
+ * means is useless; showing "Hi Anjali" makes the choice obvious. Once
+ * the audience has been checked these are replaced by the first real
+ * recipient's own values, so the last thing read before sending is a
+ * message that genuinely exists.
+ */
+const EXAMPLE_VALUES: Record<string, string> = Object.fromEntries(
+  MERGE_VARIABLES.map((variable) => [variable.key, variable.example]),
+);
 
 export interface AudienceFieldOptions {
   field: PivotField;
@@ -70,10 +93,64 @@ export function NewBroadcastForm({
   const [templateName, setTemplateName] = useState(templates[0]?.name ?? "");
   const [preview, setPreview] = useState<AudiencePreview | null>(null);
   const [previewing, startPreview] = useTransition();
+  const [sources, setSources] = useState<ParamSource[]>([]);
+  const [sendMode, setSendMode] = useState<"now" | "schedule">("now");
+  const [scheduledAt, setScheduledAt] = useState("");
 
   const fields = entity === "lead" ? leadFields : studentFields;
   const template = templates.find((t) => t.name === templateName) ?? null;
   const serialisedFilters = JSON.stringify(filters);
+  const variables = mergeVariablesFor(entity);
+
+  // One source per placeholder the chosen template actually has. A
+  // template with three variables and two sources would send the course
+  // where the name belongs, so the array is padded rather than trusted.
+  const placeholderCount = template?.placeholders ?? 0;
+  const paramSources: ParamSource[] = Array.from(
+    { length: placeholderCount },
+    (_, index) => sources[index] ?? { kind: "text", value: "" },
+  );
+  const serialisedSources = JSON.stringify(paramSources);
+
+  // The message as one real person will read it. Before the audience has
+  // been checked these are stand-in examples; after, they are the first
+  // recipient's own values.
+  const previewValues = preview?.sampleValues ?? EXAMPLE_VALUES;
+  const filledBody = template
+    ? fillTemplateBody(template.body, resolveParams(paramSources, previewValues).params)
+    : "";
+
+  function setSource(index: number, next: ParamSource) {
+    setSources((current) => {
+      const copy: ParamSource[] = Array.from(
+        { length: placeholderCount },
+        (_, i) => current[i] ?? { kind: "text", value: "" },
+      );
+      copy[index] = next;
+      return copy;
+    });
+  }
+
+  /**
+   * A variable that resolves to nothing for one person still has to send
+   * something — Meta rejects an empty parameter outright — so the
+   * fallback is required, and pre-filled with something that reads like a
+   * sentence rather than left blank for somebody to forget.
+   */
+  function chooseVariable(index: number, key: string) {
+    if (key === FIXED_TEXT) {
+      setSource(index, { kind: "text", value: "" });
+      return;
+    }
+    const existing = paramSources[index];
+    const fallback =
+      existing?.kind === "variable" && existing.fallback
+        ? existing.fallback
+        : key === "first_name" || key === "full_name"
+          ? "there"
+          : "";
+    setSource(index, { kind: "variable", key, fallback });
+  }
 
   function switchEntity(next: AudienceEntity) {
     setEntity(next);
@@ -83,6 +160,18 @@ export function NewBroadcastForm({
     setFilters({});
     setTagId("");
     setPreview(null);
+    // A student has no counsellor and a lead has no batch, so a variable
+    // chosen for one entity can be meaningless on the other. Rather than
+    // silently sending the fallback to everybody, those placeholders drop
+    // back to fixed text and have to be chosen again.
+    setSources((current) =>
+      current.map((source) =>
+        source.kind === "variable" &&
+        !mergeVariablesFor(next).some((variable) => variable.key === source.key)
+          ? { kind: "text", value: "" }
+          : source,
+      ),
+    );
   }
 
   function setFilter(key: string, value: string) {
@@ -99,6 +188,7 @@ export function NewBroadcastForm({
     const data = new FormData();
     data.set("entity", entity);
     data.set("filters", serialisedFilters);
+    data.set("bodyParams", serialisedSources);
     if (tagId) data.set("tagId", tagId);
     startPreview(async () => setPreview(await previewAudience(data)));
   }
@@ -112,6 +202,8 @@ export function NewBroadcastForm({
       <input type="hidden" name="entity" value={entity} />
       <input type="hidden" name="filters" value={serialisedFilters} />
       <input type="hidden" name="tagId" value={tagId} />
+      <input type="hidden" name="bodyParams" value={serialisedSources} />
+      <input type="hidden" name="sendMode" value={sendMode} />
 
       <section className="flex flex-col gap-3 rounded-lg border p-4">
         <h3 className="text-sm font-semibold">Who it goes to</h3>
@@ -200,7 +292,13 @@ export function NewBroadcastForm({
         </details>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" variant="outline" size="sm" onClick={runPreview} disabled={previewing}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={runPreview}
+            disabled={previewing}
+          >
             {previewing ? "Counting…" : "Check the audience"}
           </Button>
           {preview && !preview.error && (
@@ -271,8 +369,8 @@ export function NewBroadcastForm({
               required
             />
             <p className="text-xs text-muted-foreground">
-              This template was approved with a {template.headerMediaKind} header, so every
-              message carries one. It is uploaded once and reused for the whole audience.
+              This template was approved with a {template.headerMediaKind} header, so every message
+              carries one. It is uploaded once and reused for the whole audience.
               {template.headerMediaKind === "image"
                 ? " JPG or PNG, up to 5 MB."
                 : template.headerMediaKind === "video"
@@ -282,24 +380,167 @@ export function NewBroadcastForm({
           </div>
         )}
 
-        {template && template.placeholders > 0 && (
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="broadcast-body-param">Value for {"{{1}}"}</Label>
-            <Input id="broadcast-body-param" name="bodyParam" />
-            {template.placeholders > 1 && (
+        {template && placeholderCount > 0 && (
+          <div className="flex flex-col gap-3">
+            <div>
+              <Label>What fills the blanks</Label>
               <p className="text-xs text-muted-foreground">
-                This template asks for {template.placeholders} values but only the first can be
-                filled in here — the rest would be blank. Use a template with one variable, or
-                none, until per-recipient values are built.
+                Each blank is either the same words for everybody, or that person&rsquo;s own
+                details. A variable that turns out to be blank for somebody uses the fallback
+                instead — WhatsApp rejects a message with an empty blank in it.
               </p>
-            )}
+            </div>
+
+            {paramSources.map((source, index) => {
+              const variable =
+                source.kind === "variable"
+                  ? variables.find((entry) => entry.key === source.key)
+                  : undefined;
+              return (
+                <div key={index} className="flex flex-wrap items-end gap-3 rounded-md border p-3">
+                  <span className="pb-2 font-mono text-sm text-muted-foreground">
+                    {`{{${index + 1}}}`}
+                  </span>
+
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs text-muted-foreground">Fill with</Label>
+                    <Select
+                      value={source.kind === "variable" ? source.key : FIXED_TEXT}
+                      onValueChange={(value) => chooseVariable(index, value)}
+                    >
+                      <SelectTrigger className="h-9 w-56">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={FIXED_TEXT}>The same words for everybody</SelectItem>
+                        {variables.map((entry) => (
+                          <SelectItem key={entry.key} value={entry.key}>
+                            {entry.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {source.kind === "text" ? (
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-xs text-muted-foreground">Words</Label>
+                      <Input
+                        className="h-9 w-64"
+                        value={source.value}
+                        placeholder="NIFT 2027 batch"
+                        onChange={(event) =>
+                          setSource(index, { kind: "text", value: event.target.value })
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-xs text-muted-foreground">
+                        If we don&rsquo;t have it, say
+                      </Label>
+                      <Input
+                        className="h-9 w-40"
+                        value={source.fallback}
+                        placeholder="there"
+                        onChange={(event) =>
+                          setSource(index, {
+                            kind: "variable",
+                            key: source.key,
+                            fallback: event.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  )}
+
+                  {variable?.note && (
+                    <p className="w-full text-xs text-muted-foreground">{variable.note}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {template && (
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">
+              {preview?.sampleValues
+                ? `As ${preview.sample[0] ?? "the first person on the list"} will read it`
+                : "Roughly how it will read"}
+            </Label>
+            {/* The last thing anybody sees before four hundred copies of
+                it leave. Once the audience has been checked this is a
+                real recipient's own values, not an example. */}
+            <p className="whitespace-pre-wrap rounded-md border border-dashed p-3 text-sm">
+              {filledBody}
+            </p>
+          </div>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3 rounded-lg border p-4">
+        <h3 className="text-sm font-semibold">When it goes out</h3>
+
+        <div className="flex gap-1">
+          {(["now", "schedule"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => {
+                setSendMode(value);
+                // Filled the first time it is needed rather than on every
+                // render, so there is no chance of the server and the
+                // browser disagreeing about what "tomorrow" is.
+                if (value === "schedule" && !scheduledAt) {
+                  setScheduledAt(defaultScheduleValue(new Date()));
+                }
+              }}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-sm font-medium",
+                sendMode === value ? "bg-accent" : "text-muted-foreground hover:bg-accent/50",
+              )}
+            >
+              {value === "now" ? "Straight away" : "At a set time"}
+            </button>
+          ))}
+        </div>
+
+        {sendMode === "schedule" && (
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="broadcast-scheduled-at" className="text-xs text-muted-foreground">
+              Date and time (India)
+            </Label>
+            <Input
+              id="broadcast-scheduled-at"
+              name="scheduledAt"
+              type="datetime-local"
+              className="h-9 w-64"
+              value={scheduledAt}
+              onChange={(event) => setScheduledAt(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              The audience is fixed now, not at that time — whoever matches the filters today is who
+              gets it. Anybody who opts out in the meantime is dropped at send. You can stop it any
+              time before it goes.
+            </p>
+            <p className="text-xs text-muted-foreground">{SWEEP_CADENCE_NOTE}</p>
           </div>
         )}
       </section>
 
       <FormMessage error={state.error} />
       <Button type="submit" disabled={pending || !templateName} className="w-fit">
-        {pending ? "Queuing…" : preview && !preview.error ? `Send to ${preview.count}` : "Send"}
+        {pending
+          ? "Queuing…"
+          : sendMode === "schedule"
+            ? preview && !preview.error
+              ? `Schedule for ${preview.count}`
+              : "Schedule"
+            : preview && !preview.error
+              ? `Send to ${preview.count}`
+              : "Send"}
       </Button>
     </form>
   );

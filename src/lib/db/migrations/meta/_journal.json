@@ -372,6 +372,20 @@
       "when": 1788573246458,
       "tag": "0052_payment_reminders",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1788573299458,
+      "tag": "0053_broadcast_status_values",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1788573300458,
+      "tag": "0054_broadcast_schedule",
+      "breakpoints": true
     }
   ]
 }

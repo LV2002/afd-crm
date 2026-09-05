@@ -3345,3 +3345,79 @@ membership cannot undo a move to a new one.
 Outstanding amounts come from the same `allocatePayments` the Collections screen
 uses, so the two can never disagree about who is late. A refund puts the money
 back on the schedule, so a bounced payment makes somebody overdue again.
+
+## Session 40 — Broadcasts learn a person's name, and a clock
+
+Two features, built together because they touch the same composer and shipping
+them separately would have meant walking the same code twice.
+
+**Shipped — per-recipient template values**
+
+- **`lib/whatsapp/merge-variables.ts`** — the fixed catalogue of what a message
+  can say about the person receiving it: first name, full name, course, centre,
+  their counsellor (leads), batch (students), amount still due and next
+  instalment date (both, via their admission).
+- **`lib/whatsapp/personalise.ts`** — pure: `sanitiseParam`, `firstName`,
+  `resolveParams`, `parseParamSources`, `fillTemplateBody`.
+- **`lib/whatsapp/merge-values.ts`** — resolves the whole audience in a handful
+  of queries, and only for the variables actually used.
+- **`whatsapp_broadcasts.body_params`** holds what each `{{n}}` was set to;
+  **`whatsapp_broadcast_recipients.params`** holds the answer for one person.
+- The composer now shows the message **as the first real recipient will read
+  it**, once the audience has been checked.
+
+Before this a broadcast carried one `body_param` for the whole send, so "Hi
+{{1}}" greeted four hundred people identically. `body_param` is still read as a
+fallback, so nothing sent before today changes meaning.
+
+**Shipped — scheduled sends**
+
+- **`scheduled` and `cancelled`** broadcast statuses (`0053`), plus
+  `scheduled_for`, `body_params`, `cancelled_at`/`cancelled_by` and a check
+  constraint that refuses a scheduled broadcast with no time (`0054`).
+- **`lib/whatsapp/schedule.ts`** — pure, and every line of it about the time
+  zone. A person types 10:00 in Kochi and means 04:30Z.
+- The sweep **promotes** due broadcasts before sending, at or after their time
+  — never on an equality, so one whose moment passed while nobody was looking
+  goes late rather than never.
+- **Cancel** stops a broadcast, scheduled or mid-send. Recipients who never got
+  it stay `queued` on purpose, as the record of who was spared.
+
+**Decisions worth knowing**
+
+- **Merge variables are fixed in code, not admin-editable.** `amount_due` is an
+  allocation across an instalment schedule, not a column somebody could point
+  at — you cannot invent a resolver at runtime. They belong with the AI's tools
+  and the notification events on CLAUDE.md's short "fixed in code" list.
+- **Values are resolved when the audience is snapshotted, not at send time.**
+  Same reasoning as snapshotting the phone number: the send loop stays one API
+  call per person, and "what did we actually say to Anjali" is readable months
+  later rather than recomputed against a record that has since changed.
+- **Every variable needs a fallback.** Meta rejects an empty parameter per
+  message, so one lead with no course on file would otherwise fail silently.
+  A recipient that still can't be filled is queued as already `failed` with a
+  reason a human can read, and the rest of the audience goes.
+- **A check constraint written as `status::text <> 'scheduled'`.** Postgres
+  refuses to *use* an enum value added in the same transaction, and drizzle-kit
+  applies every pending migration in one — so the obvious form fails on exactly
+  the run that matters, the first one.
+- **`merge-values.ts` reads on the direct client.** Everybody it decorates came
+  out of an RLS-scoped audience query; re-reading through RLS would mean a
+  marketing user without finance read composing a fee reminder that silently
+  said ₹0 to everybody.
+
+**The cadence caveat — for Leon**
+
+Scheduling is only as precise as the sweep that sends, and that sweep runs
+**weekly, Sunday 01:00 UTC**. A broadcast scheduled for Tuesday morning leaves
+the following Sunday. The composer says so in as many words rather than
+implying a precision that does not exist — `SWEEP_CADENCE_NOTE` in
+`lib/whatsapp/schedule.ts` is the single place that sentence lives.
+
+I raised the cron to daily and Leon asked for it to be put back: his hosting
+plan allows one cron a day at most. Reverted. Batch size stays up at 100 per
+run, which is the only part of the delivery rate that could be improved without
+touching the schedule.
+
+One line in `vercel.json` fixes it whenever the plan allows, and nothing in the
+code changes with it.

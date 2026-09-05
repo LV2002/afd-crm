@@ -230,6 +230,142 @@ describe("GET /api/cron/whatsapp-broadcast-sweep", () => {
     expect(vi.mocked(sendTemplateMessage).mock.calls[0][6]).toBeUndefined();
   });
 
+  it("leaves a scheduled broadcast alone until its time has come", async () => {
+    // The whole point of scheduling. Composing on Monday for Tuesday
+    // morning is worthless if Monday night's sweep sends it.
+    const broadcastId = await makeBroadcast("future");
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await db
+      .update(whatsappBroadcasts)
+      .set({ status: "scheduled", scheduledFor: tomorrow, startedAt: null })
+      .where(eq(whatsappBroadcasts.id, broadcastId));
+    const leadId = await makeLead("future", "+919847600505", counsellorId);
+    await db
+      .insert(whatsappBroadcastRecipients)
+      .values({ broadcastId, leadId, phone: "+919847600505", status: "queued" });
+
+    await GET(request());
+
+    const [broadcast] = await db
+      .select()
+      .from(whatsappBroadcasts)
+      .where(eq(whatsappBroadcasts.id, broadcastId));
+    expect(broadcast.status).toBe("scheduled");
+    expect(broadcast.startedAt).toBeNull();
+
+    const [recipient] = await db
+      .select()
+      .from(whatsappBroadcastRecipients)
+      .where(eq(whatsappBroadcastRecipients.leadId, leadId));
+    expect(recipient.status).toBe("queued");
+  });
+
+  it("starts a scheduled broadcast whose time has passed, even if the sweep was late", async () => {
+    // `<=`, not an equality on the minute: the sweep runs on a cron and
+    // will essentially never be looking at the exact scheduled minute, so
+    // one whose time passed hours ago has to go late rather than never.
+    const broadcastId = await makeBroadcast("past");
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    await db
+      .update(whatsappBroadcasts)
+      .set({ status: "scheduled", scheduledFor: yesterday, startedAt: null })
+      .where(eq(whatsappBroadcasts.id, broadcastId));
+    const leadId = await makeLead("past", "+919847600606", counsellorId);
+    await db
+      .insert(whatsappBroadcastRecipients)
+      .values({ broadcastId, leadId, phone: "+919847600606", status: "queued" });
+
+    vi.mocked(sendTemplateMessage).mockResolvedValue("wamid.scheduled");
+    await GET(request());
+
+    const [broadcast] = await db
+      .select()
+      .from(whatsappBroadcasts)
+      .where(eq(whatsappBroadcasts.id, broadcastId));
+    // Completed, not merely started: promotion and sending both happen in
+    // the same run, so a scheduled campaign does not lose a whole cron
+    // cycle waiting to begin.
+    expect(broadcast.status).toBe("completed");
+    expect(broadcast.startedAt).not.toBeNull();
+
+    const [recipient] = await db
+      .select()
+      .from(whatsappBroadcastRecipients)
+      .where(eq(whatsappBroadcastRecipients.leadId, leadId));
+    expect(recipient.status).toBe("sent");
+  });
+
+  it("stops dead when a broadcast is cancelled mid-send", async () => {
+    // Cancelling is a status change and nothing else; the sweep's own
+    // `status = 'sending'` filter is what actually halts it. If that ever
+    // stopped being true, cancelling would become decorative.
+    const broadcastId = await makeBroadcast("cancelled");
+    await db
+      .update(whatsappBroadcasts)
+      .set({ status: "cancelled", cancelledAt: new Date() })
+      .where(eq(whatsappBroadcasts.id, broadcastId));
+    const leadId = await makeLead("cancelled", "+919847600707", counsellorId);
+    await db
+      .insert(whatsappBroadcastRecipients)
+      .values({ broadcastId, leadId, phone: "+919847600707", status: "queued" });
+
+    await GET(request());
+
+    const [recipient] = await db
+      .select()
+      .from(whatsappBroadcastRecipients)
+      .where(eq(whatsappBroadcastRecipients.leadId, leadId));
+    expect(recipient.status).toBe("queued");
+    expect(sendTemplateMessage).not.toHaveBeenCalled();
+  });
+
+  it("sends each recipient their OWN resolved values", async () => {
+    const broadcastId = await makeBroadcast("personalised");
+    await db
+      .update(whatsappBroadcasts)
+      .set({ bodyParams: [{ kind: "variable", key: "first_name", fallback: "there" }] })
+      .where(eq(whatsappBroadcasts.id, broadcastId));
+
+    const anjali = await makeLead("anjali", "+919847600808", counsellorId);
+    const rajesh = await makeLead("rajesh", "+919847600909", counsellorId);
+    await db.insert(whatsappBroadcastRecipients).values([
+      { broadcastId, leadId: anjali, phone: "+919847600808", status: "queued", params: ["Anjali"] },
+      { broadcastId, leadId: rajesh, phone: "+919847600909", status: "queued", params: ["Rajesh"] },
+    ]);
+
+    vi.mocked(sendTemplateMessage).mockResolvedValue("wamid.personalised");
+    await GET(request());
+
+    // Position 5 is the body params argument. Two people, two different
+    // greetings — before this the same word went to the whole audience.
+    const byPhone = new Map(
+      vi.mocked(sendTemplateMessage).mock.calls.map((call) => [call[2], call[5]]),
+    );
+    expect(byPhone.get("+919847600808")).toEqual(["Anjali"]);
+    expect(byPhone.get("+919847600909")).toEqual(["Rajesh"]);
+  });
+
+  it("still uses the old single body_param for a broadcast composed before personalisation", async () => {
+    // Nothing sent before today changes meaning.
+    const broadcastId = await makeBroadcast("legacy");
+    await db
+      .update(whatsappBroadcasts)
+      .set({ bodyParam: "NIFT 2027", bodyParams: null })
+      .where(eq(whatsappBroadcasts.id, broadcastId));
+    const leadId = await makeLead("legacy", "+919847601010", counsellorId);
+    await db
+      .insert(whatsappBroadcastRecipients)
+      .values({ broadcastId, leadId, phone: "+919847601010", status: "queued", params: null });
+
+    vi.mocked(sendTemplateMessage).mockResolvedValue("wamid.legacy");
+    await GET(request());
+
+    const call = vi
+      .mocked(sendTemplateMessage)
+      .mock.calls.find((entry) => entry[2] === "+919847601010");
+    expect(call?.[5]).toEqual(["NIFT 2027"]);
+  });
+
   it("never touches a recipient whose broadcast isn't in 'sending' status", async () => {
     const broadcastId = await makeBroadcast("draft");
     await db.update(whatsappBroadcasts).set({ status: "draft" }).where(eq(whatsappBroadcasts.id, broadcastId));

@@ -46,6 +46,17 @@ export interface AudienceMember {
   name: string;
   /** E.164 as stored. */
   phone: string;
+  /**
+   * The whole row this member came from, kept so per-recipient template
+   * values can be resolved without fetching everybody a second time (see
+   * `merge-values.ts`).
+   *
+   * SERVER-SIDE ONLY. It is a full lead or student record — phone
+   * numbers, custom fields, everything RLS let the composer read — and
+   * nothing may hand it to a client component. `previewAudience` returns
+   * counts and a few first names for exactly this reason.
+   */
+  record: Record<string, unknown>;
 }
 
 export interface AudienceResult {
@@ -176,6 +187,7 @@ export async function resolveAudience(
       id: lead.id,
       name: String(row[nameKey] ?? "").trim() || phone,
       phone,
+      record: row,
     });
   }
 
