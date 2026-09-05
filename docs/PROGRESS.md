@@ -3301,3 +3301,47 @@ re-joining after leaving stays possible — the old membership keeps its
 `left_at` and the history of both survives. Removing a student clears
 `current_batch_id` only if it still points at that batch, so tidying up an old
 membership cannot undo a move to a new one.
+
+## Session 39 — Overdue fees get chased
+
+**Shipped**
+
+- **`/api/cron/payment-reminders`**, nightly at 09:00 IST. Collections has
+  shown who is late since the finance module shipped; nothing has ever
+  contacted them. Now something does.
+- **A configurable ladder** (`payment_reminder_rules`, migration
+  `0052_payment_reminders.sql`) with a settings screen. A rung is "N days after
+  due, tell staff / WhatsApp the student". `days_after_due` may be **negative**
+  — a reminder before the money is late, which is the cheapest collection there
+  is and the thing an overdue-only design cannot express.
+- **`payment_reminders_sent`** — one row per rung actually fired, with a unique
+  index on (instalment, rung). That index is the entire anti-spam mechanism.
+- **`payment.overdue`** notification event, defaulting to accounts, the centre
+  head and the counsellor who sold the admission.
+- Seeded ladder: 3 days before, day 1, day 7, day 30 — all staff-facing.
+
+**Four things it will not do**
+
+- **Message the same person twice about the same instalment.** Enforced by the
+  unique index, not by the sweep's own bookkeeping.
+- **Chase a dropped student.** Excluded in SQL.
+- **Message somebody who said STOP,** is marked do-not-contact, or has no
+  number. Skipped with the reason recorded; the suppression list is re-read
+  every run.
+- **Fire four rungs at once** when a ladder is switched on against somebody
+  months late. One rung per instalment per run — the latest one due — and the
+  rungs it overtook are written off as skipped.
+
+**Two decisions**
+
+- **A rung is due at N days *or later*, not exactly on day N.** Equality looks
+  tidier and is wrong: a sweep that doesn't run on the 7th (a failed deploy, a
+  paused project) would skip the day-7 rung for every instalment due that week
+  and never come back to it.
+- **A failed WhatsApp send is recorded, not retried.** A template Meta rejects
+  will be rejected identically tomorrow and every attempt costs money. The row
+  says what went wrong; a person decides.
+
+Outstanding amounts come from the same `allocatePayments` the Collections screen
+uses, so the two can never disagree about who is late. A refund puts the money
+back on the schedule, so a bounced payment makes somebody overdue again.

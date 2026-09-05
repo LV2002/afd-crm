@@ -156,6 +156,21 @@ export const NOTIFICATION_EVENTS = [
     defaultNotifyRoleCodes: [],
   },
   {
+    key: "payment.overdue",
+    label: "Fee instalment overdue",
+    description:
+      "An instalment passed its due date without being paid. Sent by the nightly reminder sweep on the rungs an admin sets in Settings → Payment Reminders.",
+    category: "Money",
+    variables: ["student_name", "amount", "days_overdue", "due_date", "course"],
+    defaultTitle: "Overdue: {{student_name}}",
+    defaultBody:
+      "{{amount}} was due on {{due_date}} and is {{days_overdue}} days late for {{course}}.",
+    // The counsellor who sold the admission is usually the one the family
+    // actually answers the phone to.
+    defaultNotifyOwner: true,
+    defaultNotifyRoleCodes: ["accounts", "center_head"],
+  },
+  {
     key: "payment.recorded",
     label: "Payment recorded",
     description:

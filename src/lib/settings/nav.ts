@@ -72,6 +72,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage"],
   },
   {
+    href: "/settings/payment-reminders",
+    label: "Payment Reminders",
+    description: "When and how an unpaid instalment gets chased",
+    permissions: ["settings.manage"],
+  },
+  {
     href: "/settings/discount-limits",
     label: "Discount Authority",
     description: "How much each role can take off a fee before it needs approval",
