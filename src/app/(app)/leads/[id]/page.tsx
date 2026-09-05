@@ -79,18 +79,19 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   const canCreateEnrolment = can(user, "enrolment.create");
 
-  const [interactionTypes, interactionOutcomes, courseOptions, modeOptions, { data: enrolment }] = await Promise.all([
-    getDropdownOptions(supabase, "interaction_type"),
-    getDropdownOptions(supabase, "interaction_outcome"),
-    canCreateEnrolment ? getDropdownOptions(supabase, "course") : Promise.resolve([]),
-    canCreateEnrolment ? getDropdownOptions(supabase, "preferred_mode") : Promise.resolve([]),
-    supabase
-      .from("enrolments")
-      .select("id, course, net_fee_paise, status, dropped_at, drop_reason, sales_to_accounts_at")
-      .eq("lead_id", id)
-      .is("deleted_at", null)
-      .maybeSingle<EnrolmentRow>(),
-  ]);
+  const [interactionTypes, interactionOutcomes, courseOptions, modeOptions, { data: enrolment }] =
+    await Promise.all([
+      getDropdownOptions(supabase, "interaction_type"),
+      getDropdownOptions(supabase, "interaction_outcome"),
+      canCreateEnrolment ? getDropdownOptions(supabase, "course") : Promise.resolve([]),
+      canCreateEnrolment ? getDropdownOptions(supabase, "preferred_mode") : Promise.resolve([]),
+      supabase
+        .from("enrolments")
+        .select("id, course, net_fee_paise, status, dropped_at, drop_reason, sales_to_accounts_at")
+        .eq("lead_id", id)
+        .is("deleted_at", null)
+        .maybeSingle<EnrolmentRow>(),
+    ]);
 
   const [{ data: leadTagRows }, { data: allTagRows }] = await Promise.all([
     supabase
@@ -105,7 +106,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       .order("name")
       .returns<TagOption[]>(),
   ]);
-  const currentTags = (leadTagRows ?? []).map((r) => r.tags).filter((t): t is TagOption => t !== null);
+  const currentTags = (leadTagRows ?? [])
+    .map((r) => r.tags)
+    .filter((t): t is TagOption => t !== null);
   const currentTagIds = new Set(currentTags.map((t) => t.id));
   const availableTags = (allTagRows ?? []).filter((t) => !currentTagIds.has(t.id));
 
@@ -113,7 +116,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   const canReadWhatsApp = can(user, "whatsapp.read");
   const [whatsappMessages, withinWhatsAppWindow] = canReadWhatsApp
-    ? await Promise.all([getWhatsAppThread(supabase, id), isWithinCustomerServiceWindow(supabase, id)])
+    ? await Promise.all([
+        getWhatsAppThread(supabase, id),
+        isWithinCustomerServiceWindow(supabase, id),
+      ])
     : [[], false];
 
   const canReadFiles = can(user, "file.read");
@@ -171,7 +177,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               canRevealPhone={canRevealPhone}
             />
           ) : (
-            <p className="text-sm text-muted-foreground">You don&apos;t have permission to edit this lead.</p>
+            <p className="text-sm text-muted-foreground">
+              You don&apos;t have permission to edit this lead.
+            </p>
           )}
         </div>
 
@@ -272,6 +280,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             hasEnrolment={feePlan.hasEnrolment}
             hasSignedAgreement={hasSignedAgreement}
             printHref={`/leads/${id}/instalment-agreement`}
+            promos={feePlan.promos}
           />
         </div>
       )}
@@ -291,7 +300,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Timeline</h2>
-        {timeline.length === 0 && <p className="text-sm text-muted-foreground">Nothing logged yet.</p>}
+        {timeline.length === 0 && (
+          <p className="text-sm text-muted-foreground">Nothing logged yet.</p>
+        )}
         <ul className="flex flex-col gap-3">
           {timeline.map((entry) => (
             <li key={entry.id} className="flex gap-3 border-l-2 border-muted pl-3">
@@ -319,7 +330,9 @@ async function getTimeline(
       .from("stage_history")
       .select("id, changed_at, from_stage, to_stage")
       .eq("lead_id", leadId)
-      .returns<Array<{ id: string; changed_at: string; from_stage: string | null; to_stage: string }>>(),
+      .returns<
+        Array<{ id: string; changed_at: string; from_stage: string | null; to_stage: string }>
+      >(),
     supabase
       .from("interactions")
       .select("id, occurred_at, type, outcome, notes, next_action")

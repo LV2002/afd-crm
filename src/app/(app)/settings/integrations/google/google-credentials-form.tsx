@@ -35,6 +35,13 @@ const FIELDS: Array<{ key: keyof GoogleConnectionStatus["configured"]; label: st
   },
   { key: "customer_id", label: "Customer ID", help: "The ad account id, digits only (no dashes).", secret: false },
   {
+    key: "conversion_action",
+    label: "Offline Conversion Action",
+    help:
+      "The full resource name (customers/1234567890/conversionActions/987654321) of an action created in Google Ads as \u201cImport \u2014 from clicks\u201d. This is what admissions get reported against, so Smart Bidding optimises for students rather than form fills.",
+    secret: false,
+  },
+  {
     key: "login_customer_id",
     label: "Manager (Login) Customer ID",
     help: "Only needed if the account above is managed under an MCC — digits only. Leave blank otherwise.",

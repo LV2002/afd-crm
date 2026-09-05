@@ -18,5 +18,7 @@ export * from "./retargeting";
 export * from "./whatsapp";
 export * from "./whatsapp-broadcasts";
 export * from "./whatsapp-flows";
+export * from "./google-conversions";
+export * from "./promos";
 export * from "./notifications";
 export * from "./finance-ledger";

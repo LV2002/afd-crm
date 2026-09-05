@@ -1,18 +1,19 @@
 "use server";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { enrolmentInstalments, enrolments, leads } from "@/lib/db/schema";
+import { enrolmentPromos, enrolmentInstalments, enrolments, leads, promos } from "@/lib/db/schema";
 import { formatINR } from "@/lib/format/currency";
 import { notify } from "@/lib/notifications/notify";
 import { createClient } from "@/lib/supabase/server";
 
 import { discountPercent, resolveDiscount } from "./discount-authority";
 import { getDiscountLimit } from "./get-discount-limit";
+import { promoDiscountPaise, promoUsable, type Promo } from "./promos";
 import {
   INSTALMENT_SLOTS,
   rupeesToPaise,
@@ -70,7 +71,12 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
   }
 
   const [enrolment] = await db
-    .select({ id: enrolments.id, discountPaise: enrolments.discountPaise })
+    .select({
+      id: enrolments.id,
+      discountPaise: enrolments.discountPaise,
+      course: enrolments.course,
+      centerId: enrolments.centerId,
+    })
     .from(enrolments)
     .where(and(eq(enrolments.leadId, leadId), isNull(enrolments.deletedAt)));
   if (!enrolment) {
@@ -82,9 +88,11 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
 
   const discountRaw = String(formData.get("discount") ?? "").trim();
   const discountPaise = discountRaw === "" ? 0 : rupeesToPaise(discountRaw);
-  if (discountPaise === null) return { error: "Enter the discount as a number, or leave it blank." };
+  if (discountPaise === null)
+    return { error: "Enter the discount as a number, or leave it blank." };
 
   const discountName = String(formData.get("discountName") ?? "").trim() || null;
+  const promoId = String(formData.get("promoId") ?? "").trim() || null;
 
   const downRaw = String(formData.get("downPayment") ?? "").trim();
   const downPaymentPaise = downRaw === "" ? 0 : rupeesToPaise(downRaw);
@@ -117,11 +125,71 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
   // `enrolment.discountPaise` is what was previously granted, which is
   // what stops the obvious way round: approve ₹5,000, then edit it to
   // ₹25,000.
+  // An offer the institute is running, if one was picked.
+  //
+  // A promo is PRE-APPROVED by definition: the institute decided on it in
+  // advance and wrote down its cap and its expiry, so applying one is not
+  // the counsellor exercising personal authority. That is expressed by
+  // treating the promo's amount as already-approved below rather than by
+  // a second code path — which means everything else about the authority
+  // machinery still applies, including the fact that asking for MORE than
+  // the offer still queues for approval.
+  let promo: Promo | null = null;
+  let promoDiscount = 0;
+  let alreadyOnThisPromo = false;
+  if (promoId) {
+    const [row] = await db
+      .select()
+      .from(promos)
+      .where(and(eq(promos.id, promoId), isNull(promos.deletedAt)));
+    if (!row) return { error: "That offer no longer exists." };
+
+    promo = {
+      id: row.id,
+      name: row.name,
+      code: row.code,
+      discountType: row.discountType === "fixed" ? "fixed" : "percentage",
+      percentValue: row.percentValue === null ? null : Number(row.percentValue),
+      fixedPaise: row.fixedPaise,
+      maxDiscountPaise: row.maxDiscountPaise,
+      validFrom: row.validFrom,
+      validUntil: row.validUntil,
+      courses: row.courses ?? [],
+      centerIds: row.centerIds ?? [],
+      maxUses: row.maxUses,
+      usedCount: row.usedCount,
+      isActive: row.isActive,
+    };
+
+    const check = promoUsable(promo, {
+      // The institute's today, in Kochi and Kannur, not the server's.
+      asOf: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()),
+      course: enrolment.course,
+      centerId: enrolment.centerId,
+    });
+    if (!check.ok) return { error: check.reason };
+
+    promoDiscount = promoDiscountPaise(promo, totalFeePaise);
+
+    const [existing] = await db
+      .select({ promoId: enrolmentPromos.promoId })
+      .from(enrolmentPromos)
+      .where(eq(enrolmentPromos.enrolmentId, enrolment.id));
+    alreadyOnThisPromo = existing?.promoId === promo.id;
+  }
+
+  // What this person may actually give. A discount above their ceiling is
+  // recorded as a request and NOT applied — see discount-authority.ts for
+  // why an unapproved discount must not already be reducing the bill.
+  //
+  // The floor is the larger of what was previously granted and what the
+  // chosen offer is worth: a granted discount is never taken away, and an
+  // offer the institute is running needs nobody's permission.
   const outcome = resolveDiscount({
     limit: await getDiscountLimit(user),
     totalFeePaise,
     requestedPaise: discountPaise,
-    alreadyApprovedPaise: enrolment.discountPaise,
+    alreadyApprovedPaise: Math.max(enrolment.discountPaise, promoDiscount),
   });
 
   // The instalments were validated against the figure the counsellor
@@ -154,6 +222,41 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
         updatedAt: new Date(),
       })
       .where(eq(enrolments.id, enrolment.id));
+
+    // Which offer this admission took, and what it was worth AT THE TIME.
+    // The amount is kept rather than recomputed, because "what did Early
+    // Bird actually cost us?" has to stay answerable after somebody edits
+    // the offer or lets it expire.
+    if (promo) {
+      await tx
+        .insert(enrolmentPromos)
+        .values({
+          enrolmentId: enrolment.id,
+          promoId: promo.id,
+          discountPaise: promoDiscount,
+          appliedBy: user.id,
+        })
+        .onConflictDoUpdate({
+          target: enrolmentPromos.enrolmentId,
+          set: {
+            promoId: promo.id,
+            discountPaise: promoDiscount,
+            appliedBy: user.id,
+            updatedAt: new Date(),
+          },
+        });
+
+      // The counter moves only the FIRST time this admission takes this
+      // offer. `alreadyOnThisPromo` was read before the transaction, so
+      // re-saving the fee panel four times cannot use up four seats of a
+      // twenty-seat promotion.
+      if (!alreadyOnThisPromo) {
+        await tx
+          .update(promos)
+          .set({ usedCount: sql`${promos.usedCount} + 1` })
+          .where(eq(promos.id, promo.id));
+      }
+    }
 
     await tx.delete(enrolmentInstalments).where(eq(enrolmentInstalments.enrolmentId, enrolment.id));
     if (instalments.length > 0) {

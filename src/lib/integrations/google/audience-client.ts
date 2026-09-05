@@ -91,3 +91,61 @@ export async function removeUsersFromList(
 ): Promise<void> {
   await modifyUserListMembers(customerId, credentials, userListResourceName, hashedPhonesE164, "remove");
 }
+
+/**
+ * Reports an admission back to Google Ads against a click.
+ *
+ * `conversionActionResourceName` is the full
+ * `customers/{id}/conversionActions/{id}` an admin pastes into Settings →
+ * Integrations → Google. It must be an action created in Google Ads with
+ * type "Import — from clicks", or the upload is rejected.
+ *
+ * `partialFailure: true` deliberately. A batch of forty conversions where
+ * one GCLID has expired should upload the other thirty-nine, not fail
+ * whole. Google returns the per-row errors in `partialFailureError`,
+ * which the caller records against the rows that failed.
+ */
+export async function uploadClickConversions(
+  customerId: string,
+  credentials: GoogleAdsCredentials,
+  conversionActionResourceName: string,
+  conversions: Array<{ gclid: string; conversionDateTime: string; value: number; currency: string }>,
+): Promise<{ uploaded: number; partialFailure: unknown }> {
+  if (conversions.length === 0) return { uploaded: 0, partialFailure: null };
+
+  const response = await fetch(
+    `${GOOGLE_ADS_BASE_URL}/customers/${customerId}:uploadClickConversions`,
+    {
+      method: "POST",
+      headers: headers(credentials),
+      body: JSON.stringify({
+        conversions: conversions.map((conversion) => ({
+          gclid: conversion.gclid,
+          conversionAction: conversionActionResourceName,
+          conversionDateTime: conversion.conversionDateTime,
+          conversionValue: conversion.value,
+          currencyCode: conversion.currency,
+        })),
+        partialFailure: true,
+      }),
+    },
+  );
+
+  const body = await response.json();
+  if (!response.ok) {
+    throw new GoogleAdsApiError(
+      `Google Ads API returned ${response.status} uploading conversions`,
+      response.status,
+      body,
+    );
+  }
+
+  // `results` carries one entry per accepted row; a row rejected under
+  // partial failure comes back empty, so counting the non-empty ones is
+  // how many Google actually took.
+  const results = Array.isArray(body.results) ? body.results : [];
+  return {
+    uploaded: results.filter((result: unknown) => result && Object.keys(result).length > 0).length,
+    partialFailure: body.partialFailureError ?? null,
+  };
+}

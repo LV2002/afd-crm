@@ -78,6 +78,13 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage"],
   },
   {
+    href: "/settings/promos",
+    label: "Offers",
+    description:
+      "Named discounts the institute is running — pre-approved, so applying one needs no sign-off",
+    permissions: ["settings.manage"],
+  },
+  {
     href: "/settings/discount-limits",
     label: "Discount Authority",
     description: "How much each role can take off a fee before it needs approval",

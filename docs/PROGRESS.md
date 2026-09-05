@@ -3494,3 +3494,73 @@ webhook, within seconds. A button that takes a week to do anything is a form.
 It exists to fail a build that would ship server code to a browser; a Node test
 run has no browser to protect, and Next.js still enforces the real check where it
 counts.
+
+## Session 42 — Handovers, Google conversions, and offers
+
+Three of the four things Leon asked for in one go (automations shipped as
+Session 41).
+
+### Handover lag — `/handovers`
+
+CLAUDE.md names the two gates and calls the lag between them "a real
+operational metric". It has been timestamped on every enrolment since the
+finance module shipped and measured nowhere.
+
+- **The waiting list comes first, above the statistics.** "Nine admissions
+  confirmed and unpaid, the oldest 34 days" is work; "median 4 days" is trivia
+  by comparison.
+- **Every headline is a median.** One admission confirmed in March and paid in
+  November drags a mean into uselessness; the mean is shown beside it because
+  the gap between the two is itself the signal.
+- The percentile is nearest-rank, deliberately: "the median took 4 days" should
+  name an admission that really took 4 days.
+- Split by centre and by counsellor, slowest first. Dropped admissions are
+  counted separately, never listed to chase — somebody who left is not somebody
+  to ring about a payment.
+- Read through RLS, so a centre head sees their own centres. That is the right
+  call here and the wrong one on Ad Performance: spend can't be split by centre,
+  an admission belongs to exactly one.
+
+### Google offline conversions
+
+The single biggest lever on the Google budget. As far as Google knows, AFD's
+conversion is a form submission — so Smart Bidding has spent a year buying the
+cheapest form fills it can find, which is not the same as buying students.
+
+- `google_conversion_uploads` (migration `0056`) with a **unique index on
+  (enrolment, conversion action)** — the entire point of the table. Telling
+  Google about the same admission twice teaches it one click was worth double,
+  and the budget follows that lie.
+- Reports the **second** gate, not the first: a confirmed admission is a
+  counsellor's opinion, a cleared payment is money.
+- Refuses a click older than 90 days (Google has forgotten it), a dropped
+  admission (teaching Google to buy people who drop out), and a future date.
+- **First-touch GCLID**, not last: the click that started it is the one Google
+  should be credited for, and the one whose window is closest to expiring.
+- Skips and failures are recorded, because "nothing was uploaded" is
+  indistinguishable from "everything already had been".
+- New credential: **Offline Conversion Action** in Settings → Integrations →
+  Google. Leon needs to create an "Import — from clicks" action in Google Ads and
+  paste its resource name.
+
+### Offers (promos) — Settings → Offers
+
+`docs/01-DATA-MODEL.md` has listed `promos` since the beginning; nothing ever
+implemented it. Migration `0057`.
+
+- **The point is authority, not convenience.** The institute decided on the offer
+  in advance and wrote down its cap and expiry, so a counsellor applying one
+  **needs no approval** however large it is. That is expressed by feeding the
+  offer's amount in as the already-approved floor — so everything else about the
+  discount machinery still applies, including that asking for *more* than the
+  offer still queues.
+- Percentage or fixed, with a cap applied **after** the percentage (so "10% off
+  up to ₹10,000" means what a person reading it thinks), date-bounded inclusive
+  at both ends, restricted by course and centre, and optionally capped in total
+  uses.
+- `enrolment_promos` keeps the amount **at the time it was applied** — the only
+  figure that stays true once somebody edits or expires the offer.
+- One offer per admission. Stacking is a decision an institute should make
+  deliberately, not one that falls out of a form being saved twice.
+- The usage counter moves only the first time an admission takes an offer, so
+  re-saving the fee panel cannot burn four seats of a twenty-seat promotion.

@@ -18,6 +18,7 @@ export type NavIconKey =
   | "profile-forms"
   | "insights"
   | "marketing"
+  | "handovers"
   | "ask"
   | "settings";
 
@@ -103,6 +104,15 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
   },
   { href: "/insights", iconKey: "insights", permission: "report.read", label: "Insights" },
   {
+    // Centre-scoped through RLS, unlike Ad Performance: an admission
+    // belongs to exactly one centre, so a centre head reading their own
+    // handover lag is reading a true number.
+    href: "/handovers",
+    iconKey: "handovers",
+    permission: "report.read",
+    label: "Handovers",
+  },
+  {
     // Gated on report.read like Insights so it appears for the same people,
     // and the page itself turns away anyone without report.org — spend
     // cannot honestly be split by centre. See the page's module comment.
@@ -122,7 +132,9 @@ export function navItemsFor(user: SessionUser, terms: TerminologyMap): NavItem[]
       iconKey: item.iconKey,
       permission: item.permission,
       label:
-        typeof item.label === "string" ? item.label : formatTerm(terms, item.label.term, item.label.form),
+        typeof item.label === "string"
+          ? item.label
+          : formatTerm(terms, item.label.term, item.label.form),
     }),
   );
 }
