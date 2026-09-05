@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  CalendarRange,
   ClipboardList,
   GraduationCap,
   KanbanSquare,
@@ -36,6 +37,7 @@ const ICON_MAP: Record<NavIconKey, LucideIcon> = {
   accounts: Wallet,
   finance: Landmark,
   students: GraduationCap,
+  batches: CalendarRange,
   whatsapp: MessageCircle,
   "profile-forms": ClipboardList,
   insights: BarChart3,
