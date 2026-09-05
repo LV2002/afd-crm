@@ -13,6 +13,7 @@ import {
   releasePhone,
   suppressPhone,
 } from "@/lib/whatsapp/opt-out";
+import { resolveReply, startFlows } from "@/lib/whatsapp/flow-runner";
 import { activeDropdownValues } from "@/lib/config/dropdown-values";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 import { notify } from "@/lib/notifications/notify";
@@ -185,6 +186,21 @@ export async function POST(request: Request) {
           // An unmatched reply notifies nobody: there is no counsellor to
           // tell, and it is visible to whoever runs campaigns on the
           // WhatsApp inbox instead.
+          // Automation flows, before the notification.
+          //
+          // A run parked on "wait for their reply" branches HERE, in the
+          // webhook, rather than at the next sweep — a quick-reply button
+          // that takes a week to do anything is not a button, it is a
+          // form. Both calls swallow their own failures: a broken flow
+          // must not stop a message being recorded.
+          //
+          // Only when they have not opted out. Somebody whose message was
+          // "STOP" is not somebody to answer with an automation.
+          if (matched && !optOut) {
+            await resolveReply(matched.id, content.body);
+            await startFlows("inbound_keyword", { leadId: matched.id, text: content.body });
+          }
+
           if (matched) {
             await notify({
               eventKey: "whatsapp.reply_received",

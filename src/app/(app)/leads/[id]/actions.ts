@@ -14,6 +14,7 @@ import { fieldColumn } from "@/lib/fields/field-column";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import { parseRupeesToPaise } from "@/lib/format/currency";
 import { notify } from "@/lib/notifications/notify";
+import { startFlows } from "@/lib/whatsapp/flow-runner";
 import { createClient } from "@/lib/supabase/server";
 
 export interface FormState {
@@ -420,6 +421,10 @@ export async function addLeadTag(leadId: string, tagId: string): Promise<void> {
     entityId: leadId,
     after: { tagId },
   });
+
+  // A tag is how a counsellor says "this one is interested in NIFT" —
+  // which is exactly the moment an institute wants a sequence to start.
+  await startFlows("tag_added", { leadId, tagId });
 
   revalidatePath(`/leads/${leadId}`);
 }

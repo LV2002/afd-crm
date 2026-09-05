@@ -11,6 +11,15 @@ export default defineConfig({
     // Next.js or by a standalone Vitest test.
     alias: {
       "@": path.resolve(__dirname, "src"),
+      /**
+       * `server-only` throws the moment it is imported outside a React
+       * Server Component, which is exactly what a Vitest run is. The
+       * package exists to fail a BUILD that would ship server code to a
+       * browser; under Node there is no browser to protect, so it is
+       * stubbed out here. Next.js still enforces the real thing at build
+       * time, which is the check that actually matters.
+       */
+      "server-only": path.resolve(__dirname, "tests/stubs/server-only.ts"),
     },
   },
   test: {
