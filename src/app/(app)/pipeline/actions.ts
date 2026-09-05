@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { startFlows } from "@/lib/whatsapp/flow-runner";
 import { createClient } from "@/lib/supabase/server";
 
 export interface MoveLeadResult {
@@ -70,6 +71,11 @@ export async function moveLeadStage(
     entityId: leadId,
     after: payload,
   });
+
+  // Any automation watching for this stage. After the write and the audit
+  // row, and swallowing its own failures, so a flow can never be the
+  // reason a counsellor's stage move appears not to have worked.
+  await startFlows("stage_entered", { leadId, stageId });
 
   revalidatePath("/pipeline");
   return {};

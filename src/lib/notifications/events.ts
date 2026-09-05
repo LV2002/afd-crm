@@ -171,6 +171,23 @@ export const NOTIFICATION_EVENTS = [
     defaultNotifyRoleCodes: ["accounts", "center_head"],
   },
   {
+    key: "flow.step_reached",
+    label: "Automation reached a step that needs a person",
+    description:
+      "A WhatsApp automation flow hit a 'tell the counsellor' step — usually because the lead replied something the flow can't answer on its own.",
+    // Sits with the other lead-conversation events; a counsellor reads
+    // this next to "reply received", not in a category of its own.
+    category: "Leads",
+    variables: ["lead_name", "lead_number", "message"],
+    defaultTitle: "{{lead_name}} needs you",
+    defaultBody: "{{message}}",
+    // The counsellor who owns the lead. An automation handing a
+    // conversation back is handing it to the person whose conversation it
+    // is, not to a queue.
+    defaultNotifyOwner: true,
+    defaultNotifyRoleCodes: [],
+  },
+  {
     key: "payment.recorded",
     label: "Payment recorded",
     description:

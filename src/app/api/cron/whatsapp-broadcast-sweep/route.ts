@@ -5,6 +5,7 @@ import { db } from "@/lib/db/client";
 import { whatsappBroadcastRecipients, whatsappBroadcasts } from "@/lib/db/schema";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
+import { advanceRuns } from "@/lib/whatsapp/flow-runner";
 import { suppressedAmong } from "@/lib/whatsapp/opt-out";
 import { sendTemplateMessage } from "@/lib/integrations/whatsapp/client";
 
@@ -227,11 +228,31 @@ export async function GET(request: Request) {
     }
   }
 
+  // Automation flows advance on this cron too.
+  //
+  // They have their own route (/api/cron/whatsapp-flows), which is where
+  // this belongs and where a dedicated cron should point. It is called
+  // from here because AFD's hosting plan allows one cron a day at most
+  // and every slot is already spoken for — a flow engine with no
+  // schedule at all would be worse. Runs are guarded by their own
+  // `wake_at`, so running them from here changes nothing except how
+  // often they get the chance.
+  //
+  // It never throws into the broadcast sweep: a broken flow must not
+  // stop a campaign going out.
+  let flowsAdvanced = 0;
+  try {
+    flowsAdvanced = (await advanceRuns()).advanced;
+  } catch {
+    flowsAdvanced = -1;
+  }
+
   return NextResponse.json({
     started: promoted.length,
     processed: rows.length,
     sent,
     failed,
     suppressed: suppressedCount,
+    flowsAdvanced,
   });
 }

@@ -4,6 +4,7 @@ import { applyAssignment } from "@/lib/assignment/apply-assignment";
 import { db } from "@/lib/db/client";
 import { centers, enquiries, leadIdentifiers, leads, mergeReviewQueue, pipelineStages } from "@/lib/db/schema";
 import { notify } from "@/lib/notifications/notify";
+import { startFlows } from "@/lib/whatsapp/flow-runner";
 
 import { normalizeEmail } from "./normalize-email";
 import { normalizePhone } from "./normalize-phone";
@@ -80,6 +81,7 @@ export async function resolveOrCreateLead(input: ResolveLeadInput): Promise<Reso
   // about a lead that then fails to commit would be a lie besides.
   if (result.isNewLead) {
     await notifyLeadAssigned(result.leadId, input.source, input.actorId ?? null);
+    await startFlows("lead_created", { leadId: result.leadId });
   }
 
   return result;
@@ -130,6 +132,16 @@ async function notifyLeadAssigned(
     actorId,
   });
 }
+
+/**
+ * Every lead entering the system passes through here (CLAUDE.md
+ * § Non-negotiables 8: one ingestion path), so this is the only place a
+ * `lead_created` automation flow needs to be started from — webhook,
+ * CSV import, manual entry and public form all arrive at the same line.
+ *
+ * `startFlows` swallows its own failures on purpose: an automation must
+ * never be the reason a lead fails to be created.
+ */
 
 async function resolveOrCreateLeadInTransaction(
   input: ResolveLeadInput,

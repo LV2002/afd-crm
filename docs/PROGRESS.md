@@ -3421,3 +3421,76 @@ touching the schedule.
 
 One line in `vercel.json` fixes it whenever the plan allows, and nothing in the
 code changes with it.
+
+## Session 41 — Automations: a message that waits for an answer
+
+The largest single thing on the backlog, and the one Leon described in
+AiSensy's terms: send a message with buttons, and let the button decide what
+happens next.
+
+**Shipped**
+
+- **`whatsapp_flows` + steps + runs + run events** (migration `0055`). A flow
+  is a numbered list of steps a lead walks down.
+- **Seven step kinds**, fixed in code because each is an action the engine has
+  to know how to carry out: send a template, wait, **wait for their reply**,
+  add a tag, move a stage, tell the counsellor, stop.
+- **Five triggers**, each wired to a real emit site: a new lead arrives
+  (`resolveOrCreateLead` — the one ingestion path, so every source is covered
+  by one line), a lead moves into a stage, a tag is put on them, they message
+  us a word, or somebody starts it by hand.
+- **Quick-reply branching.** `wait_for_reply` carries answers to look for, each
+  pointing at a step number, plus a path for "never replied" and one for "said
+  something else".
+- **Button taps are now readable at all.** Meta sends a template quick reply as
+  `type: "button"` and an interactive tap as `button_reply`/`list_reply`; the
+  inbound mapper handled neither, so a tap arrived with a **null body** and
+  looked like an empty message. It is now recorded as the words on the button —
+  which is what the person believes they said, and what a branch matches on.
+- **`/whatsapp/flows`** — list, editor, live runs, and a per-flow history of who
+  went through it and where they came out.
+- **`flow.step_reached`** notification event, for handing a conversation back to
+  a person.
+
+**Decisions worth knowing**
+
+- **A numbered list, not a tree.** A branching tree is the obvious model and the
+  wrong one to hand a non-technical user: hard to draw, hard to read back, and
+  every edit risks orphaning a subtree. Branches jump to a step *number*, which
+  expresses everything a follow-up sequence needs and cannot orphan anything.
+- **Steps keep their numbers forever.** Deleting step 3 leaves a gap. Renumbering
+  would silently redirect every branch pointing at step 4 — which looks fine and
+  is wrong.
+- **A flow cannot be switched on until it validates.** A dangling branch ends
+  everybody's run silently; a wait-for-reply with no answers can only time out.
+  Both are faults nobody notices for a month.
+- **Switching off ≠ stopping.** Off stops NEW people entering; somebody
+  mid-conversation who has just been asked a question should get the answer.
+  Ending live runs is a separate, deliberate button.
+- **Every send re-checks consent** — opted out, do-not-contact, no number — at the
+  moment of sending, not when the run started. A run can sit parked for a
+  fortnight.
+- **A failed send is recorded, not retried**, for the same reason as the payment
+  reminder ladder: Meta will refuse the same template identically tomorrow.
+- **A loop guard.** Branches may jump backwards on purpose ("not now" → nurture in
+  a month), so a flow *can* be written as a loop. Twenty steps in one pass and it
+  stops — the alternative is a phone buzzing twenty times.
+
+**The cron problem, and how it is handled**
+
+A flow engine needs a periodic sweep and AFD's plan has no cron slots left. The
+sweep is a proper route of its own (`/api/cron/whatsapp-flows`) but is **not** in
+`vercel.json`; the broadcast sweep calls `advanceRuns()` directly, so flows
+advance on the cron that already exists. Runs are guarded by their own `wake_at`,
+so this is safe — but it does mean waits are only as punctual as that weekly job.
+**A single `/api/cron/tick` route running every sweep in sequence would let one
+daily cron drive the whole system**, and is the thing to build if the plan stays
+as it is.
+
+Replies do not wait for the sweep: a quick-reply tap branches inside the inbound
+webhook, within seconds. A button that takes a week to do anything is a form.
+
+**Also:** `server-only` is now stubbed under Vitest (`tests/stubs/server-only.ts`).
+It exists to fail a build that would ship server code to a browser; a Node test
+run has no browser to protect, and Next.js still enforces the real check where it
+counts.
