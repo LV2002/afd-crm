@@ -1,8 +1,17 @@
 import { desc, eq, inArray, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { reportingFailures } from "@/lib/errors/capture";
 
 import { db } from "@/lib/db/client";
-import { businessHours, centers, holidays, leads, pipelineStages, slaPolicies, stageHistory } from "@/lib/db/schema";
+import {
+  businessHours,
+  centers,
+  holidays,
+  leads,
+  pipelineStages,
+  slaPolicies,
+  stageHistory,
+} from "@/lib/db/schema";
 import type { DayHours } from "@/lib/sla/business-hours";
 import { dueEscalations, policyEscalationSteps } from "@/lib/sla/escalations";
 import { evaluateLeadSla } from "@/lib/sla/evaluate-sla";
@@ -28,7 +37,7 @@ export const dynamic = "force-dynamic";
  * A rung fires once, not every hour: `leads.sla_escalated_at_hours` records
  * the highest rung already reached, and clears when the SLA clears.
  */
-export async function GET(request: Request) {
+async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -36,14 +45,17 @@ export async function GET(request: Request) {
 
   const now = new Date();
 
-  const [activeLeads, activePolicies, stageRows, businessHourRows, holidayRows, centerRows] = await Promise.all([
-    db.select().from(leads).where(isNull(leads.deletedAt)),
-    db.select().from(slaPolicies).where(isNull(slaPolicies.deletedAt)),
-    db.select({ id: pipelineStages.id, stageType: pipelineStages.stageType }).from(pipelineStages),
-    db.select().from(businessHours),
-    db.select().from(holidays),
-    db.select({ id: centers.id, name: centers.name, timezone: centers.timezone }).from(centers),
-  ]);
+  const [activeLeads, activePolicies, stageRows, businessHourRows, holidayRows, centerRows] =
+    await Promise.all([
+      db.select().from(leads).where(isNull(leads.deletedAt)),
+      db.select().from(slaPolicies).where(isNull(slaPolicies.deletedAt)),
+      db
+        .select({ id: pipelineStages.id, stageType: pipelineStages.stageType })
+        .from(pipelineStages),
+      db.select().from(businessHours),
+      db.select().from(holidays),
+      db.select({ id: centers.id, name: centers.name, timezone: centers.timezone }).from(centers),
+    ]);
 
   const enabledPolicies = activePolicies.filter((p) => p.isActive);
 
@@ -72,7 +84,9 @@ export async function GET(request: Request) {
 
   const timeZoneByCenter = new Map(centerRows.map((c) => [c.id, c.timezone]));
 
-  const evaluableLeads = activeLeads.filter((lead) => !lead.stageId || !terminalStageIds.has(lead.stageId));
+  const evaluableLeads = activeLeads.filter(
+    (lead) => !lead.stageId || !terminalStageIds.has(lead.stageId),
+  );
   const leadIds = evaluableLeads.map((lead) => lead.id);
 
   // Only the most recent stage_history row per lead is needed (when it
@@ -119,7 +133,8 @@ export async function GET(request: Request) {
   for (const lead of evaluableLeads) {
     const timeZone = (lead.centerId && timeZoneByCenter.get(lead.centerId)) || "Asia/Kolkata";
     const centerBusinessHours = (lead.centerId && businessHoursByCenter.get(lead.centerId)) || [];
-    const centerHolidays = (lead.centerId && holidaysByCenter.get(lead.centerId)) || new Set<string>();
+    const centerHolidays =
+      (lead.centerId && holidaysByCenter.get(lead.centerId)) || new Set<string>();
     const stageEnteredAt = stageEnteredAtByLead.get(lead.id) ?? lead.createdAt;
 
     const result = evaluateLeadSla({
@@ -250,4 +265,14 @@ export async function GET(request: Request) {
     escalated,
     unassigned,
   });
+}
+
+/**
+ * Wrapped so a failure is recorded and emailed rather than disappearing
+ * into a 500 that nobody looks at. It re-throws afterwards on purpose:
+ * the platform's own retry and alerting depend on the route genuinely
+ * failing, and swallowing it here would make a broken job look healthy.
+ */
+export async function GET(request: Request) {
+  return reportingFailures("cron:sla-sweep", () => run(request));
 }

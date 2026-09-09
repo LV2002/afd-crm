@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { reportingFailures } from "@/lib/errors/capture";
 
 import { db } from "@/lib/db/client";
 import { adSpendDaily } from "@/lib/db/schema";
@@ -20,7 +21,7 @@ export const dynamic = "force-dynamic";
  * "today" partway through would record an incomplete number that a
  * report might already be trusting.
  */
-export async function GET(request: Request) {
+async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -31,13 +32,14 @@ export async function GET(request: Request) {
   // account data, so this is deliberately a separate credential from
   // `page_access_token` (which the Lead Ads webhook uses to fetch a
   // submitted lead's own answers). See docs/DECISIONS.md.
-  const { ad_account_id: adAccountId, ads_access_token: accessToken } = await getIntegrationCredentials("meta", [
-    "ad_account_id",
-    "ads_access_token",
-  ]);
+  const { ad_account_id: adAccountId, ads_access_token: accessToken } =
+    await getIntegrationCredentials("meta", ["ad_account_id", "ads_access_token"]);
 
   if (!adAccountId || !accessToken) {
-    return NextResponse.json({ error: "Meta ad_account_id/ads_access_token not configured" }, { status: 200 });
+    return NextResponse.json(
+      { error: "Meta ad_account_id/ads_access_token not configured" },
+      { status: 200 },
+    );
   }
 
   const date = yesterdayDateStringIST(new Date());
@@ -78,4 +80,14 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({ date, synced: rows.length });
+}
+
+/**
+ * Wrapped so a failure is recorded and emailed rather than disappearing
+ * into a 500 that nobody looks at. It re-throws afterwards on purpose:
+ * the platform's own retry and alerting depend on the route genuinely
+ * failing, and swallowing it here would make a broken job look healthy.
+ */
+export async function GET(request: Request) {
+  return reportingFailures("cron:ad-spend-sync/meta", () => run(request));
 }

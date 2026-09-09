@@ -1,12 +1,24 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { reportingFailures } from "@/lib/errors/capture";
 
 import { db } from "@/lib/db/client";
 import { adAudienceMembers, leads } from "@/lib/db/schema";
-import { computeAudienceDiff, isRetargetingEligible, type RetargetingCandidate } from "@/lib/integrations/audience-sync";
-import { getIntegrationCredentials, setIntegrationCredential } from "@/lib/integrations/credentials";
+import {
+  computeAudienceDiff,
+  isRetargetingEligible,
+  type RetargetingCandidate,
+} from "@/lib/integrations/audience-sync";
+import {
+  getIntegrationCredentials,
+  setIntegrationCredential,
+} from "@/lib/integrations/credentials";
 import { hashPhone } from "@/lib/integrations/hash-pii";
-import { addUsersToAudience, createCustomAudience, removeUsersFromAudience } from "@/lib/integrations/meta/audience-client";
+import {
+  addUsersToAudience,
+  createCustomAudience,
+  removeUsersFromAudience,
+} from "@/lib/integrations/meta/audience-client";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +37,7 @@ export const dynamic = "force-dynamic";
  * that may have JUST become ineligible (soft-deleted, opted out) in the
  * same run — it has to still be in the set being scanned.
  */
-export async function GET(request: Request) {
+async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -35,15 +47,26 @@ export async function GET(request: Request) {
     ad_account_id: adAccountId,
     ads_access_token: accessToken,
     custom_audience_id: existingAudienceId,
-  } = await getIntegrationCredentials("meta", ["ad_account_id", "ads_access_token", "custom_audience_id"]);
+  } = await getIntegrationCredentials("meta", [
+    "ad_account_id",
+    "ads_access_token",
+    "custom_audience_id",
+  ]);
 
   if (!adAccountId || !accessToken) {
-    return NextResponse.json({ error: "Meta ad_account_id/ads_access_token not configured" }, { status: 200 });
+    return NextResponse.json(
+      { error: "Meta ad_account_id/ads_access_token not configured" },
+      { status: 200 },
+    );
   }
 
   let audienceId = existingAudienceId;
   if (!audienceId) {
-    audienceId = await createCustomAudience(adAccountId, accessToken, "AFD India CRM — consented leads");
+    audienceId = await createCustomAudience(
+      adAccountId,
+      accessToken,
+      "AFD India CRM — consented leads",
+    );
     await setIntegrationCredential("meta", "custom_audience_id", audienceId);
   }
 
@@ -77,16 +100,36 @@ export async function GET(request: Request) {
       .map(hashPhone);
 
   if (toAdd.length > 0) await addUsersToAudience(audienceId, accessToken, phonesFor(toAdd));
-  if (toRemove.length > 0) await removeUsersFromAudience(audienceId, accessToken, phonesFor(toRemove));
+  if (toRemove.length > 0)
+    await removeUsersFromAudience(audienceId, accessToken, phonesFor(toRemove));
 
   if (toAdd.length > 0) {
-    await db.insert(adAudienceMembers).values(toAdd.map((leadId) => ({ platform: "meta" as const, leadId })));
+    await db
+      .insert(adAudienceMembers)
+      .values(toAdd.map((leadId) => ({ platform: "meta" as const, leadId })));
   }
   if (toRemove.length > 0) {
     await db
       .delete(adAudienceMembers)
-      .where(and(eq(adAudienceMembers.platform, "meta"), inArray(adAudienceMembers.leadId, toRemove)));
+      .where(
+        and(eq(adAudienceMembers.platform, "meta"), inArray(adAudienceMembers.leadId, toRemove)),
+      );
   }
 
-  return NextResponse.json({ audienceId, added: toAdd.length, removed: toRemove.length, eligible: eligibleLeadIds.length });
+  return NextResponse.json({
+    audienceId,
+    added: toAdd.length,
+    removed: toRemove.length,
+    eligible: eligibleLeadIds.length,
+  });
+}
+
+/**
+ * Wrapped so a failure is recorded and emailed rather than disappearing
+ * into a 500 that nobody looks at. It re-throws afterwards on purpose:
+ * the platform's own retry and alerting depend on the route genuinely
+ * failing, and swallowing it here would make a broken job look healthy.
+ */
+export async function GET(request: Request) {
+  return reportingFailures("cron:retargeting-sync/meta", () => run(request));
 }

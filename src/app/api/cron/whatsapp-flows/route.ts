@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { reportingFailures } from "@/lib/errors/capture";
 
 import { advanceRuns } from "@/lib/whatsapp/flow-runner";
 
@@ -19,7 +20,7 @@ export const maxDuration = 60;
  * own `wake_at`, so calling this twice in a minute is harmless — which is
  * what makes the piggyback safe.
  */
-export async function GET(request: Request) {
+async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -27,4 +28,14 @@ export async function GET(request: Request) {
 
   const { advanced } = await advanceRuns();
   return NextResponse.json({ advanced });
+}
+
+/**
+ * Wrapped so a failure is recorded and emailed rather than disappearing
+ * into a 500 that nobody looks at. It re-throws afterwards on purpose:
+ * the platform's own retry and alerting depend on the route genuinely
+ * failing, and swallowing it here would make a broken job look healthy.
+ */
+export async function GET(request: Request) {
+  return reportingFailures("cron:whatsapp-flows", () => run(request));
 }

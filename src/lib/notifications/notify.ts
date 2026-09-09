@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
+import { composeEmail, emailConfigured, sendEmail } from "@/lib/email/send";
 import {
   centers,
   notificationSettings,
@@ -133,6 +134,18 @@ export async function notify(input: {
       })),
     );
 
+    // And by email, when the event is configured for it.
+    //
+    // The in-app bell only reaches somebody who is already looking at the
+    // CRM, which is precisely not the case for the notifications that
+    // matter most — an SLA breach, a lead assigned at 6pm, a discount
+    // waiting on an approval. `channels` has been on the settings table
+    // since notifications shipped with nothing behind it; this is what
+    // makes turning it on do something.
+    if ((setting?.channels ?? ["in_app"]).includes("email")) {
+      await emailRecipients(recipientIds, title, body, input.href ?? null);
+    }
+
     return recipientIds.length;
   } catch (error) {
     console.error(`notify(${input.eventKey}) failed`, error);
@@ -181,4 +194,46 @@ async function loadCandidates(roleIds: string[]): Promise<RecipientCandidate[]> 
     centerIds: centersByUser.get(person.userId) ?? [],
     seesAllCenters: orgWide.has(person.roleId),
   }));
+}
+
+/**
+ * Sends one notification on to the people it is for.
+ *
+ * Never throws and never blocks the notification itself: the in-app row
+ * is already written by the time this runs, so a mail provider having a
+ * bad day costs an email, not the notification.
+ *
+ * Inactive users and anybody without an address are simply skipped —
+ * there is nothing to do about either, and failing the batch over one
+ * missing address would lose the rest.
+ */
+async function emailRecipients(
+  recipientIds: string[],
+  title: string,
+  body: string,
+  href: string | null,
+): Promise<void> {
+  try {
+    if (!emailConfigured() || recipientIds.length === 0) return;
+
+    const people = await db
+      .select({ email: profiles.email, fullName: profiles.fullName })
+      .from(profiles)
+      .where(and(inArray(profiles.id, recipientIds), eq(profiles.isActive, true)));
+
+    const addresses = people.map((person) => person.email).filter(Boolean);
+    if (addresses.length === 0) return;
+
+    const { text, html } = composeEmail({
+      heading: title,
+      lines: [body],
+      actionLabel: "Open in the CRM",
+      actionPath: href ?? "/my-day",
+      footer: "You can change which events email you in Settings → Notifications.",
+    });
+
+    await sendEmail({ to: addresses, subject: title, text, html });
+  } catch (error) {
+    console.error("emailRecipients failed", error);
+  }
 }

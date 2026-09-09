@@ -78,6 +78,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage"],
   },
   {
+    href: "/settings/health",
+    label: "Platform Health",
+    description: "Anything that has broken, and who gets emailed about it",
+    permissions: ["settings.manage"],
+  },
+  {
     href: "/settings/promos",
     label: "Offers",
     description:

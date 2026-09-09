@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { MobileNav } from "@/components/layout/mobile-nav";
 import { NotificationBell } from "@/components/layout/notification-bell";
 import { Sidebar } from "@/components/layout/sidebar";
 import { UserMenu } from "@/components/layout/user-menu";
@@ -29,8 +30,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <Sidebar items={navItems} />
       </aside>
       <div className="flex flex-1 flex-col print:block">
-        <header className="flex h-14 items-center justify-between border-b px-4 print:hidden">
-          <span className="text-sm font-medium md:hidden">AFD India CRM</span>
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-4 print:hidden">
+          {/* Below `md` the sidebar is hidden and this is the only way to
+              reach another screen. It was missing entirely. */}
+          <MobileNav items={navItems} userName={user.fullName} />
+          <span className="truncate text-[0.9375rem] font-semibold md:hidden">AFD India CRM</span>
           <div className="ml-auto flex items-center gap-1">
             {/* Suspended so its unread count never delays the rest of
                 the page. The bell is the least urgent thing on screen and
@@ -42,7 +46,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <UserMenu user={user} />
           </div>
         </header>
-        <main className="flex-1 p-6 print:p-0">{children}</main>
+        <main className="flex-1 p-4 sm:p-6 print:p-0">{children}</main>
       </div>
     </div>
   );

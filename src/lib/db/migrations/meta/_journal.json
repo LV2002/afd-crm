@@ -414,6 +414,13 @@
       "when": 1788573304458,
       "tag": "0058_performance_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1788573305458,
+      "tag": "0059_error_events",
+      "breakpoints": true
     }
   ]
 }
