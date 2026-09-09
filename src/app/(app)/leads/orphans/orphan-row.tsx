@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 
 import { RevealPhoneButton } from "../reveal-phone-button";
 import { assignOrphanLead } from "./actions";
@@ -59,21 +59,23 @@ export function OrphanRow({
         {assignableUsers.length === 0 ? (
           <p className="text-xs text-muted-foreground">No counsellors at this centre yet.</p>
         ) : (
-          <Select disabled={isPending} onValueChange={assign}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Assign to…" />
-            </SelectTrigger>
-            <SelectContent>
-              {assignableUsers.map((u) => (
-                <SelectItem key={u.id} value={u.id}>
-                  {u.fullName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            className="w-48"
+            disabled={isPending}
+            value=""
+            onChange={assign}
+            options={assignableUsers.map((u) => ({ value: u.id, label: u.fullName }))}
+            placeholder="Assign to…"
+            searchPlaceholder="Type a name…"
+          />
         )}
         {currentUserId && (
-          <Button size="sm" variant="outline" disabled={isPending} onClick={() => assign(currentUserId)}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={isPending}
+            onClick={() => assign(currentUserId)}
+          >
             Claim
           </Button>
         )}

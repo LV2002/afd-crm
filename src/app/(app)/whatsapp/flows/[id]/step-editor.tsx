@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -140,21 +141,14 @@ function StepConfig({
         <Label className="text-xs text-muted-foreground">
           {kind === "add_tag" ? "Tag" : "Stage"}
         </Label>
-        <Select
+        <Combobox
+          className="w-64"
           value={String(config[key] ?? "")}
-          onValueChange={(value) => setConfig({ ...config, [key]: value })}
-        >
-          <SelectTrigger className="h-9 w-64">
-            <SelectValue placeholder="Pick one" />
-          </SelectTrigger>
-          <SelectContent>
-            {options.map((option) => (
-              <SelectItem key={option.id} value={option.id}>
-                {option.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          onChange={(value) => setConfig({ ...config, [key]: value })}
+          options={options.map((option) => ({ value: option.id, label: option.name }))}
+          placeholder="Pick one"
+          searchPlaceholder="Type to search…"
+        />
       </div>
     );
   }
@@ -195,9 +189,10 @@ function StepConfig({
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <Label className="text-xs text-muted-foreground">Approved template</Label>
-          <Select
+          <Combobox
+            className="w-full"
             value={templateName}
-            onValueChange={(value) => {
+            onChange={(value) => {
               const chosen = lists.templates.find((entry) => entry.name === value);
               // Values are cleared with the template: placeholder 2 of the
               // old one is rarely placeholder 2 of the new one, and
@@ -209,18 +204,14 @@ function StepConfig({
                 params: [],
               });
             }}
-          >
-            <SelectTrigger className="h-9 w-full">
-              <SelectValue placeholder="Choose a template" />
-            </SelectTrigger>
-            <SelectContent>
-              {lists.templates.map((entry) => (
-                <SelectItem key={`${entry.name}-${entry.language}`} value={entry.name}>
-                  {entry.name} ({entry.language})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            options={lists.templates.map((entry) => ({
+              value: entry.name,
+              label: entry.name,
+              hint: entry.language,
+            }))}
+            placeholder="Choose a template"
+            searchPlaceholder="Type a template name…"
+          />
         </div>
 
         {template && (
@@ -230,9 +221,10 @@ function StepConfig({
         {sources.map((source, index) => (
           <div key={index} className="flex flex-wrap items-end gap-2">
             <span className="pb-2 font-mono text-xs text-muted-foreground">{`{{${index + 1}}}`}</span>
-            <Select
+            <Combobox
+              className="w-52"
               value={source.kind === "variable" ? source.key : FIXED_TEXT}
-              onValueChange={(value) =>
+              onChange={(value) =>
                 setSource(
                   index,
                   value === FIXED_TEXT
@@ -244,19 +236,12 @@ function StepConfig({
                       },
                 )
               }
-            >
-              <SelectTrigger className="h-9 w-52">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={FIXED_TEXT}>The same words for everybody</SelectItem>
-                {variables.map((variable) => (
-                  <SelectItem key={variable.key} value={variable.key}>
-                    {variable.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={[
+                { value: FIXED_TEXT, label: "The same words for everybody" },
+                ...variables.map((variable) => ({ value: variable.key, label: variable.label })),
+              ]}
+              searchPlaceholder="Type to search…"
+            />
             {source.kind === "text" ? (
               <Input
                 className="h-9 w-56"

@@ -7,7 +7,7 @@ import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/smart-inputs";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 
 import { recordPaymentAction, type FormState } from "./actions";
 
@@ -30,7 +30,10 @@ export function RecordPaymentForm({
   /** Active finance accounts the money could have landed in. */
   accounts: Array<{ id: string; name: string }>;
 }) {
-  const [state, formAction, pending] = useActionState(recordPaymentAction.bind(null, enrolmentId), initialState);
+  const [state, formAction, pending] = useActionState(
+    recordPaymentAction.bind(null, enrolmentId),
+    initialState,
+  );
 
   return (
     <form action={formAction} className="flex flex-col gap-3 rounded-lg border p-4">
@@ -43,18 +46,14 @@ export function RecordPaymentForm({
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="payment-method">Method</Label>
-          <Select name="method" required>
-            <SelectTrigger id="payment-method">
-              <SelectValue placeholder="Select method" />
-            </SelectTrigger>
-            <SelectContent>
-              {METHODS.map((m) => (
-                <SelectItem key={m.value} value={m.value}>
-                  {m.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            id="payment-method"
+            name="method"
+            required
+            options={METHODS}
+            placeholder="Select method"
+            searchPlaceholder="Type to search…"
+          />
         </div>
       </div>
 
@@ -84,7 +83,11 @@ export function RecordPaymentForm({
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="payment-reference">Reference (optional)</Label>
-        <Input id="payment-reference" name="reference" placeholder="UTR / cheque no. / transaction id" />
+        <Input
+          id="payment-reference"
+          name="reference"
+          placeholder="UTR / cheque no. / transaction id"
+        />
       </div>
 
       <FormMessage error={state.error} success={state.success} />
@@ -100,13 +103,12 @@ export function RecordPaymentForm({
         title="Record this payment?"
         body={
           <>
-            This writes a permanent line in the ledger. It cannot be edited or deleted
-            afterwards — a mistake has to be corrected with a reversal, which stays on the
-            record alongside it.
+            This writes a permanent line in the ledger. It cannot be edited or deleted afterwards —
+            a mistake has to be corrected with a reversal, which stays on the record alongside it.
             <br />
             <br />
-            If this is their first cleared payment it also creates their student record and
-            hands them to academics.
+            If this is their first cleared payment it also creates their student record and hands
+            them to academics.
           </>
         }
         confirmLabel="Yes, record it"

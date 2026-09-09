@@ -62,6 +62,7 @@ export function Combobox({
   disabled,
   required,
   clearable = false,
+  size = "default",
   id,
   className,
   "aria-describedby": describedBy,
@@ -78,6 +79,12 @@ export function Combobox({
   disabled?: boolean;
   required?: boolean;
   clearable?: boolean;
+  /**
+   * "sm" for a filter bar, where this sits in a row of 32px controls and a
+   * 40px one would stick out. Everywhere a person is filling in a form,
+   * leave it alone: the taller target is the accessible one.
+   */
+  size?: "default" | "sm";
   id?: string;
   className?: string;
   "aria-describedby"?: string;
@@ -129,7 +136,12 @@ export function Combobox({
     const rect = triggerRef.current?.getBoundingClientRect();
     setDropUp(Boolean(rect && window.innerHeight - rect.bottom < 280 && rect.top > 300));
     setOpen(true);
-    setActiveIndex(Math.max(0, filtered.findIndex((option) => option.value === value)));
+    setActiveIndex(
+      Math.max(
+        0,
+        filtered.findIndex((option) => option.value === value),
+      ),
+    );
   }
 
   // Close on a click outside or on Escape — the two things everybody
@@ -239,13 +251,18 @@ export function Combobox({
         aria-controls={open ? listId : undefined}
         aria-haspopup="listbox"
         aria-describedby={describedBy}
-        aria-activedescendant={open && filtered[activeIndex] ? `${listId}-${activeIndex}` : undefined}
+        aria-activedescendant={
+          open && filtered[activeIndex] ? `${listId}-${activeIndex}` : undefined
+        }
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={onListKeyDown}
         className={cn(
-          "flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-card px-3 py-2",
-          "text-base sm:text-[0.9375rem] shadow-sm transition-colors text-left",
+          "flex w-full items-center justify-between gap-2 rounded-md border border-input bg-card",
+          size === "sm"
+            ? "h-8 px-2.5 py-1 text-sm"
+            : "h-10 px-3 py-2 text-base sm:text-[0.9375rem]",
+          "shadow-sm transition-colors text-left",
           "hover:border-ring/40",
           "disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-muted",
           "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:border-ring",

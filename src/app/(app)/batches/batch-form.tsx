@@ -5,15 +5,9 @@ import { useActionState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 import { saveBatch, type BatchFormState } from "./actions";
 
@@ -68,18 +62,14 @@ export function BatchForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="batch-center">Centre</Label>
-          <Select name="centerId" defaultValue={values.centerId}>
-            <SelectTrigger id="batch-center">
-              <SelectValue placeholder="Choose a centre" />
-            </SelectTrigger>
-            <SelectContent>
-              {centers.map((centre) => (
-                <SelectItem key={centre.id} value={centre.id}>
-                  {centre.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            id="batch-center"
+            name="centerId"
+            defaultValue={values.centerId}
+            options={centers.map((centre) => ({ value: centre.id, label: centre.name }))}
+            placeholder="Choose a centre"
+            searchPlaceholder="Type a centre…"
+          />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -95,34 +85,26 @@ export function BatchForm({
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="batch-course">Course</Label>
-          <Select name="course" defaultValue={values.course}>
-            <SelectTrigger id="batch-course">
-              <SelectValue placeholder="Choose a course" />
-            </SelectTrigger>
-            <SelectContent>
-              {courses.map((course) => (
-                <SelectItem key={course} value={course}>
-                  {course}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            id="batch-course"
+            name="course"
+            defaultValue={values.course}
+            options={courses.map((course) => ({ value: course, label: course }))}
+            placeholder="Choose a course"
+            searchPlaceholder="Type a course…"
+          />
         </div>
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="batch-mode">Mode</Label>
-          <Select name="mode" defaultValue={values.mode}>
-            <SelectTrigger id="batch-mode">
-              <SelectValue placeholder="Choose a mode" />
-            </SelectTrigger>
-            <SelectContent>
-              {modes.map((mode) => (
-                <SelectItem key={mode} value={mode}>
-                  {mode}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            id="batch-mode"
+            name="mode"
+            defaultValue={values.mode}
+            options={modes.map((mode) => ({ value: mode, label: mode }))}
+            placeholder="Choose a mode"
+            searchPlaceholder="Type a mode…"
+          />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -147,20 +129,26 @@ export function BatchForm({
             placeholder="No limit"
           />
           <p className="text-xs text-muted-foreground">
-            Leave blank for no limit. Going over is warned about, not blocked — rooms take one
-            more chair.
+            Leave blank for no limit. Going over is warned about, not blocked — rooms take one more
+            chair.
           </p>
         </div>
 
         <label className="flex items-center gap-2 self-end pb-2 text-sm">
-          <input type="checkbox" name="isActive" className="size-4" defaultChecked={values.isActive} />
+          <input
+            type="checkbox"
+            name="isActive"
+            className="size-4"
+            defaultChecked={values.isActive}
+          />
           Currently running
         </label>
       </div>
 
       <div>
         <Button type="submit" disabled={pending}>
-          <Save className="size-4" /> {pending ? "Saving…" : values.id ? "Save changes" : "Create batch"}
+          <Save className="size-4" />{" "}
+          {pending ? "Saving…" : values.id ? "Save changes" : "Create batch"}
         </Button>
       </div>
 

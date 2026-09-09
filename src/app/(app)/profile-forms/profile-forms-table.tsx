@@ -7,16 +7,17 @@ import { Fragment, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { maskPhone } from "@/lib/leads/mask-phone";
 import {
   UNANSWERED,
@@ -199,7 +200,10 @@ export function ProfileFormsTable({
               setQuery("");
             }}
           >
-            Clear {activeFilterCount > 0 ? `${activeFilterCount} filter${activeFilterCount === 1 ? "" : "s"}` : "search"}
+            Clear{" "}
+            {activeFilterCount > 0
+              ? `${activeFilterCount} filter${activeFilterCount === 1 ? "" : "s"}`
+              : "search"}
           </Button>
         )}
       </div>
@@ -267,23 +271,18 @@ export function ProfileFormsTable({
                 {shown.map((column) => (
                   <TableHead key={column.key} className="py-1">
                     {column.options.length > 0 ? (
-                      <Select
+                      <Combobox
+                        className="w-full min-w-32"
+                        size="sm"
                         value={filters[column.key] ?? ANY}
-                        onValueChange={(value) => setFilter(column.key, value)}
-                      >
-                        <SelectTrigger className="h-7 w-full min-w-32 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={ANY}>Any</SelectItem>
-                          <SelectItem value={UNANSWERED}>{UNANSWERED_LABEL}</SelectItem>
-                          {column.options.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onChange={(value) => setFilter(column.key, value)}
+                        options={[
+                          { value: ANY, label: "Any" },
+                          { value: UNANSWERED, label: UNANSWERED_LABEL },
+                          ...column.options,
+                        ]}
+                        searchPlaceholder="Type to search…"
+                      />
                     ) : (
                       <Input
                         value={filters[column.key] ?? ""}

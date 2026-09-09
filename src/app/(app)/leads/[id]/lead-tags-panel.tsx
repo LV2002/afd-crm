@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { useTransition } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 
 import { addLeadTag, removeLeadTag } from "./actions";
 
@@ -32,7 +32,12 @@ export function LeadTagsPanel({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {currentTags.map((tag) => (
-        <Badge key={tag.id} variant="outline" style={{ borderColor: tag.color ?? undefined }} className="gap-1">
+        <Badge
+          key={tag.id}
+          variant="outline"
+          style={{ borderColor: tag.color ?? undefined }}
+          className="gap-1"
+        >
           {tag.name}
           {canEdit && (
             <button
@@ -51,22 +56,17 @@ export function LeadTagsPanel({
         // revalidates the page and hands back a new, shorter/longer list)
         // remounts this uncontrolled Select back to its placeholder,
         // instead of it holding on to the just-picked value.
-        <Select
+        <Combobox
           key={availableTags.map((t) => t.id).join(",")}
+          className="w-auto"
+          size="sm"
           disabled={isPending}
-          onValueChange={(tagId) => startTransition(() => addLeadTag(leadId, tagId))}
-        >
-          <SelectTrigger className="h-7 w-auto gap-1 border-dashed text-xs">
-            <SelectValue placeholder="+ Add tag" />
-          </SelectTrigger>
-          <SelectContent>
-            {availableTags.map((tag) => (
-              <SelectItem key={tag.id} value={tag.id}>
-                {tag.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          value=""
+          onChange={(tagId) => startTransition(() => addLeadTag(leadId, tagId))}
+          options={availableTags.map((tag) => ({ value: tag.id, label: tag.name }))}
+          placeholder="+ Add tag"
+          searchPlaceholder="Type a tag…"
+        />
       )}
     </div>
   );

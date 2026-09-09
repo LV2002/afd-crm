@@ -3695,6 +3695,86 @@ Then: new lead entry (the highest-volume form in the system), the state/district
 cascade, the fee panel, the finance intake forms, payment recording and the
 Gate 1 confirmation.
 
-**Not yet swept:** the remaining settings screens, the WhatsApp composer and the
-batch forms still use the plain `<Select>`. They inherit the palette, the sizing
-and the contrast, so they are already better — they just don't search yet.
+### The sweep, finished
+
+Every dropdown whose options come from the database — counsellors, centres,
+courses, roles, tags, stages, templates, students, fee structures, promos, the
+import wizard's field mapping, every filter bar — is now a `<Combobox>`. Three
+of those lists have no ceiling at all (roles, tags and templates are rows an
+admin creates), which is exactly the case a fixed-height dropdown handles worst.
+
+The filter bars gained something they did not have before: a **clear button**.
+A filter you cannot take off is a filter that quietly hides half the list until
+somebody reloads the page.
+
+`<Combobox size="sm">` exists for filter bars, where the control sits in a row
+of 32px inputs and a 40px one sticks out. Everywhere a person is filling in a
+form the default stands — the taller target is the accessible one.
+
+**Deliberately still `<Select>`:** the short fixed vocabularies — field entity
+(3), stage type (8), notification channel (2), discount type (2), SLA measure,
+student status, template category. These are enumerations the code enforces,
+not lists that grow, and by the Combobox's own rule a search box over four
+items is a thing to read, understand and dismiss before you can do the obvious.
+
+## Session 43 — Four reports, and the first numbers to measure against
+
+### Sources: first touch vs last touch
+
+Both have been stored on every lead since the identity layer shipped and neither
+was ever compared to the other. A source that introduces people and a source
+that closes them look equally weak in the column that is not their job, and
+budget gets cut on that misreading. `introducerScore` — admissions started here
+minus admissions finished here — is the whole report in one number.
+
+A lead who arrived from Instagram and converted after a walk-in counts once in
+Instagram's *started* column and once in Walk-in's *finished* column. The two
+columns do not add to the same total and are not supposed to.
+
+### Timing: cohort curves
+
+A flat month-on-month conversion rate always shows the current month
+collapsing, because its leads have not had time to decide. This compares every
+cohort at the same age — everyone at fourteen days, everyone at thirty — and
+**reports a blank, not a zero, for a window a cohort has not lived through**. A
+month counts as thirty days old only once its *newest* lead is thirty days old,
+so the figure is never propped up by whoever happened to arrive on the 1st.
+
+### Segments: which places and schools actually convert
+
+The Insights pivot counts leads by district; it cannot follow them to an
+admission. Segments under eight leads get their counts shown and their
+percentage withheld — "two out of three, 67%" is how one good year at one school
+becomes a budget line.
+
+### Targets and the weighted pipeline forecast
+
+`targets` is one table with three scopes — institute, centre, person — set per
+month, never carried forward automatically. They coexist and are **never
+summed**: an institute-wide target is its own statement, not the total of the
+centre rows.
+
+The screen reports two things side by side and refuses to average them into one
+authoritative-looking number:
+
+- **Pace** — arithmetic on what has already happened. Nine admissions in
+  fourteen days is a run rate; a run rate times the length of the month is a
+  projection. Flagged as "early" for the first five days, when that projection
+  is one good week multiplied.
+- **Weighted pipeline** — every open lead counted at its stage's own
+  probability. Won, lost and parked leads are excluded: a won lead is already
+  counted as an admission, and treating a parked one as 20%-likely this month is
+  how a forecast quietly inflates itself.
+
+When the two disagree — a good pace on an empty pipeline — the disagreement is
+the finding, and seeing it on the 14th is the entire point.
+
+`target.manage` is a new permission rather than a reuse of `settings.manage`: a
+centre head sets their centre's numbers and their counsellors' without also
+holding the keys to the pipeline, the roles and the integrations.
+
+**Leon's to-do:** run `npm run db:migrate` (0061) and `npm run db:seed` — the
+seed grants the new permission to centre heads; admins already hold everything.
+Then set this month's numbers in Settings → Targets, and give each pipeline
+stage a probability in Settings → Pipeline Stages, or the forecast counts those
+leads as worth nothing and says so.
