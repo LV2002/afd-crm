@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -127,36 +128,26 @@ export function FlowForm({
       {trigger === "stage_entered" && (
         <div className="flex flex-col gap-2">
           <Label>Which stage</Label>
-          <Select value={stageId || ANY} onValueChange={(v) => setStageId(v === ANY ? "" : v)}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Pick a stage" />
-            </SelectTrigger>
-            <SelectContent>
-              {stages.map((stage) => (
-                <SelectItem key={stage.id} value={stage.id}>
-                  {stage.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            value={stageId || ANY}
+            onChange={(v) => setStageId(v === ANY ? "" : v)}
+            options={stages.map((stage) => ({ value: stage.id, label: stage.name }))}
+            placeholder="Pick a stage"
+            searchPlaceholder="Type a stage…"
+          />
         </div>
       )}
 
       {trigger === "tag_added" && (
         <div className="flex flex-col gap-2">
           <Label>Which tag</Label>
-          <Select value={tagId || ANY} onValueChange={(v) => setTagId(v === ANY ? "" : v)}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Pick a tag" />
-            </SelectTrigger>
-            <SelectContent>
-              {tags.map((tag) => (
-                <SelectItem key={tag.id} value={tag.id}>
-                  {tag.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            value={tagId || ANY}
+            onChange={(v) => setTagId(v === ANY ? "" : v)}
+            options={tags.map((tag) => ({ value: tag.id, label: tag.name }))}
+            placeholder="Pick a tag"
+            searchPlaceholder="Type a tag…"
+          />
         </div>
       )}
 

@@ -5,15 +5,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition, type KeyboardEvent } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 import { filterParamKey } from "@/lib/leads/apply-filters";
 import { NOT_SET, NOT_SET_LABEL, type PivotField } from "@/lib/reports/pivot";
@@ -75,18 +69,13 @@ export function InsightControls({
       <div className="flex flex-wrap items-end gap-4">
         <div className="flex flex-col gap-1">
           <Label className="text-xs text-muted-foreground">Break down by</Label>
-          <Select value={groupBy} onValueChange={(value) => updateParams({ group: value })}>
-            <SelectTrigger className="h-9 w-56">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {dimensions.map(({ field }) => (
-                <SelectItem key={field.key} value={field.key}>
-                  {field.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            className="w-56"
+            value={groupBy}
+            onChange={(value) => updateParams({ group: value })}
+            options={dimensions.map(({ field }) => ({ value: field.key, label: field.label }))}
+            searchPlaceholder="Type a field name…"
+          />
         </div>
 
         <div className="flex flex-col gap-1">
@@ -146,23 +135,17 @@ export function InsightControls({
               <div key={field.key} className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">{field.label}</Label>
                 {options.length > 0 ? (
-                  <Select
+                  <Combobox
+                    size="sm"
                     value={current || ANY}
-                    onValueChange={(value) => updateParams({ [key]: value })}
-                  >
-                    <SelectTrigger className="h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ANY}>Any</SelectItem>
-                      <SelectItem value={NOT_SET}>{NOT_SET_LABEL}</SelectItem>
-                      {options.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={(value) => updateParams({ [key]: value })}
+                    options={[
+                      { value: ANY, label: "Any" },
+                      { value: NOT_SET, label: NOT_SET_LABEL },
+                      ...options,
+                    ]}
+                    searchPlaceholder="Type to search…"
+                  />
                 ) : (
                   <Input
                     type={field.type === "date" || field.type === "datetime" ? "month" : "text"}

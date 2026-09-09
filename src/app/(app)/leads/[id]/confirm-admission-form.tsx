@@ -7,7 +7,6 @@ import { Combobox } from "@/components/ui/combobox";
 import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { MoneyInput } from "@/components/ui/smart-inputs";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 
 import { confirmAdmissionAction, type FormState } from "./actions";
@@ -51,45 +50,41 @@ export function ConfirmAdmissionForm({
   courses: FieldOption[];
   modes: FieldOption[];
 }) {
-  const [state, formAction, pending] = useActionState(confirmAdmissionAction.bind(null, leadId), initialState);
+  const [state, formAction, pending] = useActionState(
+    confirmAdmissionAction.bind(null, leadId),
+    initialState,
+  );
 
   return (
     <form action={formAction} className="flex flex-col gap-3 rounded-lg border p-4">
       <h3 className="text-sm font-semibold">Confirm admission</h3>
       <p className="text-xs text-muted-foreground">
-        Creates the enrolment and hands this lead off to accounts. This can&apos;t be undone from here.
+        Creates the enrolment and hands this lead off to accounts. This can&apos;t be undone from
+        here.
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="admission-course">Course</Label>
-          <Select name="course" required>
-            <SelectTrigger id="admission-course">
-              <SelectValue placeholder="Select course" />
-            </SelectTrigger>
-            <SelectContent>
-              {courses.map((c) => (
-                <SelectItem key={c.value} value={c.value}>
-                  {c.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            id="admission-course"
+            name="course"
+            required
+            options={courses}
+            placeholder="Select course"
+            searchPlaceholder="Type to search…"
+          />
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="admission-mode">Mode</Label>
-          <Select name="mode" required>
-            <SelectTrigger id="admission-mode">
-              <SelectValue placeholder="Select mode" />
-            </SelectTrigger>
-            <SelectContent>
-              {modes.map((m) => (
-                <SelectItem key={m.value} value={m.value}>
-                  {m.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            id="admission-mode"
+            name="mode"
+            required
+            options={modes}
+            placeholder="Select mode"
+            searchPlaceholder="Type to search…"
+          />
         </div>
       </div>
 

@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition, type KeyboardEvent } from "react";
 
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import type { FieldSchemaEntry } from "@/lib/fields/get-field-schema";
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 import { filterParamKey } from "@/lib/leads/apply-filters";
@@ -77,37 +77,32 @@ export function LeadFilters({
           );
         }
         return (
-          <Select
+          <Combobox
             key={field.id}
-            value={current || undefined}
-            onValueChange={(value) => updateParam(key, value)}
-          >
-            <SelectTrigger className="h-8 w-40">
-              <SelectValue placeholder={field.label} />
-            </SelectTrigger>
-            <SelectContent>
-              {options.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            className="w-40"
+            size="sm"
+            value={current}
+            onChange={(value) => updateParam(key, value)}
+            options={options}
+            placeholder={field.label}
+            searchPlaceholder={`Type a ${field.label.toLowerCase()}…`}
+            // A filter you cannot take off is a filter that quietly hides
+            // half the list until somebody reloads the page.
+            clearable
+          />
         );
       })}
       {tagOptions && tagOptions.length > 0 && (
-        <Select value={tagValue || undefined} onValueChange={(value) => updateParam("tag", value)}>
-          <SelectTrigger className="h-8 w-40">
-            <SelectValue placeholder="Tag" />
-          </SelectTrigger>
-          <SelectContent>
-            {tagOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Combobox
+          className="w-40"
+          size="sm"
+          value={tagValue ?? ""}
+          onChange={(value) => updateParam("tag", value)}
+          options={tagOptions}
+          placeholder="Tag"
+          searchPlaceholder="Type a tag…"
+          clearable
+        />
       )}
     </div>
   );

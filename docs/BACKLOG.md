@@ -14,12 +14,7 @@ Sources: `docs/02-BUILD-PHASES.md` (the original plan), the deferrals recorded i
 
 ## Now
 
-### 1. Inbound WhatsApp media
-Sending images and video works (Session 35); receiving them still does not. An inbound image
-is recorded by Meta's media id and never downloaded, so it can't be viewed in the CRM. The raw
-delivery is in `webhook_events`, so nothing is lost — it is just not fetchable through the UI.
-
-### 2. A cron that actually runs everything — **Leon's decision**
+### 1. A cron that actually runs everything — **Leon's decision**
 The plan allows one cron a day. `vercel.json` declares eight, most of them weekly, and three
 features now piggyback on other people's crons to get a schedule at all: the flow engine runs
 inside the broadcast sweep, and the Google conversion upload inside the Google spend sync.
@@ -28,22 +23,16 @@ inside the broadcast sweep, and the Google conversion upload inside the Google s
 the whole system.** That is the right fix while the plan stays as it is, and it would also make
 scheduled broadcasts land on the day they were scheduled for rather than the following Sunday.
 
-### 3. First-touch vs last-touch comparison
-Both are stored on every lead, never compared.
-
-### 4. Cohort conversion curves, geographic heatmap, school-level analytics
-Phase 5's remaining reports. The Insights pivot covers a lot of this ad hoc already, which is
-why they sit here rather than higher.
-
-### 5. Targets and weighted pipeline forecast
-Per-centre and per-counsellor targets, and a forecast weighted by stage probability
-(`pipeline_stages.probability` is already configured and unused).
+This got more urgent with inbound media. Images under 5MB are fetched inside the webhook, but
+anything larger waits for `downloadPendingMedia()`, which has no schedule of its own — and Meta
+deletes inbound media after **thirty days**. An id that is never redeemed is a permanently
+missing message, not a delayed one.
 
 ---
 
 ## Backlog proper
 
-### 6. Telephony — **blocked**
+### 2. Telephony — **blocked**
 Click-to-call, auto-logged direction/duration/disposition, recordings, missed-call → lead,
 Malayalam transcription, call scoring, QA dashboard. All of Phase 6 sits behind one decision:
 **Exotel or Ozonetel**. Nothing can start until Leon picks.
@@ -62,6 +51,13 @@ Malayalam transcription, call scoring, QA dashboard. All of Phase 6 sits behind 
   Account ID in Settings → Integrations → WhatsApp.
 - **Decide how the crons run** (see item 2). Three features are currently piggybacking on other
   jobs to get a schedule at all, and scheduled broadcasts land on Sunday whatever time you pick.
+- **Set this month's targets** under Settings → Targets, and give each pipeline stage a
+  probability under Settings → Pipeline Stages. Without the first, Insights → Targets counts
+  what happened but has nothing to judge it against; without the second, the forecast counts
+  those leads as worth nothing (and says so on the page).
+- **Set the alerting environment variables** in Vercel — `RESEND_API_KEY`, `EMAIL_FROM`,
+  `ALERT_EMAIL_TO`, `NEXT_PUBLIC_APP_URL`. Failures are recorded and visible on
+  Settings → Platform Health either way; without these, nobody is emailed about them.
 - **Create a Google Ads conversion action** of type "Import — from clicks", and paste its
   resource name into Settings → Integrations → Google. Until then admissions are never reported
   back and Google keeps optimising for form fills.

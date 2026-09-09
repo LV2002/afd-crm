@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Textarea } from "@/components/ui/textarea";
 import { maskPhone } from "@/lib/leads/mask-phone";
 
@@ -59,9 +59,10 @@ export function KanbanBoard({
   const [leads, setLeads] = useState(initialLeads);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null);
-  const [pendingReasonMove, setPendingReasonMove] = useState<{ leadId: string; stageId: string } | null>(
-    null,
-  );
+  const [pendingReasonMove, setPendingReasonMove] = useState<{
+    leadId: string;
+    stageId: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
@@ -73,7 +74,11 @@ export function KanbanBoard({
     setLeads(initialLeads);
   }, [initialLeads]);
 
-  function commitMove(leadId: string, stageId: string, reason?: { lostReason: string; lostReasonDetail: string }) {
+  function commitMove(
+    leadId: string,
+    stageId: string,
+    reason?: { lostReason: string; lostReasonDetail: string },
+  ) {
     const previous = leads;
     setLeads((cur) => cur.map((l) => (l.id === leadId ? { ...l, stageId } : l)));
     setError(null);
@@ -101,7 +106,9 @@ export function KanbanBoard({
     commitMove(lead.id, stage.id);
   }
 
-  const columns: Array<KanbanStage | { id: string; name: string; color: null; requiresReason: false }> = [
+  const columns: Array<
+    KanbanStage | { id: string; name: string; color: null; requiresReason: false }
+  > = [
     ...stages,
     ...(leads.some((l) => !l.stageId)
       ? [{ id: UNSTAGED, name: "No stage", color: null, requiresReason: false as const }]
@@ -202,7 +209,9 @@ function LeadCard({
       </div>
       {/* Non-negotiable #6: masked in list/bulk views. This card never
           reveals — that's an audited action on the lead detail page only. */}
-      <span className="font-mono text-xs text-muted-foreground">{maskPhone(lead.primaryPhone)}</span>
+      <span className="font-mono text-xs text-muted-foreground">
+        {maskPhone(lead.primaryPhone)}
+      </span>
       <div className="flex flex-wrap gap-1">
         {lead.temperature && (
           <Badge variant="outline" className="text-xs">
@@ -257,22 +266,19 @@ function LostReasonDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Why is this lead lost?</DialogTitle>
-          <DialogDescription>A reason is required before this lead can move to this stage.</DialogDescription>
+          <DialogDescription>
+            A reason is required before this lead can move to this stage.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
-          <Select value={lostReason} onValueChange={setLostReason}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select a reason" />
-            </SelectTrigger>
-            <SelectContent>
-              {options.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            value={lostReason}
+            onChange={setLostReason}
+            options={options}
+            placeholder="Select a reason"
+            searchPlaceholder="Type a reason…"
+          />
           <Textarea
             placeholder="Additional detail (optional)"
             value={lostReasonDetail}
@@ -285,7 +291,10 @@ function LostReasonDialog({
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button disabled={!lostReason} onClick={() => onConfirm({ lostReason, lostReasonDetail })}>
+          <Button
+            disabled={!lostReason}
+            onClick={() => onConfirm({ lostReason, lostReasonDetail })}
+          >
             Move to Lost
           </Button>
         </DialogFooter>

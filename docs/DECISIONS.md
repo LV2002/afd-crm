@@ -2332,3 +2332,70 @@ Worth remembering beyond this one function: any "strip the punctuation" regex in
 users write Malayalam needs `\p{M}` in the keep-set. The test that caught it says so in a comment
 rather than just asserting a string, because the next person to write one of these will reach for
 the same reflex.
+
+## 2026-09-09 — Three scopes of target, never added together
+
+`targets` holds an institute-wide row, per-centre rows and per-person rows in one table, and the
+forecast screen shows all three. The obvious alternative — derive the institute number by summing
+the centres — was rejected: they are separate decisions. An institute that wants 60 admissions and
+splits 35 to Kochi and 20 to Kannur has deliberately left five unallocated, and a screen that
+reports 55 as "the target" has quietly overwritten a management decision with arithmetic.
+
+The consequence is that the same admission counts in three rows, which looks like double-counting
+and is not. The page says so in as many words, because somebody will otherwise add the column up
+and conclude the month went 300%.
+
+**A partial unique index over coalesced nullable columns.** In Postgres two nulls are not equal, so
+a plain unique index on `(period_month, metric, center_id, owner_id)` would happily accept the
+institute's June admissions target five times. Coalescing the nullable ids to the nil uuid is what
+makes the null case a value the index can compare.
+
+**`target.manage`, not `settings.manage`.** A centre head runs their centre's numbers. That is not
+the same authority as editing the pipeline, the roles and the integration credentials, and the
+whole point of permission primitives is that the two can be granted separately.
+
+## 2026-09-09 — What a report refuses to say
+
+Three of the new reports withhold a number they could easily compute, and in each case that is the
+feature:
+
+- **Cohort windows return null, not zero,** for a cohort younger than the window. Zero is a claim
+  about people who have not been asked yet.
+- **Segments under `MIN_FOR_RATE` (8) leads report no percentage.** The counts are still shown and
+  still true; it is the percentage that misleads, because one admission out of two reads as 50%.
+- **Pace returns `no_target` rather than treating an unset target as zero.** A target of zero is a
+  month that reports 100% achieved for doing nothing, or a permanent failure, depending on which
+  way the comparison falls. Neither is what "nobody set one" means.
+
+The general rule this is an instance of: when the honest answer is "not enough information", a
+report that prints a number anyway is worse than one that prints a dash, because the number gets
+acted on.
+
+## 2026-09-09 — Where a searchable dropdown is not an improvement
+
+The `<Select>` → `<Combobox>` sweep stopped at the short fixed vocabularies: field entity, stage
+type, notification channel, discount type, SLA measure, student status, template category. These
+are enumerations the code enforces — they cannot grow at runtime — and the Combobox's own rule
+already says a search box over four items is a thing to read, understand and dismiss before you
+can do the obvious thing. Converting them would have been consistency for its own sake.
+
+Everything whose options come from a database row was converted, including the three lists with no
+ceiling at all: roles, tags and templates are rows an admin creates.
+
+## 2026-09-09 — A person-scoped row has no centre, so the policy has to go through the person
+
+Migration 0061's target policies let anyone holding `report.read` at centre scope read **every**
+person-scoped target in the institute, and anyone holding `target.manage` at centre scope set one
+for **any** member of staff. The screen was already narrower than that, which is exactly the
+failure mode CLAUDE.md § 3 exists to prevent: the policy, not the page, is the boundary.
+
+0062 fixes it. The complication is that a person-scoped target carries no `center_id` — there is
+nothing for `can_access_center()` to check — so the boundary has to be found through the person's
+`user_centers` rows. A plain sub-select there would be filtered by `user_centers`' own RLS and
+quietly return false for exactly the rows the policy means to allow, so it goes through a new
+`shares_center_with(uuid)` helper, security definer, the same shape as `auth_center_ids()` beside
+it.
+
+Nine tests in `rls.spec.ts` assert the boundary, and the centre-head one was confirmed to fail
+against the 0061 policy before 0062 was applied — the house rule about making a security test fail
+on purpose before believing it.

@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { reportingFailures } from "@/lib/errors/capture";
 
 import { db } from "@/lib/db/client";
 import {
@@ -55,7 +56,7 @@ export const maxDuration = 60;
  * rejects will be rejected identically tomorrow, and every attempt costs
  * money. The row says what went wrong and a person decides.
  */
-export async function GET(request: Request) {
+async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -191,7 +192,12 @@ export async function GET(request: Request) {
       doNotContact: leads.doNotContact,
     })
     .from(leads)
-    .where(inArray(leads.id, dueEnrolments.map((row) => row.leadId)));
+    .where(
+      inArray(
+        leads.id,
+        dueEnrolments.map((row) => row.leadId),
+      ),
+    );
   const leadById = new Map(leadRows.map((row) => [row.id, row]));
 
   const studentIds = dueEnrolments
@@ -320,4 +326,14 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({ asOf, rules: rules.length, due: due.length, sent, skipped, failed });
+}
+
+/**
+ * Wrapped so a failure is recorded and emailed rather than disappearing
+ * into a 500 that nobody looks at. It re-throws afterwards on purpose:
+ * the platform's own retry and alerting depend on the route genuinely
+ * failing, and swallowing it here would make a broken job look healthy.
+ */
+export async function GET(request: Request) {
+  return reportingFailures("cron:payment-reminders", () => run(request));
 }

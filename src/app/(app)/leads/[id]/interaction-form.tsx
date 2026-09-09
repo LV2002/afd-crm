@@ -6,7 +6,7 @@ import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Textarea } from "@/components/ui/textarea";
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 
@@ -29,7 +29,10 @@ export function InteractionForm({
   types: FieldOption[];
   outcomes: FieldOption[];
 }) {
-  const [state, formAction, pending] = useActionState(logInteraction.bind(null, leadId), initialState);
+  const [state, formAction, pending] = useActionState(
+    logInteraction.bind(null, leadId),
+    initialState,
+  );
 
   return (
     <form action={formAction} className="flex flex-col gap-3 rounded-lg border p-4">
@@ -37,33 +40,25 @@ export function InteractionForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="interaction-type">Type</Label>
-          <Select name="type" required>
-            <SelectTrigger id="interaction-type">
-              <SelectValue placeholder="Select type" />
-            </SelectTrigger>
-            <SelectContent>
-              {types.map((t) => (
-                <SelectItem key={t.value} value={t.value}>
-                  {t.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            id="interaction-type"
+            name="type"
+            required
+            options={types}
+            placeholder="Select type"
+            searchPlaceholder="Type to search…"
+          />
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="interaction-outcome">Outcome</Label>
-          <Select name="outcome">
-            <SelectTrigger id="interaction-outcome">
-              <SelectValue placeholder="Select outcome" />
-            </SelectTrigger>
-            <SelectContent>
-              {outcomes.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            id="interaction-outcome"
+            name="outcome"
+            options={outcomes}
+            placeholder="Select outcome"
+            searchPlaceholder="Type to search…"
+            clearable
+          />
         </div>
       </div>
 

@@ -1,12 +1,27 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { reportingFailures } from "@/lib/errors/capture";
 
 import { db } from "@/lib/db/client";
 import { adAudienceMembers, leads } from "@/lib/db/schema";
-import { computeAudienceDiff, isRetargetingEligible, type RetargetingCandidate } from "@/lib/integrations/audience-sync";
-import { getGoogleAdsAccessToken, type GoogleAdsCredentials } from "@/lib/integrations/google/ads-client";
-import { addUsersToList, createUserList, removeUsersFromList } from "@/lib/integrations/google/audience-client";
-import { getIntegrationCredentials, setIntegrationCredential } from "@/lib/integrations/credentials";
+import {
+  computeAudienceDiff,
+  isRetargetingEligible,
+  type RetargetingCandidate,
+} from "@/lib/integrations/audience-sync";
+import {
+  getGoogleAdsAccessToken,
+  type GoogleAdsCredentials,
+} from "@/lib/integrations/google/ads-client";
+import {
+  addUsersToList,
+  createUserList,
+  removeUsersFromList,
+} from "@/lib/integrations/google/audience-client";
+import {
+  getIntegrationCredentials,
+  setIntegrationCredential,
+} from "@/lib/integrations/credentials";
 import { hashPhoneE164 } from "@/lib/integrations/hash-pii";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +34,7 @@ export const dynamic = "force-dynamic";
  * instead of a Custom Audience, and E.164-formatted (not digits-only)
  * phone hashing (`hashPhoneE164` — see docs/DECISIONS.md).
  */
-export async function GET(request: Request) {
+async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -44,7 +59,10 @@ export async function GET(request: Request) {
   ]);
 
   if (!clientId || !clientSecret || !refreshToken || !developerToken || !customerId) {
-    return NextResponse.json({ error: "Google Ads credentials not fully configured" }, { status: 200 });
+    return NextResponse.json(
+      { error: "Google Ads credentials not fully configured" },
+      { status: 200 },
+    );
   }
 
   const accessToken = await getGoogleAdsAccessToken(clientId, clientSecret, refreshToken);
@@ -52,7 +70,11 @@ export async function GET(request: Request) {
 
   let userListResourceName = existingUserListResourceName;
   if (!userListResourceName) {
-    userListResourceName = await createUserList(customerId, credentials, "AFD India CRM — consented leads");
+    userListResourceName = await createUserList(
+      customerId,
+      credentials,
+      "AFD India CRM — consented leads",
+    );
     await setIntegrationCredential("google", "user_list_resource_name", userListResourceName);
   }
 
@@ -85,17 +107,38 @@ export async function GET(request: Request) {
       .filter((phone): phone is string => Boolean(phone))
       .map(hashPhoneE164);
 
-  if (toAdd.length > 0) await addUsersToList(customerId, credentials, userListResourceName, phonesFor(toAdd));
-  if (toRemove.length > 0) await removeUsersFromList(customerId, credentials, userListResourceName, phonesFor(toRemove));
+  if (toAdd.length > 0)
+    await addUsersToList(customerId, credentials, userListResourceName, phonesFor(toAdd));
+  if (toRemove.length > 0)
+    await removeUsersFromList(customerId, credentials, userListResourceName, phonesFor(toRemove));
 
   if (toAdd.length > 0) {
-    await db.insert(adAudienceMembers).values(toAdd.map((leadId) => ({ platform: "google" as const, leadId })));
+    await db
+      .insert(adAudienceMembers)
+      .values(toAdd.map((leadId) => ({ platform: "google" as const, leadId })));
   }
   if (toRemove.length > 0) {
     await db
       .delete(adAudienceMembers)
-      .where(and(eq(adAudienceMembers.platform, "google"), inArray(adAudienceMembers.leadId, toRemove)));
+      .where(
+        and(eq(adAudienceMembers.platform, "google"), inArray(adAudienceMembers.leadId, toRemove)),
+      );
   }
 
-  return NextResponse.json({ userListResourceName, added: toAdd.length, removed: toRemove.length, eligible: eligibleLeadIds.length });
+  return NextResponse.json({
+    userListResourceName,
+    added: toAdd.length,
+    removed: toRemove.length,
+    eligible: eligibleLeadIds.length,
+  });
+}
+
+/**
+ * Wrapped so a failure is recorded and emailed rather than disappearing
+ * into a 500 that nobody looks at. It re-throws afterwards on purpose:
+ * the platform's own retry and alerting depend on the route genuinely
+ * failing, and swallowing it here would make a broken job look healthy.
+ */
+export async function GET(request: Request) {
+  return reportingFailures("cron:retargeting-sync/google", () => run(request));
 }

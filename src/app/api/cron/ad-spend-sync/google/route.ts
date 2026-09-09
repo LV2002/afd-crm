@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { reportingFailures } from "@/lib/errors/capture";
 
 import { db } from "@/lib/db/client";
 import { adSpendDaily } from "@/lib/db/schema";
@@ -18,7 +19,7 @@ export const dynamic = "force-dynamic";
  * needs — the stored refresh token is exchanged for a short-lived access
  * token first.
  */
-export async function GET(request: Request) {
+async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -109,4 +110,14 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({ date, synced, conversions });
+}
+
+/**
+ * Wrapped so a failure is recorded and emailed rather than disappearing
+ * into a 500 that nobody looks at. It re-throws afterwards on purpose:
+ * the platform's own retry and alerting depend on the route genuinely
+ * failing, and swallowing it here would make a broken job look healthy.
+ */
+export async function GET(request: Request) {
+  return reportingFailures("cron:ad-spend-sync/google", () => run(request));
 }

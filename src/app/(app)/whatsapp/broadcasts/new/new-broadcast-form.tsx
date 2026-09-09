@@ -4,15 +4,10 @@ import { useActionState, useState, useTransition } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 import { NOT_SET, NOT_SET_LABEL, type PivotField } from "@/lib/reports/pivot";
 import type { AudienceEntity } from "@/lib/whatsapp/audience";
@@ -227,25 +222,20 @@ export function NewBroadcastForm({
         {entity === "lead" && tags.length > 0 && (
           <div className="flex flex-col gap-1">
             <Label className="text-xs text-muted-foreground">Tag</Label>
-            <Select
+            <Combobox
+              className="w-56"
+              size="sm"
               value={tagId || ANY}
-              onValueChange={(value) => {
+              onChange={(value) => {
                 setTagId(value === ANY ? "" : value);
                 setPreview(null);
               }}
-            >
-              <SelectTrigger className="h-8 w-56">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ANY}>Any</SelectItem>
-                {tags.map((tag) => (
-                  <SelectItem key={tag.id} value={tag.id}>
-                    {tag.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={[
+                { value: ANY, label: "Any" },
+                ...tags.map((tag) => ({ value: tag.id, label: tag.name })),
+              ]}
+              searchPlaceholder="Type a tag…"
+            />
           </div>
         )}
 
@@ -261,23 +251,17 @@ export function NewBroadcastForm({
               <div key={field.key} className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">{field.label}</Label>
                 {options.length > 0 ? (
-                  <Select
+                  <Combobox
+                    size="sm"
                     value={filters[field.key] ?? ANY}
-                    onValueChange={(value) => setFilter(field.key, value)}
-                  >
-                    <SelectTrigger className="h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ANY}>Any</SelectItem>
-                      <SelectItem value={NOT_SET}>{NOT_SET_LABEL}</SelectItem>
-                      {options.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={(value) => setFilter(field.key, value)}
+                    options={[
+                      { value: ANY, label: "Any" },
+                      { value: NOT_SET, label: NOT_SET_LABEL },
+                      ...options,
+                    ]}
+                    searchPlaceholder="Type to search…"
+                  />
                 ) : (
                   <Input
                     className="h-8"
@@ -333,18 +317,19 @@ export function NewBroadcastForm({
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="broadcast-template">Template</Label>
-          <Select name="templateName" value={templateName} onValueChange={setTemplateName}>
-            <SelectTrigger id="broadcast-template">
-              <SelectValue placeholder="Choose an approved template" />
-            </SelectTrigger>
-            <SelectContent>
-              {templates.map((choice) => (
-                <SelectItem key={`${choice.name}-${choice.language}`} value={choice.name}>
-                  {choice.name} ({choice.language})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            id="broadcast-template"
+            name="templateName"
+            value={templateName}
+            onChange={setTemplateName}
+            options={templates.map((choice) => ({
+              value: choice.name,
+              label: choice.name,
+              hint: choice.language,
+            }))}
+            placeholder="Choose an approved template"
+            searchPlaceholder="Type a template name…"
+          />
           {template && (
             <p className="whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">{template.body}</p>
           )}
@@ -404,22 +389,16 @@ export function NewBroadcastForm({
 
                   <div className="flex flex-col gap-1">
                     <Label className="text-xs text-muted-foreground">Fill with</Label>
-                    <Select
+                    <Combobox
+                      className="w-56"
                       value={source.kind === "variable" ? source.key : FIXED_TEXT}
-                      onValueChange={(value) => chooseVariable(index, value)}
-                    >
-                      <SelectTrigger className="h-9 w-56">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={FIXED_TEXT}>The same words for everybody</SelectItem>
-                        {variables.map((entry) => (
-                          <SelectItem key={entry.key} value={entry.key}>
-                            {entry.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onChange={(value) => chooseVariable(index, value)}
+                      options={[
+                        { value: FIXED_TEXT, label: "The same words for everybody" },
+                        ...variables.map((entry) => ({ value: entry.key, label: entry.label })),
+                      ]}
+                      searchPlaceholder="Type to search…"
+                    />
                   </div>
 
                   {source.kind === "text" ? (

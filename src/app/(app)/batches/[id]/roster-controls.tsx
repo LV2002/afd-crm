@@ -5,14 +5,8 @@ import { useActionState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 import { assignStudentToBatch, removeStudentFromBatch, type BatchFormState } from "../actions";
 
@@ -44,18 +38,16 @@ export function AddStudentForm({
     <form action={action} className="flex flex-col gap-2 rounded-lg border p-4">
       <input type="hidden" name="batchId" value={batchId} />
       <div className="flex flex-wrap items-end gap-2">
-        <Select name="studentId">
-          <SelectTrigger className="h-9 w-72">
-            <SelectValue placeholder="Choose a student" />
-          </SelectTrigger>
-          <SelectContent>
-            {candidates.map((candidate) => (
-              <SelectItem key={candidate.id} value={candidate.id}>
-                {candidate.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Combobox
+          className="w-72"
+          name="studentId"
+          options={candidates.map((candidate) => ({
+            value: candidate.id,
+            label: candidate.label,
+          }))}
+          placeholder="Choose a student"
+          searchPlaceholder="Type a name…"
+        />
         <Button type="submit" size="sm" disabled={pending}>
           <UserPlus className="size-4" /> {pending ? "Adding…" : "Add to batch"}
         </Button>

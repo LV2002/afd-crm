@@ -14,11 +14,16 @@ import {
   suppressPhone,
 } from "@/lib/whatsapp/opt-out";
 import { resolveReply, startFlows } from "@/lib/whatsapp/flow-runner";
+import { downloadMessageMedia, worthFetchingInline } from "@/lib/whatsapp/inbound-media";
 import { activeDropdownValues } from "@/lib/config/dropdown-values";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 import { notify } from "@/lib/notifications/notify";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
-import { mapMessageContent, type WhatsAppContact, type WhatsAppInboundMessage } from "@/lib/integrations/whatsapp/map-inbound";
+import {
+  mapMessageContent,
+  type WhatsAppContact,
+  type WhatsAppInboundMessage,
+} from "@/lib/integrations/whatsapp/map-inbound";
 import { verifyMetaSignature } from "@/lib/integrations/meta/verify-signature";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +45,8 @@ export async function GET(request: Request) {
   const token = url.searchParams.get("hub.verify_token");
   const challenge = url.searchParams.get("hub.challenge");
 
-  const expectedToken = (await getIntegrationCredentials("whatsapp", ["verify_token"])).verify_token;
+  const expectedToken = (await getIntegrationCredentials("whatsapp", ["verify_token"]))
+    .verify_token;
 
   if (mode === "subscribe" && expectedToken && token === expectedToken) {
     return new NextResponse(challenge ?? "", { status: 200 });
@@ -68,12 +74,18 @@ interface WhatsAppWebhookPayload {
   entry?: Array<{ id?: string; changes?: Array<{ field: string; value: WhatsAppChangeValue }> }>;
 }
 
-async function persistInvalid(payload: WhatsAppWebhookPayload | null, rawBody: string, signatureOk: boolean) {
+async function persistInvalid(
+  payload: WhatsAppWebhookPayload | null,
+  rawBody: string,
+  signatureOk: boolean,
+) {
   await db.insert(webhookEvents).values({
     source: "whatsapp",
     externalId: `invalid:${randomUUID()}`,
     signatureOk,
-    raw: (payload as unknown as Record<string, unknown>) ?? { unparsedBodyPreview: rawBody.slice(0, 2000) },
+    raw: (payload as unknown as Record<string, unknown>) ?? {
+      unparsedBodyPreview: rawBody.slice(0, 2000),
+    },
     status: "failed",
     lastError: !signatureOk ? "Invalid or missing X-Hub-Signature-256" : "Body was not valid JSON",
   });
@@ -93,7 +105,8 @@ export async function POST(request: Request) {
   const signatureHeader = request.headers.get("x-hub-signature-256");
 
   const { app_secret: appSecret } = await getIntegrationCredentials("whatsapp", ["app_secret"]);
-  const signatureOk = Boolean(appSecret) && verifyMetaSignature(rawBody, signatureHeader, appSecret ?? "");
+  const signatureOk =
+    Boolean(appSecret) && verifyMetaSignature(rawBody, signatureHeader, appSecret ?? "");
 
   let payload: WhatsAppWebhookPayload | null = null;
   try {
@@ -124,7 +137,12 @@ export async function POST(request: Request) {
         const externalId = `msg:${message.id}`;
         const [inserted] = await db
           .insert(webhookEvents)
-          .values({ source: "whatsapp", externalId, signatureOk: true, raw: message as unknown as Record<string, unknown> })
+          .values({
+            source: "whatsapp",
+            externalId,
+            signatureOk: true,
+            raw: message as unknown as Record<string, unknown>,
+          })
           .onConflictDoNothing({ target: [webhookEvents.source, webhookEvents.externalId] })
           .returning({ id: webhookEvents.id });
         if (!inserted) continue; // already processed on a previous delivery of this same message id
@@ -158,24 +176,48 @@ export async function POST(request: Request) {
           } else if (optIn) {
             await releasePhone(db, { phone: message.from });
           }
-          await db.insert(whatsappMessages).values({
-            leadId: matched?.id ?? null,
-            counsellorId: matched?.assignedTo ?? null,
-            direction: "inbound",
-            waMessageId: message.id,
-            fromPhone: normalizePhone(message.from) ?? message.from,
-            toPhone: value.metadata?.display_phone_number ?? value.metadata?.phone_number_id ?? "",
-            messageType: content.messageType,
-            body: content.body,
-            mediaId: content.mediaId,
-            mediaMimeType: content.mediaMimeType,
-            status: "received",
-            occurredAt: new Date(Number(message.timestamp) * 1000),
-          });
+          const [storedMessage] = await db
+            .insert(whatsappMessages)
+            .values({
+              leadId: matched?.id ?? null,
+              counsellorId: matched?.assignedTo ?? null,
+              direction: "inbound",
+              waMessageId: message.id,
+              fromPhone: normalizePhone(message.from) ?? message.from,
+              toPhone:
+                value.metadata?.display_phone_number ?? value.metadata?.phone_number_id ?? "",
+              messageType: content.messageType,
+              body: content.body,
+              mediaId: content.mediaId,
+              mediaMimeType: content.mediaMimeType,
+              status: "received",
+              occurredAt: new Date(Number(message.timestamp) * 1000),
+            })
+            .returning({ id: whatsappMessages.id });
+
+          // A photo is a few hundred kilobytes and worth fetching now, so
+          // it is on the counsellor's screen before they have finished
+          // reading the message. Anything larger waits for the sweep:
+          // Meta retries a slow webhook, and a retried webhook is a
+          // duplicated message. Either way the failure is contained —
+          // the message row is already written.
+          if (storedMessage && content.mediaId && worthFetchingInline(content.mediaMimeType)) {
+            await downloadMessageMedia({
+              id: storedMessage.id,
+              mediaId: content.mediaId,
+              mediaMimeType: content.mediaMimeType,
+              leadId: matched?.id ?? null,
+              attempts: 0,
+            }).catch(() => {});
+          }
 
           await db
             .update(webhookEvents)
-            .set({ status: "done", processedAt: new Date(), attempts: sql`${webhookEvents.attempts} + 1` })
+            .set({
+              status: "done",
+              processedAt: new Date(),
+              attempts: sql`${webhookEvents.attempts} + 1`,
+            })
             .where(eq(webhookEvents.id, inserted.id));
 
           // Leon's rule: a broadcast reply is the assigned counsellor's
@@ -220,7 +262,11 @@ export async function POST(request: Request) {
           allOk = false;
           await db
             .update(webhookEvents)
-            .set({ status: "failed", attempts: sql`${webhookEvents.attempts} + 1`, lastError: err instanceof Error ? err.message : String(err) })
+            .set({
+              status: "failed",
+              attempts: sql`${webhookEvents.attempts} + 1`,
+              lastError: err instanceof Error ? err.message : String(err),
+            })
             .where(eq(webhookEvents.id, inserted.id));
         }
       }
@@ -229,7 +275,12 @@ export async function POST(request: Request) {
         const externalId = `status:${status.id}:${status.status}`;
         const [inserted] = await db
           .insert(webhookEvents)
-          .values({ source: "whatsapp", externalId, signatureOk: true, raw: status as unknown as Record<string, unknown> })
+          .values({
+            source: "whatsapp",
+            externalId,
+            signatureOk: true,
+            raw: status as unknown as Record<string, unknown>,
+          })
           .onConflictDoNothing({ target: [webhookEvents.source, webhookEvents.externalId] })
           .returning({ id: webhookEvents.id });
         if (!inserted) continue; // this exact status transition was already recorded
@@ -237,19 +288,29 @@ export async function POST(request: Request) {
         try {
           await db
             .update(whatsappMessages)
-            .set({ status: status.status, errorMessage: status.errors?.[0]?.title ?? status.errors?.[0]?.message ?? null })
+            .set({
+              status: status.status,
+              errorMessage: status.errors?.[0]?.title ?? status.errors?.[0]?.message ?? null,
+            })
             .where(eq(whatsappMessages.waMessageId, status.id));
 
           await db
             .update(webhookEvents)
-            .set({ status: "done", processedAt: new Date(), attempts: sql`${webhookEvents.attempts} + 1` })
+            .set({
+              status: "done",
+              processedAt: new Date(),
+              attempts: sql`${webhookEvents.attempts} + 1`,
+            })
             .where(eq(webhookEvents.id, inserted.id));
-
         } catch (err) {
           allOk = false;
           await db
             .update(webhookEvents)
-            .set({ status: "failed", attempts: sql`${webhookEvents.attempts} + 1`, lastError: err instanceof Error ? err.message : String(err) })
+            .set({
+              status: "failed",
+              attempts: sql`${webhookEvents.attempts} + 1`,
+              lastError: err instanceof Error ? err.message : String(err),
+            })
             .where(eq(webhookEvents.id, inserted.id));
         }
       }

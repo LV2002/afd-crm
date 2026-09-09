@@ -1,22 +1,18 @@
 "use client";
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 
 import { FIELD_TYPES } from "./constants";
 
 export function FieldTypeSelect({ defaultValue }: { defaultValue?: string }) {
   return (
-    <Select name="type" defaultValue={defaultValue ?? "text"} required>
-      <SelectTrigger>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {FIELD_TYPES.map((type) => (
-          <SelectItem key={type} value={type}>
-            {type.replace(/_/g, " ")}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <Combobox
+      name="type"
+      defaultValue={defaultValue ?? "text"}
+      required
+      options={FIELD_TYPES.map((type) => ({ value: type, label: type.replace(/_/g, " ") }))}
+      placeholder="Choose a type"
+      searchPlaceholder="Type to search…"
+    />
   );
 }

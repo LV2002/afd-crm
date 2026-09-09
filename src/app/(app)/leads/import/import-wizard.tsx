@@ -5,7 +5,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Table,
   TableBody,
@@ -25,7 +25,13 @@ type Step = "upload" | "map" | "preview" | "results";
 const REQUIRED_KEYS = ["student_name", "primary_phone"];
 const PREVIEW_ROW_COUNT = 5;
 
-export function ImportWizard({ fields, centers }: { fields: FieldSchemaEntry[]; centers: FieldOption[] }) {
+export function ImportWizard({
+  fields,
+  centers,
+}: {
+  fields: FieldSchemaEntry[];
+  centers: FieldOption[];
+}) {
   const [step, setStep] = useState<Step>("upload");
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<ImportRow[]>([]);
@@ -125,25 +131,21 @@ export function ImportWizard({ fields, centers }: { fields: FieldSchemaEntry[]; 
                 <span className="w-48 shrink-0 truncate text-sm font-medium" title={header}>
                   {header}
                 </span>
-                <Select
+                <Combobox
+                  className="w-64"
                   value={mapping[header] || "__skip__"}
-                  onValueChange={(value) =>
+                  onChange={(value) =>
                     setMapping((m) => ({ ...m, [header]: value === "__skip__" ? "" : value }))
                   }
-                >
-                  <SelectTrigger className="w-64">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__skip__">Skip this column</SelectItem>
-                    {fieldOptionsFor(header).map((f) => (
-                      <SelectItem key={f.key} value={f.key}>
-                        {f.label}
-                        {REQUIRED_KEYS.includes(f.key) ? " *" : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  options={[
+                    { value: "__skip__", label: "Skip this column" },
+                    ...fieldOptionsFor(header).map((f) => ({
+                      value: f.key,
+                      label: `${f.label}${REQUIRED_KEYS.includes(f.key) ? " *" : ""}`,
+                    })),
+                  ]}
+                  searchPlaceholder="Type a field name…"
+                />
               </div>
             ))}
           </div>
@@ -159,20 +161,17 @@ export function ImportWizard({ fields, centers }: { fields: FieldSchemaEntry[]; 
 
         <div className="flex flex-col gap-2">
           <p className="text-sm font-medium">
-            Default centre {mappedKeys.has("center_id") && "(used only for rows where Centre doesn't map)"}
+            Default centre{" "}
+            {mappedKeys.has("center_id") && "(used only for rows where Centre doesn't map)"}
           </p>
-          <Select value={defaultCenterId} onValueChange={setDefaultCenterId}>
-            <SelectTrigger className="w-64">
-              <SelectValue placeholder="Choose a centre" />
-            </SelectTrigger>
-            <SelectContent>
-              {centers.map((c) => (
-                <SelectItem key={c.value} value={c.value}>
-                  {c.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            className="w-64"
+            value={defaultCenterId}
+            onChange={setDefaultCenterId}
+            options={centers}
+            placeholder="Choose a centre"
+            searchPlaceholder="Type a centre…"
+          />
         </div>
 
         <div className="flex gap-2">

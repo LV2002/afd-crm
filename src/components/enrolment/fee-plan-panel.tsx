@@ -6,6 +6,7 @@ import { useActionState, useState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/ui/smart-inputs";
@@ -13,13 +14,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { saveFeePlan, type FeeFormState } from "@/lib/enrolment/fee-actions";
 import { INSTALMENT_SLOTS } from "@/lib/enrolment/instalment-plan";
 import { describePromo, promoDiscountPaise, type Promo } from "@/lib/enrolment/promos";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { formatINR } from "@/lib/format/currency";
 
 const initialState: FeeFormState = {};
@@ -166,23 +160,22 @@ export function FeePlanPanel({
           <div className="flex flex-col gap-2">
             <Label>Offer</Label>
             <input type="hidden" name="promoId" value={promoId} />
-            <Select
+            <Combobox
+              className="w-full sm:w-96"
               value={promoId || NO_PROMO}
-              onValueChange={(value) => choosePromo(value === NO_PROMO ? "" : value)}
+              onChange={(value) => choosePromo(value === NO_PROMO ? "" : value)}
               disabled={!canEdit}
-            >
-              <SelectTrigger className="w-full sm:w-96">
-                <SelectValue placeholder="No offer" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_PROMO}>No offer</SelectItem>
-                {promos.map((promo) => (
-                  <SelectItem key={promo.id} value={promo.id}>
-                    {promo.name} — {describePromo(promo, formatINR)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={[
+                { value: NO_PROMO, label: "No offer" },
+                ...promos.map((promo) => ({
+                  value: promo.id,
+                  label: promo.name,
+                  hint: describePromo(promo, formatINR),
+                })),
+              ]}
+              placeholder="No offer"
+              searchPlaceholder="Type an offer name…"
+            />
             {chosenPromo && (
               <p className="text-xs text-muted-foreground">
                 {formatINR(promoPaise)} on this fee, and it needs no approval — the institute is

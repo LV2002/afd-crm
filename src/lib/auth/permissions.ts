@@ -269,6 +269,17 @@ export const PERMISSIONS = [
     category: "Reports",
     description: "See reports across every center.",
   },
+  // Separate from settings.manage on purpose. A centre head should be
+  // able to set their centre's number for the month — and their people's
+  // numbers — without also holding the keys to the pipeline, the roles
+  // and the integrations. Enforced in the targets RLS policies and in the
+  // Settings → Targets screen.
+  {
+    code: "target.manage",
+    label: "Set targets",
+    category: "Reports",
+    description: "Set the monthly lead, admission and revenue targets a report is measured against.",
+  },
   // Seeded to admin and co-admin only. The analyst can pull one person's
   // whole file — profile, fee plan, payments, whether they are still
   // studying — and those tools refuse anybody without org-wide report

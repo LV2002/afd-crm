@@ -1,11 +1,13 @@
 import { and, eq, isNotNull, lte, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { reportingFailures } from "@/lib/errors/capture";
 
 import { db } from "@/lib/db/client";
 import { whatsappBroadcastRecipients, whatsappBroadcasts } from "@/lib/db/schema";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 import { advanceRuns } from "@/lib/whatsapp/flow-runner";
+import { downloadPendingMedia } from "@/lib/whatsapp/inbound-media";
 import { suppressedAmong } from "@/lib/whatsapp/opt-out";
 import { sendTemplateMessage } from "@/lib/integrations/whatsapp/client";
 
@@ -49,7 +51,7 @@ function isHeaderKind(value: string | null): value is "image" | "video" | "docum
   return value === "image" || value === "video" || value === "document";
 }
 
-export async function GET(request: Request) {
+async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -247,7 +249,14 @@ export async function GET(request: Request) {
     flowsAdvanced = -1;
   }
 
+  // Anything the webhook could not fetch inline — videos, documents, and
+  // anything that failed the first time. Oldest first, because Meta
+  // deletes inbound media after thirty days and the oldest pending item
+  // is always the one closest to being lost for good.
+  const media = await downloadPendingMedia();
+
   return NextResponse.json({
+    media,
     started: promoted.length,
     processed: rows.length,
     sent,
@@ -255,4 +264,14 @@ export async function GET(request: Request) {
     suppressed: suppressedCount,
     flowsAdvanced,
   });
+}
+
+/**
+ * Wrapped so a failure is recorded and emailed rather than disappearing
+ * into a 500 that nobody looks at. It re-throws afterwards on purpose:
+ * the platform's own retry and alerting depend on the route genuinely
+ * failing, and swallowing it here would make a broken job look healthy.
+ */
+export async function GET(request: Request) {
+  return reportingFailures("cron:whatsapp-broadcast-sweep", () => run(request));
 }

@@ -1,7 +1,11 @@
 "use client";
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 
+/**
+ * Roles are database rows an admin creates, so this list has no ceiling —
+ * which is why it is searchable rather than a plain dropdown.
+ */
 export function RoleSelect({
   name,
   roles,
@@ -12,17 +16,13 @@ export function RoleSelect({
   defaultValue?: string;
 }) {
   return (
-    <Select name={name} defaultValue={defaultValue} required>
-      <SelectTrigger>
-        <SelectValue placeholder="Select a role" />
-      </SelectTrigger>
-      <SelectContent>
-        {roles.map((role) => (
-          <SelectItem key={role.id} value={role.id}>
-            {role.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <Combobox
+      name={name}
+      defaultValue={defaultValue}
+      required
+      options={roles.map((role) => ({ value: role.id, label: role.name }))}
+      placeholder="Select a role"
+      searchPlaceholder="Type a role…"
+    />
   );
 }
