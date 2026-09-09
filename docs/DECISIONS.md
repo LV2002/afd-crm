@@ -2381,3 +2381,21 @@ can do the obvious thing. Converting them would have been consistency for its ow
 
 Everything whose options come from a database row was converted, including the three lists with no
 ceiling at all: roles, tags and templates are rows an admin creates.
+
+## 2026-09-09 — A person-scoped row has no centre, so the policy has to go through the person
+
+Migration 0061's target policies let anyone holding `report.read` at centre scope read **every**
+person-scoped target in the institute, and anyone holding `target.manage` at centre scope set one
+for **any** member of staff. The screen was already narrower than that, which is exactly the
+failure mode CLAUDE.md § 3 exists to prevent: the policy, not the page, is the boundary.
+
+0062 fixes it. The complication is that a person-scoped target carries no `center_id` — there is
+nothing for `can_access_center()` to check — so the boundary has to be found through the person's
+`user_centers` rows. A plain sub-select there would be filtered by `user_centers`' own RLS and
+quietly return false for exactly the rows the policy means to allow, so it goes through a new
+`shares_center_with(uuid)` helper, security definer, the same shape as `auth_center_ids()` beside
+it.
+
+Nine tests in `rls.spec.ts` assert the boundary, and the centre-head one was confirmed to fail
+against the 0061 policy before 0062 was applied — the house rule about making a security test fail
+on purpose before believing it.

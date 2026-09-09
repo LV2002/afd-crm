@@ -3773,7 +3773,11 @@ the finding, and seeing it on the 14th is the entire point.
 centre head sets their centre's numbers and their counsellors' without also
 holding the keys to the pipeline, the roles and the integrations.
 
-**Leon's to-do:** run `npm run db:migrate` (0061) and `npm run db:seed` — the
+Migration 0062 tightened the person-scoped target policies to the caller's own
+centres — 0061 let any centre-scoped reporter read every person's number in the
+institute, which the screen never did. Nine RLS tests hold the line.
+
+**Leon's to-do:** run `npm run db:migrate` (0061, 0062) and `npm run db:seed` — the
 seed grants the new permission to centre heads; admins already hold everything.
 Then set this month's numbers in Settings → Targets, and give each pipeline
 stage a probability in Settings → Pipeline Stages, or the forecast counts those

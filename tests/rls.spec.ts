@@ -1609,3 +1609,124 @@ describe("the finance ledger is scoped by finance.read, and hidden from counsell
     ).rejects.toThrow(/finance_txn_reverses_uq/);
   });
 });
+
+/**
+ * Targets: a number somebody is measured against, and three scopes of it.
+ *
+ * Worth its own block because the policy cannot lean on `can_access_center`
+ * the way every other one does — a person-scoped row carries no
+ * `center_id`, so the boundary has to be found through the person. The
+ * first version of it (migration 0061) let any centre-scoped reporter read
+ * every person's target in the institute; 0062 is what these assert.
+ */
+describe("targets are scoped by report.read to read and target.manage to set", () => {
+  const MONTH = "2099-01-01";
+
+  beforeAll(async () => {
+    await owner`
+      insert into targets (period_month, owner_id, metric, target_value)
+      values (${MONTH}, ${fx.counsellor_kannur}, 'admissions', 7)
+    `;
+    await owner`
+      insert into targets (period_month, owner_id, metric, target_value)
+      values (${MONTH}, ${fx.counsellor_kochi}, 'admissions', 9)
+    `;
+    await owner`
+      insert into targets (period_month, metric, target_value)
+      values (${MONTH}, 'admissions', 60)
+    `;
+  });
+
+  afterAll(async () => {
+    await owner`delete from targets where period_month = ${MONTH}`;
+  });
+
+  async function visible(userId: string): Promise<number> {
+    return asUser(userId, async (tx) => {
+      const rows = await tx<Array<{ n: number }>>`
+        select count(*)::int as n from targets where period_month = ${MONTH}
+      `;
+      return rows[0].n;
+    });
+  }
+
+  it("an admin sees all three", async () => {
+    expect(await visible(fx.admin_a)).toBe(3);
+  });
+
+  it("a Kochi centre head sees their own centre's person and not Kannur's", async () => {
+    const rows = await asUser(fx.centerhead_kochi, (tx) =>
+      tx<Array<{ owner_id: string | null }>>`
+        select owner_id from targets where period_month = ${MONTH}
+      `,
+    );
+    expect(rows.map((r) => r.owner_id)).toEqual([fx.counsellor_kochi]);
+  });
+
+  it("a counsellor sees their own number and nobody else's, institute-wide included", async () => {
+    const rows = await asUser(fx.counsellor_kochi, (tx) =>
+      tx<Array<{ owner_id: string | null; target_value: string }>>`
+        select owner_id, target_value from targets where period_month = ${MONTH}
+      `,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].owner_id).toBe(fx.counsellor_kochi);
+  });
+
+  it("the institute-wide row needs org-wide reporting to see at all", async () => {
+    // Not even the centre head: "the institute wants 60 admissions" read as
+    // one centre's number is a figure twenty times the one they were given.
+    const centreHeadRows = await asUser(fx.centerhead_kochi, (tx) =>
+      tx<Array<{ owner_id: string | null }>>`
+        select owner_id from targets
+        where period_month = ${MONTH} and owner_id is null and center_id is null
+      `,
+    );
+    expect(centreHeadRows).toHaveLength(0);
+  });
+
+  it("a centre head can set a number for somebody at their own centre", async () => {
+    const rows = await asUser(fx.centerhead_kochi, (tx) =>
+      tx<Array<{ id: string }>>`
+        insert into targets (period_month, owner_id, metric, target_value)
+        values (${MONTH}, ${fx.counsellor_kochi}, 'leads', 40)
+        returning id
+      `,
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("and cannot set one for somebody at a centre they do not run", async () => {
+    await expect(
+      asUser(fx.centerhead_kochi, (tx) =>
+        tx`insert into targets (period_month, owner_id, metric, target_value)
+           values (${MONTH}, ${fx.counsellor_kannur}, 'leads', 40)`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("and cannot set the institute's own number", async () => {
+    await expect(
+      asUser(fx.centerhead_kochi, (tx) =>
+        tx`insert into targets (period_month, metric, target_value)
+           values (${MONTH}, 'leads', 500)`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("a counsellor cannot set a target at all, including their own", async () => {
+    await expect(
+      asUser(fx.counsellor_kochi, (tx) =>
+        tx`insert into targets (period_month, owner_id, metric, target_value)
+           values (${MONTH}, ${fx.counsellor_kochi}, 'leads', 1)`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("nobody can delete a target row — there is no delete policy", async () => {
+    const deleted = await asUser(fx.admin_a, (tx) =>
+      tx`delete from targets where period_month = ${MONTH}`,
+    );
+    expect(deleted.count).toBe(0);
+  });
+});

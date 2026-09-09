@@ -1,12 +1,12 @@
 "use server";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { targets } from "@/lib/db/schema";
+import { targets, userCenters } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 
 export interface TargetFormState {
@@ -76,6 +76,18 @@ export async function saveTargets(
   }
   if (kind === "center" && scope !== "all" && !user.centerIds.includes(centerId!)) {
     return { error: "That centre isn't one of yours." };
+  }
+  if (kind === "owner" && scope !== "all") {
+    // Mirrors the RLS policy (migration 0062): setting somebody else's
+    // number at centre scope requires sharing a centre with them.
+    const shared = await db
+      .select({ centerId: userCenters.centerId })
+      .from(userCenters)
+      .where(and(eq(userCenters.userId, ownerId!), inArray(userCenters.centerId, user.centerIds)))
+      .limit(1);
+    if (shared.length === 0) {
+      return { error: "That person isn't at one of your centres." };
+    }
   }
 
   const saved: Record<string, number | null> = {};
