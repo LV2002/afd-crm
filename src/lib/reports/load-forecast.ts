@@ -12,6 +12,7 @@ import {
   pipelineStages,
   profiles,
   targets,
+  userCenters,
 } from "@/lib/db/schema";
 import { startOfMonthIST } from "@/lib/format/date";
 
@@ -97,68 +98,89 @@ export async function loadForecast(user: SessionUser, now: Date): Promise<Foreca
         ? and(isNull(leads.deletedAt), inArray(leads.centerId, user.centerIds))
         : and(isNull(leads.deletedAt), eq(leads.assignedTo, user.id));
 
-  const [newLeads, admissions, collected, openLeads, targetRows, centerRows, profileRows] =
-    await Promise.all([
-      db
-        .select({ centerId: leads.centerId, ownerId: leads.assignedTo })
-        .from(leads)
-        .where(and(leadScope, gte(leads.createdAt, monthStart))),
+  const [
+    newLeads,
+    admissions,
+    collected,
+    openLeads,
+    targetRows,
+    centerRows,
+    profileRows,
+    colleagueRows,
+  ] = await Promise.all([
+    db
+      .select({ centerId: leads.centerId, ownerId: leads.assignedTo })
+      .from(leads)
+      .where(and(leadScope, gte(leads.createdAt, monthStart))),
 
-      db
-        .select({ centerId: leads.centerId, ownerId: leads.assignedTo })
-        .from(enrolments)
-        .innerJoin(leads, eq(leads.id, enrolments.leadId))
-        .where(
-          and(
-            leadScope,
-            isNull(enrolments.deletedAt),
-            isNull(enrolments.droppedAt),
-            isNotNull(enrolments.salesToAccountsAt),
-            gte(enrolments.salesToAccountsAt, monthStart),
-          ),
+    db
+      .select({ centerId: leads.centerId, ownerId: leads.assignedTo })
+      .from(enrolments)
+      .innerJoin(leads, eq(leads.id, enrolments.leadId))
+      .where(
+        and(
+          leadScope,
+          isNull(enrolments.deletedAt),
+          isNull(enrolments.droppedAt),
+          isNotNull(enrolments.salesToAccountsAt),
+          gte(enrolments.salesToAccountsAt, monthStart),
         ),
+      ),
 
-      // Signed, so a refund reduces the month rather than adding to it.
-      // The ledger is append-only; a correction is a debit row, and
-      // summing the absolute amounts would report a reversed payment
-      // twice.
-      db
-        .select({
-          centerId: leads.centerId,
-          ownerId: leads.assignedTo,
-          amount: sql<number>`sum(case when ${payments.direction} = 'credit' then ${payments.amountPaise} else -${payments.amountPaise} end)`,
-        })
-        .from(payments)
-        .innerJoin(enrolments, eq(enrolments.id, payments.enrolmentId))
-        .innerJoin(leads, eq(leads.id, enrolments.leadId))
-        .where(and(leadScope, gte(payments.receivedAt, monthStart)))
-        .groupBy(leads.centerId, leads.assignedTo),
+    // Signed, so a refund reduces the month rather than adding to it.
+    // The ledger is append-only; a correction is a debit row, and
+    // summing the absolute amounts would report a reversed payment
+    // twice.
+    db
+      .select({
+        centerId: leads.centerId,
+        ownerId: leads.assignedTo,
+        amount: sql<number>`sum(case when ${payments.direction} = 'credit' then ${payments.amountPaise} else -${payments.amountPaise} end)`,
+      })
+      .from(payments)
+      .innerJoin(enrolments, eq(enrolments.id, payments.enrolmentId))
+      .innerJoin(leads, eq(leads.id, enrolments.leadId))
+      .where(and(leadScope, gte(payments.receivedAt, monthStart)))
+      .groupBy(leads.centerId, leads.assignedTo),
 
-      db
-        .select({
-          leadId: leads.id,
-          stageId: leads.stageId,
-          stageName: pipelineStages.name,
-          probability: pipelineStages.probability,
-        })
-        .from(leads)
-        .innerJoin(pipelineStages, eq(pipelineStages.id, leads.stageId))
-        .where(and(leadScope, notInArray(pipelineStages.stageType, CLOSED_STAGE_TYPES))),
+    db
+      .select({
+        leadId: leads.id,
+        stageId: leads.stageId,
+        stageName: pipelineStages.name,
+        probability: pipelineStages.probability,
+      })
+      .from(leads)
+      .innerJoin(pipelineStages, eq(pipelineStages.id, leads.stageId))
+      .where(and(leadScope, notInArray(pipelineStages.stageType, CLOSED_STAGE_TYPES))),
 
-      db
-        .select({
-          centerId: targets.centerId,
-          ownerId: targets.ownerId,
-          metric: targets.metric,
-          targetValue: targets.targetValue,
-        })
-        .from(targets)
-        .where(and(eq(targets.periodMonth, periodMonth), isNull(targets.deletedAt))),
+    db
+      .select({
+        centerId: targets.centerId,
+        ownerId: targets.ownerId,
+        metric: targets.metric,
+        targetValue: targets.targetValue,
+      })
+      .from(targets)
+      .where(and(eq(targets.periodMonth, periodMonth), isNull(targets.deletedAt))),
 
-      db.select({ id: centers.id, name: centers.name }).from(centers),
-      db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles),
-    ]);
+    db.select({ id: centers.id, name: centers.name }).from(centers),
+    db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles),
 
+    // Who counts as "one of mine" for a centre-scoped reader. Only
+    // needed for that scope, and it is the same boundary the targets
+    // RLS policy applies through shares_center_with() — a person-scoped
+    // target carries no centre, so it has to be found through the
+    // person.
+    scope === "center" && user.centerIds.length > 0
+      ? db
+          .selectDistinct({ userId: userCenters.userId })
+          .from(userCenters)
+          .where(inArray(userCenters.centerId, user.centerIds))
+      : Promise.resolve([] as Array<{ userId: string }>),
+  ]);
+
+  const colleagues = new Set(colleagueRows.map((row) => row.userId));
   const centerName = new Map(centerRows.map((row) => [row.id, row.name]));
   const profileName = new Map(profileRows.map((row) => [row.id, row.fullName]));
 
@@ -181,6 +203,12 @@ export async function loadForecast(user: SessionUser, now: Date): Promise<Foreca
     if (kind === "owner") {
       if (!id) return null;
       if (scope === "own" && id !== user.id) return null;
+      // Somebody else's number only if you share a centre with them. A
+      // target row exists for people with no activity this month, so
+      // without this a centre head would see a counsellor from a centre
+      // they have nothing to do with the moment that person is given a
+      // number.
+      if (scope === "center" && id !== user.id && !colleagues.has(id)) return null;
     }
 
     const created: ForecastRow = {
