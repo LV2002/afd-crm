@@ -3627,3 +3627,74 @@ nosniff` and `Referrer-Policy: strict-origin-when-cross-origin`.
   and nothing about this codebase. Architecture, the authorization model, the
   migration traps that have already bitten, the cron-budget constraint, the
   performance findings above, a runbook, and an honest list of the gaps.
+
+## Session 44 — The interface, and the mistakes it was inviting
+
+Leon: make it simple enough for staff in their twenties and for management in
+their late fifties, and stop the application inviting typing errors.
+
+### What was actually wrong
+
+**The whole palette was greyscale.** Every colour token sat at zero chroma, so
+a primary button, a secondary button and a table header carried identical
+visual weight and nothing told you where to click. That is hard for everyone
+and hardest for somebody who did not grow up with software.
+
+**Controls were 36px with 14px text**, below the 44px a thumb needs and small
+enough to be a squint at 55. `--muted-foreground` was about 4.2:1 on white and
+used at 12px in dozens of places.
+
+**There was no searchable dropdown anywhere.** Choosing a counsellor out of
+fifteen or a course out of twenty meant scrolling a list and reading carefully.
+
+**Free text where a list belonged.** Exam year was a text box with the
+placeholder "2027". Academic year was a text box — so "2026-27", "2026-2027"
+and "26-27" are three spellings of one year, splitting every fee lookup and
+cohort report along a difference nobody can see.
+
+**No echo on anything.** A fee of ₹4,500 where ₹45,000 was meant, and a
+nine-digit phone number, both look completely fine as raw digits in a box.
+
+### Shipped
+
+- **A real palette.** One saturated blue used *only* for the next action, so
+  "the blue button" is a reliable instruction; neutrals given a slight blue bias
+  so they read as chosen rather than muddy; and `--success`/`--warning` as
+  separate semantic tokens, because green and red have to mean paid and overdue
+  rather than decoration. Muted text is now about 7:1.
+- **Everything bigger.** 16px base, 40px controls, 44px list rows and checkbox
+  targets, `text-base` on mobile so iOS stops zooming the page on focus, and a
+  visible focus ring on everything.
+- **`<Combobox>`** — a dropdown you type into. Hand-built rather than pulled in,
+  because it has to post its value inside `<form action={serverAction}>`, which
+  is how every form here submits. The search box only appears above seven
+  options (a search field over four items is a thing to dismiss before you can
+  do the obvious), and filtering matches anywhere in the label, because people
+  type the distinctive part — "nift", "kann".
+- **`<MoneyInput>`, `<PhoneInput>`, `<DateInput>`** — each says back what it
+  understood: "₹45,000", "Saved as +919847123456", and four quick picks
+  (Tomorrow / In 3 days / Next week / In 2 weeks) for the follow-up dates
+  counsellors set dozens of times a day and almost never mean a calendar square
+  by.
+- **`<Field>`** — one shape for every field: label above, hint or error below,
+  required marked on the label rather than discovered by failing. A placeholder
+  is never the label; placeholder text vanishes when you type, so a form filled
+  in from placeholders cannot be checked afterwards.
+- **`<ConfirmSubmit>`** on the one-way doors — confirming an admission and
+  recording a payment. It names what will happen rather than asking "Are you
+  sure?", which nobody reads.
+
+### Where it has been applied
+
+`dynamic-field-input.tsx` was the highest-leverage change: every custom field an
+admin ever adds, and the whole student profile form, renders from that switch —
+so `select` became searchable, `currency` gained the echo and `phone` the
+normalisation preview, everywhere at once.
+
+Then: new lead entry (the highest-volume form in the system), the state/district
+cascade, the fee panel, the finance intake forms, payment recording and the
+Gate 1 confirmation.
+
+**Not yet swept:** the remaining settings screens, the WhatsApp composer and the
+batch forms still use the plain `<Select>`. They inherit the palette, the sizing
+and the contrast, so they are already better — they just don't search yet.

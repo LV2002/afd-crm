@@ -1,8 +1,9 @@
 "use client";
 
 import { Checkbox } from "@/components/ui/checkbox";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MoneyInput, PhoneInput } from "@/components/ui/smart-inputs";
 import { Textarea } from "@/components/ui/textarea";
 import type { FieldSchemaEntry } from "@/lib/fields/get-field-schema";
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
@@ -10,8 +11,16 @@ import type { FieldOption } from "@/lib/fields/resolve-field-options";
 /**
  * Renders the right input for a field's *type* — one place that decides
  * "text box vs dropdown vs checkboxes", so a brand-new custom field of an
- * existing type edits correctly with no new code. Phone-type fields are
- * deliberately never handled here: see lead-edit-form.tsx for why.
+ * existing type edits correctly with no new code.
+ *
+ * This is also the highest-leverage place in the application to reduce
+ * data-entry mistakes: every custom field an admin ever adds, and the
+ * whole student profile form, is rendered from this switch. A `select`
+ * here becomes a searchable one everywhere at once; a `currency` field
+ * starts saying "₹45,000" back on every screen that has one.
+ *
+ * Phone-type fields on the LEAD are deliberately handled elsewhere: see
+ * lead-edit-form.tsx for why.
  */
 export function DynamicFieldInput({
   field,
@@ -38,24 +47,23 @@ export function DynamicFieldInput({
       return <Input type="datetime-local" name={name} defaultValue={toDateTimeInputValue(defaultValue)} />;
 
     case "number":
-    case "currency":
       return <Input type="number" name={name} defaultValue={(defaultValue as number) ?? ""} />;
+
+    case "currency":
+      // Says the amount back in words as it is typed. A missing zero is
+      // invisible as digits and obvious as "₹4,500".
+      return <MoneyInput name={name} defaultValue={String(defaultValue ?? "")} />;
 
     case "select":
     case "user_ref":
       return (
-        <Select name={name} defaultValue={(defaultValue as string) ?? undefined}>
-          <SelectTrigger>
-            <SelectValue placeholder={field.label} />
-          </SelectTrigger>
-          <SelectContent>
-            {options.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Combobox
+          name={name}
+          defaultValue={(defaultValue as string) ?? ""}
+          options={options}
+          placeholder={`Choose ${field.label.toLowerCase()}`}
+          clearable
+        />
       );
 
     case "multiselect": {
@@ -63,8 +71,16 @@ export function DynamicFieldInput({
       return (
         <div className="flex flex-col gap-1.5">
           {options.map((option) => (
-            <label key={option.value} className="flex items-center gap-2 text-sm font-normal">
-              <Checkbox name={name} value={option.value} defaultChecked={current.includes(option.value)} />
+            <label
+              key={option.value}
+              className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.9375rem] font-normal"
+            >
+              <Checkbox
+                name={name}
+                value={option.value}
+                defaultChecked={current.includes(option.value)}
+                className="size-5"
+              />
               {option.label}
             </label>
           ))}
@@ -86,8 +102,13 @@ export function DynamicFieldInput({
     case "url":
       return <Input type="url" name={name} defaultValue={(defaultValue as string) ?? ""} />;
 
-    case "text":
     case "phone":
+      // A phone on a custom field or the profile form gets the same echo
+      // the lead's own number gets — the E.164 it will actually be saved
+      // as, which is how a nine-digit number gives itself away.
+      return <PhoneInput name={name} defaultValue={(defaultValue as string) ?? ""} />;
+
+    case "text":
     default:
       return <Input name={name} defaultValue={(defaultValue as string) ?? ""} />;
   }

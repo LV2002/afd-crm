@@ -6,6 +6,7 @@ import { useActionState, useState } from "react";
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/smart-inputs";
 import { Label } from "@/components/ui/label";
 import {
   recordExpense,
@@ -155,8 +156,8 @@ function EntryForm({
           <Input id="occurredOn" name="occurredOn" type="date" defaultValue={today} required />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="amount">Amount (₹)</Label>
-          <Input id="amount" name="amount" placeholder="12,500" required />
+          <Label htmlFor="amount">Amount</Label>
+          <MoneyInput id="amount" name="amount" placeholder="12500" required />
         </div>
       </div>
 
@@ -235,8 +236,8 @@ function TransferForm({ accounts }: { accounts: Array<{ id: string; name: string
           <Input id="transferDate" name="occurredOn" type="date" defaultValue={today} required />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="transferAmount">Amount (₹)</Label>
-          <Input id="transferAmount" name="amount" placeholder="20,000" required />
+          <Label htmlFor="transferAmount">Amount</Label>
+          <MoneyInput id="transferAmount" name="amount" placeholder="20000" required />
         </div>
       </div>
 

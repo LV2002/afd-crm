@@ -3,8 +3,9 @@
 import { useActionState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
-import { Button } from "@/components/ui/button";
+import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/smart-inputs";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -37,8 +38,8 @@ export function RecordPaymentForm({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="payment-amount">Amount (₹)</Label>
-          <Input id="payment-amount" name="amount" type="number" min="1" step="1" required />
+          <Label htmlFor="payment-amount">Amount</Label>
+          <MoneyInput id="payment-amount" name="amount" required />
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="payment-method">Method</Label>
@@ -87,9 +88,29 @@ export function RecordPaymentForm({
       </div>
 
       <FormMessage error={state.error} success={state.success} />
-      <Button type="submit" disabled={pending} className="w-fit">
-        {pending ? "Recording…" : "Record payment"}
-      </Button>
+      {/* Asked before, not after. The ledger is append-only: a payment
+          recorded by a mis-click cannot be edited away, only reversed
+          with a second line — and the first cleared payment is the gate
+          that creates a student record and hands the family to
+          academics. Both are worth one deliberate press. */}
+      <ConfirmSubmit
+        label="Record payment"
+        pending={pending}
+        pendingLabel="Recording…"
+        title="Record this payment?"
+        body={
+          <>
+            This writes a permanent line in the ledger. It cannot be edited or deleted
+            afterwards — a mistake has to be corrected with a reversal, which stays on the
+            record alongside it.
+            <br />
+            <br />
+            If this is their first cleared payment it also creates their student record and
+            hands them to academics.
+          </>
+        }
+        confirmLabel="Yes, record it"
+      />
     </form>
   );
 }

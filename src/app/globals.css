@@ -4,48 +4,99 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* ─────────────────────────────────────────────────────────────
+     AFD India CRM — colour
+
+     The palette was entirely greyscale: every token sat at zero
+     chroma, so a primary button, a secondary button and a table
+     header carried the same visual weight and nothing on the page
+     told you where to click. That is hard for everyone and hardest
+     for somebody who did not grow up with software.
+
+     Two changes fix most of it. ONE saturated blue, used only for
+     the thing you are meant to do next — so "the blue button" is a
+     reliable instruction. And neutrals with a slight blue bias
+     rather than dead grey, which keeps the greys feeling chosen
+     next to that blue instead of muddy.
+
+     Semantic colours are separate from the accent on purpose: green
+     and red have to mean paid and overdue, not decoration.
+     ───────────────────────────────────────────────────────────── */
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+
+  --background: oklch(0.994 0.002 255);
+  --foreground: oklch(0.215 0.021 258);
+
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.215 0.021 258);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.215 0.021 258);
+
+  --primary: oklch(0.505 0.163 262);
+  --primary-foreground: oklch(0.99 0.002 250);
+
+  --secondary: oklch(0.962 0.006 253);
+  --secondary-foreground: oklch(0.27 0.023 258);
+
+  --muted: oklch(0.966 0.005 253);
+  /* Was oklch(0.556 0 0) — about 4.2:1 on white, and used at 12px in
+     dozens of places, which is genuinely hard to read at 55. This is
+     roughly 7:1 and comfortable at every size the app uses. */
+  --muted-foreground: oklch(0.472 0.021 256);
+
+  --accent: oklch(0.955 0.012 255);
+  --accent-foreground: oklch(0.27 0.023 258);
+
+  --destructive: oklch(0.532 0.196 27);
+  --destructive-foreground: oklch(0.99 0.002 250);
+
+  /* Meaning, not decoration: paid, needs attention, overdue. */
+  --success: oklch(0.523 0.122 156);
+  --success-foreground: oklch(0.99 0.002 250);
+  --success-subtle: oklch(0.945 0.038 156);
+  --warning: oklch(0.63 0.135 70);
+  --warning-foreground: oklch(0.21 0.03 70);
+  --warning-subtle: oklch(0.958 0.048 82);
+
+  --border: oklch(0.898 0.008 253);
+  --input: oklch(0.878 0.009 253);
+  --ring: oklch(0.505 0.163 262);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --background: oklch(0.191 0.016 259);
+  --foreground: oklch(0.955 0.005 250);
+
+  --card: oklch(0.234 0.018 259);
+  --card-foreground: oklch(0.955 0.005 250);
+  --popover: oklch(0.245 0.018 259);
+  --popover-foreground: oklch(0.955 0.005 250);
+
+  --primary: oklch(0.655 0.148 262);
+  --primary-foreground: oklch(0.17 0.022 260);
+
+  --secondary: oklch(0.286 0.018 259);
+  --secondary-foreground: oklch(0.955 0.005 250);
+
+  --muted: oklch(0.281 0.018 259);
+  --muted-foreground: oklch(0.735 0.019 255);
+
+  --accent: oklch(0.315 0.022 259);
+  --accent-foreground: oklch(0.965 0.005 250);
+
+  --destructive: oklch(0.665 0.176 26);
+  --destructive-foreground: oklch(0.16 0.02 26);
+
+  --success: oklch(0.68 0.126 158);
+  --success-foreground: oklch(0.16 0.03 158);
+  --success-subtle: oklch(0.29 0.05 158);
+  --warning: oklch(0.76 0.128 76);
+  --warning-foreground: oklch(0.18 0.03 76);
+  --warning-subtle: oklch(0.31 0.05 76);
+
+  --border: oklch(1 0 0 / 13%);
+  --input: oklch(1 0 0 / 18%);
+  --ring: oklch(0.655 0.148 262);
 }
 
 @theme inline {
@@ -72,6 +123,12 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-subtle: var(--success-subtle);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-subtle: var(--warning-subtle);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -80,7 +137,45 @@
   * {
     @apply border-border outline-ring/50;
   }
+
+  /*
+   * 16px base, not the 14px this was effectively running at.
+   *
+   * The application is read all day by people across a forty-year age
+   * range. One comfortable size for everybody beats a size toggle
+   * nobody finds — and because everything is in rem, a person who
+   * needs it larger still gets it by using their browser's own zoom,
+   * which is the control they already know how to use.
+   */
+  html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-background text-foreground;
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  /*
+   * A visible focus ring on everything, always. Keyboard users need it,
+   * and so does anybody who has lost track of where they are in a long
+   * form — which, on the fee panel, is most people.
+   */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Figures line up in columns without being asked to. */
+  table, .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
