@@ -7,6 +7,7 @@ import { whatsappBroadcastRecipients, whatsappBroadcasts } from "@/lib/db/schema
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 import { advanceRuns } from "@/lib/whatsapp/flow-runner";
+import { downloadPendingMedia } from "@/lib/whatsapp/inbound-media";
 import { suppressedAmong } from "@/lib/whatsapp/opt-out";
 import { sendTemplateMessage } from "@/lib/integrations/whatsapp/client";
 
@@ -248,7 +249,14 @@ async function run(request: Request) {
     flowsAdvanced = -1;
   }
 
+  // Anything the webhook could not fetch inline — videos, documents, and
+  // anything that failed the first time. Oldest first, because Meta
+  // deletes inbound media after thirty days and the oldest pending item
+  // is always the one closest to being lost for good.
+  const media = await downloadPendingMedia();
+
   return NextResponse.json({
+    media,
     started: promoted.length,
     processed: rows.length,
     sent,

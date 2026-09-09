@@ -10,6 +10,11 @@ export interface WhatsAppThreadMessage {
   templateName: string | null;
   mediaId: string | null;
   mediaMimeType: string | null;
+  /** Set once the bytes have been fetched from Meta into our own bucket. */
+  mediaStoragePath: string | null;
+  mediaFilename: string | null;
+  /** Why the fetch failed, when it did — better on screen than a blank space. */
+  mediaError: string | null;
   status: "queued" | "sent" | "delivered" | "read" | "failed" | "received";
   errorMessage: string | null;
   occurredAt: string;
@@ -23,6 +28,9 @@ interface MessageRow {
   template_name: string | null;
   media_id: string | null;
   media_mime_type: string | null;
+  media_storage_path: string | null;
+  media_filename: string | null;
+  media_error: string | null;
   status: "queued" | "sent" | "delivered" | "read" | "failed" | "received";
   error_message: string | null;
   occurred_at: string;
@@ -32,7 +40,7 @@ interface MessageRow {
 export async function getWhatsAppThread(supabase: SupabaseClient, leadId: string): Promise<WhatsAppThreadMessage[]> {
   const { data } = await supabase
     .from("whatsapp_messages")
-    .select("id, direction, message_type, body, template_name, media_id, media_mime_type, status, error_message, occurred_at")
+    .select("id, direction, message_type, body, template_name, media_id, media_mime_type, media_storage_path, media_filename, media_error, status, error_message, occurred_at")
     .eq("lead_id", leadId)
     .is("deleted_at", null)
     .order("occurred_at", { ascending: true })
@@ -50,6 +58,9 @@ function toThreadMessage(row: MessageRow): WhatsAppThreadMessage {
     templateName: row.template_name,
     mediaId: row.media_id,
     mediaMimeType: row.media_mime_type,
+    mediaStoragePath: row.media_storage_path,
+    mediaFilename: row.media_filename,
+    mediaError: row.media_error,
     status: row.status,
     errorMessage: row.error_message,
     occurredAt: row.occurred_at,
@@ -72,7 +83,7 @@ export async function getWhatsAppThreadByPhone(
 ): Promise<WhatsAppThreadMessage[]> {
   const { data } = await supabase
     .from("whatsapp_messages")
-    .select("id, direction, message_type, body, template_name, media_id, media_mime_type, status, error_message, occurred_at")
+    .select("id, direction, message_type, body, template_name, media_id, media_mime_type, media_storage_path, media_filename, media_error, status, error_message, occurred_at")
     .is("lead_id", null)
     .eq("from_phone", phone)
     .is("deleted_at", null)

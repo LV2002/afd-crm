@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { idColumn, softDelete, timestamps } from "./_helpers";
 import { interactionDirectionEnum } from "./activity";
@@ -78,6 +78,19 @@ export const whatsappMessages = pgTable(
     templateName: text("template_name"),
     mediaId: text("media_id"),
     mediaMimeType: text("media_mime_type"),
+    /**
+     * Where the bytes actually live, once fetched from Meta into the
+     * private attachments bucket. Null means not fetched yet — Meta keeps
+     * inbound media for 30 days and then it is gone, so an id that is
+     * never redeemed becomes a permanently missing message.
+     */
+    mediaStoragePath: text("media_storage_path"),
+    mediaFilename: text("media_filename"),
+    mediaSizeBytes: integer("media_size_bytes"),
+    mediaDownloadedAt: timestamp("media_downloaded_at", { withTimezone: true }),
+    /** Why a fetch failed, and how many times it has been tried. Five and it stops. */
+    mediaError: text("media_error"),
+    mediaAttempts: integer("media_attempts").notNull().default(0),
     status: whatsappMessageStatusEnum("status").notNull().default("queued"),
     errorMessage: text("error_message"),
     sentBy: uuid("sent_by").references(() => profiles.id, { onDelete: "set null" }),

@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { WhatsAppThreadMessage } from "@/lib/whatsapp/get-thread";
 
+import { InboundMedia } from "@/components/whatsapp/inbound-media";
 import { WHATSAPP_MEDIA_EXTENSIONS, validateWhatsAppMedia } from "@/lib/whatsapp/media";
 import {
   sendWhatsAppMedia,
@@ -38,18 +39,31 @@ function MessageBubble({ message }: { message: WhatsAppThreadMessage }) {
         )}
       >
         {message.messageType === "media" ? (
-          <span className="flex flex-col gap-1">
-            <span className="text-xs uppercase opacity-70">
-              {/*
-                Inbound media still has no preview — the bytes sit on
-                Meta's servers behind the access token and downloading
-                them is separate work. Outbound media we sent ourselves,
-                so saying so is honest and useful; the caption is the
-                part worth showing either way.
-              */}
-              {message.mediaMimeType?.split("/")[0] ?? "Media"}{" "}
-              {isOutbound ? "sent" : "received — preview not yet available"}
-            </span>
+          <span className="flex flex-col gap-1.5">
+            {message.mediaStoragePath ? (
+              // The bytes are ours now: fetched from Meta into the private
+              // bucket and shown through a short-lived signed URL.
+              <InboundMedia
+                messageId={message.id}
+                mimeType={message.mediaMimeType}
+                filename={message.mediaFilename}
+              />
+            ) : (
+              <span className="text-xs uppercase opacity-70">
+                {message.mediaMimeType?.split("/")[0] ?? "Media"}{" "}
+                {isOutbound
+                  ? "sent"
+                  : message.mediaError
+                    ? "— couldn't be fetched"
+                    : "— fetching it"}
+              </span>
+            )}
+            {/* Said plainly rather than left as a blank space. Meta deletes
+                inbound media after thirty days, and "we tried and it was
+                already gone" is the answer somebody needs. */}
+            {!message.mediaStoragePath && !isOutbound && message.mediaError && (
+              <span className="text-xs opacity-70">{message.mediaError}</span>
+            )}
             {message.body && <span>{message.body}</span>}
           </span>
         ) : message.messageType === "template" ? (
