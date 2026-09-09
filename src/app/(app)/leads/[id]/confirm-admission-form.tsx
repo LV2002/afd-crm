@@ -3,13 +3,35 @@
 import { useActionState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Combobox } from "@/components/ui/combobox";
+import { ConfirmSubmit } from "@/components/ui/confirm-submit";
+import { MoneyInput } from "@/components/ui/smart-inputs";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 
 import { confirmAdmissionAction, type FormState } from "./actions";
+
+/**
+ * Academic years as a list rather than a text box.
+ *
+ * "2026-27", "2026-2027", "26-27" and "2026/27" are four spellings of one
+ * year, and typed freely all four appear — after which every fee
+ * structure lookup and every cohort report splits along a formatting
+ * difference nobody can see.
+ */
+function academicYearOptions() {
+  const now = new Date();
+  // An academic year is named for the calendar year it starts in, and
+  // enrolment for the next one begins well before June.
+  const startYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const years = [];
+  for (let year = startYear - 1; year <= startYear + 2; year += 1) {
+    const label = `${year}-${String((year + 1) % 100).padStart(2, "0")}`;
+    years.push({ value: label, label });
+  }
+  return years;
+}
 
 const initialState: FormState = {};
 
@@ -73,31 +95,52 @@ export function ConfirmAdmissionForm({
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="admission-academic-year">Academic year</Label>
-        <Input id="admission-academic-year" name="academicYear" placeholder="2026-27" required />
+        <Combobox
+          id="admission-academic-year"
+          name="academicYear"
+          options={academicYearOptions()}
+          placeholder="Choose a year"
+          required
+        />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="admission-discount">Discount (₹)</Label>
-          <Input id="admission-discount" name="discount" type="number" min="0" step="1" placeholder="0" />
+          <Label htmlFor="admission-discount">Discount</Label>
+          <MoneyInput id="admission-discount" name="discount" placeholder="0" />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="admission-fee-override">Manual fee override (₹)</Label>
-          <Input
+          <Label htmlFor="admission-fee-override">Manual fee override</Label>
+          <MoneyInput
             id="admission-fee-override"
             name="totalFeeOverride"
-            type="number"
-            min="0"
-            step="1"
-            placeholder="Leave blank to use fee structure"
+            placeholder="Blank uses the fee structure"
           />
         </div>
       </div>
 
       <FormMessage error={state.error} success={state.success} />
-      <Button type="submit" disabled={pending} className="w-fit">
-        {pending ? "Confirming…" : "Confirm admission"}
-      </Button>
+      {/* Gate 1 is a one-way door: sales work on this lead stops, and only
+          an administrator can walk it back. Worth one deliberate press
+          from a counsellor who is otherwise editing fields on the same
+          screen. */}
+      <ConfirmSubmit
+        label="Confirm admission"
+        size="lg"
+        pending={pending}
+        pendingLabel="Confirming…"
+        title="Confirm this admission?"
+        body={
+          <>
+            This hands the family to accounts and <strong>ends sales work on this lead</strong>.
+            Only an administrator can undo it.
+            <br />
+            <br />
+            Do this when the admission is actually agreed — not when it looks likely.
+          </>
+        }
+        confirmLabel="Yes, confirm it"
+      />
     </form>
   );
 }

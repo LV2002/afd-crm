@@ -8,6 +8,7 @@ import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/smart-inputs";
 import { Textarea } from "@/components/ui/textarea";
 import { saveFeePlan, type FeeFormState } from "@/lib/enrolment/fee-actions";
 import { INSTALMENT_SLOTS } from "@/lib/enrolment/instalment-plan";
@@ -113,37 +114,38 @@ export function FeePlanPanel({
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="courseFee">Course fee (₹)</Label>
-            <Input
+            <Label htmlFor="courseFee">Course fee</Label>
+            {/* Every money field says the amount back in words as it is
+                typed. A missing zero on a fee is the most expensive
+                typing mistake anybody makes here, and ₹4,500 versus
+                ₹45,000 is invisible as raw digits and obvious as text. */}
+            <MoneyInput
               id="courseFee"
               name="courseFee"
               value={fee}
-              onChange={(e) => setFee(e.target.value)}
+              onValueChange={setFee}
               disabled={!canEdit}
-              inputMode="decimal"
               placeholder="45000"
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="discount">Discount (₹)</Label>
-            <Input
+            <Label htmlFor="discount">Discount</Label>
+            <MoneyInput
               id="discount"
               name="discount"
               value={discount}
-              onChange={(e) => setDiscount(e.target.value)}
+              onValueChange={setDiscount}
               disabled={!canEdit}
-              inputMode="decimal"
               placeholder="0"
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="downPayment">Down payment (₹)</Label>
-            <Input
+            <Label htmlFor="downPayment">Down payment</Label>
+            <MoneyInput
               id="downPayment"
               name="downPayment"
               defaultValue={values.downPayment}
               disabled={!canEdit}
-              inputMode="decimal"
               placeholder="0"
             />
           </div>

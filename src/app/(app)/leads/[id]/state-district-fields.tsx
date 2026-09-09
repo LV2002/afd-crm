@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
+import { Field } from "@/components/ui/field";
 import { districtsForState, INDIAN_STATES_DISTRICTS } from "@/lib/geo/indian-states-districts";
 
 /**
@@ -12,6 +13,11 @@ import { districtsForState, INDIAN_STATES_DISTRICTS } from "@/lib/geo/indian-sta
  * a state narrows the district list; changing state clears a district
  * that's no longer valid for it, rather than silently keeping a stale
  * value.
+ *
+ * Both are searchable. Thirty-six states and, for Kerala alone, fourteen
+ * districts is exactly the length at which a plain dropdown stops being
+ * a list you read and becomes a list you scroll — and scrolling past the
+ * right answer is how somebody ends up in Kannur when they meant Kollam.
  */
 export function StateDistrictFields({
   stateName,
@@ -30,43 +36,38 @@ export function StateDistrictFields({
 
   return (
     <>
-      <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium">State</label>
-        <Select
+      <Field label="State" htmlFor={stateName}>
+        <Combobox
+          id={stateName}
           name={stateName}
-          value={state || undefined}
-          onValueChange={(value) => {
+          value={state}
+          onChange={(value) => {
             setState(value);
             if (!districtsForState(value).includes(district)) setDistrict("");
           }}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="State" />
-          </SelectTrigger>
-          <SelectContent>
-            {INDIAN_STATES_DISTRICTS.map((s) => (
-              <SelectItem key={s.state} value={s.state}>
-                {s.state}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium">District</label>
-        <Select name={districtName} value={district || undefined} onValueChange={setDistrict} disabled={!state}>
-          <SelectTrigger>
-            <SelectValue placeholder={state ? "District" : "Select a state first"} />
-          </SelectTrigger>
-          <SelectContent>
-            {districts.map((d) => (
-              <SelectItem key={d} value={d}>
-                {d}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+          options={INDIAN_STATES_DISTRICTS.map((entry) => ({
+            value: entry.state,
+            label: entry.state,
+          }))}
+          placeholder="Choose a state"
+          searchPlaceholder="Type a state…"
+          clearable
+        />
+      </Field>
+
+      <Field label="District" htmlFor={districtName}>
+        <Combobox
+          id={districtName}
+          name={districtName}
+          value={district}
+          onChange={setDistrict}
+          options={districts.map((name) => ({ value: name, label: name }))}
+          disabled={!state}
+          placeholder={state ? "Choose a district" : "Pick a state first"}
+          searchPlaceholder="Type a district…"
+          clearable
+        />
+      </Field>
     </>
   );
 }

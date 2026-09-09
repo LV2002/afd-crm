@@ -13,7 +13,10 @@ function Label({
     <LabelPrimitive.Root
       data-slot="label"
       className={cn(
-        "flex items-center gap-2 text-sm leading-none font-medium select-none peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
+        // Labels sit at full foreground weight, not muted. A label is the
+      // question being asked; greying it out to look tidy is how a form
+      // ends up filled in wrong.
+      "flex items-center gap-1.5 text-[0.9375rem] leading-snug font-medium text-foreground select-none peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
         className,
       )}
       {...props}
