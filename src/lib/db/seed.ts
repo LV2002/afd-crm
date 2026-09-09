@@ -177,6 +177,10 @@ const ROLE_SEEDS: RoleSeed[] = [
           "batch.manage",
           "report.read",
           "report.center",
+          // A centre head sets their centre's numbers for the month and
+          // splits them between their counsellors. Scoped to "center", so
+          // the institute-wide target stays out of reach.
+          "target.manage",
           "users.manage",
           "audit.read",
         ],

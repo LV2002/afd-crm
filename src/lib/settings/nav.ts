@@ -84,6 +84,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage"],
   },
   {
+    href: "/settings/targets",
+    label: "Targets",
+    description: "The monthly numbers the institute, each centre and each person are aiming for",
+    permissions: ["target.manage"],
+  },
+  {
     href: "/settings/promos",
     label: "Offers",
     description:
