@@ -326,20 +326,58 @@ The same applies to a lead marked **do not contact**.
 
 ## Part 8 — Reports
 
+Insights has five tabs. They answer different questions and it is worth knowing
+which is which.
+
 | Screen | The question it answers |
 |---|---|
-| **Insights** | Anything. Pick variables, filter, group. Same grammar as broadcast audiences. |
+| **Insights → Explore** | Anything. Pick variables, filter, group. Same grammar as broadcast audiences. |
+| **Insights → Sources** | Which sources bring people in, and which ones close them? |
+| **Insights → Timing** | How long do people take to decide, and is this month genuinely worse or just younger? |
+| **Insights → Segments** | Which districts and schools actually enrol — not which send the most enquiries. |
+| **Insights → Targets** | Is this month on course? |
 | **Ad Performance** | What did each campaign cost, and what did it actually bring in? |
 | **Handovers** | Who is confirmed but unpaid right now, and how long do admissions take? |
 | **Finance → Reports** | Monthly, yearly, cash flow, collections, timeliness. |
 | **Ask AI** | A plain-English question. Admins and co-admins only. |
 
-Two things worth knowing about the numbers:
+Five things worth knowing about the numbers:
 
 - **Recent months always look worse than they are.** An enquiry from last week
-  hasn't had time to enrol. Ad Performance says so on screen.
+  hasn't had time to enrol. Ad Performance says so on screen, and Timing is the
+  screen built to correct for it.
 - **Handovers reports medians, not averages.** One admission that took eight
   months would otherwise make it look like every handover is broken.
+- **A dash is not a zero.** On Timing it means that month hasn't lived long
+  enough for the number to exist yet. On Segments it means fewer than eight
+  leads — the counts are still true, it is the percentage that would mislead,
+  because one enrolment out of two reads as 50%.
+- **On Sources, the two columns do not add up, and are not supposed to.** Somebody
+  who found us on Instagram and enrolled after walking in counts once in
+  Instagram's *started* column and once in Walk-in's *finished* column. Cutting
+  a source because it doesn't close is how you lose the source that introduces
+  everybody.
+- **On Targets, the rows do not add up either.** An admission at Kochi counts in
+  Kochi's row, in the counsellor's row and in the institute's. Three statements
+  about the same month, not a total.
+
+### Reading the Targets screen
+
+Two numbers, deliberately not merged into one:
+
+- **On course for** — your current rate carried to the end of the month. Useful
+  from about the 5th; before that it is one good week multiplied by six, and the
+  screen says so.
+- **Open pipeline worth** — every lead still in play, counted at its stage's own
+  chance of closing. A lead at Demo Scheduled at 60% counts as 0.6.
+
+When those two disagree, that is the thing to act on. A good rate on an empty
+pipeline is a month that ends badly, and you can see it on the 14th instead of
+the 30th.
+
+If a stage shows "not set" under Chance, nobody has given it a probability yet
+and its leads are being counted as worth nothing. An admin fixes that in
+Settings → Pipeline Stages.
 
 ---
 

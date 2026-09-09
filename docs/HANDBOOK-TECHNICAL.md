@@ -196,6 +196,25 @@ schedule, not a column somebody could point at.
 
 ---
 
+### Reporting reads bypass RLS on purpose
+
+`lib/reports/load-report-leads.ts` and `load-forecast.ts` use the direct
+`db` client, not the caller's RLS-bound one. This is deliberate and the
+reasoning is in both files' headers: `report.read` is meant to grant
+aggregate counts to roles that do not hold `lead.read` at all (accounts,
+academics), so an RLS-bound read would return nothing for exactly the people
+these screens exist for.
+
+The price is that the centre scope RLS would have enforced has to be
+enforced in code, in `scopeWhere`, and that **no PII column is ever
+selected** — no name, no phone, no email. Nothing on those screens is
+row-level. If you add a column to either loader, check it against that rule
+first.
+
+`targets` is the exception in the other direction: it is read through RLS
+like ordinary data, and its policies (migrations 0061 + 0062) are covered by
+nine tests in `rls.spec.ts`.
+
 ## 7. Migrations
 
 Hand-written SQL, not generated. To add one:
@@ -447,13 +466,17 @@ in `docs/DECISIONS.md`.
 
 Honest list, in the order I would close them:
 
-1. **The cron budget** (§10). Three features have no schedule of their own.
-2. **Inbound WhatsApp media** is recorded by Meta's media id and never
-   downloaded, so it cannot be viewed in the CRM. The raw delivery is in
-   `webhook_events`, so nothing is lost.
-3. **Rate-limiting on `/f/*`** (§12).
-4. **Telephony** — the whole of Phase 6 is blocked on choosing a vendor.
-5. **Opening balances** must be set before any finance figure means anything.
+1. **The cron budget** (§10). Several features have no schedule of their own,
+   and inbound WhatsApp media now wants one too — images arrive inline in the
+   webhook, but anything bigger waits for a sweep that has no cron of its own
+   yet. Meta deletes inbound media after thirty days, so this one has a clock.
+2. **Rate-limiting on `/f/*`** (§12).
+3. **Telephony** — the whole of Phase 6 is blocked on choosing a vendor.
+4. **Opening balances** must be set before any finance figure means anything.
+5. **Drizzle snapshots are hand-maintained.** Every migration since 0005 is
+   hand-written SQL with its snapshot copied forward (new `id`, `prevId` =
+   the previous one). `drizzle-kit generate` is therefore not part of the
+   workflow and would emit duplicate CREATE TABLEs if run. See DECISIONS.md.
 
 `docs/BACKLOG.md` is the maintained list; this is the subset a maintainer
 inherits rather than a feature request.
