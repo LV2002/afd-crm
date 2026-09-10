@@ -1,3 +1,4 @@
+import { contactLine, formatAddress, type Brand } from "@/lib/brand/get-brand";
 import { A4_PORTRAIT_CSS } from "@/lib/print/page-css";
 import { BADGE_KEYS, PRINT_ROWS, type SheetCells } from "@/lib/print/profile-sheet";
 
@@ -11,15 +12,13 @@ import { PrintButton } from "./print-button";
  * without either page's data shape leaking into the layout.
  */
 export function ProfileSheet({
-  orgName,
-  logoUrl,
+  brand,
   name,
   photoUrl,
   cells,
   caption,
 }: {
-  orgName: string;
-  logoUrl: string | null;
+  brand: Brand;
   name: string;
   photoUrl: string | null;
   cells: SheetCells;
@@ -48,11 +47,38 @@ export function ProfileSheet({
         <table className="w-full border-collapse border border-foreground text-sm">
           <tbody>
             <tr>
+              {/*
+                The masthead stays inside the table rather than using the
+                shared <Letterhead>: this sheet reproduces a physical form
+                the institute already prints, and the heading is one of its
+                cells. What it gained is the contact block underneath —
+                the sheet named the institute and gave a reader no way to
+                reach it.
+              */}
               <td colSpan={4} className="border border-foreground p-3 text-center">
-                <span className="text-lg font-bold">{orgName}</span>
-                {logoUrl && (
+                {brand.logoUrl && (
                   // eslint-disable-next-line @next/next/no-img-element -- a print page has no image optimisation to gain from next/image
-                  <img src={logoUrl} alt="" className="mx-auto mt-1 h-8 w-auto object-contain" />
+                  <img
+                    src={brand.logoUrl}
+                    alt=""
+                    className="mx-auto mb-1 h-8 w-auto object-contain"
+                  />
+                )}
+                <span className="text-lg font-bold">{brand.legalName ?? brand.name}</span>
+                {brand.tagline && (
+                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                    {brand.tagline}
+                  </p>
+                )}
+                {formatAddress(brand) && (
+                  <p className="text-[10px] leading-snug text-muted-foreground">
+                    {formatAddress(brand)}
+                  </p>
+                )}
+                {contactLine(brand) && (
+                  <p className="text-[10px] leading-snug text-muted-foreground">
+                    {contactLine(brand)}
+                  </p>
                 )}
               </td>
             </tr>

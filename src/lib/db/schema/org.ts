@@ -6,8 +6,37 @@ import { idColumn, softDelete, timestamps } from "./_helpers";
 export const orgSettings = pgTable("org_settings", {
   id: idColumn(),
   name: text("name").notNull(),
+  /**
+   * The name that goes on a contract, when it differs from the name on
+   * the sign. "AFD India" is who a family talks to; the entity that takes
+   * their money may be something longer with a Pvt Ltd on the end, and
+   * putting the trading name on an agreement is the sort of thing that
+   * matters exactly once, in a dispute.
+   */
+  legalName: text("legal_name"),
+  /** The line under the logo. Was hardcoded into the fee agreement. */
+  tagline: text("tagline"),
   logoUrl: text("logo_url"),
   primaryColor: text("primary_color").notNull().default("#0f172a"),
+
+  /**
+   * The letterhead block.
+   *
+   * None of this existed, which is why every printed document either had
+   * no contact details or had a set typed into the source code. A receipt
+   * with no address is not a receipt anybody would accept.
+   */
+  addressLine: text("address_line"),
+  city: text("city"),
+  state: text("state"),
+  pincode: text("pincode"),
+  phone: text("phone"),
+  email: text("email"),
+  website: text("website"),
+  /** Printed on fee documents where it belongs, omitted entirely when blank. */
+  gstin: text("gstin"),
+  /** A last line for documents — terms reference, refund policy pointer, anything. */
+  documentFooter: text("document_footer"),
   timezone: text("timezone").notNull().default("Asia/Kolkata"),
   currency: text("currency").notNull().default("INR"),
   locale: text("locale").notNull().default("en-IN"),
@@ -50,6 +79,13 @@ export const centers = pgTable(
     name: text("name").notNull(),
     city: text("city").notNull(),
     address: text("address"),
+    /**
+     * Per-centre contact, for documents issued by that centre. A receipt
+     * printed at Kannur showing Kochi's phone number sends the person who
+     * has a question about it to the wrong office.
+     */
+    phone: text("phone"),
+    email: text("email"),
     isActive: boolean("is_active").notNull().default(true),
     timezone: text("timezone").notNull().default("Asia/Kolkata"),
     catchment: jsonb("catchment").$type<{ districts?: string[] }>(),

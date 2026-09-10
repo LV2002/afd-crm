@@ -6,7 +6,7 @@ export default function NewCenterPage() {
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">New centre</h1>
       <CenterForm
-        values={{ name: "", city: "", address: "", timezone: "Asia/Kolkata" }}
+        values={{ name: "", city: "", address: "", phone: "", email: "", timezone: "Asia/Kolkata" }}
         action={createCenter}
         submitLabel="Create centre"
       />

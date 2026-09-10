@@ -142,16 +142,34 @@ export function appUrl(path = ""): string {
  * line that says what happened and three lines that say what to do beats
  * anything with a header image, and it cannot render wrong.
  */
+export interface EmailBrand {
+  name: string;
+  primaryColor: string;
+}
+
 export function composeEmail(input: {
   heading: string;
   lines: string[];
   actionLabel?: string;
   actionPath?: string;
   footer?: string;
+  /**
+   * The institute's name and colour, when the caller can safely read them.
+   *
+   * Optional on purpose. The error alerter calls this from inside a
+   * failure and must not touch the database to do it — the whole point of
+   * that path is to work when the database is what is broken — so it
+   * sends the plain version. Everything else passes the brand and the
+   * recipient sees who the message is from.
+   */
+  brand?: EmailBrand;
 }): { text: string; html: string } {
   const link = input.actionPath ? appUrl(input.actionPath) : null;
 
+  const accent = input.brand?.primaryColor ?? "#2f4fd0";
+
   const text = [
+    ...(input.brand ? [input.brand.name, ""] : []),
     input.heading,
     "",
     ...input.lines,
@@ -163,9 +181,10 @@ export function composeEmail(input: {
     value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;line-height:1.6;color:#16202b;max-width:34rem">
+${input.brand ? `<p style="font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:${accent};margin:0 0 14px">${escape(input.brand.name)}</p>` : ""}
 <p style="font-size:17px;font-weight:600;margin:0 0 12px">${escape(input.heading)}</p>
 ${input.lines.map((line) => `<p style="margin:0 0 10px">${escape(line)}</p>`).join("\n")}
-${link ? `<p style="margin:20px 0"><a href="${link}" style="background:#2f4fd0;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">${escape(input.actionLabel ?? "Open")}</a></p>` : ""}
+${link ? `<p style="margin:20px 0"><a href="${link}" style="background:${accent};color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">${escape(input.actionLabel ?? "Open")}</a></p>` : ""}
 ${input.footer ? `<p style="margin:24px 0 0;color:#6b7684;font-size:13px;border-top:1px solid #e2e7ec;padding-top:12px">${escape(input.footer)}</p>` : ""}
 </div>`;
 

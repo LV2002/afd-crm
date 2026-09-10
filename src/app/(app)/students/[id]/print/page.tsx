@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AccessDenied } from "@/components/layout/access-denied";
 import { ProfileSheet } from "@/components/print/profile-sheet";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { getBrand } from "@/lib/brand/get-brand";
 import { getRawFieldValue } from "@/lib/fields/field-column";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import { buildSheetCells, resolveOptionsForPrint } from "@/lib/print/profile-sheet";
@@ -19,11 +20,6 @@ import type { StudentDetailRow } from "../types";
  * filled in from two different sides, so the two must not drift apart.
  * All this page does is read the student and turn it into cells.
  */
-interface OrgRow {
-  name: string;
-  logo_url: string | null;
-}
-
 export default async function StudentPrintPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user || !can(user, "student.read")) return <AccessDenied />;
@@ -31,7 +27,7 @@ export default async function StudentPrintPage({ params }: { params: Promise<{ i
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: student }, { data: org }, fields] = await Promise.all([
+  const [{ data: student }, brand, fields] = await Promise.all([
     supabase
       .from("students")
       .select(
@@ -40,7 +36,7 @@ export default async function StudentPrintPage({ params }: { params: Promise<{ i
       .eq("id", id)
       .is("deleted_at", null)
       .maybeSingle<StudentDetailRow>(),
-    supabase.from("org_settings").select("name, logo_url").maybeSingle<OrgRow>(),
+    getBrand(),
     getFieldSchema(supabase, "student", user),
   ]);
 
@@ -77,8 +73,7 @@ export default async function StudentPrintPage({ params }: { params: Promise<{ i
 
   return (
     <ProfileSheet
-      orgName={org?.name ?? "AFD India"}
-      logoUrl={org?.logo_url ?? null}
+      brand={brand}
       name={student.full_name}
       photoUrl={photoUrl}
       cells={cells}

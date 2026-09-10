@@ -27,11 +27,28 @@ const uuid = z.string().uuid();
 const timestamp = z.coerce.date();
 const nullableTimestamp = z.coerce.date().nullable().optional();
 
+const optionalString = z.string().nullable().optional();
+
 export const orgSettingsSchema = z.object({
   id: uuid,
   name: z.string(),
-  logoUrl: z.string().nullable().optional(),
+  // The letterhead travels with the bundle. A config export that carried
+  // the pipeline and the fee structures but not the institute's own name
+  // and address would import into a fresh instance and print blank
+  // documents — which is the plug-and-play test failing quietly.
+  legalName: optionalString,
+  tagline: optionalString,
+  logoUrl: optionalString,
   primaryColor: z.string(),
+  addressLine: optionalString,
+  city: optionalString,
+  state: optionalString,
+  pincode: optionalString,
+  phone: optionalString,
+  email: optionalString,
+  website: optionalString,
+  gstin: optionalString,
+  documentFooter: optionalString,
   timezone: z.string(),
   currency: z.string(),
   locale: z.string(),
@@ -56,6 +73,8 @@ export const centerSchema = z.object({
   name: z.string(),
   city: z.string(),
   address: z.string().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
   isActive: z.boolean(),
   timezone: z.string(),
   catchment: z.object({ districts: z.array(z.string()).optional() }).nullable().optional(),

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AccessDenied } from "@/components/layout/access-denied";
@@ -242,7 +243,20 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
               <TableBody>
                 {payments.map((p) => (
                   <TableRow key={p.id}>
-                    <TableCell>{receiptNoByPaymentId.get(p.id) ? `#${receiptNoByPaymentId.get(p.id)}` : "—"}</TableCell>
+                    <TableCell>
+                      {/* The receipt number was printed on nothing until
+                          now. A family that pays in cash at the desk asks
+                          for a receipt, and the answer was a row on a
+                          screen they cannot see. */}
+                      <Link
+                        href={`/accounts/${id}/receipt/${p.id}`}
+                        className="font-medium underline"
+                      >
+                        {receiptNoByPaymentId.get(p.id)
+                          ? `#${receiptNoByPaymentId.get(p.id)}`
+                          : "Print"}
+                      </Link>
+                    </TableCell>
                     <TableCell>{formatDateIST(p.received_at, "d MMM yyyy, h:mm a")}</TableCell>
                     <TableCell className={p.direction === "debit" ? "text-destructive" : undefined}>
                       {p.direction === "debit" ? "−" : ""}

@@ -14,6 +14,8 @@ export interface CenterFormValues {
   name: string;
   city: string;
   address: string;
+  phone: string;
+  email: string;
   timezone: string;
 }
 
@@ -43,6 +45,18 @@ export function CenterForm({
       <div className="flex flex-col gap-2">
         <Label htmlFor="address">Address</Label>
         <Textarea id="address" name="address" defaultValue={values.address} />
+      </div>
+      {/* Printed on the documents this centre issues — a receipt from
+          Kannur carrying Kochi's number sends somebody with a question to
+          the wrong office. */}
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="phone">Phone</Label>
+        <Input id="phone" name="phone" defaultValue={values.phone} />
+        <p className="text-xs text-muted-foreground">Shown on receipts issued by this centre.</p>
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="email">Email</Label>
+        <Input id="email" name="email" type="email" defaultValue={values.email} />
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="timezone">Timezone</Label>
