@@ -220,6 +220,19 @@ Record it against the admission with the amount, date, method and reference.
 automatically and academics take over. You do not do anything extra to make
 that happen.
 
+### Giving somebody a receipt
+
+Every payment gets a receipt number automatically. To print one, open the
+admission and **click the receipt number** in the payments table — it opens a
+receipt on your letterhead with the amount, the amount in words, the balance
+remaining and your centre's phone number, ready to print or save as a PDF.
+
+Printing it again changes nothing. The tenth copy is identical to the first, so
+"can you send that again?" is never a problem.
+
+A reversal prints too, marked clearly as a reversal rather than as a receipt for
+money received.
+
 ### The ledger is append-only
 
 **A payment is never edited and never deleted.** If something is wrong, record
@@ -378,6 +391,24 @@ the 30th.
 If a stage shows "not set" under Chance, nobody has given it a probability yet
 and its leads are being counted as worth nothing. An admin fixes that in
 Settings → Pipeline Stages.
+
+---
+
+## Part 8b — Printing anything
+
+Press **Ctrl+P** (⌘P on a Mac) on any screen and it prints on your letterhead —
+your logo, address and phone at the top, the date printed at the bottom. The
+menus, buttons and filter boxes are left off automatically.
+
+This works for the reports as well, so a number somebody asks for in a meeting
+can go on paper without anybody copying it into a document first.
+
+Wide tables that scroll sideways on screen are left out of the printout on
+purpose: they would print their first few columns and silently lose the rest,
+which is worse than not printing them at all.
+
+If your documents print with just your name and nothing else, an administrator
+has not filled in **Settings → Organisation** yet.
 
 ---
 

@@ -58,6 +58,11 @@ Malayalam transcription, call scoring, QA dashboard. All of Phase 6 sits behind 
 - **Set the alerting environment variables** in Vercel — `RESEND_API_KEY`, `EMAIL_FROM`,
   `ALERT_EMAIL_TO`, `NEXT_PUBLIC_APP_URL`. Failures are recorded and visible on
   Settings → Platform Health either way; without these, nobody is emailed about them.
+- **Fill in Settings → Organisation.** Address, phone, email, GSTIN and the logo.
+  Every printed document — receipts, the fee agreement, profile sheets, and any
+  report somebody prints — reads from there, and until it is filled in they carry
+  your name and nothing else. Add each centre's own phone and email under
+  Settings → Centres at the same time, so a receipt from Kannur shows Kannur.
 - **Create a Google Ads conversion action** of type "Import — from clicks", and paste its
   resource name into Settings → Integrations → Google. Until then admissions are never reported
   back and Google keeps optimising for form fills.

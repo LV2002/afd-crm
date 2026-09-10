@@ -3782,3 +3782,53 @@ seed grants the new permission to centre heads; admins already hold everything.
 Then set this month's numbers in Settings → Targets, and give each pipeline
 stage a probability in Settings → Pipeline Stages, or the forecast counts those
 leads as worth nothing and says so.
+
+
+## Session 44 — The brand reaches the paperwork
+
+Leon asked what the point of Settings → Organisation was, given the details did
+not appear on the documents. The honest answer was worse than "not everywhere":
+
+- Name and logo reached **two** printouts. The brand colour was read by **no
+  code at all**. There was no address, phone, email, website or GSTIN in the
+  system, so no document could show contact details even in principle.
+- The **instalment agreement** — the document a family signs about money — had
+  the wordmark, the tagline, the form-number prefix and the accent colour typed
+  into its source. Changing the logo in Settings changed everything except the
+  one document that matters most.
+- There was **no printable receipt at all**. Receipt numbers have been issued
+  from a gapless sequence since the finance module shipped and printed on
+  nothing.
+
+### What changed
+
+**The letterhead is data.** `org_settings` gains legal name, tagline, address,
+city, state, PIN, phone, email, website, GSTIN and a document footer; `centers`
+gain their own phone and email. One `<Letterhead>` draws it, and every optional
+field is genuinely optional — a half-filled settings screen produces a plainer
+document, never a broken one with gaps and stray commas.
+
+**A printable receipt**, at `/accounts/[id]/receipt/[paymentId]`. Receipt
+number, amount, **amount in words**, balance, issuing centre. Nothing about it
+writes, so the tenth print equals the first; a reversal prints marked as one.
+
+**Every screen prints on the letterhead**, from one block in the `(app)` layout.
+Documents that draw their own suppress it via the stylesheet they already
+inject (`lib/print/page-css.ts`), so two letterheads is not a state the code can
+reach.
+
+**The logo is uploadable.** It was a paste-a-URL box. The attachments bucket's
+policies resolve the owning centre from the object key's `lead/`/`student/`
+prefix, so a brand logo could not be written at all — migration 0064 adds a
+`brand/` policy gated on `settings.manage`, with the service-role key kept out
+of it per CLAUDE.md § 3.
+
+Also: the settings screen previews the letterhead using the same component and
+query as the real documents; notification emails carry the name and colour (the
+error alerter deliberately does not — it must work when the database is the
+broken thing); the app header reads the org name; and the config bundle carries
+the brand, so an imported bundle produces documents with a name on them.
+
+**Leon's to-do:** run `npm run db:migrate` (0063, 0064), then fill in
+Settings → Organisation — address, phone, email, GSTIN, logo — and each centre's
+own phone and email under Settings → Centres.
