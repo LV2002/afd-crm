@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AccessDenied } from "@/components/layout/access-denied";
 import { ProfileSheet } from "@/components/print/profile-sheet";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { getBrand } from "@/lib/brand/get-brand";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import { formatDateIST } from "@/lib/format/date";
 import { buildSheetCells, resolveOptionsForPrint } from "@/lib/print/profile-sheet";
@@ -32,11 +33,6 @@ interface LeadRow {
   profile_form_submitted_at: string | null;
 }
 
-interface OrgRow {
-  name: string;
-  logo_url: string | null;
-}
-
 export default async function LeadProfileFormPrintPage({
   params,
 }: {
@@ -48,14 +44,14 @@ export default async function LeadProfileFormPrintPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: lead }, { data: org }, fields] = await Promise.all([
+  const [{ data: lead }, brand, fields] = await Promise.all([
     supabase
       .from("leads")
       .select("id, lead_number, student_name, profile_form_data, profile_form_submitted_at")
       .eq("id", id)
       .is("deleted_at", null)
       .maybeSingle<LeadRow>(),
-    supabase.from("org_settings").select("name, logo_url").maybeSingle<OrgRow>(),
+    getBrand(),
     // The STUDENT field definitions: the profile form's answers are keyed
     // by them, so they are what turns a stored key into a printed label.
     getFieldSchema(supabase, "student", user),
@@ -90,8 +86,7 @@ export default async function LeadProfileFormPrintPage({
 
   return (
     <ProfileSheet
-      orgName={org?.name ?? "AFD India"}
-      logoUrl={org?.logo_url ?? null}
+      brand={brand}
       name={fullName}
       photoUrl={photoUrl}
       cells={cells}

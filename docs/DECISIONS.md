@@ -2399,3 +2399,45 @@ it.
 Nine tests in `rls.spec.ts` assert the boundary, and the centre-head one was confirmed to fail
 against the 0061 policy before 0062 was applied — the house rule about making a security test fail
 on purpose before believing it.
+
+
+## 2026-09-10 — Configuration that reaches nothing is not configuration
+
+Settings → Organisation had held a name, a logo, a colour and three locale fields since the first
+week. Only two of them were ever read, and the brand colour was read by nothing at all. The screen
+existed, the fields saved, and the system behaved identically whatever was typed in them.
+
+That is a worse failure than a missing feature, because it looks finished. CLAUDE.md § 10 asks
+whether a thing is configuration or a constant; it does not ask whether the configuration is
+*wired to anything*, and this is the case that shows the question is incomplete. **A settings field
+with no enforcement point is the UI equivalent of a permission code with no check behind it.**
+
+The concrete rule that came out of it: a settings screen should show what its fields produce.
+Settings → Organisation now previews the letterhead, built from the same component and the same
+query the real documents use, so "why am I typing this?" has a visible answer and the preview
+cannot drift from the output.
+
+## 2026-09-10 — Suppression rides with the stylesheet, not with the page
+
+Every screen now prints a letterhead from the `(app)` layout, and documents that draw their own
+(receipts, the fee agreement, the two profile sheets) must not print two.
+
+The obvious implementation is a prop or a per-page flag, and it rots the first time somebody adds
+a document and forgets. Instead the suppression rule lives inside `A4_PORTRAIT_CSS` and
+`A4_LANDSCAPE_CSS` — the stylesheets every document page already injects to control its paper
+size. A document that sets its page size cannot fail to suppress the generic letterhead, because
+it is the same string.
+
+The general shape: when two things must always travel together, make one of them physically part
+of the other rather than documenting that they should match.
+
+## 2026-09-10 — The amount in words takes paise
+
+`amountInWords()` takes paise, like every other money value in this system, and the test says so in
+a comment rather than only asserting a string. A version that quietly expected rupees would print
+"four hundred rupees" on a receipt for ₹40,000 — wrong by a factor of a hundred, on the one
+document nobody re-reads before handing it over, in a system where CLAUDE.md's money rule exists
+precisely to stop this class of error.
+
+Indian numbering (lakh, crore) rather than the Intl default, for the same reason the rest of the
+system formats in `en-IN`: "four lakh fifty thousand" is what a family reads back to you.

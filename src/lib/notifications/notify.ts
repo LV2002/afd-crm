@@ -6,6 +6,7 @@ import {
   centers,
   notificationSettings,
   notifications,
+  orgSettings,
   profiles,
   rolePermissions,
   userCenters,
@@ -224,12 +225,21 @@ async function emailRecipients(
     const addresses = people.map((person) => person.email).filter(Boolean);
     if (addresses.length === 0) return;
 
+    // Read straight from the singleton rather than through getBrand():
+    // this runs on the direct connection like the rest of this module, and
+    // it only needs the two fields an email shows.
+    const [org] = await db
+      .select({ name: orgSettings.name, primaryColor: orgSettings.primaryColor })
+      .from(orgSettings)
+      .limit(1);
+
     const { text, html } = composeEmail({
       heading: title,
       lines: [body],
       actionLabel: "Open in the CRM",
       actionPath: href ?? "/my-day",
       footer: "You can change which events email you in Settings → Notifications.",
+      brand: org ? { name: org.name, primaryColor: org.primaryColor } : undefined,
     });
 
     await sendEmail({ to: addresses, subject: title, text, html });

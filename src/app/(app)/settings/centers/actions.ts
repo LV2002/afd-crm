@@ -17,6 +17,8 @@ const centerSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
   city: z.string().trim().min(1, "City is required"),
   address: z.string().trim().optional().or(z.literal("")),
+  phone: z.string().trim().max(40).optional().or(z.literal("")),
+  email: z.string().trim().email("That isn't an email address").optional().or(z.literal("")),
   timezone: z.string().trim().min(1),
 });
 
@@ -33,6 +35,8 @@ export async function createCenter(
     name: formData.get("name"),
     city: formData.get("city"),
     address: formData.get("address"),
+    phone: formData.get("phone"),
+    email: formData.get("email"),
     timezone: formData.get("timezone"),
   });
   if (!parsed.success) {
@@ -46,6 +50,8 @@ export async function createCenter(
       name: parsed.data.name,
       city: parsed.data.city,
       address: parsed.data.address || null,
+      phone: parsed.data.phone || null,
+      email: parsed.data.email || null,
       timezone: parsed.data.timezone,
     })
     .select("id")
@@ -81,6 +87,8 @@ export async function updateCenter(
     name: formData.get("name"),
     city: formData.get("city"),
     address: formData.get("address"),
+    phone: formData.get("phone"),
+    email: formData.get("email"),
     timezone: formData.get("timezone"),
   });
   if (!parsed.success) {
@@ -94,6 +102,8 @@ export async function updateCenter(
       name: parsed.data.name,
       city: parsed.data.city,
       address: parsed.data.address || null,
+      phone: parsed.data.phone || null,
+      email: parsed.data.email || null,
       timezone: parsed.data.timezone,
     })
     .eq("id", centerId);

@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 
-import { PrintButton } from "@/components/print/print-button";
 import { AccessDenied } from "@/components/layout/access-denied";
+import { DocumentFooter, Letterhead } from "@/components/print/letterhead";
+import { PrintButton } from "@/components/print/print-button";
+import { documentPrefix, getBrand } from "@/lib/brand/get-brand";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { getLeadFeePlan } from "@/lib/enrolment/get-fee-plan";
 import { formatINR } from "@/lib/format/currency";
@@ -11,9 +13,15 @@ import { A4_LANDSCAPE_CSS } from "@/lib/print/page-css";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * The printable instalment agreement, matching AFD's real form
+ * The printable instalment agreement, matching the institute's real form
  * (installment_agreement_a5.pdf): landscape A5, two columns, numbered
- * sections, blue accents.
+ * sections, coloured accents.
+ *
+ * The brand on it is DATA, not markup. This document used to carry the
+ * wordmark, the tagline, the form-number prefix and the accent colour
+ * typed into this file, so an institute could change its logo in Settings
+ * and the one document a family signs would carry the old one — the
+ * single worst place in the system for that to be true.
  *
  * Rendered from the saved plan rather than from what is on screen, so the
  * paper a student signs and the record the CRM holds cannot diverge.
@@ -33,13 +41,22 @@ import { createClient } from "@/lib/supabase/server";
  *    agreed, so pre-filling it would be inventing one.
  */
 
-const ACCENT = "#2c5aa0";
+/** Only a fallback: the accent comes from Settings → Organisation. */
+const FALLBACK_ACCENT = "#2c5aa0";
 
-function SectionHeading({ number, children }: { number: number; children: React.ReactNode }) {
+function SectionHeading({
+  number,
+  accent,
+  children,
+}: {
+  number: number;
+  accent: string;
+  children: React.ReactNode;
+}) {
   return (
     <h2
       className="mb-2 flex items-center gap-2 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white"
-      style={{ background: ACCENT }}
+      style={{ background: accent }}
     >
       <span>
         {number}. {children}
@@ -49,10 +66,10 @@ function SectionHeading({ number, children }: { number: number; children: React.
 }
 
 /** A labelled line with a dotted rule, as on the paper form. */
-function FieldLine({ label, value }: { label: string; value: string }) {
+function FieldLine({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
     <div className="flex items-baseline gap-2 text-[11px]">
-      <span className="w-32 shrink-0 font-semibold" style={{ color: ACCENT }}>
+      <span className="w-32 shrink-0 font-semibold" style={{ color: accent }}>
         {label}
       </span>
       <span className="flex-1 border-b border-dotted border-gray-400 pb-0.5">{value || " "}</span>
@@ -76,6 +93,10 @@ export default async function InstalmentAgreementPage({
   const plan = await getLeadFeePlan(id);
   if (!plan.hasEnrolment) notFound();
 
+  const brand = await getBrand();
+  const accent = brand.primaryColor || FALLBACK_ACCENT;
+  const formPrefix = `${documentPrefix(brand.name)}/FEE`;
+
   const { row, centerName } = detail;
   const toPaise = (v: string) => Math.round(Number(v || 0) * 100);
 
@@ -95,65 +116,48 @@ export default async function InstalmentAgreementPage({
           <PrintButton />
         </div>
 
-        <header
-          className="mb-3 flex items-end justify-between border-b-2 pb-2"
-          style={{ borderColor: ACCENT }}
-        >
-          <div>
-            <div
-              className="inline-block px-2 py-1 text-sm font-extrabold tracking-tight text-white"
-              style={{ background: "#111" }}
-            >
-              afdindia
-            </div>
-            <p className="mt-0.5 text-[8px] uppercase tracking-wider text-gray-600">
-              gateway to global design schools
-            </p>
-          </div>
-          <div className="text-right">
-            <h1 className="text-lg font-bold uppercase" style={{ color: ACCENT }}>
-              Installment Payment Agreement
-            </h1>
-            <p className="text-[10px] text-gray-600">
-              Form No: AFD/FEE/{year}/{String(row.lead_number).padStart(6, "0")}
-            </p>
-          </div>
-        </header>
+        <Letterhead
+          brand={brand}
+          compact
+          title="Installment Payment Agreement"
+          reference={`Form No: ${formPrefix}/${year}/${String(row.lead_number).padStart(6, "0")}`}
+          centre={centerName ? { name: centerName } : null}
+        />
 
         <div className="grid grid-cols-2 gap-5">
           {/* Left column: who, and what they owe. */}
           <div>
-            <SectionHeading number={1}>Student &amp; Course Information</SectionHeading>
+            <SectionHeading number={1} accent={accent}>Student &amp; Course Information</SectionHeading>
             <div className="mb-4 flex flex-col gap-1.5">
-              <FieldLine label="Student Name:" value={row.student_name} />
-              <FieldLine label="Roll No / Ref:" value={`Lead #${row.lead_number}`} />
-              <FieldLine label="Course Name:" value={String(row.courses_interested ?? "")} />
-              <FieldLine label="Center / Branch:" value={centerName ?? ""} />
-              <FieldLine label="Parent / Guardian:" value={parentName} />
-              <FieldLine label="Contact Number:" value={row.primary_phone} />
+              <FieldLine label="Student Name:" value={row.student_name} accent={accent} />
+              <FieldLine label="Roll No / Ref:" value={`Lead #${row.lead_number}`} accent={accent} />
+              <FieldLine label="Course Name:" value={String(row.courses_interested ?? "")} accent={accent} />
+              <FieldLine label="Center / Branch:" value={centerName ?? ""} accent={accent} />
+              <FieldLine label="Parent / Guardian:" value={parentName} accent={accent} />
+              <FieldLine label="Contact Number:" value={row.primary_phone} accent={accent} />
             </div>
 
-            <SectionHeading number={2}>Fee Summary &amp; Payment Schedule</SectionHeading>
+            <SectionHeading number={2} accent={accent}>Fee Summary &amp; Payment Schedule</SectionHeading>
             <div className="mb-2 flex flex-col gap-1.5">
               <FieldLine
                 label="Total Course Fee:"
-                value={`₹ ${formatINR(toPaise(plan.values.courseFee)).replace("₹", "").trim()}`}
+                value={`₹ ${formatINR(toPaise(plan.values.courseFee)).replace("₹", "").trim()}`} accent={accent}
               />
               {plan.values.discountName && (
                 <FieldLine
                   label="Discount:"
-                  value={`₹ ${formatINR(toPaise(plan.values.discount)).replace("₹", "").trim()} (${plan.values.discountName})`}
+                  value={`₹ ${formatINR(toPaise(plan.values.discount)).replace("₹", "").trim()} (${plan.values.discountName})`} accent={accent}
                 />
               )}
               <FieldLine
                 label="Down Payment Paid:"
-                value={`₹ ${formatINR(toPaise(plan.values.downPayment)).replace("₹", "").trim()}`}
+                value={`₹ ${formatINR(toPaise(plan.values.downPayment)).replace("₹", "").trim()}`} accent={accent}
               />
             </div>
 
             <table className="w-full border-collapse text-[10px]">
               <thead>
-                <tr className="text-white" style={{ background: ACCENT }}>
+                <tr className="text-white" style={{ background: accent }}>
                   <th className="border border-gray-400 p-1 text-left">INST.</th>
                   <th className="border border-gray-400 p-1 text-left">DUE DATE</th>
                   <th className="border border-gray-400 p-1 text-right">AMOUNT (₹)</th>
@@ -185,7 +189,7 @@ export default async function InstalmentAgreementPage({
 
             {plan.values.feeNotes && (
               <p className="mt-2 text-[9px] leading-snug">
-                <span className="font-semibold" style={{ color: ACCENT }}>
+                <span className="font-semibold" style={{ color: accent }}>
                   Notes:{" "}
                 </span>
                 {plan.values.feeNotes}
@@ -195,7 +199,7 @@ export default async function InstalmentAgreementPage({
 
           {/* Right column: the terms and the signatures. */}
           <div className="border-l border-dashed border-gray-300 pl-5">
-            <SectionHeading number={3}>Terms &amp; Payment Conditions</SectionHeading>
+            <SectionHeading number={3} accent={accent}>Terms &amp; Payment Conditions</SectionHeading>
             <ol className="mb-4 list-decimal space-y-2 pl-4 text-[10px] leading-snug">
               <li>
                 <span className="font-bold">Due Dates &amp; Grace Period:</span> Installment payments
@@ -224,7 +228,7 @@ export default async function InstalmentAgreementPage({
               </li>
             </ol>
 
-            <SectionHeading number={4}>Authorization &amp; Signatures</SectionHeading>
+            <SectionHeading number={4} accent={accent}>Authorization &amp; Signatures</SectionHeading>
             <div className="mt-16 flex items-end justify-between gap-4 text-[10px]">
               <div className="flex-1 border-t border-gray-500 pt-1 text-center font-bold">
                 Student
@@ -241,6 +245,8 @@ export default async function InstalmentAgreementPage({
             </p>
           </div>
         </div>
+
+        <DocumentFooter brand={brand} printedOn={formatDateIST(new Date(), "d MMM yyyy, h:mm a")} />
       </div>
     </>
   );

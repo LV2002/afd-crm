@@ -14,7 +14,7 @@ export default async function EditCenterPage({ params }: { params: Promise<{ id:
 
   const { data: center } = await supabase
     .from("centers")
-    .select("id, name, city, address, timezone, is_active")
+    .select("id, name, city, address, phone, email, timezone, is_active")
     .eq("id", id)
     .maybeSingle();
 
@@ -56,6 +56,8 @@ export default async function EditCenterPage({ params }: { params: Promise<{ id:
           name: center.name,
           city: center.city,
           address: center.address ?? "",
+          phone: center.phone ?? "",
+          email: center.email ?? "",
           timezone: center.timezone,
         }}
         action={updateCenter.bind(null, center.id)}

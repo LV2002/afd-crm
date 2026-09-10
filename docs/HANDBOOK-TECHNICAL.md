@@ -196,6 +196,26 @@ schedule, not a column somebody could point at.
 
 ---
 
+### The brand, and everything printed
+
+`lib/brand/get-brand.ts` is the one reader for the institute's identity, memoised
+per request. Everything printed goes through it, including the app-wide
+letterhead in the `(app)` layout, so a settings change reaches every document
+without a per-page edit.
+
+Two mechanics worth knowing before you add a printable page:
+
+- **Suppression rides with the stylesheet.** A page that draws its own letterhead
+  must hide the layout's. That rule lives inside `A4_PORTRAIT_CSS` /
+  `A4_LANDSCAPE_CSS` (`lib/print/page-css.ts`), which every document page already
+  injects to set its paper size — so it is not possible to set one without the
+  other. Inject one of those constants and you are done.
+- **The logo may be a Storage key.** `logo_url` holds either an external URL or a
+  key under `brand/`; `getBrand()` signs the latter. The `brand/` prefix has its
+  own Storage policy (migration 0064) gated on `settings.manage`, because the
+  attachments policies resolve a centre from a `lead/`/`student/` prefix and a
+  logo has neither.
+
 ### Reporting reads bypass RLS on purpose
 
 `lib/reports/load-report-leads.ts` and `load-forecast.ts` use the direct
