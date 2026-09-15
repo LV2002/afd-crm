@@ -3,7 +3,12 @@
 import { redirect } from "next/navigation";
 
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
+import {
+  leadIsVisibleToCaller,
+  SCOPE_VIOLATION_MESSAGE,
+} from "@/lib/identity/assert-lead-visible";
 import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
+import { createClient } from "@/lib/supabase/server";
 
 export interface FormState {
   error?: string;
@@ -91,6 +96,20 @@ export async function createLeadManually(_prevState: FormState, formData: FormDa
   if ("error" in result) {
     return { error: result.error };
   }
+
+  // The seatbelt. resolveOrCreateLead wrote through the RLS-bypassing
+  // client (it has to — see assert-lead-visible.ts), so the scope checks
+  // above were the only thing enforcing centre boundaries. Read the lead
+  // back as this user: if RLS will not show it to them, those checks
+  // failed and somebody needs to know.
+  const supabase = await createClient();
+  const visible = await leadIsVisibleToCaller(supabase, {
+    leadId: result.leadId,
+    actorId: user.id,
+    source: "createLeadManually",
+    context: { scope, centerId },
+  });
+  if (!visible) return { error: SCOPE_VIOLATION_MESSAGE };
 
   redirect(`/leads/${result.leadId}`);
 }

@@ -13,12 +13,18 @@ a human) without re-deriving the analysis.
 
 | Still open | Fixed |
 |---|---|
-| #2 lead creation has no RLS backstop (Medium, re-graded from High) | #11 audit-log forgery (High) |
-| #3 AI analyst scoping has no RLS backstop (Medium) | #1 PostCSS CVEs (High CVSS, low reachability) |
-| #6 four Server Actions validate by hand, not zod (Low) | #5 CSV formula injection (Medium) |
-| #10 public profile form validates by hand, not zod (Low) | #12 PostgREST filter injection (Medium) |
+| #6 four Server Actions validate by hand, not zod (Low) | #11 audit-log forgery (High) |
+| #10 public profile form validates by hand, not zod (Low) | #2 lead-creation seatbelt (Medium, re-graded from High) |
+| | #3 AI analyst scoping guard (Medium) |
+| | #1 PostCSS CVEs (High CVSS, low reachability) |
+| | #5 CSV formula injection (Medium) · #12 filter injection (Medium) |
 | | #7 silent audit-log failures (Medium) |
 | | #8 tasks unaudited (Low) · #9 cron timing (Low) · #4 doc naming (Low) |
+
+**Every security finding above Low is now closed.** What remains is convention
+drift (hand-rolled validation in four Server Actions and the public profile form),
+plus the test-coverage and architecture items in their own sections below — of which
+the CI-provisioned Postgres job and coverage tooling are the two still open.
 
 Findings kept below in their original numbering, each with its status line updated.
 Full detail of what changed is in "Resolved findings" at the end.
@@ -124,7 +130,7 @@ docs). Full detail below.
 ### 2. Lead creation bypasses RLS via a raw DB client (High → re-graded Medium)
 
 - **Severity: Medium** (downgraded from High on 2026-09-15 re-verification — see "Re-grading" below)
-- **Status:** Confirmed valid, NOT FIXED — deliberately deferred
+- **Status:** RESOLVED 2026-09-15 — `lib/identity/assert-lead-visible.ts`, wired into both callers
 - **Category:** Authorization / access control
 
 `src/lib/db/client.ts` exports a raw `postgres-js`/Drizzle connection (`db`) over
@@ -198,7 +204,7 @@ the "webhook/cron only" comment, is free and should happen at the same time.
 ### 3. AI analyst centre-scoping has no RLS backstop (Medium)
 
 - **Severity: Medium**
-- **Status:** Confirmed valid, not yet fixed (design risk, not an active bug today)
+- **Status:** RESOLVED 2026-09-15 — `tests/ai-tool-scoping.spec.ts` fails the build if a tool skips scoping
 - **Category:** Authorization / access control
 
 Every tool in `src/lib/ai/tools/index.ts` (`leads_by_source`, `funnel_snapshot`,
@@ -573,6 +579,20 @@ just happy path.
 ---
 
 ## Resolved findings
+
+### Second fix pass — 2026-09-15 (later the same day)
+
+| # | Was | Fix | Verified by |
+|---|---|---|---|
+| coverage #1 | **High** — `revealLeadPhone()` untested, the one function non-negotiable #6 exists for | `tests/reveal-lead-phone.spec.ts` — 6 cases: full numbers with the permission, audit row naming lead and actor, refusal without it (and no query at all, so a refusal is not an existence oracle), signed-out refusal, **no audit row when RLS hid the lead**, and that only the three phone columns are selected | Confirmed the suite **fails** when the `lead.reveal_phone` check is removed from the action |
+| 3 | Medium — AI analyst scoping had no backstop | `tests/ai-tool-scoping.spec.ts` reads the registry source and fails if any tool omits a scoping helper; an exemption needs a name and a written reason | All 10 tools pass today; a guard test confirms the parsing itself cannot silently match zero tools |
+| 2 | Medium — lead creation had no RLS backstop | `lib/identity/assert-lead-visible.ts`: after `resolveOrCreateLead()`, the row is read back through the caller's own RLS-bound client. Invisible means the app-level scope check failed — alert, `lead.scope_violation` audit row, and a plain error to the user. Wired into `createLeadManually` and per row in `importLeads` | `tests/lead-scope-seatbelt.spec.ts`, 6 cases including a failed read counting as a failed check |
+
+**Why the seatbelt does not delete the offending lead.** It fires on a bug, and on a
+bug the safest thing to do with a real enquiry from a real person is keep it. The lead
+stays visible to whoever legitimately owns that centre, the actor is told plainly that
+it failed, and an administrator gets an alert naming the row. Losing a genuine enquiry
+to a false positive would be the worse outcome.
 
 ### Fix pass — 2026-09-15
 

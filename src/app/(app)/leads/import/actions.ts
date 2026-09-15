@@ -11,6 +11,10 @@ import { getFieldSchema, type FieldSchemaEntry } from "@/lib/fields/get-field-sc
 import { OPTION_BEARING_TYPES, resolveFieldOptions, type FieldOption } from "@/lib/fields/resolve-field-options";
 import { coerceImportValue } from "@/lib/leads/coerce-import-value";
 import { RESOLVE_INPUT_KEYS } from "@/lib/leads/importable-fields";
+import {
+  leadIsVisibleToCaller,
+  SCOPE_VIOLATION_MESSAGE,
+} from "@/lib/identity/assert-lead-visible";
 import { resolveOrCreateLead, type ResolveLeadInput } from "@/lib/identity/resolve-or-create-lead";
 import { createClient } from "@/lib/supabase/server";
 
@@ -175,6 +179,21 @@ export async function importLeads(
         status: "skipped",
         message: error instanceof Error ? error.message : "Could not import this row.",
       });
+      skipped++;
+      continue;
+    }
+
+    // Same seatbelt as manual entry: the write went through the
+    // RLS-bypassing client, so read the row back as this user before
+    // counting it. See lib/identity/assert-lead-visible.ts.
+    const visible = await leadIsVisibleToCaller(supabase, {
+      leadId: outcome.leadId,
+      actorId: user.id,
+      source: "importLeads",
+      context: { rowIndex, scope, centerId: rowCenterId, batchId },
+    });
+    if (!visible) {
+      rowResults.push({ rowIndex, status: "skipped", message: SCOPE_VIOLATION_MESSAGE });
       skipped++;
       continue;
     }

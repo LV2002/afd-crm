@@ -4026,3 +4026,44 @@ that is read is a trail worth forging.
 
 **Leon's to-do:** `npm run db:migrate` for 0068, and `npm install` (the lockfile
 changed).
+
+---
+
+## Session 50 — The three backstops
+
+The remaining security-audit items with real teeth, plus branch cleanup after PR #36
+merged to main.
+
+**`revealLeadPhone()` now has a test.** It is the single function non-negotiable #6
+exists for — masked in lists, full on request, an audit row every time, because
+"counsellors leave and take databases with them" — and it had no direct test at all.
+Six cases now, including the two that matter most: a refusal reads nothing (so it
+cannot be used to check whether a lead id exists), and a lead RLS hid produces no audit
+row (logging a reveal that did not happen would put a false accusation in a permanent
+record). Verified by deleting the permission check and watching the suite fail.
+
+**The analyst can no longer gain an unscoped tool.** All ten scope correctly today;
+nothing kept them that way, since they run on the RLS-bypassing client. A test now
+reads the registry's own source and fails if a tool references none of the scoping
+helpers. Blunt, deliberately: mentioning `leadScopeWhere` is not proof of using it
+right, but omitting it entirely is exactly the failure mode, and now it cannot be
+committed by accident. Correct *use* stays covered by the database-backed analyst
+suites.
+
+**Lead creation has a seatbelt.** `resolveOrCreateLead()` must use the RLS-bypassing
+client — one transaction across four tables, with a row lock in the round-robin path,
+which PostgREST cannot express — so for manual entry and CSV import the app's own scope
+checks were the only enforcement. Now the row is read back through the caller's own
+client afterwards; if RLS will not show it to them, they should not have created it.
+That raises an alert, writes a `lead.scope_violation` audit row, and tells the user
+plainly. It does **not** delete the lead: this fires on a bug, and losing a genuine
+enquiry to a false positive is worse than the fault being reported.
+
+Also: `docs/SECURITY.md` updated — every security finding above Low is now closed.
+
+**Branch cleanup.** Twelve old branches were already in main. Five were not, and each
+contained nothing but deletions from `package-lock.json` (plus two junk files from a
+mistyped command on `phase-10`) — merging any would have stripped the PostCSS and
+esbuild security pins. They are not merged, and deleting them is blocked for this
+session's credentials (GitHub returns 403 on a ref delete); Leon can remove them from
+the GitHub branches page.
