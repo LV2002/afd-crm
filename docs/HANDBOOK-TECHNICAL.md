@@ -410,6 +410,20 @@ them immediately.
 until the server finished. `(app)/loading.tsx` is a skeleton shown instantly on
 every navigation. If you add a route group, give it one.
 
+**5. The functions ran on a different continent from the database.** Vercel
+defaults to `iad1` (Washington DC) when `vercel.json` names no region. AFD's
+Supabase project is in Mumbai (`ap-south-1`), so *every* database round trip
+crossed the Atlantic and the Indian Ocean — and a page makes several in
+sequence, not one. Roughly 250ms each, on a screen that makes six of them,
+before counting the user's own hop from Kerala to Washington and back.
+
+> `vercel.json` now pins `"regions": ["bom1"]`. **The rule is to sit beside the
+> database, not beside the user**: there are many database round trips per page
+> and exactly one browser round trip, so co-locating with Postgres wins by an
+> order of magnitude. It happens to also be near the staff here, which is luck
+> rather than design. If the Supabase project is ever moved, this must move with
+> it — they are one decision, not two.
+
 **When adding a screen:**
 
 - Use `Promise.all` for independent queries. Never `await` them in sequence.

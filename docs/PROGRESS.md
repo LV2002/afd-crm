@@ -4162,3 +4162,35 @@ The orphan queue has existed since Phase 2 and was reachable only by typing the
 URL. For a screen whose entire purpose is "these leads are being forgotten", that
 is close to not having it. It is now a sidebar entry gated on `lead.assign`, so it
 appears for exactly the people who can claim one.
+
+---
+
+## Session 53 — The app was running on the wrong continent
+
+Leon: "the app is quite slow even while I am using it on Vercel."
+
+The three causes from the earlier performance pass were all still fixed — session
+caching, the connection pool, the indexes, the loading skeleton. The one left was
+not in the code at all.
+
+**`vercel.json` named no region, so Vercel ran the app in Washington DC.** The
+Supabase project is in Mumbai. Every database round trip crossed the Atlantic and
+the Indian Ocean, and a page makes several of them in sequence — call it 250ms
+each, six deep, before counting the staff member's own hop from Kerala to
+Washington and back. That is roughly two seconds of a lead page spent purely on
+distance, doing no work.
+
+Now pinned to `bom1`. The rule, written into the technical handbook so it is not
+re-learned: **sit beside the database, not beside the user.** There are many
+database round trips per page and exactly one browser round trip. Mumbai happening
+to also be near the staff is luck, not the reason.
+
+**The lead detail page was nine sequential awaits** — timeline, WhatsApp thread,
+service window, attachments, fee plan, student field labels, tasks, the referrer
+lookup and the referrals list, each waiting on the one before, on the screen
+counsellors open more than any other. Two of those nine were mine, added this
+week. All nine now go out together.
+
+In-region those are a few milliseconds each; the batching matters far less than
+the region change and is worth doing anyway, because it is the difference between
+one round trip and nine whenever the network is having a bad day.
