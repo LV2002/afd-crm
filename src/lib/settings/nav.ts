@@ -84,6 +84,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage"],
   },
   {
+    href: "/settings/audit",
+    label: "Audit Log",
+    description: "Every change and every export, who made it and when — admin only",
+    permissions: ["audit.read"],
+  },
+  {
     href: "/settings/health",
     label: "Platform Health",
     description: "Anything that has broken, and who gets emailed about it",

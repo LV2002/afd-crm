@@ -384,22 +384,49 @@ describe("profiles and user_centers are scoped by users.manage", () => {
   });
 });
 
-describe("audit_log is scoped by audit.read, and rejects UPDATE/DELETE outright", () => {
-  it("holders of audit.read (admin, co_admin, center_head, accounts) can see the fixture row", async () => {
-    for (const key of ["admin_a", "coadmin_a", "centerhead_kochi", "accounts_a"] as const) {
-      const rows = await asUser(fx[key], (tx) =>
-        tx<Array<{ id: string }>>`select id from audit_log where id = ${auditFixtureId}`,
-      );
-      expect(rows, key).toHaveLength(1);
-    }
+describe("audit_log is admin-only to read, and rejects UPDATE/DELETE outright", () => {
+  it("the admin can see the fixture row", async () => {
+    const rows = await asUser(fx.admin_a, (tx) =>
+      tx<Array<{ id: string }>>`select id from audit_log where id = ${auditFixtureId}`,
+    );
+    expect(rows).toHaveLength(1);
   });
 
-  it("roles without audit.read (counsellor, academics) cannot see it", async () => {
-    for (const key of ["counsellor_kochi", "academics_a"] as const) {
+  it("nobody else can — including the co-admin", async () => {
+    // Leon's call, enforced in migration 0066: the audit trail records
+    // what the co-admin did too, so it is not theirs to read. The seed
+    // grants `audit.read` to `admin` alone.
+    for (const key of [
+      "coadmin_a",
+      "centerhead_kochi",
+      "accounts_a",
+      "counsellor_kochi",
+      "academics_a",
+    ] as const) {
       const rows = await asUser(fx[key], (tx) =>
         tx<Array<{ id: string }>>`select id from audit_log where id = ${auditFixtureId}`,
       );
       expect(rows, key).toHaveLength(0);
+    }
+  });
+
+  it("a centre-scoped grant of audit.read reveals nothing, rather than everything", async () => {
+    // The bug 0066 closed. `audit_log` has no center_id — a row about a
+    // role change belongs to no centre — so the old policy
+    // (`auth_scope('audit.read') is not null`) gave a centre-scoped holder
+    // the whole institute's log. It now fails closed.
+    await owner`insert into role_permissions (role_id, permission_code, scope)
+      values ((select role_id from profiles where id = ${fx.centerhead_kochi}), 'audit.read', 'center')
+      on conflict (role_id, permission_code) do update set scope = 'center'`;
+    try {
+      const rows = await asUser(fx.centerhead_kochi, (tx) =>
+        tx<Array<{ id: string }>>`select id from audit_log where id = ${auditFixtureId}`,
+      );
+      expect(rows).toHaveLength(0);
+    } finally {
+      await owner`delete from role_permissions
+        where role_id = (select role_id from profiles where id = ${fx.centerhead_kochi})
+          and permission_code = 'audit.read'`;
     }
   });
 
@@ -1754,9 +1781,11 @@ describe("user.reset_password is granted to admin and nobody else", () => {
     expect(rows[0].scope).toBe("all");
   });
 
-  it("co-admin holds every other administration permission", async () => {
-    // The exclusion has to be one deliberate hole, not a co-admin that
-    // quietly lost a category.
+  it("co-admin holds every administration permission except the two Leon withheld", async () => {
+    // The exclusions have to be deliberate holes, not a co-admin that
+    // quietly lost a category. Both are the same judgement: a co-admin
+    // must not be able to take over an account, and must not be the
+    // reader of the log that records what they did.
     const rows = await owner<Array<{ code: string }>>`
       select p.code
       from permissions p
@@ -1768,6 +1797,20 @@ describe("user.reset_password is granted to admin and nobody else", () => {
         )
       order by p.code
     `;
-    expect(rows.map((r) => r.code)).toEqual(["user.reset_password"]);
+    expect(rows.map((r) => r.code)).toEqual(["audit.read", "user.reset_password"]);
+  });
+
+  it("audit.read is granted to admin and nobody else, at scope all", async () => {
+    const rows = await owner<Array<{ code: string; scope: string }>>`
+      select r.code, rp.scope::text as scope
+      from role_permissions rp
+      join roles r on r.id = rp.role_id
+      where rp.permission_code = 'audit.read'
+      order by r.code
+    `;
+    expect(rows.map((r) => r.code)).toEqual(["admin"]);
+    // Anything narrower than 'all' now reads nothing at all — see the
+    // audit_log describe block above.
+    expect(rows[0].scope).toBe("all");
   });
 });

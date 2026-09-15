@@ -149,7 +149,7 @@ const ROLE_SEEDS: RoleSeed[] = [
     description:
       "Deputy admin. Full operational and configuration access, except resetting passwords.",
     isProtected: false,
-    grants: allExcept(["user.reset_password"], "all"),
+    grants: allExcept(["user.reset_password", "audit.read"], "all"),
   },
   {
     code: "center_head",
@@ -195,7 +195,11 @@ const ROLE_SEEDS: RoleSeed[] = [
           // the institute-wide target stays out of reach.
           "target.manage",
           "users.manage",
-          "audit.read",
+          // No `audit.read`. It cannot be scoped to a centre — audit_log
+          // has no center_id and a row about a role change belongs to no
+          // centre — so a centre-scoped grant read the whole institute's
+          // log. Leon's call: the audit trail is the admin's. See
+          // migration 0066.
         ],
         "center",
       ),
@@ -253,7 +257,7 @@ const ROLE_SEEDS: RoleSeed[] = [
           "student.read",
           "report.read",
           "report.center",
-          "audit.read",
+          // No `audit.read` — same reason as center_head above.
         ],
         "center",
       ),
