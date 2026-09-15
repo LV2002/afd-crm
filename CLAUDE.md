@@ -238,7 +238,7 @@ src/
       webhooks/
         whatsapp/         Meta WABA inbound + status
         meta-leads/       Lead Ads
-        website/          your existing site forms — NOT BUILT YET
+        website/          your existing site forms, posted by the Apps Script
         knorish/          course purchase events — NOT BUILT YET, pending a decision on whether Knorish is still in use
       cron/
         sla-sweep/ recompute-temperature/ ad-spend-sync/ digest/
