@@ -60,6 +60,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage", "rules.manage"],
   },
   {
+    href: "/settings/rules",
+    label: "Assignment Rules",
+    description: "Who gets a new lead — conditions, priority order, one person or a rotation",
+    permissions: ["rules.manage"],
+  },
+  {
     href: "/settings/sla",
     label: "SLA Policies",
     description: "Policies, escalation ladders, business hours and holidays",
