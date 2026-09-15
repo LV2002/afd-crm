@@ -256,8 +256,25 @@ export const tagSchema = z.object({
   updatedAt: nullableTimestamp,
 });
 
+/**
+ * Which dashboard widgets a role sees. Keyed by `role_id`, and roles keep
+ * their ids across an import, so this travels correctly — unlike
+ * `assignment_rules`, whose action names a specific person (see the note
+ * at the top of this file). `widget_key` is a code-level key, identical in
+ * every instance running the same build.
+ */
+export const dashboardLayoutSchema = z.object({
+  id: uuid,
+  roleId: uuid,
+  widgetKey: z.string(),
+  sortOrder: z.number().int(),
+  isVisible: z.boolean(),
+  createdAt: timestamp,
+  updatedAt: nullableTimestamp,
+});
+
 /** Bumped only if this shape itself changes, not on every export. */
-export const CONFIG_BUNDLE_VERSION = "3";
+export const CONFIG_BUNDLE_VERSION = "4";
 
 export const configBundleSchema = z.object({
   version: z.literal(CONFIG_BUNDLE_VERSION),
@@ -277,6 +294,7 @@ export const configBundleSchema = z.object({
   holidays: z.array(holidaySchema),
   feeStructures: z.array(feeStructureSchema),
   tags: z.array(tagSchema),
+  dashboardLayouts: z.array(dashboardLayoutSchema),
 });
 
 export type ConfigBundle = z.infer<typeof configBundleSchema>;

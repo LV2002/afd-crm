@@ -160,6 +160,22 @@ tables RLS would fragment.
 comment. If you write one, do the same. `batches/actions.ts` and
 `fee-actions.ts` are the examples to copy.
 
+### Gate on the scope, not just the permission
+
+Two tables are institute-wide by nature and their policies say so —
+`assignment_rules` and `audit_log` both require `auth_scope(...) = 'all'`. A
+screen for such a table must gate the same way (`scopeFor(user, perm) === "all"`,
+not `can(user, perm)`), or an admin-created role holding the permission at
+centre scope opens a page that shows nothing and fails every save, which reads
+as broken rather than forbidden. `settings/rules/scope.ts` is the pattern.
+
+`audit_log` is the cautionary tale: its policy used to be
+`auth_scope('audit.read') is not null`. The table has no `center_id` and cannot
+have one — a row about a role change belongs to no centre — so a *centre*-scoped
+grant read the entire institute's log. Migration 0066 fixed it. When a table
+cannot be scoped, say `= 'all'`, so a narrow grant means nothing rather than
+everything.
+
 ---
 
 ## 6. The data model, in brief
@@ -475,6 +491,21 @@ processes, a settings screen.
 **A new automation step or merge variable** → add it to the fixed catalogue in
 `flow-engine.ts` / `merge-variables.ts` and implement it in the runner. These
 are code, not configuration, on purpose.
+
+**A new dashboard widget** → a component under `app/(app)/dashboard/`, an entry
+in `lib/dashboard/widgets.ts` (key, name, description, and the permission its
+data actually needs), and a `case` in the dashboard page's switch. Nothing else:
+it appears for every role whose permissions allow it, above the ones an admin
+has already arranged, and an admin can then place or hide it in Settings →
+Dashboards. The `permission` on the registry entry is a floor the resolver
+enforces — a layout can subtract from it but never add, because a widget shown
+without its permission draws a believable card of zeroes.
+
+**A new rule condition field** → add it to `FIELD_MAP` in
+`assignment/evaluate-conditions.ts` and to `CONDITION_FIELDS` in
+`rules/condition-fields.ts`. The `satisfies` on the second makes the build fail
+until you have done both, which is deliberate: a field with no label and no
+operator list would reach the rule builder as an unusable row.
 
 **Before merging anything:** `npx tsc --noEmit`, `npm run lint`, `npm test`,
 `npm run build` — all clean. Update `docs/PROGRESS.md`. Record any assumption

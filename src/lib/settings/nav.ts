@@ -127,6 +127,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage"],
   },
   {
+    href: "/settings/dashboards",
+    label: "Dashboards",
+    description: "Which widgets each role sees when they sign in, and in what order",
+    permissions: ["settings.manage"],
+  },
+  {
     href: "/settings/notifications",
     label: "Notifications",
     description: "Which events notify which roles, and in what words",

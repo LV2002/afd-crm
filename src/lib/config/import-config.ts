@@ -3,6 +3,7 @@ import { ensurePermissionsSeeded } from "@/lib/auth/seed-permissions";
 import {
   businessHours,
   centers,
+  dashboardLayouts,
   dropdownCategories,
   dropdownOptions,
   feeStructures,
@@ -41,6 +42,7 @@ const GUARD_TABLES = [
   { name: "holidays", table: holidays },
   { name: "fee_structures", table: feeStructures },
   { name: "tags", table: tags },
+  { name: "dashboard_layouts", table: dashboardLayouts },
 ] as const;
 
 /**
@@ -105,6 +107,9 @@ export async function importConfig(bundle: ConfigBundle): Promise<ImportConfigRe
     if (bundle.holidays.length > 0) await tx.insert(holidays).values(bundle.holidays);
     if (bundle.feeStructures.length > 0) await tx.insert(feeStructures).values(bundle.feeStructures);
     if (bundle.tags.length > 0) await tx.insert(tags).values(bundle.tags);
+    // After roles: every row points at one by id.
+    if (bundle.dashboardLayouts.length > 0)
+      await tx.insert(dashboardLayouts).values(bundle.dashboardLayouts);
 
     return {
       counts: {
@@ -123,6 +128,7 @@ export async function importConfig(bundle: ConfigBundle): Promise<ImportConfigRe
         holidays: bundle.holidays.length,
         feeStructures: bundle.feeStructures.length,
         tags: bundle.tags.length,
+        dashboardLayouts: bundle.dashboardLayouts.length,
       },
     };
   });

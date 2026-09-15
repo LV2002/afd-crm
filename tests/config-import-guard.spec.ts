@@ -46,6 +46,7 @@ function emptyBundle() {
     holidays: [],
     feeStructures: [],
     tags: [],
+    dashboardLayouts: [],
   };
 }
 

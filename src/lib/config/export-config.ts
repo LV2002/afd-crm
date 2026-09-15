@@ -6,6 +6,7 @@ import { db } from "@/lib/db/client";
 import {
   businessHours,
   centers,
+  dashboardLayouts,
   dropdownCategories,
   dropdownOptions,
   feeStructures,
@@ -52,6 +53,7 @@ export async function exportConfig(): Promise<ConfigBundle> {
     holidayRows,
     feeStructureRows,
     tagRows,
+    dashboardLayoutRows,
   ] = await Promise.all([
     db.select().from(orgSettings),
     db.select().from(terminology),
@@ -68,6 +70,7 @@ export async function exportConfig(): Promise<ConfigBundle> {
     db.select().from(holidays),
     db.select().from(feeStructures).where(isNull(feeStructures.deletedAt)),
     db.select().from(tags).where(isNull(tags.deletedAt)),
+    db.select().from(dashboardLayouts),
   ]);
 
   return {
@@ -88,5 +91,6 @@ export async function exportConfig(): Promise<ConfigBundle> {
     holidays: holidayRows,
     feeStructures: feeStructureRows,
     tags: tagRows,
+    dashboardLayouts: dashboardLayoutRows,
   };
 }

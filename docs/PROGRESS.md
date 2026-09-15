@@ -3898,3 +3898,66 @@ re-implemented in `referrer-labels.ts` and everybody else sees a lead number.
 
 **Leon's to-do:** run `npm run db:migrate` (0065) and `npm run db:seed` (the
 "Referred by" field definition).
+
+---
+
+## Session 48 — Rules, the audit trail, and dashboards that can be arranged
+
+The rest of Leon's list. All three are the same shape: a mechanism that has been
+running since Phase 1 or 2, with no screen attached, so in practice it was not
+running at all.
+
+### Assignment rules have a screen
+
+The engine has assigned every lead from every ingestion path since Phase 2 and
+the rules could only be written with an INSERT statement — so there were none,
+and every lead landed owned by nobody. Exactly the v1 failure CLAUDE.md § 8 was
+written about, arrived at from the other end.
+
+Settings → Assignment Rules: conditions built from dropdowns rather than JSON,
+the rule read back in English as you build it, priority order by arrow (first
+match wins, so the order *is* the logic), one person or a round robin, and a dry
+run — "would have matched 43 of the last 200 leads" — which the data model asked
+for and nothing had ever called.
+
+Two rules the builder will not let you break. Operators narrow to what the field
+can do: `interested_exams` is a `text[]` and the evaluator's `equals` is `===`,
+so "interested exams equals NIFT" matches nothing forever and is no longer
+offerable. And an action naming nobody is refused, because a rule that matches
+and assigns nothing swallows the lead — it never reaches the rule below it.
+
+### The audit log is readable, and admin-only
+
+Settings → Audit Log. What happened, in English ("Revealed the phone number of a
+lead"), generated mechanically rather than from a lookup table of forty call
+sites. Filters for who/what/when built from what is actually in the log; the
+before/after payload folded away behind a toggle; a link through to the record.
+
+Migration 0066 closes a real hole. The policy was
+`auth_scope('audit.read') is not null` — and `audit_log` has no `center_id` and
+cannot have one, so a *centre*-scoped grant read every lead reveal, fee change
+and export in the institute. Two seeded roles held it that way. It now requires
+`= 'all'`, so a narrow grant means nothing rather than everything. Per Leon the
+grant is admin's alone, co-admin included: the log records what the co-admin
+did.
+
+### Dashboards are arranged per role
+
+`dashboard_layouts` was named in the data model in week one and never built, so
+the first screen everybody sees was five hardcoded permission checks in a fixed
+order. Migration 0067 adds the table; Settings → Dashboards arranges each role.
+
+A widget can be switched off for a role but never on for a role whose
+permissions would leave it empty — the resolver treats permission as a floor,
+and unavailable widgets are shown greyed out with the reason rather than hidden,
+so "why can't I give accounts the pipeline card?" has an answer on the screen. A
+role nobody has arranged behaves exactly as before: everything its permissions
+allow, in registry order. Widget implementations stay in code, as CLAUDE.md
+specifies; the registry is `lib/dashboard/widgets.ts`.
+
+The config bundle carries the layouts (version 3 → 4). Roles keep their ids
+across an import, so they travel correctly — unlike assignment rules, whose
+action names a specific person and still does not.
+
+**Leon's to-do:** `npm run db:migrate` (0066, 0067), then Settings → Assignment
+Rules and add at least a catch-all, or leads keep arriving unassigned.
