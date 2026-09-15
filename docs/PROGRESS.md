@@ -4194,3 +4194,59 @@ week. All nine now go out together.
 In-region those are a few milliseconds each; the batching matters far less than
 the region change and is worth doing anyway, because it is the difference between
 one round trip and nine whenever the network is having a bad day.
+
+---
+
+## Session 54 — Website enquiry forms come into the CRM
+
+Leon: "the lead forms on my website are all directed to be populated on a google
+sheet via an app script. how can I adjust it so the form submissions come to the
+CRM?"
+
+The forms on afdindia.com post to a Google Apps Script that appends a row to a
+spreadsheet. A spreadsheet row has no owner, no response-time clock and no place
+in any report, so the institute's cheapest source of leads was also its slowest to
+answer. The script now also POSTs each submission to the CRM, and the sheet
+becomes a backup rather than the destination.
+
+**New webhook: `POST /api/webhooks/website`.** Non-negotiable #9 in order —
+verify the HMAC against the raw body, persist to `webhook_events` whether or not
+it passed, then process. Non-negotiable #8 — the lead goes through
+`resolveOrCreateLead()` like every other source, so somebody who filled in the
+website form and also called is one person with two enquiries.
+
+Signing reuses Meta's scheme rather than inventing a second one: the script signs
+the exact request body with a shared secret and sends `sha256=<hex>` in
+`X-AFD-Signature`. Apps Script computes that in three lines, and unlike a bearer
+token it cannot be lifted from the script and replayed against a different body.
+
+**Field mapping is forgiving on purpose** (`lib/integrations/website/map-form-fields.ts`).
+The site's forms do not share one field naming convention and never will, so the
+mapper strips non-alphanumerics and matches a table of aliases — `Full Name`,
+`student_name` and `name` all land in the same place. Anything it does not
+recognise is kept verbatim on the raw payload, so a question nobody thought to map
+is still there to read.
+
+**Three response codes, deliberately different:**
+- Bad or missing signature → 401, recorded with `signature_ok = false`. Somebody
+  found the URL; that is worth knowing.
+- Unusable submission (no name, no usable phone) → **200** with the reason stored
+  on the event. Retrying produces the same result, so asking the script to send it
+  again helps nobody. It shows up on Settings → Platform Health, which is where a
+  broken form gets noticed.
+- Anything genuinely wrong (database unreachable) → 500, so Apps Script retries.
+  V1 returned 200 on everything and lost leads invisibly.
+
+A retried delivery is caught on `(source, external_id)` and returns
+`{duplicate: true}` without creating a second lead.
+
+**Settings → Integrations → Website forms** generates the signing secret (shown
+once) and prints the complete Apps Script for Leon to paste.
+
+**Shipped:** the webhook, the field mapper, the settings screen, migration 0070
+(`website` added to the `integration_provider` enum).
+**Verify by:** `npm run db:migrate` then Settings → Integrations → Website forms
+→ Generate secret → paste the script into the existing Apps Script project. A
+test submission should appear in Leads within a second, with source `Website`.
+**Next:** the readiness review, split into what Leon does in the CRM and what is
+still development work.
