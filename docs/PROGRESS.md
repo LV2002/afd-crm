@@ -4026,3 +4026,92 @@ that is read is a trail worth forging.
 
 **Leon's to-do:** `npm run db:migrate` for 0068, and `npm install` (the lockfile
 changed).
+
+---
+
+## Session 50 — The three backstops
+
+The remaining security-audit items with real teeth, plus branch cleanup after PR #36
+merged to main.
+
+**`revealLeadPhone()` now has a test.** It is the single function non-negotiable #6
+exists for — masked in lists, full on request, an audit row every time, because
+"counsellors leave and take databases with them" — and it had no direct test at all.
+Six cases now, including the two that matter most: a refusal reads nothing (so it
+cannot be used to check whether a lead id exists), and a lead RLS hid produces no audit
+row (logging a reveal that did not happen would put a false accusation in a permanent
+record). Verified by deleting the permission check and watching the suite fail.
+
+**The analyst can no longer gain an unscoped tool.** All ten scope correctly today;
+nothing kept them that way, since they run on the RLS-bypassing client. A test now
+reads the registry's own source and fails if a tool references none of the scoping
+helpers. Blunt, deliberately: mentioning `leadScopeWhere` is not proof of using it
+right, but omitting it entirely is exactly the failure mode, and now it cannot be
+committed by accident. Correct *use* stays covered by the database-backed analyst
+suites.
+
+**Lead creation has a seatbelt.** `resolveOrCreateLead()` must use the RLS-bypassing
+client — one transaction across four tables, with a row lock in the round-robin path,
+which PostgREST cannot express — so for manual entry and CSV import the app's own scope
+checks were the only enforcement. Now the row is read back through the caller's own
+client afterwards; if RLS will not show it to them, they should not have created it.
+That raises an alert, writes a `lead.scope_violation` audit row, and tells the user
+plainly. It does **not** delete the lead: this fires on a bug, and losing a genuine
+enquiry to a false positive is worse than the fault being reported.
+
+Also: `docs/SECURITY.md` updated — every security finding above Low is now closed.
+
+**Branch cleanup.** Twelve old branches were already in main. Five were not, and each
+contained nothing but deletions from `package-lock.json` (plus two junk files from a
+mistyped command on `phase-10`) — merging any would have stripped the PostCSS and
+esbuild security pins. They are not merged, and deleting them is blocked for this
+session's credentials (GitHub returns 403 on a ref delete); Leon can remove them from
+the GitHub branches page.
+
+---
+
+## Session 51 — The last of the audit's code findings, and a CI that proves it
+
+**Every numbered security finding in `docs/SECURITY.md` is now closed.**
+
+### One typed parse for both forms
+
+`lib/fields/parse-field-value.ts` replaces the hand-rolled coercion in the lead edit
+form (finding #6) and the public student profile form (finding #10). CSV import
+already had `coerce-import-value.ts`; the two form paths had nothing, and the
+consequence was quiet rather than dangerous — `Number("next year")` is `NaN`, and
+`NaN` went into the column; on the student's own form a mistyped number was dropped to
+null behind a thank-you message.
+
+The two modules differ deliberately: an import has hundreds of rows and one bad cell
+must not stop the file, so it warns and continues; a person filling in a form is
+standing right there, so this one refuses and says what is wrong. Reference and select
+values are checked against the options the picker actually offered, which also stops a
+stale option being written back after an admin removes it.
+
+`createLeadManually` gets a zod schema of its own. `email` is deliberately only
+length-capped there, not format-checked: a counsellor typing what a caller spells out
+should not be stopped at the door over a typo they can fix on the edit page.
+
+### CI, at last
+
+`.github/workflows/ci.yml` — Postgres service, the Supabase shim, migrations, seed,
+typecheck, lint, the whole test suite, build. On every push and pull request.
+
+This matters more than it sounds. Twenty-three test files need a live database, and
+they are precisely the ones that prove RLS stops a Kannur counsellor reading Kochi's
+leads, that the audit log refuses a forged actor, and that the ledger will not accept
+an update. Until now they ran only when somebody remembered, which made the proof of
+the whole authorization model optional.
+
+Rehearsed locally from an empty database before committing: 69 migrations, 64 tables,
+1,127 tests passing.
+
+### What is left from the audit, and it is not code
+
+- **Rate-limiting the public form** belongs at the edge (Cloudflare Turnstile or a WAF
+  rule), not in the application. Worth noting the app is not defenceless: the token is
+  a 32-byte CSPRNG value, and resubmission is already refused outright.
+- **Coverage tooling** — no `@vitest/coverage-v8`, so no numeric visibility into drift.
+- **Architecture tidying** — duplicate session numbers in this file, `students`/`batches`
+  living in `schema/finance.ts`, and the unbuilt `website`/`knorish` webhooks.

@@ -12,6 +12,7 @@ import { resolveDiscount } from "@/lib/enrolment/discount-authority";
 import { getDiscountLimit } from "@/lib/enrolment/get-discount-limit";
 import { fieldColumn } from "@/lib/fields/field-column";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
+import { NOT_PROVIDED, parseFieldValue } from "@/lib/fields/parse-field-value";
 import { parseRupeesToPaise } from "@/lib/format/currency";
 import { notify } from "@/lib/notifications/notify";
 import { startFlows } from "@/lib/whatsapp/flow-runner";
@@ -60,26 +61,19 @@ export async function updateLead(leadId: string, _prevState: FormState, formData
   for (const field of fields) {
     if (field.type === "phone" || !field.isEditable) continue;
 
-    let value: unknown;
-    if (field.type === "boolean") {
-      value = formData.get(field.key) === "on";
-    } else if (field.type === "multiselect") {
-      value = formData.getAll(field.key).map(String).filter(Boolean);
-    } else {
-      const raw = formData.get(field.key);
-      if (raw === null) continue; // field wasn't rendered in this form at all
-      if (raw === "") {
-        value = null;
-      } else if (field.type === "number" || field.type === "currency") {
-        value = Number(raw);
-      } else {
-        value = raw;
-      }
-    }
+    // One typed parse for every field type, shared with the public
+    // student form — see lib/fields/parse-field-value.ts. It replaces a
+    // hand-rolled coercion that turned "next year" into NaN and stored
+    // it (security audit 2026-09-15, finding #6).
+    const raw =
+      field.type === "multiselect"
+        ? formData.getAll(field.key).map(String)
+        : (formData.get(field.key) as string | null);
 
-    if (field.isRequired && (value === null || value === "" || (Array.isArray(value) && value.length === 0))) {
-      return { error: `${field.label} is required.` };
-    }
+    const parsed = parseFieldValue(field, raw);
+    if (!parsed.ok) return { error: parsed.message };
+    if (parsed.value === NOT_PROVIDED) continue; // not rendered in this form at all
+    const value = parsed.value;
 
     if (field.isCore) {
       coreUpdates[fieldColumn(field.key)] = value;

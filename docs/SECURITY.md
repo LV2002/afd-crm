@@ -13,12 +13,20 @@ a human) without re-deriving the analysis.
 
 | Still open | Fixed |
 |---|---|
-| #2 lead creation has no RLS backstop (Medium, re-graded from High) | #11 audit-log forgery (High) |
-| #3 AI analyst scoping has no RLS backstop (Medium) | #1 PostCSS CVEs (High CVSS, low reachability) |
-| #6 four Server Actions validate by hand, not zod (Low) | #5 CSV formula injection (Medium) |
-| #10 public profile form validates by hand, not zod (Low) | #12 PostgREST filter injection (Medium) |
+| *(nothing — every numbered security finding is closed)* | #11 audit-log forgery (High) |
+| | #2 lead-creation seatbelt (Medium, re-graded from High) |
+| | #6 / #10 hand-rolled validation (Low) |
+| | #3 AI analyst scoping guard (Medium) |
+| | #1 PostCSS CVEs (High CVSS, low reachability) |
+| | #5 CSV formula injection (Medium) · #12 filter injection (Medium) |
 | | #7 silent audit-log failures (Medium) |
 | | #8 tasks unaudited (Low) · #9 cron timing (Low) · #4 doc naming (Low) |
+
+**Every numbered security finding is now closed**, and the CI job that runs the
+database-backed suites exists (`.github/workflows/ci.yml`). What remains from this
+audit is not code: coverage tooling, the architecture tidying in its own section, and
+the edge rate-limit on the public form, which belongs in front of the application
+rather than in it.
 
 Findings kept below in their original numbering, each with its status line updated.
 Full detail of what changed is in "Resolved findings" at the end.
@@ -124,7 +132,7 @@ docs). Full detail below.
 ### 2. Lead creation bypasses RLS via a raw DB client (High → re-graded Medium)
 
 - **Severity: Medium** (downgraded from High on 2026-09-15 re-verification — see "Re-grading" below)
-- **Status:** Confirmed valid, NOT FIXED — deliberately deferred
+- **Status:** RESOLVED 2026-09-15 — `lib/identity/assert-lead-visible.ts`, wired into both callers
 - **Category:** Authorization / access control
 
 `src/lib/db/client.ts` exports a raw `postgres-js`/Drizzle connection (`db`) over
@@ -198,7 +206,7 @@ the "webhook/cron only" comment, is free and should happen at the same time.
 ### 3. AI analyst centre-scoping has no RLS backstop (Medium)
 
 - **Severity: Medium**
-- **Status:** Confirmed valid, not yet fixed (design risk, not an active bug today)
+- **Status:** RESOLVED 2026-09-15 — `tests/ai-tool-scoping.spec.ts` fails the build if a tool skips scoping
 - **Category:** Authorization / access control
 
 Every tool in `src/lib/ai/tools/index.ts` (`leads_by_source`, `funnel_snapshot`,
@@ -296,7 +304,7 @@ function csvEscape(value: string): string {
 ### 6. Several Server Actions validate input by hand instead of zod (Low)
 
 - **Severity: Low**
-- **Status:** Confirmed valid, not yet fixed
+- **Status:** RESOLVED 2026-09-15 — `lib/fields/parse-field-value.ts` + zod on `createLeadManually`
 - **Category:** Input validation (defense-in-depth / convention drift, not directly exploitable)
 
 Project convention (CLAUDE.md "Conventions") is "all input validated with zod at the
@@ -397,7 +405,7 @@ webhook auth).
 ### 10. Public profile-form submission uses manual coercion instead of zod (Low)
 
 - **Severity: Low**
-- **Status:** Confirmed valid, not yet fixed
+- **Status:** RESOLVED 2026-09-15 — same parser as the counsellor's edit form
 - **Category:** Input validation (data quality, not injection)
 
 `src/lib/profile-form/submit.ts:16-30` (`readValue`) manually trims strings, coerces
@@ -560,8 +568,8 @@ functionally equivalent to pgTAP.
 
 | Severity | Area / File | Gap | Fix |
 |---|---|---|---|
-| High | `src/app/(app)/leads/actions.ts` `revealLeadPhone()` | The one function non-negotiable #6 exists for (masked phone + audit row on reveal) has zero direct test — `tests/ai-person-history.spec.ts` only tests masking in the AI-tool path, not this server action. | Add `tests/reveal-lead-phone.spec.ts` asserting: a user without `lead.reveal_phone` gets refused/masked; a user with it gets the full number AND a `lead.reveal_phone` row lands in `audit_log` with the right lead/actor. |
-| Medium | CI / test infra | 23 of 75 suites — including assignment/identity/SLA-adjacent webhook and merge suites — silently no-op without a provisioned `DATABASE_URL`+seed; no CI config was available to confirm these actually run anywhere. | Confirm or add a CI job that runs `db:migrate && db:seed` against a throwaway Postgres before `npm test`, so these mandated tests execute on every PR. |
+| ~~High~~ RESOLVED 2026-09-15 (`tests/reveal-lead-phone.spec.ts`) | `src/app/(app)/leads/actions.ts` `revealLeadPhone()` | The one function non-negotiable #6 exists for (masked phone + audit row on reveal) has zero direct test — `tests/ai-person-history.spec.ts` only tests masking in the AI-tool path, not this server action. | Add `tests/reveal-lead-phone.spec.ts` asserting: a user without `lead.reveal_phone` gets refused/masked; a user with it gets the full number AND a `lead.reveal_phone` row lands in `audit_log` with the right lead/actor. |
+| ~~Medium~~ RESOLVED 2026-09-15 (`.github/workflows/ci.yml`) | CI / test infra | 23 of 75 suites — including assignment/identity/SLA-adjacent webhook and merge suites — silently no-op without a provisioned `DATABASE_URL`+seed; no CI config was available to confirm these actually run anywhere. | Confirm or add a CI job that runs `db:migrate && db:seed` against a throwaway Postgres before `npm test`, so these mandated tests execute on every PR. |
 | Low | `src/lib/format/currency.ts` (`formatINR`) | No dedicated unit test for the required money-formatting helper (paise→INR display, rounding, negative/reversal amounts). | Add `tests/format-currency.spec.ts` with cases for 0, large values, and negative (reversal) paise amounts. |
 | Low | Coverage tooling | No `@vitest/coverage-v8` configured — no team visibility into numeric coverage drift over time. | Add `@vitest/coverage-v8` and a `coverage` block to `vitest.config.mts`; wire `npm run test:coverage` into CI as a visibility (not gating) metric. |
 
@@ -573,6 +581,28 @@ just happy path.
 ---
 
 ## Resolved findings
+
+### Third fix pass — 2026-09-15
+
+| # | Was | Fix | Verified by |
+|---|---|---|---|
+| 6 | Low — four Server Actions validated by hand | `lib/fields/parse-field-value.ts`: one zod-backed parse per field type, used by `updateLead`; zod schema on `createLeadManually`. `Number("next year")` no longer becomes `NaN` in a column | `tests/parse-field-value.spec.ts` (16 cases) |
+| 10 | Low — public profile form coerced by hand | Same parser. A student who mistypes a number is told, instead of seeing "thank you" while the answer is dropped to null | Same suite |
+| coverage #2 | Medium — the 23 database-backed suites only ran when somebody remembered | `.github/workflows/ci.yml`: Postgres service, the Supabase shim, migrations, seed, typecheck, lint, **the whole suite**, build — on every push and pull request | The exact sequence rehearsed locally from an empty database: 69 migrations, 64 tables, 1,127 tests passing |
+
+### Second fix pass — 2026-09-15 (later the same day)
+
+| # | Was | Fix | Verified by |
+|---|---|---|---|
+| coverage #1 | **High** — `revealLeadPhone()` untested, the one function non-negotiable #6 exists for | `tests/reveal-lead-phone.spec.ts` — 6 cases: full numbers with the permission, audit row naming lead and actor, refusal without it (and no query at all, so a refusal is not an existence oracle), signed-out refusal, **no audit row when RLS hid the lead**, and that only the three phone columns are selected | Confirmed the suite **fails** when the `lead.reveal_phone` check is removed from the action |
+| 3 | Medium — AI analyst scoping had no backstop | `tests/ai-tool-scoping.spec.ts` reads the registry source and fails if any tool omits a scoping helper; an exemption needs a name and a written reason | All 10 tools pass today; a guard test confirms the parsing itself cannot silently match zero tools |
+| 2 | Medium — lead creation had no RLS backstop | `lib/identity/assert-lead-visible.ts`: after `resolveOrCreateLead()`, the row is read back through the caller's own RLS-bound client. Invisible means the app-level scope check failed — alert, `lead.scope_violation` audit row, and a plain error to the user. Wired into `createLeadManually` and per row in `importLeads` | `tests/lead-scope-seatbelt.spec.ts`, 6 cases including a failed read counting as a failed check |
+
+**Why the seatbelt does not delete the offending lead.** It fires on a bug, and on a
+bug the safest thing to do with a real enquiry from a real person is keep it. The lead
+stays visible to whoever legitimately owns that centre, the actor is told plainly that
+it failed, and an administrator gets an alert naming the row. Losing a genuine enquiry
+to a false positive would be the worse outcome.
 
 ### Fix pass — 2026-09-15
 
