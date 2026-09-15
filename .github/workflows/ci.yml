@@ -43,7 +43,10 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/afd_ci
       # Test-only values. The real ones live in Vercel and are never in git.
-      INTEGRATION_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      # This one must decode from base64 to exactly 32 bytes — the
+      # credential store checks, and a hex string of the right length is
+      # the wrong length once decoded.
+      INTEGRATION_ENCRYPTION_KEY: WtfLZ63NJuR9qwPE+04o3rDNep5AApy0lslFiAg/0D0=
       CRON_SECRET: ci-cron-secret
       NEXT_PUBLIC_SUPABASE_URL: https://ci.supabase.invalid
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key
