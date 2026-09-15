@@ -300,6 +300,19 @@ export const PERMISSIONS = [
     category: "Administration",
     description: "Edit org settings, terminology, centers, pipeline, dropdowns, fields.",
   },
+  // Deliberately narrower than users.manage, which a centre head holds for
+  // their own centres. Setting somebody else's password is the one action
+  // here that hands over an identity rather than editing a record about
+  // one, so it ships granted to `admin` alone — including not to co-admin,
+  // which otherwise holds everything. It is still an ordinary editable
+  // grant: an institute that wants its deputy to do this turns it on in
+  // Settings → Roles.
+  {
+    code: "user.reset_password",
+    label: "Reset passwords",
+    category: "Administration",
+    description: "Set a new password for another user's account. Always audited.",
+  },
   {
     code: "users.manage",
     label: "Manage users",

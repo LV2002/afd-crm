@@ -2,7 +2,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import type { DbExecutor } from "@/lib/db/client";
 import { db } from "@/lib/db/client";
-import { whatsappSuppressions } from "@/lib/db/schema";
+import { leads, whatsappSuppressions } from "@/lib/db/schema";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 
 /**
@@ -53,6 +53,17 @@ export async function suppressPhone(
     source: input.source ?? "keyword",
     createdBy: input.createdBy ?? null,
   });
+
+  // Keep the lead's own consent record in step. Suppression by phone is
+  // what actually stops a send, but a lead row still reading "opted in"
+  // after the person said STOP is a record that contradicts itself — and
+  // it is the lead, not the suppression list, that a counsellor looks at
+  // before picking up the phone.
+  await tx
+    .update(leads)
+    .set({ consentStatus: "withdrawn", consentSource: "opt_out", consentAt: new Date() })
+    .where(eq(leads.primaryPhone, phone));
+
   return true;
 }
 
@@ -76,6 +87,18 @@ export async function releasePhone(
     .set({ releasedAt: new Date(), releasedBy: input.releasedBy ?? null })
     .where(and(eq(whatsappSuppressions.phone, phone), isNull(whatsappSuppressions.releasedAt)))
     .returning({ id: whatsappSuppressions.id });
+
+  // Coming back is a deliberate act — an explicit START, or somebody on
+  // the suppressions screen acting on a request — so unlike a repeat
+  // enquiry it does restore consent. Only for a lead this actually
+  // withdrew, never one that was already something else.
+  if (released.length > 0) {
+    await tx
+      .update(leads)
+      .set({ consentStatus: "given", consentSource: "opt_in", consentAt: new Date() })
+      .where(and(eq(leads.primaryPhone, phone), eq(leads.consentStatus, "withdrawn")));
+  }
+
   return released.length > 0;
 }
 

@@ -10,6 +10,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LeadRefPicker } from "@/components/fields/lead-ref-picker";
 import { PhoneInput } from "@/components/ui/smart-inputs";
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 
@@ -164,6 +165,14 @@ export function LeadCreateForm({
             ))}
           </div>
         </div>
+
+        <Field
+          label="Referred by"
+          hint="If somebody sent them, search for that person here. It is the cheapest source we have and the only one nobody was counting."
+          className="sm:max-w-md"
+        >
+          <LeadRefPicker name="referredByLeadId" />
+        </Field>
 
         <div className="flex flex-col gap-2">
           <Label>Courses interested</Label>

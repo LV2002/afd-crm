@@ -21,6 +21,7 @@ export * from "./whatsapp-flows";
 export * from "./google-conversions";
 export * from "./promos";
 export * from "./targets";
+export * from "./dashboards";
 export * from "./error-events";
 export * from "./notifications";
 export * from "./finance-ledger";

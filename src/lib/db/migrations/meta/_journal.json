@@ -456,6 +456,34 @@
       "when": 1788573310458,
       "tag": "0064_brand_logo_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1788573311458,
+      "tag": "0065_consent_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1788573312458,
+      "tag": "0066_audit_read_admin_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1788573313458,
+      "tag": "0067_dashboard_layouts",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1788573314458,
+      "tag": "0068_audit_log_actor_trigger",
+      "breakpoints": true
     }
   ]
 }

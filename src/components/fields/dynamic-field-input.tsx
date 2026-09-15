@@ -1,5 +1,6 @@
 "use client";
 
+import { LeadRefPicker } from "@/components/fields/lead-ref-picker";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
@@ -27,11 +28,17 @@ export function DynamicFieldInput({
   name,
   defaultValue,
   options,
+  leadRefLabel,
+  excludeLeadId,
 }: {
   field: FieldSchemaEntry;
   name: string;
   defaultValue: unknown;
   options: FieldOption[];
+  /** For a `lead_ref` that already points somewhere — show the name, not a uuid. */
+  leadRefLabel?: { id: string; name: string; phone: string; hint: string } | null;
+  /** The lead being edited, so it cannot be picked as its own referrer. */
+  excludeLeadId?: string;
 }) {
   switch (field.type) {
     case "boolean":
@@ -89,9 +96,21 @@ export function DynamicFieldInput({
     }
 
     case "lead_ref":
+      // A search rather than a dropdown: the option list here is every
+      // lead in the system, which is thousands within a year and full of
+      // phone numbers. See lead-ref-picker.tsx.
+      return (
+        <LeadRefPicker
+          name={name}
+          defaultValue={(defaultValue as string) ?? ""}
+          defaultLabel={leadRefLabel}
+          excludeId={excludeLeadId}
+        />
+      );
+
     case "file":
-      // No picker/upload UI yet — read-only until Sessions 9+ (import) and
-      // a file storage flow exist. Showing the raw value beats hiding it.
+      // No upload UI in the generic field renderer — attachments have
+      // their own panel. Showing the raw value beats hiding it.
       return (
         <Input value={defaultValue ? String(defaultValue) : "—"} disabled className="text-muted-foreground" />
       );

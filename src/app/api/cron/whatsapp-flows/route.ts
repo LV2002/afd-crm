@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { requireCronSecret } from "@/lib/cron/require-secret";
 import { reportingFailures } from "@/lib/errors/capture";
 
 import { advanceRuns } from "@/lib/whatsapp/flow-runner";
@@ -21,10 +23,8 @@ export const maxDuration = 60;
  * what makes the piggyback safe.
  */
 async function run(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = requireCronSecret(request);
+  if (denied) return denied;
 
   const { advanced } = await advanceRuns();
   return NextResponse.json({ advanced });

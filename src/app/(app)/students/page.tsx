@@ -4,6 +4,7 @@ import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { filterTerm } from "@/lib/db/filter-term";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { formatDateIST } from "@/lib/format/date";
 import { maskPhone } from "@/lib/leads/mask-phone";
@@ -53,8 +54,12 @@ export default async function StudentsPage({
     .is("deleted_at", null);
 
   if (status) query = query.eq("status", status);
-  if (search) {
-    query = query.or(`full_name.ilike.%${search}%,phone.ilike.%${search}%,student_code.ilike.%${search}%`);
+  // See lib/db/filter-term.ts — the same guard the leads list uses.
+  const searchFilter = filterTerm(search);
+  if (searchFilter) {
+    query = query.or(
+      `full_name.ilike.%${searchFilter}%,phone.ilike.%${searchFilter}%,student_code.ilike.%${searchFilter}%`,
+    );
   }
 
   const { data: rows, error } = await query

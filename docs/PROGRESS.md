@@ -3832,3 +3832,197 @@ the brand, so an imported bundle produces documents with a name on them.
 **Leon's to-do:** run `npm run db:migrate` (0063, 0064), then fill in
 Settings → Organisation — address, phone, email, GSTIN, logo — and each centre's
 own phone and email under Settings → Centres.
+
+---
+
+## Session 47 — Password resets, consent, and counting word of mouth
+
+Four of the seven things Leon asked for after reading the pre-launch audit.
+
+### Admin-only password reset
+
+New permission primitive `user.reset_password`, held by `admin` and nothing
+else — not even `co_admin`, which otherwise holds every Administration
+permission. Settings → Users → *(a user)* grows a reset box for an admin and
+shows nothing to anybody else. The target user is read through the caller's own
+client so RLS still decides who is visible; the service-role key is used for
+exactly one call, `admin.auth.admin.updateUserById`, and the audit row records
+who reset whose password and never the password.
+
+### The migration chain actually applies
+
+Migration 0064 (brand logo storage policies) had never run anywhere.
+`create policy on storage.objects` raises `undefined_schema` on a database with
+no Supabase storage schema, drizzle-kit applies the whole pending batch in one
+transaction, and the rollback was silent — the recorded count sat one behind
+the journal and looked like success. Fixed with the same up-front
+`information_schema.schemata` guard migration 0031 already used. Verified:
+0001–0065 apply to an empty database in order, 63 tables.
+
+### WhatsApp consent, decided rather than assumed
+
+Leon's rule, which is the correct one for this business: entering the CRM *is*
+the opt-in, because everybody in it enquired about a course. So consent is now
+recorded rather than presumed — `lib/consent/consent.ts` stamps status, date
+and basis on every lead at creation, whichever of the ingestion paths it came
+in through, and migration 0065 backfills the existing rows dated to their own
+`created_at`. An inbound STOP still withdraws it, and a withdrawal is never
+quietly overwritten by a later enquiry. The broadcast audience counts and names
+the people it excludes for consent, so a campaign of 400 that sends to 380 says
+why.
+
+### Referrals — the source nobody was counting
+
+`referred_by_lead_id` has been a column since the first migration with nothing
+in the product able to write it, and `lead_ref` was a declared field type that
+rendered a disabled box. Both are now real:
+
+- **A searching picker**, not a dropdown — the option set is every lead in the
+  system. Type two characters of a name or number; results show masked numbers
+  (`+91 98••••3456`) and a lead number, enough to tell two Anjalis apart.
+- **On the create form as well as the edit form.** A referral is mentioned at
+  the door and forgotten by the time anybody opens the edit page.
+- **The other direction on the lead page**: "Sent us 4 people", with links. A
+  past student who has sent four people is the most valuable number in the
+  database and nothing said so.
+- **Insights → Referrals**: how many came by referral and what share that is,
+  how referred enquiries convert against everybody else (in percentage points,
+  with a warning when the sample is too small to act on), who is sending them,
+  the month-by-month trend, and how many referrals came from somebody who was
+  themselves referred.
+
+Names on the leaderboard appear only where the caller could have opened that
+lead anyway — `report.read` is deliberately wider than `lead.read`, and these
+screens read through a client that bypasses RLS, so the scope check is
+re-implemented in `referrer-labels.ts` and everybody else sees a lead number.
+
+**Leon's to-do:** run `npm run db:migrate` (0065) and `npm run db:seed` (the
+"Referred by" field definition).
+
+---
+
+## Session 48 — Rules, the audit trail, and dashboards that can be arranged
+
+The rest of Leon's list. All three are the same shape: a mechanism that has been
+running since Phase 1 or 2, with no screen attached, so in practice it was not
+running at all.
+
+### Assignment rules have a screen
+
+The engine has assigned every lead from every ingestion path since Phase 2 and
+the rules could only be written with an INSERT statement — so there were none,
+and every lead landed owned by nobody. Exactly the v1 failure CLAUDE.md § 8 was
+written about, arrived at from the other end.
+
+Settings → Assignment Rules: conditions built from dropdowns rather than JSON,
+the rule read back in English as you build it, priority order by arrow (first
+match wins, so the order *is* the logic), one person or a round robin, and a dry
+run — "would have matched 43 of the last 200 leads" — which the data model asked
+for and nothing had ever called.
+
+Two rules the builder will not let you break. Operators narrow to what the field
+can do: `interested_exams` is a `text[]` and the evaluator's `equals` is `===`,
+so "interested exams equals NIFT" matches nothing forever and is no longer
+offerable. And an action naming nobody is refused, because a rule that matches
+and assigns nothing swallows the lead — it never reaches the rule below it.
+
+### The audit log is readable, and admin-only
+
+Settings → Audit Log. What happened, in English ("Revealed the phone number of a
+lead"), generated mechanically rather than from a lookup table of forty call
+sites. Filters for who/what/when built from what is actually in the log; the
+before/after payload folded away behind a toggle; a link through to the record.
+
+Migration 0066 closes a real hole. The policy was
+`auth_scope('audit.read') is not null` — and `audit_log` has no `center_id` and
+cannot have one, so a *centre*-scoped grant read every lead reveal, fee change
+and export in the institute. Two seeded roles held it that way. It now requires
+`= 'all'`, so a narrow grant means nothing rather than everything. Per Leon the
+grant is admin's alone, co-admin included: the log records what the co-admin
+did.
+
+### Dashboards are arranged per role
+
+`dashboard_layouts` was named in the data model in week one and never built, so
+the first screen everybody sees was five hardcoded permission checks in a fixed
+order. Migration 0067 adds the table; Settings → Dashboards arranges each role.
+
+A widget can be switched off for a role but never on for a role whose
+permissions would leave it empty — the resolver treats permission as a floor,
+and unavailable widgets are shown greyed out with the reason rather than hidden,
+so "why can't I give accounts the pipeline card?" has an answer on the screen. A
+role nobody has arranged behaves exactly as before: everything its permissions
+allow, in registry order. Widget implementations stay in code, as CLAUDE.md
+specifies; the registry is `lib/dashboard/widgets.ts`.
+
+The config bundle carries the layouts (version 3 → 4). Roles keep their ids
+across an import, so they travel correctly — unlike assignment rules, whose
+action names a specific person and still does not.
+
+**Leon's to-do:** `npm run db:migrate` (0066, 0067), then Settings → Assignment
+Rules and add at least a catch-all, or leads keep arriving unassigned.
+
+---
+
+## Session 49 — Security audit fix pass
+
+Leon supplied a security and project audit (`docs/SECURITY.md`, now tracked in the repo).
+Every finding was re-verified against the code before being acted on — several line
+references had moved, and one High needed re-grading — then the actionable ones were
+fixed. `npm audit` went from six vulnerabilities to zero.
+
+### The one that mattered
+
+**`audit_log` rows could be written in anybody's name.** The insert policy is
+`with check (true)` — correctly, since every user must be able to record their own
+actions — and `actor_id` came from the application with nothing in the database tying
+the two together. The anon key is in the browser by design, so any signed-in counsellor
+could POST a forged row attributing an export or a phone reveal to a colleague.
+
+Migration `0068_audit_log_actor_trigger.sql` adds a `BEFORE INSERT` trigger: reject
+unless `actor_id` is the acting user, while still allowing the null-actor writes
+webhooks and cron depend on. Three new cases in `tests/rls.spec.ts`, all confirmed to
+fail with the trigger dropped.
+
+This got more urgent because migration 0066 gave the log a screen last session. A trail
+that is read is a trail worth forging.
+
+### Also fixed
+
+- **CSV formula injection.** Lead names arrive from public Meta and Google ad forms; a
+  name beginning `=HYPERLINK(...)` executed when a counsellor opened the export.
+  New `lib/format/csv.ts` prefixes `= + - @` with an apostrophe.
+- **PostgREST filter injection.** The search box interpolated straight into an `.or()`
+  filter expression. New `lib/db/filter-term.ts`, applied at all three search sites —
+  including the referral picker written last session, which had its own partial strip.
+- **Silent audit-log failures** now reach Platform Health and the alert email. Still
+  never throws: the mutation has already happened.
+- **Tasks are audited** (`task.create`, `task.complete`) — the last mutation path that
+  wasn't.
+- **One cron guard, constant-time.** `lib/cron/require-secret.ts` replaces the same six
+  lines copy-pasted into ten routes, and compares with `timingSafeEqual` like the
+  webhook handlers already did.
+- **Dependencies.** `postcss` and `esbuild` forced to patched versions via `overrides`;
+  `react-hook-form` and `@hookform/resolvers` removed (zero imports anywhere);
+  `tw-animate-css` moved to devDependencies; `engines` and `.nvmrc` added; agent
+  tooling artifacts added to `.gitignore`.
+- **CLAUDE.md corrections.** It named a permission function (`auth_has`) that has never
+  existed, claimed an AI stack the code does not use (Gemini, not the Anthropic SDK),
+  listed react-hook-form, and showed two webhook directories that were never built.
+
+### Deliberately not fixed
+
+- **#2 lead creation has no RLS backstop** — re-graded High → Medium. Real, but there is
+  no current path by which a counsellor creates a lead outside their scope; the audit's
+  own scenario is conditional on a future bug. Its recommended fix as written cannot
+  work (`resolveOrCreateLead` needs one transaction with row locks across four tables;
+  PostgREST cannot express that). The practical version is a post-insert re-read through
+  the caller's own client.
+- **#3 AI analyst scoping** — same shape. The cheap fix is a test asserting every tool
+  in `ANALYST_TOOLS` scopes or is explicitly org-wide.
+- **#6 / #10 hand-rolled validation** — convention drift, not exploitable.
+- Test-coverage items: `revealLeadPhone()` still has no direct test, there is no CI job
+  provisioning Postgres, and no coverage tooling.
+
+**Leon's to-do:** `npm run db:migrate` for 0068, and `npm install` (the lockfile
+changed).

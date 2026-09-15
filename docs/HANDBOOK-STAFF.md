@@ -424,6 +424,73 @@ has not filled in **Settings → Organisation** yet.
 
 ---
 
+## Part 9b — If you are the administrator
+
+Four screens that only you can reach, plus one field everybody should use.
+
+### Assignment Rules — Settings → Assignment Rules
+
+Who gets a new lead, decided for you. Rules run **top to bottom, and the first
+one that matches wins** — nothing below it is even looked at, so the order is
+the logic, not a preference. Use the arrows to change it.
+
+A rule is two halves:
+
+- **Which leads** — conditions, all of which must be true. Pick the field, the
+  comparison and the value; the screen says the rule back to you in English
+  underneath. There is no "or": make two rules instead.
+- **Who gets them** — one person, or shared out in turn between several. Somebody
+  deactivated is skipped, not stalled on.
+
+Before saving, press **Test against recent leads**. It tells you how many of the
+last 200 leads the rule would have caught, which is the difference between a
+rule that works and a rule that looks right.
+
+**Finish the list with a catch-all** — a rule with no conditions at all, sharing
+leads out between the counsellors. Anything that matches nothing stays owned by
+nobody and waits in the orphan queue for somebody to notice.
+
+### Audit Log — Settings → Audit Log
+
+Every change anybody has made and every export anybody has taken, newest first.
+Filter by person, by what they touched, or by date. **Details** opens what the
+value was before and after. Nothing here can be edited or deleted by anybody,
+including you — the database refuses it.
+
+This is where to look when a fee is wrong, a lead moved centres unexpectedly, or
+somebody asks who saw a phone number.
+
+### Dashboards — Settings → Dashboards
+
+What each role sees when they sign in, and in what order. Pick the role, drag
+the cards into the order that suits them, switch off what they do not need.
+
+A card can be switched **off** for a role, never **on** for a role whose
+permissions would leave it empty — those are shown greyed out with the reason,
+because "a card of zeroes" is worse than no card. **Back to the default** throws
+the arrangement away and lets the role see everything it is allowed again.
+
+### Resetting a password — Settings → Users → *(the person)*
+
+Only you can do this — not even the co-admin. Type the new password twice and
+tell the person in person or on the phone, not over WhatsApp. The reset is
+recorded in the audit log; the password itself is never stored anywhere it could
+be read back, including there.
+
+### Referrals — on every lead
+
+Word of mouth is the cheapest source this institute has and the only one nobody
+was counting. On any lead, under **Tracking**, **Referred by** searches for the
+person who sent them: type two letters of a name or the start of a number and
+pick from the list. It is also on the new-lead form, which is the moment it
+actually gets mentioned.
+
+Fill it in and **Insights → Referrals** starts working: how many came by
+referral, whether they enrol more often than everybody else, and who is sending
+them — which is a list of people worth ringing to say thank you.
+
+---
+
 ## Part 10 — When something looks wrong
 
 | What you see | What it usually means |
@@ -463,3 +530,5 @@ report it rather than working around it.
 | **Offer** | A pre-approved discount. Needs no sign-off. |
 | **Suppression** | Somebody who said STOP. Never messaged again. |
 | **SLA** | The response-time target for a stage or source. |
+| **Referral** | A lead somebody already in the CRM sent us. Marked on the lead. |
+| **Assignment rule** | A condition plus an owner. First match wins. |

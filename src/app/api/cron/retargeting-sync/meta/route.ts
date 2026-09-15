@@ -1,5 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
+
+import { requireCronSecret } from "@/lib/cron/require-secret";
 import { reportingFailures } from "@/lib/errors/capture";
 
 import { db } from "@/lib/db/client";
@@ -38,10 +40,8 @@ export const dynamic = "force-dynamic";
  * same run — it has to still be in the set being scanned.
  */
 async function run(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = requireCronSecret(request);
+  if (denied) return denied;
 
   const {
     ad_account_id: adAccountId,

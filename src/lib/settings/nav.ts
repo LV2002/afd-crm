@@ -60,6 +60,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage", "rules.manage"],
   },
   {
+    href: "/settings/rules",
+    label: "Assignment Rules",
+    description: "Who gets a new lead — conditions, priority order, one person or a rotation",
+    permissions: ["rules.manage"],
+  },
+  {
     href: "/settings/sla",
     label: "SLA Policies",
     description: "Policies, escalation ladders, business hours and holidays",
@@ -76,6 +82,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     label: "Payment Reminders",
     description: "When and how an unpaid instalment gets chased",
     permissions: ["settings.manage"],
+  },
+  {
+    href: "/settings/audit",
+    label: "Audit Log",
+    description: "Every change and every export, who made it and when — admin only",
+    permissions: ["audit.read"],
   },
   {
     href: "/settings/health",
@@ -112,6 +124,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     href: "/settings/dropdowns",
     label: "Dropdowns",
     description: "Manage categories and options",
+    permissions: ["settings.manage"],
+  },
+  {
+    href: "/settings/dashboards",
+    label: "Dashboards",
+    description: "Which widgets each role sees when they sign in, and in what order",
     permissions: ["settings.manage"],
   },
   {

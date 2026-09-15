@@ -7,6 +7,8 @@ import { notify } from "@/lib/notifications/notify";
 import { startFlows } from "@/lib/whatsapp/flow-runner";
 
 import { normalizeEmail } from "./normalize-email";
+import { consentOnEntry, consentOnRepeatEnquiry } from "@/lib/consent/consent";
+
 import { normalizePhone } from "./normalize-phone";
 
 export interface ResolveLeadInput {
@@ -40,6 +42,13 @@ export interface ResolveLeadInput {
   coursesInterested?: string[] | null;
   centerId?: string | null;
   assignedTo?: string | null;
+  /**
+   * The existing lead who sent them. Carried only onto a NEW lead: a
+   * second enquiry from somebody already in the system does not get to
+   * rewrite who introduced them, for the same reason first-touch source
+   * is never overwritten.
+   */
+  referredByLeadId?: string | null;
 
   /**
    * Whoever is doing this, when a person is. Used only so a counsellor
@@ -221,6 +230,24 @@ async function resolveOrCreateLeadInTransaction(
     if (resolvedLeadId) {
       // Existing lead: attach a new enquiry, update last-touch, never
       // touch first-touch.
+      //
+      // A fresh enquiry settles consent for anybody who never had it
+      // recorded — a lead from before consent was captured, say. It
+      // deliberately does NOT resurrect a withdrawn one: somebody who
+      // said STOP and later asks for a prospectus has not re-subscribed
+      // to marketing, and coming back in is not the moment to decide they
+      // have. See lib/consent/consent.ts.
+      const [existingConsent] = await tx
+        .select({ consentStatus: leads.consentStatus })
+        .from(leads)
+        .where(eq(leads.id, resolvedLeadId));
+
+      const consentUpdate = consentOnRepeatEnquiry(
+        existingConsent?.consentStatus ?? null,
+        input.source,
+        receivedAt,
+      );
+
       await tx
         .update(leads)
         .set({
@@ -228,6 +255,7 @@ async function resolveOrCreateLeadInTransaction(
           lastTouchSubSource: input.subSource ?? null,
           lastTouchCampaign: input.campaignId ?? null,
           lastActivityAt: receivedAt,
+          ...(consentUpdate ?? {}),
         })
         .where(eq(leads.id, resolvedLeadId));
 
@@ -307,6 +335,7 @@ async function resolveOrCreateLeadInTransaction(
         coursesInterested: input.coursesInterested,
         centerId: input.centerId,
         assignedTo: input.assignedTo,
+        referredByLeadId: input.referredByLeadId ?? null,
         stageId: newStage?.id,
         firstTouchSource: input.source,
         firstTouchSubSource: input.subSource,
@@ -315,6 +344,11 @@ async function resolveOrCreateLeadInTransaction(
         lastTouchSubSource: input.subSource,
         lastTouchCampaign: input.campaignId,
         lastActivityAt: receivedAt,
+        // Entering the CRM IS the opt-in: everybody here enquired about a
+        // course, and that enquiry is the consent. Recorded per lead with
+        // a date and the source it came from, so "on what basis did we
+        // message this person?" has an answer. See lib/consent/consent.ts.
+        ...consentOnEntry(input.source, receivedAt),
       })
       .returning({ id: leads.id, leadNumber: leads.leadNumber });
 

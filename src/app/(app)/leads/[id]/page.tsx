@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AccessDenied } from "@/components/layout/access-denied";
@@ -27,6 +28,8 @@ import { getWhatsAppThread, isWithinCustomerServiceWindow } from "@/lib/whatsapp
 
 import { ConfirmAdmissionForm } from "./confirm-admission-form";
 import { InteractionForm } from "./interaction-form";
+import { describeLead } from "@/lib/leads/search-leads";
+
 import { LeadEditForm } from "./lead-edit-form";
 import { LeadTagsPanel, type TagOption } from "./lead-tags-panel";
 import { TasksPanel, type TaskRow } from "./tasks-panel";
@@ -143,6 +146,27 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     .order("due_at", { ascending: true, nullsFirst: false })
     .returns<TaskRow[]>();
 
+  // Who referred them, resolved to a name here rather than in the picker:
+  // the edit form should render complete on first paint, not fetch a name
+  // for a value it already has.
+  const referrerId = typeof values.referred_by_lead_id === "string" ? values.referred_by_lead_id : "";
+  const referrer = referrerId ? await describeLead(referrerId) : null;
+
+  // The other direction: who THEY sent. A past student who has sent four
+  // people is the single most valuable phone number in the database, and
+  // nothing on this page would otherwise say so. Read through the
+  // caller's own client, so a counsellor sees only the referrals they
+  // could have opened anyway.
+  const { data: referredRows } = await supabase
+    .from("leads")
+    .select("id, student_name, lead_number, created_at")
+    .eq("referred_by_lead_id", id)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(20)
+    .returns<Array<{ id: string; student_name: string; lead_number: number; created_at: string }>>();
+  const referred = referredRows ?? [];
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -175,6 +199,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               values={values}
               optionsByKey={optionsByKey}
               canRevealPhone={canRevealPhone}
+              leadRefLabel={referrer}
             />
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -230,6 +255,25 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             <InteractionForm leadId={id} types={interactionTypes} outcomes={interactionOutcomes} />
           )}
           <TasksPanel leadId={id} tasks={taskRows ?? []} />
+          {referred.length > 0 && (
+            <div className="flex flex-col gap-2 rounded-lg border p-4">
+              <h3 className="text-sm font-semibold">
+                Sent us {referred.length} {referred.length === 1 ? "person" : "people"}
+              </h3>
+              <ul className="flex flex-col gap-1 text-sm">
+                {referred.map((person) => (
+                  <li key={person.id} className="flex items-baseline justify-between gap-3">
+                    <Link href={`/leads/${person.id}`} className="truncate hover:underline">
+                      {person.student_name}
+                    </Link>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatDateIST(person.created_at, "d MMM yyyy")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
 

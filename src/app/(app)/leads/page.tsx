@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { filterTerm } from "@/lib/db/filter-term";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { fieldColumn, getRawFieldValue } from "@/lib/fields/field-column";
 import { formatFieldValue } from "@/lib/fields/format-field-value";
@@ -131,8 +132,13 @@ export default async function LeadsPage({
     .select(selectColumns, { count: "exact" })
     .is("deleted_at", null);
   query = applyLeadFilters(query, filterableFields, filterValues);
-  if (search) {
-    query = query.or(`student_name.ilike.%${search}%,primary_phone.ilike.%${search}%`);
+  // Stripped before it reaches the filter expression: a comma in a search
+  // box would otherwise open a second clause. See lib/db/filter-term.ts.
+  const searchFilter = filterTerm(search);
+  if (searchFilter) {
+    query = query.or(
+      `student_name.ilike.%${searchFilter}%,primary_phone.ilike.%${searchFilter}%`,
+    );
   }
   if (taggedLeadIds !== null) {
     query = query.in("id", taggedLeadIds);

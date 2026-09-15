@@ -13,6 +13,19 @@
 -- Postgres checks.
 do $$
 begin
+  -- Guarded on the `storage` schema existing, the same way migration 0031
+  -- guards the attachments bucket. The test suite and any fresh local
+  -- Postgres have no Supabase Storage, and `create policy on
+  -- storage.objects` inside an EXECUTE raises `undefined_schema` — which
+  -- an exception handler further down cannot catch late enough to save the
+  -- transaction. drizzle-kit applies every pending migration in ONE
+  -- transaction and swallows the error, so the whole batch rolled back
+  -- silently and this migration never applied anywhere. Check first.
+  if not exists (select 1 from information_schema.schemata where schema_name = 'storage') then
+    raise notice 'storage schema not present (local Postgres) — skipping brand logo policies';
+    return;
+  end if;
+
   -- Every signed-in user can read it. The logo appears on documents any of
   -- them may legitimately print, and it is the institute's public mark —
   -- it is on the front of the building.
@@ -49,11 +62,8 @@ begin
       )
   $pol$;
 exception
+  -- A re-run against a project that already has these policies.
   when duplicate_object then null;
   when insufficient_privilege then
-    -- Local Postgres has no storage schema; the shim skips it. Supabase
-    -- runs this for real.
     raise notice 'skipping brand storage policies: %', sqlerrm;
-  when undefined_table then
-    raise notice 'skipping brand storage policies: storage.objects not present';
 end $$;

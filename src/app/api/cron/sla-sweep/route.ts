@@ -1,5 +1,7 @@
 import { desc, eq, inArray, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
+
+import { requireCronSecret } from "@/lib/cron/require-secret";
 import { reportingFailures } from "@/lib/errors/capture";
 
 import { db } from "@/lib/db/client";
@@ -38,10 +40,8 @@ export const dynamic = "force-dynamic";
  * the highest rung already reached, and clears when the SLA clears.
  */
 async function run(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = requireCronSecret(request);
+  if (denied) return denied;
 
   const now = new Date();
 

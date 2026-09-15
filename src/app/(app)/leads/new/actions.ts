@@ -57,6 +57,17 @@ export async function createLeadManually(_prevState: FormState, formData: FormDa
   // rules engine actually runs, same as every other ingestion path.
   const assignedTo = scope === "own" ? user.id : undefined;
 
+  // Who sent them, when they say so at the door. A referral is worth
+  // recording at the moment it is mentioned — asked for later, on the
+  // edit page, nobody remembers. The picker only ever offers leads the
+  // counsellor can already see, and the value is a uuid, so a bad one
+  // simply fails the foreign key rather than corrupting anything.
+  const referredByLeadIdRaw = formData.get("referredByLeadId");
+  const referredByLeadId =
+    typeof referredByLeadIdRaw === "string" && referredByLeadIdRaw.trim()
+      ? referredByLeadIdRaw.trim()
+      : null;
+
   const interestedExams = formData.getAll("interestedExams").map(String).filter(Boolean);
   const coursesInterested = formData.getAll("coursesInterested").map(String).filter(Boolean);
 
@@ -73,6 +84,7 @@ export async function createLeadManually(_prevState: FormState, formData: FormDa
     coursesInterested: coursesInterested.length > 0 ? coursesInterested : null,
     centerId,
     assignedTo,
+    referredByLeadId,
     source: "Manual",
   }).catch((error: unknown) => ({ error: error instanceof Error ? error.message : "Could not create lead." }));
 
