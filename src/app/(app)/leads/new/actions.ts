@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { z } from "zod";
 
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import {
@@ -9,6 +10,31 @@ import {
 } from "@/lib/identity/assert-lead-visible";
 import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
 import { createClient } from "@/lib/supabase/server";
+
+const optionalText = z.string().trim().max(200).optional().or(z.literal(""));
+
+/**
+ * What a person walking in or ringing up actually gives you. Everything
+ * else about a lead is set later, from the edit page.
+ */
+const newLeadSchema = z.object({
+  studentName: z.string().trim().min(1, "Student name is required.").max(200),
+  primaryPhone: z.string().trim().min(1, "Primary phone is required.").max(32),
+  // Not `.email()`: a counsellor typing what a caller spells out should not
+  // be blocked at the door over a typo they can fix later. Length-capped
+  // only; the edit form validates it properly.
+  email: optionalText,
+  fatherName: optionalText,
+  city: optionalText,
+  district: optionalText,
+  state: optionalText,
+  examYear: z
+    .string()
+    .trim()
+    .regex(/^\d{4}$/, "Exam year should be a four-digit year, like 2027.")
+    .optional()
+    .or(z.literal("")),
+});
 
 export interface FormState {
   error?: string;
@@ -33,14 +59,24 @@ export async function createLeadManually(_prevState: FormState, formData: FormDa
     return { error: "You don't have permission to create leads." };
   }
 
-  const studentName = formData.get("studentName");
-  const primaryPhone = formData.get("primaryPhone");
-  if (typeof studentName !== "string" || !studentName.trim()) {
-    return { error: "Student name is required." };
-  }
-  if (typeof primaryPhone !== "string" || !primaryPhone.trim()) {
-    return { error: "Primary phone is required." };
-  }
+  // Zod at the boundary, per CLAUDE.md's conventions — this action used to
+  // check two fields by hand and let everything else through as any string
+  // (security audit 2026-09-15, finding #6). The caps are deliberately
+  // generous: they exist to stop a megabyte of text reaching the database,
+  // not to second-guess a Malayalam name or a long school title.
+  const parsed = newLeadSchema.safeParse({
+    studentName: formData.get("studentName"),
+    primaryPhone: formData.get("primaryPhone"),
+    email: formData.get("email"),
+    fatherName: formData.get("fatherName"),
+    city: formData.get("city"),
+    district: formData.get("district"),
+    state: formData.get("state"),
+    examYear: formData.get("examYear"),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const { studentName, primaryPhone } = parsed.data;
 
   // 'center' scope always shows the picker (lead-create-form.tsx) so a
   // centerId is required; 'own' scope hides it entirely (ownership already
@@ -77,14 +113,14 @@ export async function createLeadManually(_prevState: FormState, formData: FormDa
   const coursesInterested = formData.getAll("coursesInterested").map(String).filter(Boolean);
 
   const result = await resolveOrCreateLead({
-    studentName: studentName.trim(),
-    primaryPhone: primaryPhone.trim(),
-    email: (formData.get("email") as string) || null,
-    fatherName: (formData.get("fatherName") as string) || null,
-    city: (formData.get("city") as string) || null,
-    district: (formData.get("district") as string) || null,
-    state: (formData.get("state") as string) || null,
-    examYear: (formData.get("examYear") as string) || null,
+    studentName,
+    primaryPhone,
+    email: parsed.data.email || null,
+    fatherName: parsed.data.fatherName || null,
+    city: parsed.data.city || null,
+    district: parsed.data.district || null,
+    state: parsed.data.state || null,
+    examYear: parsed.data.examYear || null,
     interestedExams: interestedExams.length > 0 ? interestedExams : null,
     coursesInterested: coursesInterested.length > 0 ? coursesInterested : null,
     centerId,

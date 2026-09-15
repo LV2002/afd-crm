@@ -1,0 +1,91 @@
+# Every check a contributor runs locally, run on every push and pull
+# request — against a real Postgres with the real migrations and seed.
+#
+# That last part is the point. Twenty-three of this repo's test files need
+# a live database: they are the ones that prove row-level security actually
+# stops a Kannur counsellor reading Kochi's leads, that the audit log
+# refuses a forged actor, and that the ledger will not accept an update.
+# Until now they only ran when somebody remembered to run them (security
+# audit 2026-09-15, test-coverage gap #2), which means the proof of the
+# whole authorization model was optional.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  # A second push to the same branch cancels the first — no point finishing
+  # a run for code that has already been replaced.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: afd_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/afd_ci
+      # Test-only values. The real ones live in Vercel and are never in git.
+      INTEGRATION_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      CRON_SECRET: ci-cron-secret
+      NEXT_PUBLIC_SUPABASE_URL: https://ci.supabase.invalid
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Supabase provides the `auth` schema and the anon/authenticated
+      # roles in production. A bare Postgres has neither, and the RLS
+      # policies reference both, so the shim stands in for them exactly as
+      # it does on a developer's machine. It must never touch a real
+      # Supabase project — see the file's own header.
+      - name: Create the Supabase-shaped scaffolding
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f scripts/local-supabase-shim.sql
+
+      - name: Apply migrations
+        run: npm run db:migrate
+
+      - name: Seed configuration
+        run: npm run db:seed
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      # The whole suite, including every database-backed file. If this step
+      # is ever made conditional or allowed to fail, the security model
+      # stops being tested — say so in the pull request rather than doing
+      # it quietly.
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

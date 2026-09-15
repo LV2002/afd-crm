@@ -4,29 +4,14 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
 import { leads } from "@/lib/db/schema";
+import { NOT_PROVIDED, parseFieldValue } from "@/lib/fields/parse-field-value";
 import { notify } from "@/lib/notifications/notify";
 
-import { getProfileFormByToken, type ProfileFormField } from "./get-form";
+import { getProfileFormByToken } from "./get-form";
 
 export interface ProfileSubmitState {
   error?: string;
   success?: string;
-}
-
-function readValue(field: ProfileFormField, formData: FormData): unknown {
-  if (field.type === "multiselect") {
-    const all = formData.getAll(field.key).filter((v): v is string => typeof v === "string" && v.length > 0);
-    return all.length > 0 ? all : null;
-  }
-  const raw = formData.get(field.key);
-  if (typeof raw !== "string" || raw.trim().length === 0) return null;
-  const value = raw.trim();
-  if (field.type === "boolean") return value === "on" || value === "true";
-  if (field.type === "number" || field.type === "currency") {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : null;
-  }
-  return value;
 }
 
 /**
@@ -70,11 +55,22 @@ export async function submitProfileForm(
 
   const answers: Record<string, unknown> = {};
   for (const field of form.fields) {
-    const value = readValue(field, formData);
-    if (field.isRequired && (value === null || (Array.isArray(value) && value.length === 0))) {
-      return { error: `Please fill in “${field.label}”.` };
-    }
-    if (value !== null) answers[field.key] = value;
+    // Typed, and it says so when an answer is wrong instead of dropping
+    // it to null behind a thank-you (security audit 2026-09-15, finding
+    // #10). Same parser the counsellor's own edit form uses, so a student
+    // and a counsellor cannot disagree about what a valid answer is.
+    const raw =
+      field.type === "multiselect"
+        ? formData.getAll(field.key).map(String)
+        : (formData.get(field.key) as string | null);
+
+    const parsed = parseFieldValue(field, raw, field.options);
+    if (!parsed.ok) return { error: parsed.message };
+
+    const value = parsed.value;
+    if (value === NOT_PROVIDED || value === null) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    answers[field.key] = value;
   }
 
   if (Object.keys(answers).length === 0) {
