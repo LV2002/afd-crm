@@ -10,6 +10,7 @@ export type NavIconKey =
   | "my-day"
   | "leads"
   | "pipeline"
+  | "orphans"
   | "accounts"
   | "finance"
   | "students"
@@ -59,6 +60,16 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     label: { term: "lead", form: "plural" },
   },
   { href: "/pipeline", iconKey: "pipeline", permission: "lead.read", label: "Pipeline" },
+  // The unassigned pile. It had a screen from Phase 2 and no way to reach
+  // it but by typing the URL, which for a queue whose entire job is "these
+  // are being forgotten" is close to not having it. Gated on lead.assign,
+  // so only the people who can actually claim one see it.
+  {
+    href: "/leads/orphans",
+    iconKey: "orphans",
+    permission: "lead.assign",
+    label: "Unassigned",
+  },
   {
     // "Admissions", not "Accounts": this is the per-student fee-collection
     // queue, and the moment a Finance section existed the old name read as

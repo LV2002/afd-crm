@@ -4115,3 +4115,50 @@ Rehearsed locally from an empty database before committing: 69 migrations, 64 ta
 - **Coverage tooling** — no `@vitest/coverage-v8`, so no numeric visibility into drift.
 - **Architecture tidying** — duplicate session numbers in this file, `students`/`batches`
   living in `schema/finance.ts`, and the unbuilt `website`/`knorish` webhooks.
+
+---
+
+## Session 52 — Database review, and the queue nobody could find
+
+### The database, reviewed against the live schema
+
+**RLS coverage is complete.** Every one of the 64 tables has row-level security
+enabled — there is no table a signed-in user can read around. One table,
+`integration_credentials`, has RLS enabled and *no policy at all*: that is
+deliberate and correct (migration 0022 says so), and it is the safest shape in the
+schema. No policy means denied for everyone; only the direct client, which holds
+the service-role credentials, can touch it. An encrypted API key should never be
+readable through a browser session even by an admin.
+
+**Every table has a primary key.** Nothing is a bag of rows.
+
+**Foreign keys without indexes: 65 found, 13 worth fixing.** Postgres indexes a
+primary key automatically and a foreign key not at all. The bare count sounds
+alarming and mostly is not — most are `created_by` / `recorded_by` / `reviewed_by`
+columns answering "who did this?" about a row already in hand, and an index on a
+column nobody filters by is pure cost.
+
+Migration 0069 adds the thirteen the code actually searches by, counted from real
+call sites rather than guessed: `lead_identifiers.lead_id` (read for every lead
+entering the system, from every source — the hottest of the lot), `tasks.lead_id`,
+`assignment_history.lead_id`, both sides of `merge_review_queue`,
+`whatsapp_broadcast_recipients.lead_id`, `ad_audience_members.lead_id`,
+`leads.referred_by_lead_id`, `receipts.payment_id`,
+`finance_transactions.payment_id`, `students.current_batch_id`,
+`user_centers.center_id`, `notifications.center_id`, `batches.center_id`. Four are
+partial, indexing only the non-null rows.
+
+### Architecture
+
+**`students`, `batches` and `student_batches` moved to `schema/academics.ts`.**
+They were in `schema/finance.ts`, which had grown to hold accounts *and* academics
+in one 435-line file — working against the very separation the schema exists to
+make obvious. The dependency runs one way: `enrolments` points at `batches`, and
+nothing in academics points back.
+
+### The unassigned queue is now in the sidebar
+
+The orphan queue has existed since Phase 2 and was reachable only by typing the
+URL. For a screen whose entire purpose is "these leads are being forgotten", that
+is close to not having it. It is now a sidebar entry gated on `lead.assign`, so it
+appears for exactly the people who can claim one.

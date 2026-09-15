@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 
 import { idColumn, softDelete, timestamps } from "./_helpers";
 import { profiles } from "./auth";
-import { students } from "./finance";
+import { students } from "./academics";
 import { leads } from "./leads";
 
 /**

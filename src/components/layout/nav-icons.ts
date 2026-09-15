@@ -6,6 +6,7 @@ import {
   CalendarRange,
   ClipboardList,
   GraduationCap,
+  Inbox,
   KanbanSquare,
   MessageCircle,
   Landmark,
@@ -28,6 +29,7 @@ import type { NavIconKey } from "@/lib/auth/nav";
  */
 export const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   dashboard: LayoutDashboard,
+  orphans: Inbox,
   "my-day": Sun,
   leads: Users,
   pipeline: KanbanSquare,

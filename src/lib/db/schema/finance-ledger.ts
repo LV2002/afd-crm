@@ -18,7 +18,8 @@ import {
 import { idColumn, softDelete, timestamps } from "./_helpers";
 import { profiles } from "./auth";
 import { centers } from "./org";
-import { enrolments, payments, students } from "./finance";
+import { students } from "./academics";
+import { enrolments, payments } from "./finance";
 
 /**
  * The institute's own money — the CRM half of AFD's finance workbook.
