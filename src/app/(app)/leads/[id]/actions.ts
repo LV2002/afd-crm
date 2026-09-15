@@ -230,18 +230,39 @@ export async function createTask(leadId: string, _prevState: FormState, formData
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("tasks").insert({
-    lead_id: leadId,
-    title: title.trim(),
-    type: formData.get("type") || null,
-    due_at: formData.get("dueAt") || null,
-    assigned_to: (formData.get("assignedTo") as string) || user.id,
-    created_by: user.id,
-  });
+  const { data, error } = await supabase
+    .from("tasks")
+    .insert({
+      lead_id: leadId,
+      title: title.trim(),
+      type: formData.get("type") || null,
+      due_at: formData.get("dueAt") || null,
+      assigned_to: (formData.get("assignedTo") as string) || user.id,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
 
   if (error) {
     return { error: error.message };
   }
+
+  // Security audit 2026-09-15, finding #8. Tasks were the one mutation
+  // path with no audit row, against non-negotiable #5's "every mutation".
+  // A task carries a name and a follow-up commitment, and who assigned
+  // what to whom is exactly the kind of thing an argument later turns on.
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "task.create",
+    entityType: "tasks",
+    entityId: data.id,
+    after: {
+      leadId,
+      title: title.trim(),
+      assignedTo: (formData.get("assignedTo") as string) || user.id,
+      dueAt: formData.get("dueAt") || null,
+    },
+  });
 
   revalidatePath(`/leads/${leadId}`);
   return { success: "Task added." };
@@ -252,10 +273,20 @@ export async function completeTask(taskId: string, leadId: string): Promise<void
   if (!user || !can(user, "interaction.create")) return;
 
   const supabase = await createClient();
-  await supabase
+  const { error } = await supabase
     .from("tasks")
     .update({ status: "done", completed_at: new Date().toISOString(), completed_by: user.id })
     .eq("id", taskId);
+
+  if (error) return;
+
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "task.complete",
+    entityType: "tasks",
+    entityId: taskId,
+    after: { leadId, status: "done" },
+  });
 
   revalidatePath(`/leads/${leadId}`);
 }

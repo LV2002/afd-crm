@@ -2,6 +2,7 @@
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { csvEscape } from "@/lib/format/csv";
 import { fieldColumn, getRawFieldValue } from "@/lib/fields/field-column";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import { formatFieldValue } from "@/lib/fields/format-field-value";
@@ -73,11 +74,6 @@ export interface ExportLeadsResult {
 
 /** Defensive cap, not a real limit at AFD's current ~200 leads/month volume — see docs/DECISIONS.md. */
 const EXPORT_ROW_LIMIT = 5000;
-
-function csvEscape(value: string): string {
-  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
-}
 
 /**
  * CLAUDE.md non-negotiable #5 ("every export writes to audit_log") and #6

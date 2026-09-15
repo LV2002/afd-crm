@@ -430,6 +430,53 @@ describe("audit_log is admin-only to read, and rejects UPDATE/DELETE outright", 
     }
   });
 
+  it("refuses an audit row written in somebody else's name", async () => {
+    // Security audit 2026-09-15 finding #11. The insert policy is
+    // `with check (true)` on purpose — everyone must be able to record
+    // their own actions — so the honesty of `actor_id` rests entirely on
+    // the trigger added in migration 0068. Without it, any signed-in user
+    // could call the REST API directly and attribute an export or a phone
+    // reveal to a colleague.
+    await expect(
+      asUser(
+        fx.counsellor_kochi,
+        (tx) => tx`
+          insert into audit_log (actor_id, action, entity_type)
+          values (${fx.admin_a}, 'lead.export', 'leads')
+        `,
+      ),
+    ).rejects.toThrow(/actor_id must be the acting user/);
+  });
+
+  it("refuses an audit row with no actor at all from a user session", async () => {
+    // A null actor is how a webhook or cron row is written. A logged-in
+    // user borrowing that shape would be laundering their own action into
+    // "the system did it".
+    await expect(
+      asUser(
+        fx.counsellor_kochi,
+        (tx) => tx`
+          insert into audit_log (actor_id, action, entity_type)
+          values (null, 'lead.export', 'leads')
+        `,
+      ),
+    ).rejects.toThrow(/actor_id must be the acting user/);
+  });
+
+  it("still allows a system write with no session — webhooks and cron", async () => {
+    // `owner` here is the direct postgres connection, where auth.uid() is
+    // null: the same shape the service-role key has. Those callers already
+    // hold credentials the trigger cannot second-guess, and they must keep
+    // being able to log ingestion.
+    const [row] = await owner<Array<{ id: string }>>`
+      insert into audit_log (actor_id, action, entity_type)
+      values (null, 'lead.create', 'leads')
+      returning id
+    `;
+    expect(row.id).toBeTruthy();
+    await owner`delete from audit_log where id = ${row.id}`;
+  });
+
   it("every authenticated user can INSERT into audit_log, regardless of audit.read", async () => {
     // No `.returning()` here deliberately: Postgres checks a table's SELECT
     // policy against rows returned by INSERT ... RETURNING, so a counsellor

@@ -477,6 +477,13 @@
       "when": 1788573313458,
       "tag": "0067_dashboard_layouts",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1788573314458,
+      "tag": "0068_audit_log_actor_trigger",
+      "breakpoints": true
     }
   ]
 }

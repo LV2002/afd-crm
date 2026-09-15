@@ -35,9 +35,9 @@ in the seed data. Its architectural mistakes are listed under "Non-negotiables" 
 | Files | Supabase Storage, private buckets, signed URLs |
 | UI | Tailwind + shadcn/ui + lucide-react |
 | Charts | Recharts |
-| Forms | react-hook-form + zod |
+| Forms | Server Actions + `useActionState` + zod (no react-hook-form — it was never used and has been removed) |
 | Background jobs | Vercel Cron → route handlers under `/api/cron/*` |
-| AI | `@anthropic-ai/sdk`, `claude-sonnet-4-6`, tool-use only |
+| AI | Google Gemini via REST (`lib/ai/gemini.ts`), tool-use only — see `docs/DECISIONS.md`, 2026-09-03, for why not Anthropic |
 | Hosting | Vercel |
 
 Timezone is **Asia/Kolkata** everywhere user-facing. Store all timestamps as `timestamptz` in UTC.
@@ -158,7 +158,10 @@ data scope             own | center | all
 role                   a named bundle of primitives, each with a scope
 ```
 
-RLS policies call `auth_has('lead.read','center')`, never `role = 'admin'`.
+RLS policies call `auth_scope('lead.read')` and
+`can_access_center('lead.read', center_id, owner_id)`, never `role = 'admin'`.
+(Earlier drafts of this file named a function `auth_has(permission, scope)`; it has
+never existed. The two above are what every policy actually uses.)
 See `docs/01-DATA-MODEL.md` § Permissions.
 
 Six roles ship as seed data — `admin`, `co_admin`, `center_head`, `counsellor`,
@@ -235,8 +238,8 @@ src/
       webhooks/
         whatsapp/         Meta WABA inbound + status
         meta-leads/       Lead Ads
-        website/          your existing site forms
-        knorish/          course purchase events
+        website/          your existing site forms — NOT BUILT YET
+        knorish/          course purchase events — NOT BUILT YET, pending a decision on whether Knorish is still in use
       cron/
         sla-sweep/ recompute-temperature/ ad-spend-sync/ digest/
       ai/query/           tool-use endpoint

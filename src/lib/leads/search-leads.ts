@@ -2,6 +2,7 @@
 
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { maskPhone } from "@/lib/leads/mask-phone";
+import { filterTerm } from "@/lib/db/filter-term";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 import { createClient } from "@/lib/supabase/server";
 
@@ -55,7 +56,12 @@ export async function searchLeads(query: string): Promise<LeadSearchResult[]> {
   const asPhone = normalizePhone(term);
   const digitsOnly = /^[\d+\s-]+$/.test(term);
 
-  const filters = [`student_name.ilike.%${term.replace(/[%,]/g, "")}%`];
+  // One shared guard now, rather than the partial inline strip this used
+  // to do — see lib/db/filter-term.ts.
+  const safeTerm = filterTerm(term);
+  if (!safeTerm) return [];
+
+  const filters = [`student_name.ilike.%${safeTerm}%`];
   if (digitsOnly) {
     const bare = term.replace(/\D/g, "");
     if (bare) filters.push(`primary_phone.ilike.%${bare}%`);

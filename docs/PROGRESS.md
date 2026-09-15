@@ -3961,3 +3961,68 @@ action names a specific person and still does not.
 
 **Leon's to-do:** `npm run db:migrate` (0066, 0067), then Settings → Assignment
 Rules and add at least a catch-all, or leads keep arriving unassigned.
+
+---
+
+## Session 49 — Security audit fix pass
+
+Leon supplied a security and project audit (`docs/SECURITY.md`, now tracked in the repo).
+Every finding was re-verified against the code before being acted on — several line
+references had moved, and one High needed re-grading — then the actionable ones were
+fixed. `npm audit` went from six vulnerabilities to zero.
+
+### The one that mattered
+
+**`audit_log` rows could be written in anybody's name.** The insert policy is
+`with check (true)` — correctly, since every user must be able to record their own
+actions — and `actor_id` came from the application with nothing in the database tying
+the two together. The anon key is in the browser by design, so any signed-in counsellor
+could POST a forged row attributing an export or a phone reveal to a colleague.
+
+Migration `0068_audit_log_actor_trigger.sql` adds a `BEFORE INSERT` trigger: reject
+unless `actor_id` is the acting user, while still allowing the null-actor writes
+webhooks and cron depend on. Three new cases in `tests/rls.spec.ts`, all confirmed to
+fail with the trigger dropped.
+
+This got more urgent because migration 0066 gave the log a screen last session. A trail
+that is read is a trail worth forging.
+
+### Also fixed
+
+- **CSV formula injection.** Lead names arrive from public Meta and Google ad forms; a
+  name beginning `=HYPERLINK(...)` executed when a counsellor opened the export.
+  New `lib/format/csv.ts` prefixes `= + - @` with an apostrophe.
+- **PostgREST filter injection.** The search box interpolated straight into an `.or()`
+  filter expression. New `lib/db/filter-term.ts`, applied at all three search sites —
+  including the referral picker written last session, which had its own partial strip.
+- **Silent audit-log failures** now reach Platform Health and the alert email. Still
+  never throws: the mutation has already happened.
+- **Tasks are audited** (`task.create`, `task.complete`) — the last mutation path that
+  wasn't.
+- **One cron guard, constant-time.** `lib/cron/require-secret.ts` replaces the same six
+  lines copy-pasted into ten routes, and compares with `timingSafeEqual` like the
+  webhook handlers already did.
+- **Dependencies.** `postcss` and `esbuild` forced to patched versions via `overrides`;
+  `react-hook-form` and `@hookform/resolvers` removed (zero imports anywhere);
+  `tw-animate-css` moved to devDependencies; `engines` and `.nvmrc` added; agent
+  tooling artifacts added to `.gitignore`.
+- **CLAUDE.md corrections.** It named a permission function (`auth_has`) that has never
+  existed, claimed an AI stack the code does not use (Gemini, not the Anthropic SDK),
+  listed react-hook-form, and showed two webhook directories that were never built.
+
+### Deliberately not fixed
+
+- **#2 lead creation has no RLS backstop** — re-graded High → Medium. Real, but there is
+  no current path by which a counsellor creates a lead outside their scope; the audit's
+  own scenario is conditional on a future bug. Its recommended fix as written cannot
+  work (`resolveOrCreateLead` needs one transaction with row locks across four tables;
+  PostgREST cannot express that). The practical version is a post-insert re-read through
+  the caller's own client.
+- **#3 AI analyst scoping** — same shape. The cheap fix is a test asserting every tool
+  in `ANALYST_TOOLS` scopes or is explicitly org-wide.
+- **#6 / #10 hand-rolled validation** — convention drift, not exploitable.
+- Test-coverage items: `revealLeadPhone()` still has no direct test, there is no CI job
+  provisioning Postgres, and no coverage tooling.
+
+**Leon's to-do:** `npm run db:migrate` for 0068, and `npm install` (the lockfile
+changed).

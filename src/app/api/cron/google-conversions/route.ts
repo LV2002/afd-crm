@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { requireCronSecret } from "@/lib/cron/require-secret";
 import { reportingFailures } from "@/lib/errors/capture";
 
 import { uploadConversions } from "@/lib/integrations/google/upload-conversions";
@@ -17,10 +19,8 @@ export const maxDuration = 60;
  * Google what it bought belong together.
  */
 async function run(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = requireCronSecret(request);
+  if (denied) return denied;
   return NextResponse.json(await uploadConversions());
 }
 
