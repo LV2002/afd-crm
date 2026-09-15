@@ -742,6 +742,7 @@ interface FieldSeed {
   showInList?: boolean;
   showInFilters?: boolean;
   options?: Array<{ value: string; label: string }>;
+  helpText?: string;
   /** Defaults to true — everything on this list was a lead-form field from the start. STUDENT_FIELD_SEEDS mixes real columns (true) with admin-added form fields (false), so it's explicit there. */
   isCore?: boolean;
 }
@@ -782,6 +783,17 @@ const LEAD_FIELD_SEEDS: FieldSeed[] = [
   { key: "assigned_to", label: "Assigned Counsellor", type: "user_ref", section: "Tracking", showInList: true, showInFilters: true },
   { key: "center_id", label: "Centre", type: "select", section: "Tracking", showInList: true, showInFilters: true },
   { key: "next_followup_at", label: "Next Follow-up", type: "datetime", section: "Tracking", showInList: true },
+  // Word of mouth from past students is a top source for a 25-year-old
+  // institute and was the one source the CRM could not see: the column
+  // existed with nothing able to write it. `lead_ref` searches rather than
+  // listing — the option set here is every lead in the system.
+  {
+    key: "referred_by_lead_id",
+    label: "Referred by",
+    type: "lead_ref",
+    section: "Tracking",
+    helpText: "The student or enquirer who sent them to us. Search by name or number.",
+  },
   { key: "brochure_sent", label: "Brochure Sent", type: "boolean", section: "Tracking" },
 ];
 
@@ -887,6 +899,7 @@ async function seedFieldDefinitionsFor(entity: "lead" | "student", seeds: FieldS
         entity,
         key: field.key,
         label: field.label,
+        helpText: field.helpText,
         type: field.type,
         section: field.section,
         sortOrder: index,
@@ -904,12 +917,13 @@ async function seedFieldDefinitionsFor(entity: "lead" | "student", seeds: FieldS
           type: field.type,
           section: field.section,
         },
-        // `sort_order` and `on_profile_form` are deliberately NOT in this
-        // set. Both are things an admin changes in Settings → Student
-        // Profile Form, and re-running the seed against a live instance
-        // must not quietly undo a reordered or trimmed form. New rows
-        // still land in the order written above, which is all the seed
-        // is for.
+        // `sort_order`, `on_profile_form` and `help_text` are deliberately
+        // NOT in this set. All three are things an admin changes — the
+        // first two in Settings → Student Profile Form, the last in
+        // Settings → Fields — and re-running the seed against a live
+        // instance must not quietly undo a reordered form or a reworded
+        // hint. New rows still land with the order and help text written
+        // above, which is all the seed is for.
       });
   }
   console.log(`seeded ${seeds.length} ${entity} field definitions`);

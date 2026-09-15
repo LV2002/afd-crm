@@ -42,6 +42,8 @@ export interface ReportLead {
   board: string | null;
   educationStatus: string | null;
   examYear: string | null;
+  /** The lead who sent them, or null. An id, never a name — see the note above about PII. */
+  referredByLeadId: string | null;
   /** Past the sales→accounts gate and not since dropped. */
   admitted: boolean;
   /** `yyyy-MM-dd` in IST of that gate, or null. */
@@ -80,6 +82,7 @@ export async function loadReportLeads(user: SessionUser): Promise<ReportLead[]> 
       board: leads.board,
       educationStatus: leads.educationStatus,
       examYear: leads.examYear,
+      referredByLeadId: leads.referredByLeadId,
     })
     .from(leads)
     .where(scopeWhere);
@@ -139,6 +142,7 @@ export async function loadReportLeads(user: SessionUser): Promise<ReportLead[]> 
       board: row.board,
       educationStatus: row.educationStatus,
       examYear: row.examYear,
+      referredByLeadId: row.referredByLeadId,
       admitted: admitted !== null,
       admittedOn: admitted ? dayIST(admitted) : null,
     };

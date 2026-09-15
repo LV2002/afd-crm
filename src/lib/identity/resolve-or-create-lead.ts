@@ -42,6 +42,13 @@ export interface ResolveLeadInput {
   coursesInterested?: string[] | null;
   centerId?: string | null;
   assignedTo?: string | null;
+  /**
+   * The existing lead who sent them. Carried only onto a NEW lead: a
+   * second enquiry from somebody already in the system does not get to
+   * rewrite who introduced them, for the same reason first-touch source
+   * is never overwritten.
+   */
+  referredByLeadId?: string | null;
 
   /**
    * Whoever is doing this, when a person is. Used only so a counsellor
@@ -328,6 +335,7 @@ async function resolveOrCreateLeadInTransaction(
         coursesInterested: input.coursesInterested,
         centerId: input.centerId,
         assignedTo: input.assignedTo,
+        referredByLeadId: input.referredByLeadId ?? null,
         stageId: newStage?.id,
         firstTouchSource: input.source,
         firstTouchSubSource: input.subSource,

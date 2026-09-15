@@ -89,6 +89,13 @@ export async function updateLead(leadId: string, _prevState: FormState, formData
     }
   }
 
+  // The picker never offers the lead itself, but the value posts as a
+  // plain uuid and the column would take it — a self-referral would then
+  // count as a referral in the report and point the graph at a loop.
+  if (coreUpdates.referred_by_lead_id === leadId) {
+    return { error: "A lead can't be their own referrer." };
+  }
+
   // A human changing `temperature` here is exactly the "counsellor's manual
   // judgement" docs/01-DATA-MODEL.md § Temperature describes — it must beat
   // the recompute cron for a configurable number of days, or the cron would

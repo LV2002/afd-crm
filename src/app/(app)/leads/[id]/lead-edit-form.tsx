@@ -28,12 +28,15 @@ export function LeadEditForm({
   values,
   optionsByKey,
   canRevealPhone,
+  leadRefLabel,
 }: {
   leadId: string;
   sections: FieldSection[];
   values: Record<string, unknown>;
   optionsByKey: Record<string, FieldOption[]>;
   canRevealPhone: boolean;
+  /** Resolved server-side so a referrer already on the record shows as a name. */
+  leadRefLabel?: { id: string; name: string; phone: string; hint: string } | null;
 }) {
   const [state, formAction, pending] = useActionState(updateLead.bind(null, leadId), initialState);
   const [activeSection, setActiveSection] = useState(sections[0]?.section ?? "");
@@ -92,6 +95,8 @@ export function LeadEditForm({
                       name={field.key}
                       defaultValue={values[field.key]}
                       options={optionsByKey[field.key] ?? []}
+                      leadRefLabel={field.type === "lead_ref" ? (leadRefLabel ?? null) : null}
+                      excludeLeadId={leadId}
                     />
                   ) : (
                     <p className="text-sm text-muted-foreground">{String(values[field.key] ?? "—")}</p>

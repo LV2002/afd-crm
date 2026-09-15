@@ -3832,3 +3832,69 @@ the brand, so an imported bundle produces documents with a name on them.
 **Leon's to-do:** run `npm run db:migrate` (0063, 0064), then fill in
 Settings → Organisation — address, phone, email, GSTIN, logo — and each centre's
 own phone and email under Settings → Centres.
+
+---
+
+## Session 47 — Password resets, consent, and counting word of mouth
+
+Four of the seven things Leon asked for after reading the pre-launch audit.
+
+### Admin-only password reset
+
+New permission primitive `user.reset_password`, held by `admin` and nothing
+else — not even `co_admin`, which otherwise holds every Administration
+permission. Settings → Users → *(a user)* grows a reset box for an admin and
+shows nothing to anybody else. The target user is read through the caller's own
+client so RLS still decides who is visible; the service-role key is used for
+exactly one call, `admin.auth.admin.updateUserById`, and the audit row records
+who reset whose password and never the password.
+
+### The migration chain actually applies
+
+Migration 0064 (brand logo storage policies) had never run anywhere.
+`create policy on storage.objects` raises `undefined_schema` on a database with
+no Supabase storage schema, drizzle-kit applies the whole pending batch in one
+transaction, and the rollback was silent — the recorded count sat one behind
+the journal and looked like success. Fixed with the same up-front
+`information_schema.schemata` guard migration 0031 already used. Verified:
+0001–0065 apply to an empty database in order, 63 tables.
+
+### WhatsApp consent, decided rather than assumed
+
+Leon's rule, which is the correct one for this business: entering the CRM *is*
+the opt-in, because everybody in it enquired about a course. So consent is now
+recorded rather than presumed — `lib/consent/consent.ts` stamps status, date
+and basis on every lead at creation, whichever of the ingestion paths it came
+in through, and migration 0065 backfills the existing rows dated to their own
+`created_at`. An inbound STOP still withdraws it, and a withdrawal is never
+quietly overwritten by a later enquiry. The broadcast audience counts and names
+the people it excludes for consent, so a campaign of 400 that sends to 380 says
+why.
+
+### Referrals — the source nobody was counting
+
+`referred_by_lead_id` has been a column since the first migration with nothing
+in the product able to write it, and `lead_ref` was a declared field type that
+rendered a disabled box. Both are now real:
+
+- **A searching picker**, not a dropdown — the option set is every lead in the
+  system. Type two characters of a name or number; results show masked numbers
+  (`+91 98••••3456`) and a lead number, enough to tell two Anjalis apart.
+- **On the create form as well as the edit form.** A referral is mentioned at
+  the door and forgotten by the time anybody opens the edit page.
+- **The other direction on the lead page**: "Sent us 4 people", with links. A
+  past student who has sent four people is the most valuable number in the
+  database and nothing said so.
+- **Insights → Referrals**: how many came by referral and what share that is,
+  how referred enquiries convert against everybody else (in percentage points,
+  with a warning when the sample is too small to act on), who is sending them,
+  the month-by-month trend, and how many referrals came from somebody who was
+  themselves referred.
+
+Names on the leaderboard appear only where the caller could have opened that
+lead anyway — `report.read` is deliberately wider than `lead.read`, and these
+screens read through a client that bypasses RLS, so the scope check is
+re-implemented in `referrer-labels.ts` and everybody else sees a lead number.
+
+**Leon's to-do:** run `npm run db:migrate` (0065) and `npm run db:seed` (the
+"Referred by" field definition).
