@@ -59,6 +59,8 @@ export interface AudiencePreview {
   noPhone: number;
   doNotContact: number;
   duplicatePhone: number;
+  /** Withdrew consent, or predates consent being captured at all. */
+  noConsent: number;
   /** A few names, so somebody can sanity-check that the filters mean what they think. */
   sample: string[];
   /**
@@ -135,6 +137,7 @@ export async function previewAudience(formData: FormData): Promise<AudiencePrevi
     noPhone: 0,
     doNotContact: 0,
     duplicatePhone: 0,
+    noConsent: 0,
     sample: [],
   };
 
@@ -161,6 +164,7 @@ export async function previewAudience(formData: FormData): Promise<AudiencePrevi
       noPhone: skipped.noPhone,
       doNotContact: skipped.doNotContact,
       duplicatePhone: skipped.duplicatePhone,
+      noConsent: skipped.noConsent,
       sample: members.slice(0, 5).map((member) => member.name),
       sampleValues,
     };

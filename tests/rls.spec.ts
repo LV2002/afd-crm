@@ -1730,3 +1730,44 @@ describe("targets are scoped by report.read to read and target.manage to set", (
     expect(deleted.count).toBe(0);
   });
 });
+
+/**
+ * Resetting somebody else's password is the admin's alone.
+ *
+ * Asserted against the seeded grants rather than an RLS policy, because
+ * this one is enforced in a server action: Supabase has no "set another
+ * user's password" call under RLS-scoped auth, so the boundary is the
+ * permission the action checks. What the database can still prove is that
+ * the permission lands on exactly one role — including that co-admin,
+ * which holds everything else, does not hold this.
+ */
+describe("user.reset_password is granted to admin and nobody else", () => {
+  it("exactly one role holds it, and it is admin", async () => {
+    const rows = await owner<Array<{ code: string; scope: string }>>`
+      select r.code, rp.scope::text as scope
+      from role_permissions rp
+      join roles r on r.id = rp.role_id
+      where rp.permission_code = 'user.reset_password'
+      order by r.code
+    `;
+    expect(rows.map((r) => r.code)).toEqual(["admin"]);
+    expect(rows[0].scope).toBe("all");
+  });
+
+  it("co-admin holds every other administration permission", async () => {
+    // The exclusion has to be one deliberate hole, not a co-admin that
+    // quietly lost a category.
+    const rows = await owner<Array<{ code: string }>>`
+      select p.code
+      from permissions p
+      where p.category = 'Administration'
+        and p.code not in (
+          select rp.permission_code from role_permissions rp
+          join roles r on r.id = rp.role_id
+          where r.code = 'co_admin'
+        )
+      order by p.code
+    `;
+    expect(rows.map((r) => r.code)).toEqual(["user.reset_password"]);
+  });
+});

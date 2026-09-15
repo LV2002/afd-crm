@@ -7,6 +7,7 @@ import { getRawFieldValue } from "@/lib/fields/field-column";
 import { getFieldSchema, type FieldEntity } from "@/lib/fields/get-field-schema";
 import { db } from "@/lib/db/client";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
+import { mayReceiveMarketing } from "@/lib/consent/consent";
 import { suppressedAmong } from "@/lib/whatsapp/opt-out";
 import { applyPivotFilters, dimensionFields, type PivotField } from "@/lib/reports/pivot";
 
@@ -67,6 +68,8 @@ export interface AudienceResult {
     doNotContact: number;
     duplicatePhone: number;
     optedOut: number;
+    /** Consent withdrawn, or never recorded on a lead predating consent capture. */
+    noConsent: number;
   };
 }
 
@@ -152,7 +155,7 @@ export async function resolveAudience(
 
   const members: AudienceMember[] = [];
   const seenPhones = new Set<string>();
-  const skipped = { noPhone: 0, doNotContact: 0, duplicatePhone: 0, optedOut: 0 };
+  const skipped = { noPhone: 0, doNotContact: 0, duplicatePhone: 0, optedOut: 0, noConsent: 0 };
 
   for (const lead of matched) {
     const row = rowById.get(lead.id);
@@ -180,6 +183,25 @@ export async function resolveAudience(
       skipped.optedOut += 1;
       continue;
     }
+
+    // Consent is the other half of the same question, and it is asked
+    // through one helper so no caller can check only the part it
+    // remembers. Every lead entering the CRM is recorded as opted in —
+    // the enquiry is the consent — so in practice this only removes the
+    // ones who withdrew, and the handful created before consent was
+    // captured at all. See lib/consent/consent.ts.
+    if (
+      spec.entity === "lead" &&
+      !mayReceiveMarketing({
+        consentStatus: typeof row.consent_status === "string" ? row.consent_status : null,
+        doNotContact: row.do_not_contact === true,
+        phoneSuppressed: false,
+      })
+    ) {
+      skipped.noConsent += 1;
+      continue;
+    }
+
     seenPhones.add(key);
 
     members.push({

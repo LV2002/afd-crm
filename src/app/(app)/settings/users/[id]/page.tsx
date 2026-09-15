@@ -1,14 +1,20 @@
 import { notFound } from "next/navigation";
 
+import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
+import { can, getCurrentUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 import { AssignedCenters, type CenterRow } from "./assigned-centers";
 import { EditUserForm } from "./edit-user-form";
+import { ResetPasswordForm } from "./reset-password-form";
 import { UserActiveToggle } from "./active-toggle";
 
 export default async function EditUserPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const actor = await getCurrentUser();
+  if (!actor || !can(actor, "users.manage")) return <AccessDenied />;
+
   const supabase = await createClient();
 
   const { data: profile } = await supabase
@@ -56,6 +62,12 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
         roleId={profile.role_id}
         roles={roles ?? []}
       />
+
+      {/* Only rendered for somebody who actually holds the permission —
+          the action checks it again, which is the part that matters. */}
+      {can(actor, "user.reset_password") && (
+        <ResetPasswordForm userId={profile.id} fullName={profile.full_name} />
+      )}
 
       <div className="flex flex-col gap-2">
         <h2 className="text-lg font-medium">Centres</h2>

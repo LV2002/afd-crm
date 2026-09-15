@@ -119,6 +119,18 @@ function allAt(scope: PermissionScope) {
   return ALL_PERMISSION_CODES.map((code) => ({ code, scope }));
 }
 
+/**
+ * Everything except a named few — for co-admin, which is "everything the
+ * admin can do" with the deliberate exception of handing over somebody
+ * else's identity by setting their password. Leon asked for password
+ * resets to be the admin's alone; this is where that is expressed, and it
+ * stays an ordinary editable grant he can turn on in Settings → Roles.
+ */
+function allExcept(excluded: PermissionCode[], scope: PermissionScope) {
+  const skip = new Set<string>(excluded);
+  return ALL_PERMISSION_CODES.filter((code) => !skip.has(code)).map((code) => ({ code, scope }));
+}
+
 function grant(codes: PermissionCode[], scope: PermissionScope) {
   return codes.map((code) => ({ code, scope }));
 }
@@ -134,9 +146,10 @@ const ROLE_SEEDS: RoleSeed[] = [
   {
     code: "co_admin",
     name: "Co-Admin",
-    description: "Deputy admin. Full operational and configuration access.",
+    description:
+      "Deputy admin. Full operational and configuration access, except resetting passwords.",
     isProtected: false,
-    grants: allAt("all"),
+    grants: allExcept(["user.reset_password"], "all"),
   },
   {
     code: "center_head",

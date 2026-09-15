@@ -302,7 +302,9 @@ export function NewBroadcastForm({
             {preview.duplicatePhone > 0 &&
               `${preview.duplicatePhone} share a number with somebody already on the list and get one message between them. `}
             {preview.doNotContact > 0 &&
-              `${preview.doNotContact} marked do-not-contact are excluded everywhere.`}
+              `${preview.doNotContact} marked do-not-contact are excluded everywhere. `}
+            {preview.noConsent > 0 &&
+              `${preview.noConsent} have opted out of messaging, or joined before consent was recorded.`}
           </p>
         )}
       </section>

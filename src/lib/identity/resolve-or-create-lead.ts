@@ -7,6 +7,8 @@ import { notify } from "@/lib/notifications/notify";
 import { startFlows } from "@/lib/whatsapp/flow-runner";
 
 import { normalizeEmail } from "./normalize-email";
+import { consentOnEntry, consentOnRepeatEnquiry } from "@/lib/consent/consent";
+
 import { normalizePhone } from "./normalize-phone";
 
 export interface ResolveLeadInput {
@@ -221,6 +223,24 @@ async function resolveOrCreateLeadInTransaction(
     if (resolvedLeadId) {
       // Existing lead: attach a new enquiry, update last-touch, never
       // touch first-touch.
+      //
+      // A fresh enquiry settles consent for anybody who never had it
+      // recorded — a lead from before consent was captured, say. It
+      // deliberately does NOT resurrect a withdrawn one: somebody who
+      // said STOP and later asks for a prospectus has not re-subscribed
+      // to marketing, and coming back in is not the moment to decide they
+      // have. See lib/consent/consent.ts.
+      const [existingConsent] = await tx
+        .select({ consentStatus: leads.consentStatus })
+        .from(leads)
+        .where(eq(leads.id, resolvedLeadId));
+
+      const consentUpdate = consentOnRepeatEnquiry(
+        existingConsent?.consentStatus ?? null,
+        input.source,
+        receivedAt,
+      );
+
       await tx
         .update(leads)
         .set({
@@ -228,6 +248,7 @@ async function resolveOrCreateLeadInTransaction(
           lastTouchSubSource: input.subSource ?? null,
           lastTouchCampaign: input.campaignId ?? null,
           lastActivityAt: receivedAt,
+          ...(consentUpdate ?? {}),
         })
         .where(eq(leads.id, resolvedLeadId));
 
@@ -315,6 +336,11 @@ async function resolveOrCreateLeadInTransaction(
         lastTouchSubSource: input.subSource,
         lastTouchCampaign: input.campaignId,
         lastActivityAt: receivedAt,
+        // Entering the CRM IS the opt-in: everybody here enquired about a
+        // course, and that enquiry is the consent. Recorded per lead with
+        // a date and the source it came from, so "on what basis did we
+        // message this person?" has an answer. See lib/consent/consent.ts.
+        ...consentOnEntry(input.source, receivedAt),
       })
       .returning({ id: leads.id, leadNumber: leads.leadNumber });
 
