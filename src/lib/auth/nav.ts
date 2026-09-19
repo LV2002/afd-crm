@@ -16,6 +16,7 @@ export type NavIconKey =
   | "students"
   | "batches"
   | "syllabus"
+  | "faculty"
   | "whatsapp"
   | "profile-forms"
   | "insights"
@@ -85,6 +86,12 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
   // it is the coordinator's daily working document, not a thing an admin
   // configures once. Gated on read, so faculty can see what they are
   // meant to teach without being able to rewrite it.
+  {
+    href: "/academics/faculty",
+    iconKey: "faculty",
+    permission: "faculty.read",
+    label: "Faculty",
+  },
   {
     href: "/academics/syllabus",
     iconKey: "syllabus",

@@ -10,6 +10,7 @@ export * from "./activity";
 export * from "./config";
 export * from "./academics";
 export * from "./curriculum";
+export * from "./faculty";
 export * from "./finance";
 export * from "./files";
 export * from "./tags";

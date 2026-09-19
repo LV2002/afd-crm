@@ -234,6 +234,23 @@ export const PERMISSIONS = [
   // document and is the academic coordinator's to write. The read half is
   // separate again because a faculty member needs to see what they are
   // meant to teach without being able to rewrite it.
+  // Faculty are a separate record from users on purpose (see
+  // schema/faculty.ts): a visiting teacher gets a name and a subject in
+  // ten seconds, and a login only if they ever need one. Managing that
+  // list is the coordinator's job, so it is not folded into users.manage.
+  {
+    code: "faculty.read",
+    label: "View faculty",
+    category: "Academics",
+    description: "See the teaching staff list, what each teaches, and when they are free.",
+  },
+  {
+    code: "faculty.manage",
+    label: "Manage faculty",
+    category: "Academics",
+    description:
+      "Add and edit teaching staff, their subjects, centres, availability and leave.",
+  },
   {
     code: "curriculum.read",
     label: "View the syllabus",

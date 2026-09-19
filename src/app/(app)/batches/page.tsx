@@ -1,4 +1,4 @@
-import { asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 
@@ -16,7 +16,7 @@ import {
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { batchCapacity, describeBatch } from "@/lib/batches/roster";
 import { db } from "@/lib/db/client";
-import { batches, centers } from "@/lib/db/schema";
+import { batchSessions, batches, centers } from "@/lib/db/schema";
 import { formatDateIST } from "@/lib/format/date";
 
 /**
@@ -62,6 +62,18 @@ export default async function BatchesPage() {
   // Running batches first — the ones somebody is actually managing.
   const ordered = [...rows].sort((a, b) => Number(b.isActive) - Number(a.isActive));
 
+  // Which batches have no timings. A batch without them cannot be put on a
+  // timetable, and that is invisible from the batch's own row until you
+  // open it — so it is called out here instead.
+  const timed = new Set(
+    (
+      await db
+        .selectDistinct({ batchId: batchSessions.batchId })
+        .from(batchSessions)
+        .where(and(eq(batchSessions.isActive, true), isNull(batchSessions.deletedAt)))
+    ).map((row) => row.batchId),
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -91,6 +103,7 @@ export default async function BatchesPage() {
               <TableRow>
                 <TableHead>Batch</TableHead>
                 <TableHead>Centre</TableHead>
+                <TableHead>Timings</TableHead>
                 <TableHead>Starts</TableHead>
                 <TableHead className="text-right">Students</TableHead>
                 <TableHead className="text-right">Seats left</TableHead>
@@ -123,6 +136,18 @@ export default async function BatchesPage() {
                       </p>
                     </TableCell>
                     <TableCell>{row.centerName ?? "—"}</TableCell>
+                    <TableCell>
+                      {timed.has(row.id) ? (
+                        <Link
+                          href={`/batches/${row.id}`}
+                          className="text-sm text-muted-foreground hover:underline"
+                        >
+                          set
+                        </Link>
+                      ) : (
+                        <Badge variant="outline">none yet</Badge>
+                      )}
+                    </TableCell>
                     <TableCell>{formatDateIST(row.startDate, "d MMM yyyy")}</TableCell>
                     <TableCell className="text-right tabular-nums">{row.filled}</TableCell>
                     <TableCell className="text-right tabular-nums">

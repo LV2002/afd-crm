@@ -72,6 +72,48 @@ hours a week". Pure, unit-tested, no database.
 
 ---
 
+## Layer 1b — Faculty · **BUILT** (migration 0072)
+
+```
+faculty                 name, phone, email, profile_id?, employment_type,
+                        availability_mode(always|by_window)
+  faculty_centers       which centres they work at
+  faculty_subjects      which subjects they can take
+  faculty_availability  recurring windows they ARE free (by_window only)
+  faculty_leave         one-off absence, inclusive of both dates
+```
+
+Three decisions worth keeping:
+
+**A faculty member is a record, not a login.** `profile_id` is nullable. Visiting
+faculty come for one module and never sign in; requiring an auth account before a
+name could be written down is exactly the friction that keeps this in a
+spreadsheet. Link a login later, if and when they need one.
+
+**Availability is opt-in.** `always` is the default — assumed free, stopped only by
+a clash or leave. A whitelist is more precise and nobody fills it in, so the precise
+mode exists (`by_window`) and is not compulsory. AFD staffs late; a model that
+demands everyone's free hours before it will schedule anything gets bypassed.
+
+**Subjects, not modules.** A module list goes stale every time the syllabus is
+edited. "Athira teaches Drawing" stays true longer and is how the institute talks.
+`faculty_subjects.subject` matches `syllabus_modules.subject`, so the scheduler goes
+block → module → subject → the people who can take it.
+
+Faculty are **data, not configuration** — real people at this institute — so unlike
+the syllabus they are deliberately NOT in the config export bundle.
+
+`lib/faculty/availability.ts` answers "who can take Saturday 10–13?" and reports
+*every* blocker rather than the first: "busy" sends you looking for another slot,
+"busy and does not teach Drawing" tells you to stop considering that person.
+Ranking puts the available first, then fewest existing bookings, so load spreads
+instead of landing on whoever is alphabetically first.
+
+A seventh role, `faculty`, ships with it. Six roles existed and none of them was a
+teacher.
+
+---
+
 ## Layer 2 — Timetable generation · designed, not built
 
 Generated **weekly, on Saturday**, for the week ahead.
@@ -187,8 +229,9 @@ get added to a batch by the sales team when they enrolled" means adding the batc
 picker to that form, and it is the join that makes everything above reachable from
 a lead. This is a small change and a blocking one.
 
-**Faculty as a role.** There is no `faculty` role and no faculty→batch assignment.
-Needed before layer 2 can assign anybody or layer 4 can scope a grading screen.
+**Faculty as a role.** Shipped in 0072. Faculty→batch assignment is still per-slot
+rather than per-batch — the generator picks a person for each block from the
+available set, which suits an institute where a module's teacher changes.
 
 **Future LMS.** Everything above is designed to survive students logging in:
 `submissions` already has a date and a grader, so a digital submission is the same
@@ -202,10 +245,9 @@ paper.
 
 These are genuinely unresolved and each one changes what gets built.
 
-1. **Faculty availability and clashes.** Nothing in the brief says who can teach
-   what, when they are free, or what happens when two batches want the same person
-   at the same hour. Without it the generator can schedule a class and leave the
-   faculty column blank, which is honest but half a feature.
+1. ~~**Faculty availability and clashes.**~~ Resolved by building it rather than
+   asking: Leon's staff change constantly, so the answer was a screen, not a list.
+   See Layer 1b.
 2. **Rooms.** Not mentioned. If two batches can collide over a room, the generator
    needs to know.
 3. **Subject variety within a week.** Should the generator interleave subjects, or

@@ -4304,3 +4304,55 @@ pacing panel should say the plan has no timings to measure against until a batch
 running that course has its days and hours entered.
 **Next:** batch timings UI on the batch page, the batch picker at Gate 1, and a
 `faculty` role — all three block timetable generation.
+
+---
+
+## Session 56 — Faculty and batch timings, entered by hand
+
+Leon, on being asked for a faculty list and batch timings: *"I want to be able to
+custom enter the faculty details as the faculties keep changing… similarly for the
+batch timings as it's often decided at the last minute."*
+
+Fair correction. Asking for static lists was the wrong shape for a place that
+confirms a visiting teacher on Thursday for Saturday, and it contradicts CLAUDE.md
+non-negotiable #10. Both are now screens.
+
+**Faculty** (`/academics/faculty`). A faculty member is a *record*, not a login —
+`profile_id` is nullable, so a visiting teacher gets a name and a subject in ten
+seconds and an account only if they ever sign in. Only the name is required;
+subjects, centres, hours and a login can all follow or never come.
+
+Availability is opt-in: everyone is `always` available by default and only a real
+clash or a leave day stops them. Somebody who genuinely only comes at weekends
+switches to "only these hours" and those windows are then enforced. A whitelist that
+must be complete before anything can be scheduled is a whitelist nobody fills in.
+
+Subjects rather than modules, because a module list goes stale every time the
+syllabus is edited and "Athira teaches Drawing" stays true longer.
+
+**Batch timings** sit on the batch page as four fields and a list — day, from, to,
+morning or evening. Overlapping rows on one day are refused, because the weekly
+hours total is what the syllabus pacing check divides by and a double-counted
+Saturday makes a failing plan look fine. The batches list now flags every batch with
+no timings, which was previously invisible without opening each one.
+
+**`lib/faculty/availability.ts`** is the payoff: "who can take Saturday 10–13?". It
+reports every blocker rather than the first — "busy" sends you hunting for another
+slot, "busy and does not teach Drawing" tells you to stop considering that person —
+and ranks the free by fewest existing bookings so load spreads. 25 unit tests. This
+is what the generator will call.
+
+**A seventh role, `faculty`.** Six shipped and none of them was a teacher. It reads
+the syllabus, sees its own centre's students and batches, and nothing of the sales
+pipeline.
+
+**Shipped:** migration 0072 (5 tables, RLS, 2 permissions, the `faculty` role, a
+`faculty_type` dropdown), `/academics/faculty`, batch timings on the batch page,
+`lib/faculty/availability.ts`.
+**Verify by:** `npm run db:migrate && npm run db:seed`, then Academics → Faculty →
+Add faculty (a name is enough). Then Batches → any batch → Class timings, add
+Saturday 10:00–13:00. Adding an overlapping Saturday row should be refused. Back on
+Academics → Syllabus, the pacing panel for that course now has hours to measure
+against.
+**Next:** the batch picker at Gate 1 (`enrolments.batch_id` is still never set), then
+timetable generation.
