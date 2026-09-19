@@ -273,8 +273,65 @@ export const dashboardLayoutSchema = z.object({
   updatedAt: nullableTimestamp,
 });
 
+/**
+ * The syllabus. Configuration, not data, by CLAUDE.md's own test: another
+ * coaching institute deploying this would replace these rows wholesale and
+ * have a working CRM, exactly as they would replace the pipeline stages.
+ *
+ * `batch_sessions` is deliberately NOT here. A batch's Saturday-morning
+ * slot belongs to one real batch of one real intake; it travels with the
+ * data, not with the shape of the system.
+ */
+export const syllabusModuleSchema = z.object({
+  id: uuid,
+  name: z.string(),
+  subject: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  sortOrder: z.number().int(),
+  isActive: z.boolean(),
+  createdAt: timestamp,
+  updatedAt: nullableTimestamp,
+});
+
+export const syllabusTopicSchema = z.object({
+  id: uuid,
+  moduleId: uuid,
+  name: z.string(),
+  description: z.string().nullable().optional(),
+  sortOrder: z.number().int(),
+  isActive: z.boolean(),
+  createdAt: timestamp,
+  updatedAt: nullableTimestamp,
+});
+
+export const courseCurriculumSchema = z.object({
+  id: uuid,
+  course: z.string(),
+  academicYear: z.string().nullable().optional(),
+  teachingEndDate: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  isActive: z.boolean(),
+  createdAt: timestamp,
+  updatedAt: nullableTimestamp,
+});
+
+export const curriculumItemSchema = z.object({
+  id: uuid,
+  curriculumId: uuid,
+  moduleId: uuid,
+  topicId: uuid.nullable().optional(),
+  kind: z.enum(["teaching", "practice", "mock_test", "revision"]),
+  /** numeric(5,2) arrives as a string from the driver, and stays one. */
+  hours: z.string(),
+  coverage: z.string().nullable().optional(),
+  sortOrder: z.number().int(),
+  isActive: z.boolean(),
+  createdAt: timestamp,
+  updatedAt: nullableTimestamp,
+});
+
 /** Bumped only if this shape itself changes, not on every export. */
-export const CONFIG_BUNDLE_VERSION = "4";
+export const CONFIG_BUNDLE_VERSION = "5";
 
 export const configBundleSchema = z.object({
   version: z.literal(CONFIG_BUNDLE_VERSION),
@@ -295,6 +352,10 @@ export const configBundleSchema = z.object({
   feeStructures: z.array(feeStructureSchema),
   tags: z.array(tagSchema),
   dashboardLayouts: z.array(dashboardLayoutSchema),
+  syllabusModules: z.array(syllabusModuleSchema),
+  syllabusTopics: z.array(syllabusTopicSchema),
+  courseCurricula: z.array(courseCurriculumSchema),
+  curriculumItems: z.array(curriculumItemSchema),
 });
 
 export type ConfigBundle = z.infer<typeof configBundleSchema>;

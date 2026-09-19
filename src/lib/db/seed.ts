@@ -483,6 +483,24 @@ const DROPDOWN_SEEDS: DropdownSeed[] = [
     ],
   },
   {
+    // Groups syllabus modules. Ships with AFD's own subjects as a starting
+    // point, and is an ordinary editable list like every other dropdown —
+    // an institute teaching something else replaces these outright.
+    key: "subject",
+    label: "Subject",
+    isSystem: false,
+    options: [
+      { value: "drawing", label: "Drawing" },
+      { value: "design_aptitude", label: "Design Aptitude" },
+      { value: "general_awareness", label: "General Awareness" },
+      { value: "english", label: "English" },
+      { value: "mathematics", label: "Mathematics" },
+      { value: "studio_test", label: "Studio Test" },
+      { value: "situation_test", label: "Situation Test" },
+      { value: "interview", label: "Interview Preparation" },
+    ],
+  },
+  {
     key: "education_status",
     label: "Education status",
     isSystem: false,

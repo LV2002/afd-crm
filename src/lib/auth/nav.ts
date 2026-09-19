@@ -15,6 +15,7 @@ export type NavIconKey =
   | "finance"
   | "students"
   | "batches"
+  | "syllabus"
   | "whatsapp"
   | "profile-forms"
   | "insights"
@@ -80,6 +81,16 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     label: "Admissions",
   },
   { href: "/students", iconKey: "students", permission: "student.read", label: "Students" },
+  // The syllabus lives under Academics rather than Settings on purpose:
+  // it is the coordinator's daily working document, not a thing an admin
+  // configures once. Gated on read, so faculty can see what they are
+  // meant to teach without being able to rewrite it.
+  {
+    href: "/academics/syllabus",
+    iconKey: "syllabus",
+    permission: "curriculum.read",
+    label: "Syllabus",
+  },
   {
     // The institute's own money. Gated on finance.read, which a counsellor
     // does not hold — so the whole section is invisible to them, not just

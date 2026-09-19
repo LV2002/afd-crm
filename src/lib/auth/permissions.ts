@@ -229,6 +229,24 @@ export const PERMISSIONS = [
     category: "Academics",
     description: "Create batches and assign students to them.",
   },
+  // Split from batch.manage on purpose. A centre head manages who is in
+  // which batch at their own centre; the syllabus is one institute-wide
+  // document and is the academic coordinator's to write. The read half is
+  // separate again because a faculty member needs to see what they are
+  // meant to teach without being able to rewrite it.
+  {
+    code: "curriculum.read",
+    label: "View the syllabus",
+    category: "Academics",
+    description: "See the modules, topics and per-course teaching plans.",
+  },
+  {
+    code: "curriculum.manage",
+    label: "Edit the syllabus",
+    category: "Academics",
+    description:
+      "Add and edit modules, topics, and each course's hours and coverage notes.",
+  },
 
   // Files
   {

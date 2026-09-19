@@ -4250,3 +4250,57 @@ once) and prints the complete Apps Script for Leon to paste.
 test submission should appear in Leads within a second, with source `Website`.
 **Next:** the readiness review, split into what Leon does in the CRM and what is
 still development work.
+
+---
+
+## Session 55 — The syllabus gets written down
+
+Leon wants a batch planning, timetable and teaching-delivery system. One person
+currently spends two to three days building one week's timetable. This session is
+the first of five layers; `docs/04-ACADEMICS.md` designs all five so that this one's
+shape is not a guess.
+
+**Why the syllabus comes first.** Timetabling is not hard — what makes it take three
+days is that the three inputs live in three places and one of them is unreliable.
+What is to be taught lives in the coordinator's head; when each batch meets lives in
+another sheet; what has actually been taught lives in a third that faculty do not
+update. Nothing can be generated until the first is written down.
+
+**Three layers, one idea: the syllabus is shared, the depth is not.**
+`syllabus_modules` → `syllabus_topics` is vocabulary every course shares, so a topic
+is written once and renaming it is one edit. `course_curricula` → `curriculum_items`
+is what one course does with that vocabulary: how many hours a topic gets, and —
+the column this whole feature exists for — **`coverage`**, free text saying what
+specifically is taught in this course. The same topic is four hours in Foundation
+and one in Crash, and that difference is the coordinator's real expertise. It has
+never been written down anywhere.
+
+`kind` is teaching / practice / mock test / revision, one row per scheduled block
+rather than three hour-columns on a topic, because the four schedule differently
+and the generator places blocks.
+
+**Batch timings** (`batch_sessions`) are the recurring weekly pattern — "Saturdays
+10:00–13:00, morning" — not a calendar. The half-day is a property of the slot
+because that is how attendance gets marked.
+
+**The pacing check** multiplies the two: planned hours against hours the calendar
+actually holds before the teaching deadline, holidays removed. It answers "does
+Foundation still finish by 15 November, and if not, how many extra hours a week" —
+which is the question nobody can answer today until it is November and the only
+remedies left are bad ones. Pure, no database, 22 unit tests.
+
+The syllabus is **configuration, not data** — in the config export bundle, now
+version 5. Another institute replaces these rows and has a working CRM, which is
+CLAUDE.md's own plug-and-play test.
+
+**Shipped:** migration 0071 (5 tables, RLS, two new permissions granted to admin,
+co-admin and academics), `lib/curriculum/pacing.ts`, Academics → Syllabus, a
+`subject` dropdown category, config export/import coverage.
+**Not built:** timetable generation, the delivery log, homework/attendance, report
+cards. All designed in `docs/04-ACADEMICS.md` with the open questions listed.
+**Verify by:** `npm run db:migrate && npm run db:seed`, then Academics → Syllabus.
+Add a module, a topic, a course plan with a November finish date, and a block — the
+pacing panel should say the plan has no timings to measure against until a batch
+running that course has its days and hours entered.
+**Next:** batch timings UI on the batch page, the batch picker at Gate 1, and a
+`faculty` role — all three block timetable generation.
