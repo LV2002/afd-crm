@@ -498,20 +498,6 @@
       "when": 1788573316458,
       "tag": "0070_website_provider",
       "breakpoints": true
-    },
-    {
-      "idx": 71,
-      "version": "7",
-      "when": 1788573317458,
-      "tag": "0071_curriculum",
-      "breakpoints": true
-    },
-    {
-      "idx": 72,
-      "version": "7",
-      "when": 1788573318458,
-      "tag": "0072_faculty",
-      "breakpoints": true
     }
   ]
 }

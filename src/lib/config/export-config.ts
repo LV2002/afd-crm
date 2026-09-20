@@ -20,10 +20,6 @@ import {
   tags,
   temperatureRules,
   terminology,
-  syllabusModules,
-  syllabusTopics,
-  courseCurricula,
-  curriculumItems,
 } from "@/lib/db/schema";
 
 import { CONFIG_BUNDLE_VERSION, type ConfigBundle } from "./bundle-schema";
@@ -58,10 +54,6 @@ export async function exportConfig(): Promise<ConfigBundle> {
     feeStructureRows,
     tagRows,
     dashboardLayoutRows,
-    syllabusModuleRows,
-    syllabusTopicRows,
-    courseCurriculumRows,
-    curriculumItemRows,
   ] = await Promise.all([
     db.select().from(orgSettings),
     db.select().from(terminology),
@@ -79,10 +71,6 @@ export async function exportConfig(): Promise<ConfigBundle> {
     db.select().from(feeStructures).where(isNull(feeStructures.deletedAt)),
     db.select().from(tags).where(isNull(tags.deletedAt)),
     db.select().from(dashboardLayouts),
-    db.select().from(syllabusModules).where(isNull(syllabusModules.deletedAt)),
-    db.select().from(syllabusTopics).where(isNull(syllabusTopics.deletedAt)),
-    db.select().from(courseCurricula).where(isNull(courseCurricula.deletedAt)),
-    db.select().from(curriculumItems).where(isNull(curriculumItems.deletedAt)),
   ]);
 
   return {
@@ -104,9 +92,5 @@ export async function exportConfig(): Promise<ConfigBundle> {
     feeStructures: feeStructureRows,
     tags: tagRows,
     dashboardLayouts: dashboardLayoutRows,
-    syllabusModules: syllabusModuleRows,
-    syllabusTopics: syllabusTopicRows,
-    courseCurricula: courseCurriculumRows,
-    curriculumItems: curriculumItemRows,
   };
 }

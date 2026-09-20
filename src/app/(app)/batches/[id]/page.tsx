@@ -16,12 +16,11 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { batchCapacity, describeBatch } from "@/lib/batches/roster";
 import { activeDropdownValues } from "@/lib/config/dropdown-values";
 import { db } from "@/lib/db/client";
-import { batchSessions, batches, centers, studentBatches, students } from "@/lib/db/schema";
+import { batches, centers, studentBatches, students } from "@/lib/db/schema";
 import { formatDateIST } from "@/lib/format/date";
 
 import { BatchForm } from "../batch-form";
 import { AddStudentForm, RemoveStudentForm } from "./roster-controls";
-import { BatchTimings } from "./timings";
 
 /**
  * One batch: who is in it now, who has left, and the settings themselves.
@@ -59,24 +58,6 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
     .where(and(eq(batches.id, id), isNull(batches.deletedAt)));
 
   if (!batch) notFound();
-
-  const timings = await db
-    .select({
-      id: batchSessions.id,
-      dayOfWeek: batchSessions.dayOfWeek,
-      startTime: batchSessions.startTime,
-      endTime: batchSessions.endTime,
-      daySession: batchSessions.daySession,
-    })
-    .from(batchSessions)
-    .where(
-      and(
-        eq(batchSessions.batchId, id),
-        eq(batchSessions.isActive, true),
-        isNull(batchSessions.deletedAt),
-      ),
-    )
-    .orderBy(asc(batchSessions.dayOfWeek), asc(batchSessions.startTime));
 
   const memberRows = await db
     .select({
@@ -215,8 +196,6 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
           </ul>
         </div>
       )}
-
-      <BatchTimings batchId={batch.id} rows={timings} canEdit />
 
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Batch settings</h2>

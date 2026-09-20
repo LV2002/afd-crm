@@ -4253,106 +4253,36 @@ still development work.
 
 ---
 
-## Session 55 — The syllabus gets written down
+## Session 57 — The academics module is parked
 
-Leon wants a batch planning, timetable and teaching-delivery system. One person
-currently spends two to three days building one week's timetable. This session is
-the first of five layers; `docs/04-ACADEMICS.md` designs all five so that this one's
-shape is not a guess.
+Leon: *"I don't want to implement this now so undo it and let's build it as another
+tool later."*
 
-**Why the syllabus comes first.** Timetabling is not hard — what makes it take three
-days is that the three inputs live in three places and one of them is unreliable.
-What is to be taught lives in the coordinator's head; when each batch meets lives in
-another sheet; what has actually been taught lives in a third that faculty do not
-update. Nothing can be generated until the first is written down.
+Sessions 55 and 56 built the first two layers of the academics module — the syllabus
+(modules, topics, per-course plans with hours and coverage notes, batch timings, the
+mid-November pacing check) and faculty (records, subjects, centres, availability,
+leave, and a seventh role). Both are reverted.
 
-**Three layers, one idea: the syllabus is shared, the depth is not.**
-`syllabus_modules` → `syllabus_topics` is vocabulary every course shares, so a topic
-is written once and renaming it is one edit. `course_curricula` → `curriculum_items`
-is what one course does with that vocabulary: how many hours a topic gets, and —
-the column this whole feature exists for — **`coverage`**, free text saying what
-specifically is taught in this course. The same topic is four hours in Foundation
-and one in Crash, and that difference is the coordinator's real expertise. It has
-never been written down anywhere.
+**Reverted, not erased.** The work is still in this branch's history and comes back
+with one command when it is wanted:
 
-`kind` is teaching / practice / mock test / revision, one row per scheduled block
-rather than three hour-columns on a topic, because the four schedule differently
-and the generator places blocks.
+```
+git cherry-pick c3e6e83 9c6ca8c      # the syllabus, then faculty
+```
 
-**Batch timings** (`batch_sessions`) are the recurring weekly pattern — "Saturdays
-10:00–13:00, morning" — not a calendar. The half-day is a property of the slot
-because that is how attendance gets marked.
+`c3e6e83` is the syllabus layer, `9c6ca8c` is faculty and batch timings. The design
+for all five layers went with them in `docs/04-ACADEMICS.md`; it is in those commits
+too, and worth reading before restarting rather than redesigning from scratch. The
+ten open questions it lists are still open.
 
-**The pacing check** multiplies the two: planned hours against hours the calendar
-actually holds before the teaching deadline, holidays removed. It answers "does
-Foundation still finish by 15 November, and if not, how many extra hours a week" —
-which is the question nobody can answer today until it is November and the only
-remedies left are bad ones. Pure, no database, 22 unit tests.
+**Nothing to undo on production.** Migrations 0071 and 0072 were only ever applied
+to the local development database, and have been dropped there. The live Supabase
+project never received them, so there is no cleanup for Leon to run. The next
+migration written takes the number 0071 again.
 
-The syllabus is **configuration, not data** — in the config export bundle, now
-version 5. Another institute replaces these rows and has a working CRM, which is
-CLAUDE.md's own plug-and-play test.
+Also reverted with them, worth knowing because they were quietly useful: the
+`subject` and `faculty_type` dropdown categories, the config bundle going to version
+5, and the `faculty` role. All come back with the cherry-pick.
 
-**Shipped:** migration 0071 (5 tables, RLS, two new permissions granted to admin,
-co-admin and academics), `lib/curriculum/pacing.ts`, Academics → Syllabus, a
-`subject` dropdown category, config export/import coverage.
-**Not built:** timetable generation, the delivery log, homework/attendance, report
-cards. All designed in `docs/04-ACADEMICS.md` with the open questions listed.
-**Verify by:** `npm run db:migrate && npm run db:seed`, then Academics → Syllabus.
-Add a module, a topic, a course plan with a November finish date, and a block — the
-pacing panel should say the plan has no timings to measure against until a batch
-running that course has its days and hours entered.
-**Next:** batch timings UI on the batch page, the batch picker at Gate 1, and a
-`faculty` role — all three block timetable generation.
-
----
-
-## Session 56 — Faculty and batch timings, entered by hand
-
-Leon, on being asked for a faculty list and batch timings: *"I want to be able to
-custom enter the faculty details as the faculties keep changing… similarly for the
-batch timings as it's often decided at the last minute."*
-
-Fair correction. Asking for static lists was the wrong shape for a place that
-confirms a visiting teacher on Thursday for Saturday, and it contradicts CLAUDE.md
-non-negotiable #10. Both are now screens.
-
-**Faculty** (`/academics/faculty`). A faculty member is a *record*, not a login —
-`profile_id` is nullable, so a visiting teacher gets a name and a subject in ten
-seconds and an account only if they ever sign in. Only the name is required;
-subjects, centres, hours and a login can all follow or never come.
-
-Availability is opt-in: everyone is `always` available by default and only a real
-clash or a leave day stops them. Somebody who genuinely only comes at weekends
-switches to "only these hours" and those windows are then enforced. A whitelist that
-must be complete before anything can be scheduled is a whitelist nobody fills in.
-
-Subjects rather than modules, because a module list goes stale every time the
-syllabus is edited and "Athira teaches Drawing" stays true longer.
-
-**Batch timings** sit on the batch page as four fields and a list — day, from, to,
-morning or evening. Overlapping rows on one day are refused, because the weekly
-hours total is what the syllabus pacing check divides by and a double-counted
-Saturday makes a failing plan look fine. The batches list now flags every batch with
-no timings, which was previously invisible without opening each one.
-
-**`lib/faculty/availability.ts`** is the payoff: "who can take Saturday 10–13?". It
-reports every blocker rather than the first — "busy" sends you hunting for another
-slot, "busy and does not teach Drawing" tells you to stop considering that person —
-and ranks the free by fewest existing bookings so load spreads. 25 unit tests. This
-is what the generator will call.
-
-**A seventh role, `faculty`.** Six shipped and none of them was a teacher. It reads
-the syllabus, sees its own centre's students and batches, and nothing of the sales
-pipeline.
-
-**Shipped:** migration 0072 (5 tables, RLS, 2 permissions, the `faculty` role, a
-`faculty_type` dropdown), `/academics/faculty`, batch timings on the batch page,
-`lib/faculty/availability.ts`.
-**Verify by:** `npm run db:migrate && npm run db:seed`, then Academics → Faculty →
-Add faculty (a name is enough). Then Batches → any batch → Class timings, add
-Saturday 10:00–13:00. Adding an overlapping Saturday row should be refused. Back on
-Academics → Syllabus, the pacing panel for that course now has hours to measure
-against.
-**Next:** the batch picker at Gate 1 (`enrolments.batch_id` is still never set), then
-timetable generation.
+**Unchanged and still live:** the website form webhook from session 54, and
+everything before it.

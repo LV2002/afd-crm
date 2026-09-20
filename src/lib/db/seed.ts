@@ -282,27 +282,6 @@ const ROLE_SEEDS: RoleSeed[] = [
         ],
         "center",
       ),
-      // The coordinator owns the syllabus and the staff list; both are one
-      // institute-wide document, so both are held at 'all'.
-      ...grant(["curriculum.read", "curriculum.manage", "faculty.read", "faculty.manage"], "all"),
-    ],
-  },
-  {
-    // The people who actually teach. Six roles shipped and none of them was
-    // a teacher, so faculty had nowhere to sign in to.
-    //
-    // What it deliberately does NOT carry is the point: no lead access, no
-    // fees, no settings. A teacher has no business in the sales pipeline,
-    // and the syllabus is read-only to them — they deliver it, they do not
-    // rewrite it.
-    code: "faculty",
-    name: "Faculty",
-    description:
-      "Teaches classes. Sees the syllabus, their own batches and students, and records what was taught.",
-    isProtected: false,
-    grants: [
-      ...grant(["curriculum.read", "faculty.read"], "all"),
-      ...grant(["student.read", "batch.manage", "file.read", "file.upload"], "center"),
     ],
   },
 ];
@@ -501,36 +480,6 @@ const DROPDOWN_SEEDS: DropdownSeed[] = [
       { value: "repeat_batch", label: "Repeat Batch" },
       { value: "mdes", label: "MDes" },
       { value: "consultancy", label: "Consultancy" },
-    ],
-  },
-  {
-    // Full time, visiting, or in for one module. Shows on the faculty list
-    // so the coordinator can see at a glance who is actually around.
-    key: "faculty_type",
-    label: "Faculty type",
-    isSystem: false,
-    options: [
-      { value: "full_time", label: "Full time" },
-      { value: "part_time", label: "Part time" },
-      { value: "visiting", label: "Visiting" },
-    ],
-  },
-  {
-    // Groups syllabus modules. Ships with AFD's own subjects as a starting
-    // point, and is an ordinary editable list like every other dropdown —
-    // an institute teaching something else replaces these outright.
-    key: "subject",
-    label: "Subject",
-    isSystem: false,
-    options: [
-      { value: "drawing", label: "Drawing" },
-      { value: "design_aptitude", label: "Design Aptitude" },
-      { value: "general_awareness", label: "General Awareness" },
-      { value: "english", label: "English" },
-      { value: "mathematics", label: "Mathematics" },
-      { value: "studio_test", label: "Studio Test" },
-      { value: "situation_test", label: "Situation Test" },
-      { value: "interview", label: "Interview Preparation" },
     ],
   },
   {

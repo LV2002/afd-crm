@@ -4,10 +4,6 @@ import {
   businessHours,
   centers,
   dashboardLayouts,
-  syllabusModules,
-  syllabusTopics,
-  courseCurricula,
-  curriculumItems,
   dropdownCategories,
   dropdownOptions,
   feeStructures,
@@ -47,10 +43,6 @@ const GUARD_TABLES = [
   { name: "fee_structures", table: feeStructures },
   { name: "tags", table: tags },
   { name: "dashboard_layouts", table: dashboardLayouts },
-  { name: "syllabus_modules", table: syllabusModules },
-  { name: "syllabus_topics", table: syllabusTopics },
-  { name: "course_curricula", table: courseCurricula },
-  { name: "curriculum_items", table: curriculumItems },
 ] as const;
 
 /**
@@ -119,18 +111,6 @@ export async function importConfig(bundle: ConfigBundle): Promise<ImportConfigRe
     if (bundle.dashboardLayouts.length > 0)
       await tx.insert(dashboardLayouts).values(bundle.dashboardLayouts);
 
-    // The syllabus, innermost first: topics reference modules, and items
-    // reference all three. Inserting an item before its module exists is
-    // a foreign key violation, not a warning.
-    if (bundle.syllabusModules.length > 0)
-      await tx.insert(syllabusModules).values(bundle.syllabusModules);
-    if (bundle.syllabusTopics.length > 0)
-      await tx.insert(syllabusTopics).values(bundle.syllabusTopics);
-    if (bundle.courseCurricula.length > 0)
-      await tx.insert(courseCurricula).values(bundle.courseCurricula);
-    if (bundle.curriculumItems.length > 0)
-      await tx.insert(curriculumItems).values(bundle.curriculumItems);
-
     return {
       counts: {
         orgSettings: bundle.orgSettings.length,
@@ -149,10 +129,6 @@ export async function importConfig(bundle: ConfigBundle): Promise<ImportConfigRe
         feeStructures: bundle.feeStructures.length,
         tags: bundle.tags.length,
         dashboardLayouts: bundle.dashboardLayouts.length,
-        syllabusModules: bundle.syllabusModules.length,
-        syllabusTopics: bundle.syllabusTopics.length,
-        courseCurricula: bundle.courseCurricula.length,
-        curriculumItems: bundle.curriculumItems.length,
       },
     };
   });

@@ -47,10 +47,6 @@ function emptyBundle() {
     feeStructures: [],
     tags: [],
     dashboardLayouts: [],
-    syllabusModules: [],
-    syllabusTopics: [],
-    courseCurricula: [],
-    curriculumItems: [],
   };
 }
 

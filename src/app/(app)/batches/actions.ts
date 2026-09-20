@@ -7,8 +7,7 @@ import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { checkAssignment, liveMemberCount } from "@/lib/batches/roster";
 import { db } from "@/lib/db/client";
-import { batchSessions, batches, studentBatches, students } from "@/lib/db/schema";
-import { formatTime, timesOverlap } from "@/lib/faculty/availability";
+import { batches, studentBatches, students } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 
 export interface BatchFormState {
@@ -17,7 +16,6 @@ export interface BatchFormState {
 }
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-const TIME_ONLY = /^\d{2}:\d{2}$/;
 
 function readDate(formData: FormData, key: string): string | null {
   const raw = String(formData.get(key) ?? "").trim();
@@ -283,159 +281,4 @@ export async function removeStudentFromBatch(
   revalidatePath(`/students/${studentId}`);
   revalidatePath("/students");
   return { success: "Removed from the batch." };
-}
-
-/**
- * Add one recurring slot to a batch's week.
- *
- * Kept on the batch page rather than behind a setup wizard because AFD
- * decides timings late — a batch is confirmed on Thursday for Saturday —
- * and a flow that assumes timings are known at creation is a flow that
- * gets skipped, leaving batches the generator cannot schedule.
- *
- * Runs on the direct client with the centre check re-implemented here, the
- * same pattern as `saveBatch()` above: `batch.manage` is centre-scoped, so
- * a centre head may only touch their own centres' batches.
- */
-export async function addBatchSession(
-  _prev: BatchFormState,
-  formData: FormData,
-): Promise<BatchFormState> {
-  const user = await getCurrentUser();
-  if (!user || !can(user, "batch.manage")) {
-    return { error: "You don't have permission to manage batches." };
-  }
-
-  const batchId = String(formData.get("batchId") ?? "").trim();
-  const dayOfWeek = Number(formData.get("dayOfWeek"));
-  const startTime = String(formData.get("startTime") ?? "").trim();
-  const endTime = String(formData.get("endTime") ?? "").trim();
-  const daySession = String(formData.get("daySession") ?? "morning").trim();
-
-  if (!batchId) return { error: "Which batch?" };
-  if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
-    return { error: "Pick a day of the week." };
-  }
-  if (!TIME_ONLY.test(startTime) || !TIME_ONLY.test(endTime)) {
-    return { error: "Use times like 10:00." };
-  }
-  if (endTime <= startTime) return { error: "The class has to end after it starts." };
-  if (daySession !== "morning" && daySession !== "evening") {
-    return { error: "Pick morning or evening." };
-  }
-
-  const batch = await batchInScope(user, batchId);
-  if ("error" in batch) return batch;
-
-  // An overlapping slot on the same day is a data entry slip — usually
-  // adding Saturday twice — and it would double-count the batch's weekly
-  // hours, which is the number the syllabus pacing check divides by.
-  const existing = await db
-    .select({ startTime: batchSessions.startTime, endTime: batchSessions.endTime })
-    .from(batchSessions)
-    .where(
-      and(
-        eq(batchSessions.batchId, batchId),
-        eq(batchSessions.dayOfWeek, dayOfWeek),
-        eq(batchSessions.isActive, true),
-        isNull(batchSessions.deletedAt),
-      ),
-    );
-
-  const clash = existing.find((row) => timesOverlap(row.startTime, row.endTime, startTime, endTime));
-  if (clash) {
-    return {
-      error: `That overlaps the ${formatTime(clash.startTime)}–${formatTime(clash.endTime)} class already on this day.`,
-    };
-  }
-
-  await db.insert(batchSessions).values({
-    batchId,
-    dayOfWeek,
-    startTime,
-    endTime,
-    daySession,
-  });
-
-  const supabase = await createClient();
-  await writeAuditLog(supabase, {
-    actorId: user.id,
-    action: "batch.session_added",
-    entityType: "batches",
-    entityId: batchId,
-    after: { dayOfWeek, startTime, endTime, daySession, batchName: batch.name },
-  });
-
-  revalidatePath(`/batches/${batchId}`);
-  revalidatePath("/batches");
-  revalidatePath("/academics/syllabus");
-  return { success: "Added." };
-}
-
-/**
- * Drop one slot from a batch's week.
- *
- * Soft, like the rest of the schema: a class taught last Saturday must
- * still be able to name the slot it happened in after the batch moves to
- * Sundays.
- */
-export async function removeBatchSession(
-  sessionId: string,
-  batchId: string,
-): Promise<BatchFormState> {
-  const user = await getCurrentUser();
-  if (!user || !can(user, "batch.manage")) {
-    return { error: "You don't have permission to manage batches." };
-  }
-
-  const batch = await batchInScope(user, batchId);
-  if ("error" in batch) return batch;
-
-  const removed = await db
-    .update(batchSessions)
-    .set({ deletedAt: new Date(), isActive: false })
-    .where(and(eq(batchSessions.id, sessionId), eq(batchSessions.batchId, batchId)))
-    .returning({ id: batchSessions.id });
-
-  if (removed.length === 0) return { error: "That timing is not on this batch." };
-
-  const supabase = await createClient();
-  await writeAuditLog(supabase, {
-    actorId: user.id,
-    action: "batch.session_removed",
-    entityType: "batches",
-    entityId: batchId,
-    after: { sessionId, batchName: batch.name },
-  });
-
-  revalidatePath(`/batches/${batchId}`);
-  revalidatePath("/batches");
-  revalidatePath("/academics/syllabus");
-  return { success: "Removed." };
-}
-
-/**
- * The batch, if this user is allowed to touch it. One lookup shared by
- * both session actions rather than the same four lines twice.
- */
-async function batchInScope(
-  user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>,
-  batchId: string,
-): Promise<{ name: string } | { error: string }> {
-  const [batch] = await db
-    .select({ name: batches.name, centerId: batches.centerId })
-    .from(batches)
-    .where(and(eq(batches.id, batchId), isNull(batches.deletedAt)));
-
-  if (!batch) return { error: "That batch no longer exists." };
-
-  if (
-    !can(user, "settings.manage") &&
-    user.centerIds.length > 0 &&
-    !user.centerIds.includes(batch.centerId)
-  ) {
-    return { error: "That batch isn't at one of your centres." };
-  }
-
-  return { name: batch.name };
 }
