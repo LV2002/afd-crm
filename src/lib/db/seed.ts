@@ -16,6 +16,7 @@ import { ensurePermissionsSeeded } from "../auth/seed-permissions";
 import { db } from "./client";
 import {
   centers,
+  dashboardLayouts,
   discountLimits,
   dropdownCategories,
   dropdownOptions,
@@ -331,6 +332,53 @@ async function seedDiscountLimits(roleIds: Record<string, string>) {
       })
       .onConflictDoNothing({ target: discountLimits.roleId });
   }
+}
+
+/**
+ * The two personal dashboard widgets, hidden for the admin roles.
+ *
+ * "Your numbers" and "Your day" are both about leads assigned to the person
+ * looking, and nothing is ever assigned to an admin. They are permitted —
+ * an admin holds `lead.read` — so without a row here they would draw two
+ * empty cards at the top of the screen admins use most.
+ *
+ * Expressed as configuration rather than as a rule in code, because that is
+ * what `dashboard_layouts` is for and because an admin who *does* carry
+ * leads can turn both back on in Settings → Dashboards with one click.
+ *
+ * Migration 0071 inserts the same two rows, which covers an existing
+ * instance where the roles already exist. This covers a fresh one, where
+ * the migration runs against an empty `roles` table and matches nothing.
+ * Both are idempotent and agree.
+ */
+const HIDDEN_BY_DEFAULT: Array<{ roleCode: string; widgetKey: string; sortOrder: number }> = [
+  { roleCode: "admin", widgetKey: "my_numbers", sortOrder: 0 },
+  { roleCode: "admin", widgetKey: "my_day", sortOrder: 1 },
+  { roleCode: "co_admin", widgetKey: "my_numbers", sortOrder: 0 },
+  { roleCode: "co_admin", widgetKey: "my_day", sortOrder: 1 },
+];
+
+async function seedDashboardLayouts(roleIds: Record<string, string>) {
+  let count = 0;
+  for (const row of HIDDEN_BY_DEFAULT) {
+    const roleId = roleIds[row.roleCode];
+    if (!roleId) continue;
+    await db
+      .insert(dashboardLayouts)
+      .values({
+        roleId,
+        widgetKey: row.widgetKey,
+        sortOrder: row.sortOrder,
+        isVisible: false,
+      })
+      // Never an update: an admin who turned one of these back on must not
+      // have it hidden again by the next seed run.
+      .onConflictDoNothing({
+        target: [dashboardLayouts.roleId, dashboardLayouts.widgetKey],
+      });
+    count += 1;
+  }
+  console.log(`seeded ${count} dashboard layout defaults`);
 }
 
 /**
@@ -1097,6 +1145,7 @@ async function main() {
   await seedFieldDefinitions();
   await seedNotificationSettings(roleIds);
   await seedDiscountLimits(roleIds);
+  await seedDashboardLayouts(roleIds);
   await seedPaymentReminders();
   await seedFinanceAccounts(centerIds);
   await seedUsers(roleIds, centerIds);

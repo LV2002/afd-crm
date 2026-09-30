@@ -22,9 +22,9 @@ import { PendingDiscount } from "@/components/enrolment/pending-discount";
 import { ProfileFormPanel } from "@/components/profile-form/profile-form-panel";
 import { listAttachments } from "@/lib/storage/attachments";
 import { currentSignedAgreement, otherDocuments } from "@/lib/storage/shared";
+import { getBatchOptionsForCentre } from "@/lib/enrolment/batch-options";
 import { getLeadFeePlan } from "@/lib/enrolment/get-fee-plan";
 import { getStudentFieldLabels } from "@/lib/profile-form/field-labels";
-import { getWhatsAppThread, isWithinCustomerServiceWindow } from "@/lib/whatsapp/get-thread";
 
 import { ConfirmAdmissionForm } from "./confirm-admission-form";
 import { InteractionForm } from "./interaction-form";
@@ -33,7 +33,6 @@ import { describeLead } from "@/lib/leads/search-leads";
 import { LeadEditForm } from "./lead-edit-form";
 import { LeadTagsPanel, type TagOption } from "./lead-tags-panel";
 import { TasksPanel, type TaskRow } from "./tasks-panel";
-import { WhatsAppPanel } from "@/components/whatsapp/whatsapp-panel";
 
 interface EnrolmentRow {
   id: string;
@@ -82,12 +81,21 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   const canCreateEnrolment = can(user, "enrolment.create");
 
-  const [interactionTypes, interactionOutcomes, courseOptions, modeOptions, { data: enrolment }] =
-    await Promise.all([
+  const [
+    interactionTypes,
+    interactionOutcomes,
+    courseOptions,
+    modeOptions,
+    batchOptions,
+    { data: enrolment },
+  ] = await Promise.all([
       getDropdownOptions(supabase, "interaction_type"),
       getDropdownOptions(supabase, "interaction_outcome"),
       canCreateEnrolment ? getDropdownOptions(supabase, "course") : Promise.resolve([]),
       canCreateEnrolment ? getDropdownOptions(supabase, "preferred_mode") : Promise.resolve([]),
+      canCreateEnrolment
+        ? getBatchOptionsForCentre(supabase, row.center_id as string | null)
+        : Promise.resolve([]),
       supabase
         .from("enrolments")
         .select("id, course, net_fee_paise, status, dropped_at, drop_reason, sales_to_accounts_at")
@@ -115,56 +123,73 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const currentTagIds = new Set(currentTags.map((t) => t.id));
   const availableTags = (allTagRows ?? []).filter((t) => !currentTagIds.has(t.id));
 
-  const timeline = await getTimeline(supabase, id);
-
-  const canReadWhatsApp = can(user, "whatsapp.read");
-  const [whatsappMessages, withinWhatsAppWindow] = canReadWhatsApp
-    ? await Promise.all([
-        getWhatsAppThread(supabase, id),
-        isWithinCustomerServiceWindow(supabase, id),
-      ])
-    : [[], false];
-
+  // No `canReadWhatsApp` here any more. The WhatsApp panel was removed from
+  // this page in September 2026 at Leon's request — messaging belongs in the
+  // WhatsApp section, which has the inbox, the templates and the 24-hour
+  // service window in view.
+  //
+  // Worth being straight about the cost: WhatsApp messages do NOT write
+  // `interactions` rows, so the timeline below never carried them and this
+  // page now shows no WhatsApp history at all. The conversation lives in
+  // WhatsApp → Inbox, searchable by the lead's name or number. If that turns
+  // out to be a step too far, the honest fix is a read-only link to the
+  // thread, not putting the send box back.
   const canReadFiles = can(user, "file.read");
-  const attachments = canReadFiles ? await listAttachments(supabase, { kind: "lead", id }) : [];
+  const canReadFees = can(user, "enrolment.read");
+
+  // Who referred them, resolved to a name here rather than in the picker:
+  // the edit form should render complete on first paint, not fetch a name
+  // for a value it already has.
+  const referrerId = typeof values.referred_by_lead_id === "string" ? values.referred_by_lead_id : "";
+
+  // Everything below is independent of everything else below it, so it all
+  // goes out at once. It used to be nine sequential awaits — nine round
+  // trips to the database, each waiting on the one before, on the screen
+  // counsellors open more than any other. Within one region that is a few
+  // milliseconds each; across a continent it was most of the page's load
+  // time. See docs/HANDBOOK-TECHNICAL.md § 11.
+  const [
+    timeline,
+    attachments,
+    feePlan,
+    studentFieldLabels,
+    { data: taskRows },
+    referrer,
+    { data: referredRows },
+  ] = await Promise.all([
+    getTimeline(supabase, id),
+    canReadFiles ? listAttachments(supabase, { kind: "lead", id }) : Promise.resolve([]),
+    canReadFees ? getLeadFeePlan(id) : Promise.resolve(null),
+    getStudentFieldLabels(supabase),
+    supabase
+      .from("tasks")
+      .select("id, title, type, due_at, status")
+      .eq("lead_id", id)
+      .is("deleted_at", null)
+      .order("due_at", { ascending: true, nullsFirst: false })
+      .returns<TaskRow[]>(),
+    referrerId ? describeLead(referrerId) : Promise.resolve(null),
+    // The other direction: who THEY sent. A past student who has sent four
+    // people is the single most valuable phone number in the database, and
+    // nothing on this page would otherwise say so. Read through the
+    // caller's own client, so a counsellor sees only the referrals they
+    // could have opened anyway.
+    supabase
+      .from("leads")
+      .select("id, student_name, lead_number, created_at")
+      .eq("referred_by_lead_id", id)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .returns<Array<{ id: string; student_name: string; lead_number: number; created_at: string }>>(),
+  ]);
+
   // The signed agreement is an ordinary attachment — same bucket, same RLS,
   // no separate mechanism — distinguished by its `kind`. It used to be
   // found by searching the free-text label for "instalment", which missed
   // every other phrasing a counsellor might type.
   const signedAgreement = currentSignedAgreement(attachments);
   const hasSignedAgreement = signedAgreement !== null;
-
-  const canReadFees = can(user, "enrolment.read");
-  const feePlan = canReadFees ? await getLeadFeePlan(id) : null;
-  const studentFieldLabels = await getStudentFieldLabels(supabase);
-
-  const { data: taskRows } = await supabase
-    .from("tasks")
-    .select("id, title, type, due_at, status")
-    .eq("lead_id", id)
-    .is("deleted_at", null)
-    .order("due_at", { ascending: true, nullsFirst: false })
-    .returns<TaskRow[]>();
-
-  // Who referred them, resolved to a name here rather than in the picker:
-  // the edit form should render complete on first paint, not fetch a name
-  // for a value it already has.
-  const referrerId = typeof values.referred_by_lead_id === "string" ? values.referred_by_lead_id : "";
-  const referrer = referrerId ? await describeLead(referrerId) : null;
-
-  // The other direction: who THEY sent. A past student who has sent four
-  // people is the single most valuable phone number in the database, and
-  // nothing on this page would otherwise say so. Read through the
-  // caller's own client, so a counsellor sees only the referrals they
-  // could have opened anyway.
-  const { data: referredRows } = await supabase
-    .from("leads")
-    .select("id, student_name, lead_number, created_at")
-    .eq("referred_by_lead_id", id)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .limit(20)
-    .returns<Array<{ id: string; student_name: string; lead_number: number; created_at: string }>>();
   const referred = referredRows ?? [];
 
   return (
@@ -249,7 +274,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                 </div>
               )
             : canCreateEnrolment && (
-                <ConfirmAdmissionForm leadId={id} courses={courseOptions} modes={modeOptions} />
+                <ConfirmAdmissionForm
+                  leadId={id}
+                  courses={courseOptions}
+                  modes={modeOptions}
+                  batches={batchOptions}
+                />
               )}
           {can(user, "interaction.create") && (
             <InteractionForm leadId={id} types={interactionTypes} outcomes={interactionOutcomes} />
@@ -276,16 +306,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           )}
         </div>
       </div>
-
-      {canReadWhatsApp && (
-        <WhatsAppPanel
-          leadId={id}
-          toPhone={row.primary_phone}
-          messages={whatsappMessages}
-          canSend={can(user, "whatsapp.send")}
-          withinWindow={withinWhatsAppWindow}
-        />
-      )}
 
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Student profile form</h2>

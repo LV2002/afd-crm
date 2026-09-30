@@ -4115,3 +4115,464 @@ Rehearsed locally from an empty database before committing: 69 migrations, 64 ta
 - **Coverage tooling** — no `@vitest/coverage-v8`, so no numeric visibility into drift.
 - **Architecture tidying** — duplicate session numbers in this file, `students`/`batches`
   living in `schema/finance.ts`, and the unbuilt `website`/`knorish` webhooks.
+
+---
+
+## Session 52 — Database review, and the queue nobody could find
+
+### The database, reviewed against the live schema
+
+**RLS coverage is complete.** Every one of the 64 tables has row-level security
+enabled — there is no table a signed-in user can read around. One table,
+`integration_credentials`, has RLS enabled and *no policy at all*: that is
+deliberate and correct (migration 0022 says so), and it is the safest shape in the
+schema. No policy means denied for everyone; only the direct client, which holds
+the service-role credentials, can touch it. An encrypted API key should never be
+readable through a browser session even by an admin.
+
+**Every table has a primary key.** Nothing is a bag of rows.
+
+**Foreign keys without indexes: 65 found, 13 worth fixing.** Postgres indexes a
+primary key automatically and a foreign key not at all. The bare count sounds
+alarming and mostly is not — most are `created_by` / `recorded_by` / `reviewed_by`
+columns answering "who did this?" about a row already in hand, and an index on a
+column nobody filters by is pure cost.
+
+Migration 0069 adds the thirteen the code actually searches by, counted from real
+call sites rather than guessed: `lead_identifiers.lead_id` (read for every lead
+entering the system, from every source — the hottest of the lot), `tasks.lead_id`,
+`assignment_history.lead_id`, both sides of `merge_review_queue`,
+`whatsapp_broadcast_recipients.lead_id`, `ad_audience_members.lead_id`,
+`leads.referred_by_lead_id`, `receipts.payment_id`,
+`finance_transactions.payment_id`, `students.current_batch_id`,
+`user_centers.center_id`, `notifications.center_id`, `batches.center_id`. Four are
+partial, indexing only the non-null rows.
+
+### Architecture
+
+**`students`, `batches` and `student_batches` moved to `schema/academics.ts`.**
+They were in `schema/finance.ts`, which had grown to hold accounts *and* academics
+in one 435-line file — working against the very separation the schema exists to
+make obvious. The dependency runs one way: `enrolments` points at `batches`, and
+nothing in academics points back.
+
+### The unassigned queue is now in the sidebar
+
+The orphan queue has existed since Phase 2 and was reachable only by typing the
+URL. For a screen whose entire purpose is "these leads are being forgotten", that
+is close to not having it. It is now a sidebar entry gated on `lead.assign`, so it
+appears for exactly the people who can claim one.
+
+---
+
+## Session 53 — The app was running on the wrong continent
+
+Leon: "the app is quite slow even while I am using it on Vercel."
+
+The three causes from the earlier performance pass were all still fixed — session
+caching, the connection pool, the indexes, the loading skeleton. The one left was
+not in the code at all.
+
+**`vercel.json` named no region, so Vercel ran the app in Washington DC.** The
+Supabase project is in Mumbai. Every database round trip crossed the Atlantic and
+the Indian Ocean, and a page makes several of them in sequence — call it 250ms
+each, six deep, before counting the staff member's own hop from Kerala to
+Washington and back. That is roughly two seconds of a lead page spent purely on
+distance, doing no work.
+
+Now pinned to `bom1`. The rule, written into the technical handbook so it is not
+re-learned: **sit beside the database, not beside the user.** There are many
+database round trips per page and exactly one browser round trip. Mumbai happening
+to also be near the staff is luck, not the reason.
+
+**The lead detail page was nine sequential awaits** — timeline, WhatsApp thread,
+service window, attachments, fee plan, student field labels, tasks, the referrer
+lookup and the referrals list, each waiting on the one before, on the screen
+counsellors open more than any other. Two of those nine were mine, added this
+week. All nine now go out together.
+
+In-region those are a few milliseconds each; the batching matters far less than
+the region change and is worth doing anyway, because it is the difference between
+one round trip and nine whenever the network is having a bad day.
+
+---
+
+## Session 54 — Website enquiry forms come into the CRM
+
+Leon: "the lead forms on my website are all directed to be populated on a google
+sheet via an app script. how can I adjust it so the form submissions come to the
+CRM?"
+
+The forms on afdindia.com post to a Google Apps Script that appends a row to a
+spreadsheet. A spreadsheet row has no owner, no response-time clock and no place
+in any report, so the institute's cheapest source of leads was also its slowest to
+answer. The script now also POSTs each submission to the CRM, and the sheet
+becomes a backup rather than the destination.
+
+**New webhook: `POST /api/webhooks/website`.** Non-negotiable #9 in order —
+verify the HMAC against the raw body, persist to `webhook_events` whether or not
+it passed, then process. Non-negotiable #8 — the lead goes through
+`resolveOrCreateLead()` like every other source, so somebody who filled in the
+website form and also called is one person with two enquiries.
+
+Signing reuses Meta's scheme rather than inventing a second one: the script signs
+the exact request body with a shared secret and sends `sha256=<hex>` in
+`X-AFD-Signature`. Apps Script computes that in three lines, and unlike a bearer
+token it cannot be lifted from the script and replayed against a different body.
+
+**Field mapping is forgiving on purpose** (`lib/integrations/website/map-form-fields.ts`).
+The site's forms do not share one field naming convention and never will, so the
+mapper strips non-alphanumerics and matches a table of aliases — `Full Name`,
+`student_name` and `name` all land in the same place. Anything it does not
+recognise is kept verbatim on the raw payload, so a question nobody thought to map
+is still there to read.
+
+**Three response codes, deliberately different:**
+- Bad or missing signature → 401, recorded with `signature_ok = false`. Somebody
+  found the URL; that is worth knowing.
+- Unusable submission (no name, no usable phone) → **200** with the reason stored
+  on the event. Retrying produces the same result, so asking the script to send it
+  again helps nobody. It shows up on Settings → Platform Health, which is where a
+  broken form gets noticed.
+- Anything genuinely wrong (database unreachable) → 500, so Apps Script retries.
+  V1 returned 200 on everything and lost leads invisibly.
+
+A retried delivery is caught on `(source, external_id)` and returns
+`{duplicate: true}` without creating a second lead.
+
+**Settings → Integrations → Website forms** generates the signing secret (shown
+once) and prints the complete Apps Script for Leon to paste.
+
+**Shipped:** the webhook, the field mapper, the settings screen, migration 0070
+(`website` added to the `integration_provider` enum).
+**Verify by:** `npm run db:migrate` then Settings → Integrations → Website forms
+→ Generate secret → paste the script into the existing Apps Script project. A
+test submission should appear in Leads within a second, with source `Website`.
+**Next:** the readiness review, split into what Leon does in the CRM and what is
+still development work.
+
+---
+
+## Session 57 — The academics module is parked
+
+Leon: *"I don't want to implement this now so undo it and let's build it as another
+tool later."*
+
+Sessions 55 and 56 built the first two layers of the academics module — the syllabus
+(modules, topics, per-course plans with hours and coverage notes, batch timings, the
+mid-November pacing check) and faculty (records, subjects, centres, availability,
+leave, and a seventh role). Both are reverted.
+
+**Reverted, not erased.** The work is still in this branch's history and comes back
+with one command when it is wanted:
+
+```
+git cherry-pick c3e6e83 9c6ca8c      # the syllabus, then faculty
+```
+
+`c3e6e83` is the syllabus layer, `9c6ca8c` is faculty and batch timings. The design
+for all five layers went with them in `docs/04-ACADEMICS.md`; it is in those commits
+too, and worth reading before restarting rather than redesigning from scratch. The
+ten open questions it lists are still open.
+
+**Nothing to undo on production.** Migrations 0071 and 0072 were only ever applied
+to the local development database, and have been dropped there. The live Supabase
+project never received them, so there is no cleanup for Leon to run. The next
+migration written takes the number 0071 again.
+
+Also reverted with them, worth knowing because they were quietly useful: the
+`subject` and `faculty_type` dropdown categories, the config bundle going to version
+5, and the `faculty` role. All come back with the cherry-pick.
+
+**Unchanged and still live:** the website form webhook from session 54, and
+everything before it.
+
+---
+
+## Session 58 — Dashboard and My Day are one screen
+
+Leon: *"I want a dashboard and my day to be merged together so that when a
+counsellor logs in they can see all their leads, how many are assigned today, how
+many they need to get in touch with today, how many are overdue, what are the total
+admissions this month… then the dashboard for the centre head. Admin portal is good
+as it is right now."*
+
+A counsellor was starting the day on two screens. My Day had the queue and no
+numbers; the Dashboard had four numbers and a link to My Day. Neither told them how
+the month was going.
+
+**`/my-day` is now a redirect to `/dashboard`.** The queue is drawn there in full —
+overdue, due today, new, at risk, first five of each with a link to the rest. The
+route stays as a redirect rather than being deleted: it is in bookmarks, in the
+notification fallback path and in the staff handbook, and a 404 for any of those is
+worse than one extra hop. The sidebar entry is gone, because two links to one screen
+is how people come to believe one of them is stale.
+
+They remain two widgets in the registry — "Your numbers" and "Your day" — rather
+than one merged card, so an admin can still turn either half off per role.
+
+**"Your numbers"** is new: active leads, assigned today, new this month, never
+contacted, admissions this month, admission rate, overdue follow-ups, SLA breaches.
+
+**"Counsellor performance"** is new for centre heads: a row per counsellor ordered
+by admissions this month, with *not contacted* and *overdue* flagged in colour
+rather than merely counted — those are the two a head can act on before lunch.
+Gated on `report.center`, not `lead.assign`: showing one person's numbers to another
+person is a reporting act, and a counsellor holds `report.read` only at `own`.
+
+**Two honesty decisions worth keeping.** The admission rate is this month's
+admissions divided by this month's new leads — a running rate, not a cohort
+conversion, since most of a month's admissions come from earlier leads. The field is
+named `admissionsPerLeadThisMonth` so nobody reads it as the other thing, and both
+the card and the handbook say so. And a zero denominator yields **null, not zero**:
+a counsellor who got no leads this month has an undefined rate, and "0%" beside
+their name is an accusation the data cannot support.
+
+**`leads.assigned_at` (migration 0071).** "How many were assigned to me today?" had
+no honest answer — the nearest column was `created_at`, which is a different
+question for any lead that gets reassigned, and reassignment is routine here.
+Maintained by a **database trigger**, not by the four places that write
+`assigned_to`: a fifth will be added one day and would not know to set it. Existing
+rows backfilled from `created_at`.
+
+**The admin view is unchanged, as asked.** Dropping `requireScope: "own"` from "Your
+day" — needed because centre heads carry leads too — would have put two empty cards
+at the top of the screen admins use most. Both are hidden for `admin` and `co_admin`
+by seeded `dashboard_layouts` rows: configuration in the table built for it, not a
+rule in code, and one click in Settings → Dashboards to turn back on.
+
+**Shipped:** migration 0071, `lib/dashboard/scoreboard.ts` (pure, 22 tests),
+`lib/dashboard/get-scoreboard.ts`, "Your numbers", "Counsellor performance", a fuller
+Pipeline card, the merged queue, the redirect.
+**Verify by:** `npm run db:migrate && npm run db:seed`, then sign in as a counsellor
+— one screen, numbers above the queue, no My Day in the sidebar. As a centre head,
+two more cards. As an admin, exactly what was there before.
+**Next:** open items 2–10 from the academics questions are still unanswered, and
+`enrolments.batch_id` is still never set at Gate 1.
+
+---
+
+## Session 59 — The lifecycle chain made legible
+
+Five changes, all of them Leon noticing the navigation did not describe the flow.
+
+**Leads → Admissions → Students is now the whole story.** A counsellor confirms
+the admission and picks the batch; accounts records the first payment; the student
+appears in Students with their batch already on the record. That last part is new:
+`enrolments.batch_id` has existed since Phase 4 and **nothing ever set it**, because
+no screen asked. So the batch was left for somebody who was not in the conversation
+to fill in later, which mostly meant never — the batch column on the students list
+was permanently blank.
+
+Now the Confirm Admission form has a batch picker that only offers batches at this
+student's centre running the course just selected. Short list, hard to get wrong.
+The posted id is still re-checked server-side against centre, course and active
+state, because a picker is not a form: an id can go stale while the form sits open,
+and a wrong batch is invisible afterwards. Confirming **without** a batch is still
+allowed — an institute that has not created next year's batches must still be able
+to take an admission — and there is a test for that case too.
+
+At Gate 2 the batch lands on `students.current_batch_id` *and* as a `student_batches`
+row: the pointer answers "which batch now", the roster row is the history a later
+move needs.
+
+**Batches moved to Settings.** A batch is defined once a term and referred to
+constantly, which makes it setup rather than a daily workspace. It left the left
+menu; `/batches` is now `/settings/batches`.
+
+**"Academics" as a section is gone.** The department still exists and still works —
+in Admissions, where a new joiner appears first, and in Students. The dashboard card
+is now called "Students" (the key stays `academics`, since renaming a text key would
+orphan every saved layout row for no gain).
+
+**The duplicate Unassigned link is gone.** The leads header had an "Orphan queue"
+button beside the sidebar entry that already led there. Two routes to one screen is
+how somebody decides one of them is stale.
+
+**Counsellor activity, per day** — Insights → Activity. Every call, message and
+walk-in logged on a chosen day, by whom, against which lead, with the outcome.
+Collapsed to a summary line per person; the names are one click away, because a
+centre head with six counsellors does not want two hundred rows on load. Gated on
+`report.center`, the same bar as the counsellor-performance card.
+
+One decision worth keeping: **outcomes are not classified into reached / not
+reached.** `interaction_outcome` is a dropdown an admin edits, so hardcoding which
+values count as a successful contact would be exactly the buried list CLAUDE.md
+forbids, and it would silently misclassify anything added later. The screen reports
+the real outcome names with counts instead — "Not Reachable: 7" is a number the
+reader can see rather than one the code guessed at, and it stays correct when the
+list changes. A counsellor who logged nothing gets a row saying so in words, not a
+zero: a zero in a column of numbers reads as unremarkable; "nothing logged" is the
+finding.
+
+**Students list: every column filterable** — centre, course, batch, status and a
+joined-from/to range, alongside the existing search. "The Kochi Foundation students
+who joined in July" was previously unaskable, and it is the question academics has
+every time a batch starts. Filters live in the URL, so a view is shareable and
+survives a refresh.
+
+**Shipped:** the batch at both gates, batches under Settings, the activity screen
+(`lib/reports/activity-log.ts`, pure, 15 tests), student filters, the two navigation
+removals.
+**Verify by:** confirm an admission on a lead whose centre has a batch for that
+course — the picker offers it, and after accounts take the first payment the student
+shows that batch. Insights → Activity for today, arrows to step back a day.
+**Next:** open academics questions 2–10 remain unanswered; the academics module
+itself is still parked (`git cherry-pick c3e6e83 9c6ca8c`).
+
+---
+
+## Session 60 — WhatsApp comes off the lead page
+
+Leon: *"we go into that lead and on the bottom we seem to have some sort of
+WhatsApp sending feature — I do not want that there. I only want the student
+profile link and the fee instalment details."*
+
+The panel is gone from `/leads/[id]`. Nothing was deleted: `WhatsAppPanel`,
+`getWhatsAppThread` and `isWithinCustomerServiceWindow` are all shared with the
+WhatsApp inbox, which stays exactly as it is — inbox, templates, broadcasts,
+automations, opt-outs.
+
+Side benefit: the thread query and the 24-hour service-window check went out of the
+lead page's `Promise.all` with it. Two fewer database round trips on the screen
+counsellors open more than any other.
+
+**The cost, stated plainly rather than buried.** WhatsApp messages do not write
+`interactions` rows, so the timeline never carried them — which means this page now
+shows **no** WhatsApp history at all, not just no send box. The conversation is in
+WhatsApp → Inbox, searchable by name or number. If that turns out to be a step too
+far in daily use, the right fix is a read-only link through to the thread, not
+putting the send box back. Recorded here so the next session does not "restore" the
+panel thinking it was dropped by accident.
+
+**Shipped:** the panel removed from the lead page, handbook updated to say where
+messaging lives.
+**Verify by:** open any lead — profile form and fees are the last two sections, no
+WhatsApp. WhatsApp → Inbox still works and still sends.
+
+---
+
+## Session 61 — One cron, and per-platform ad tabs
+
+Leon: *"how can I make sure my leads database automatically gets uploaded for
+retargeting in both these platforms daily? If I get a lead today, by tomorrow they
+should be seeing my ads."*
+
+The retargeting sync was always correct — a real diff against `ad_audience_members`,
+so a lead who opts out comes back *out* of the live audience. Only the schedule was
+wrong: Meta refreshed on Wednesdays, Google on Fridays, so a lead who arrived on a
+Thursday waited six days.
+
+The cause was the cron limit. Ten routes existed, `vercel.json` scheduled eight of
+them on different days of the week to fit inside a plan that allows very few, and
+**`google-conversions` and `whatsapp-flows` were not scheduled at all** — built,
+working, never called except as a piggyback inside two other routes.
+
+**`vercel.json` now has one entry: `/api/cron/daily`, 04:30 UTC (10:00 IST).** That
+route calls all ten sweeps in turn. Still literally one scheduled job a day, which
+was the constraint that produced the weekday spread in the first place.
+
+Decisions worth keeping:
+
+- **Sequential.** The db pool is one connection, so parallel would queue on it
+  anyway while multiplying external API calls in flight.
+- **Called in process.** Each route is an ordinary `async (Request) => Response` and
+  `requireCronSecret` reads only the `authorization` header, so the orchestrator
+  passes its own verified request straight through. No synthetic request, no secret
+  handling, no second invocation per job. Smoke-tested against a running build: all
+  ten execute in order, and the route still returns 401 without the secret.
+- **A failing job does not stop the run; the route still returns 500.** Google being
+  down must not stop the SLA sweep — but a night where three jobs broke is not a
+  healthy night, and the retry and the alert email depend on it saying so.
+- **The order is by how fast the value decays.** Time-critical local sweeps, then
+  retargeting (this is the job whose whole point is same-day freshness), then
+  reporting, which is what gets skipped when time runs short.
+- **`CRON_BUDGET_SECONDS`, default 50.** Vercel kills a Hobby function at 60s
+  whatever `maxDuration` says, and being killed means no report and no alert — the
+  worst outcome, because the job looks healthy. A job with no time to start is
+  skipped, never cut off part-way: half-updating a Meta audience is worse than not
+  touching it, and every job is incremental so tomorrow covers it.
+
+**What one run a day still costs, stated rather than hidden:** a broadcast scheduled
+for 3pm leaves at 10am the next morning. That is the single slot, not the code — the
+same route on an hourly cron gives retargeting *and* broadcasts within the hour, with
+no code change at all. 10:00 IST was chosen over 1am precisely because the broadcast
+sweep has a human on the other end.
+
+**Per-platform tabs on Ad performance.** All platforms / Meta Ads / Google Ads, driven
+by `lib/integrations/platforms.ts` — a registry derived from the `ad_platform` enum,
+with a `satisfies` that **fails the build** if an enum value has no label. Adding a
+platform later is: extend the enum, add one row, build its webhook and spend sync;
+every tab, filter and badge picks it up.
+
+Two correctness details on that filter. It filters the attributed leads as well as the
+spend, because filtering spend alone would leave the other platform's campaigns on
+screen as zero-spend rows — reading as "this campaign cost nothing" rather than "wrong
+tab". And "Leads not from ads" is hidden on a platform tab rather than shown as zero:
+a walk-in belongs to no platform, so there it is not-applicable, not nought.
+
+**Shipped:** `/api/cron/daily`, `lib/cron/nightly-runner.ts` (14 tests), one-line
+`vercel.json`, the platform registry and tabs, `CRON_BUDGET_SECONDS` documented in
+`.env.example`, §10 of the technical handbook rewritten.
+**Verify by:** `curl -H "Authorization: Bearer $CRON_SECRET" .../api/cron/daily` —
+a JSON body with a line per job. In Vercel, one cron entry instead of eight.
+**Next:** raise `CRON_BUDGET_SECONDS` to ~270 if the plan allows, or move the cron to
+hourly for near-real-time retargeting and broadcasts.
+
+---
+
+## Session 62 — Telling the website forms apart
+
+Leon: *"Each form is on a different page or a different type of form on the same
+page, so I would like to know which page and which form was submitted in the
+sources."*
+
+The webhook from session 54 already took submissions. What it could not do was say
+where they came from — and there was a real bug behind that: **`page` was an alias
+for the form name.** Both collided into one `sub_source`, so whichever field a form
+happened to send won and the other was lost. Two forms on one page were
+indistinguishable.
+
+**They are separate questions now, and both land in the sub-source, page first:**
+`/courses/nift · Book a demo`. Page first so Insights → Sources sorts by page with
+the several forms on that page grouped underneath — which is the shape of the
+question. Either half alone still works, and a form that sends neither still produces
+a lead rather than being refused over a missing label.
+
+**The page is reduced to a path, and that is the load-bearing part.** A sub-source is
+a reporting dimension, and one whose values are full URLs has unbounded cardinality:
+`?utm_source=fb`, `#apply`, a trailing slash, `www.` and a stray capital are five
+rows for one landing page, and the page gets no total at all. `pagePathOf()` collapses
+all of them. It also has to tell `afdindia.com/courses/nift` from `courses/nift`,
+where the only practical discriminator is a dot in the first segment — a test caught
+that treating `courses` as a hostname, which the first version did.
+
+**UTM parameters are captured, which they were not before.** Anything `utm_*`, plus
+`gclid` and `fbclid`, is recorded on the enquiry — so an ad pointing at a landing page
+can be credited with the form fills it produced. Explicit form fields beat the query
+string: a hidden input somebody filled in deliberately is better evidence than
+whatever URL the page was loaded with, since a visitor who browsed around before
+submitting carries a different page's parameters.
+
+Both halves are also stored apart on the enquiry's `utm` (`page_path`, `form_name`),
+so grouping by page alone never needs a label parsed back out.
+
+**A drop-in script rather than hand-edited forms.** Leon's forms are hand-written HTML
+across many pages. Asking him to add hidden inputs to each is how three end up
+unlabelled and their leads unattributable. One `<script>` before `</body>` adds the
+three fields to every form on the page, deriving the form's name from
+`data-crm-form`, then its `id`, then its `name`, then its position — so two unnamed
+forms are still told apart. It **adds hidden fields rather than intercepting submit**:
+the forms keep posting exactly where they post today, so a mistake in it cannot lose
+an enquiry, and neither the Apps Script nor the sheet has to change.
+
+The Apps Script sample now also covers a `doPost` handler taking a direct form POST,
+which is what Leon actually has — the previous sample assumed a Google Form's
+`onFormSubmit`.
+
+**Shipped:** `lib/integrations/website/page-identity.ts` (22 tests), page/form/UTM
+through the mapper and onto the enquiry, the browser snippet and rewritten guidance on
+Settings → Integrations → Website forms, two end-to-end webhook assertions proving it
+reaches the database.
+**Verify by:** paste the snippet, submit two different forms on one page, then
+Insights → Sources — two rows under one page path.

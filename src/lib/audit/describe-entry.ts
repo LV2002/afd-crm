@@ -136,7 +136,7 @@ const ENTITY_HREFS: Record<string, (id: string) => string> = {
   sla_policies: () => "/settings/sla",
   temperature_rules: () => "/settings/temperatures",
   org_settings: () => "/settings/organization",
-  batches: (id) => `/batches/${id}`,
+  batches: (id) => `/settings/batches/${id}`,
 };
 
 export function auditEntityHref(entityType: string, entityId: string | null): string | null {

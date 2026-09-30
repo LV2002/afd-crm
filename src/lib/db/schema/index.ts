@@ -8,6 +8,7 @@ export * from "./leads";
 export * from "./assignment";
 export * from "./activity";
 export * from "./config";
+export * from "./academics";
 export * from "./finance";
 export * from "./files";
 export * from "./tags";

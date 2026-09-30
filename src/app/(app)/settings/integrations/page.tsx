@@ -19,6 +19,7 @@ export default async function IntegrationsPage() {
   const metaConnected = await hasIntegrationCredential("meta", "page_access_token");
   const googleConnected = await hasIntegrationCredential("google", "refresh_token");
   const whatsappConnected = await hasIntegrationCredential("whatsapp", "access_token");
+  const websiteConnected = await hasIntegrationCredential("website", "signing_secret");
 
   const cards: IntegrationCard[] = [
     {
@@ -38,6 +39,12 @@ export default async function IntegrationsPage() {
       name: "WhatsApp",
       description: "Per-counsellor chat on the lead profile, sent and received from the CRM.",
       connected: whatsappConnected,
+    },
+    {
+      href: "/settings/integrations/website",
+      name: "Website forms",
+      description: "Enquiries from afdindia.com, straight into the pipeline instead of a spreadsheet.",
+      connected: websiteConnected,
     },
     { href: null, name: "Telephony", description: "Click-to-call and call logging. Coming soon.", connected: false },
   ];

@@ -7,13 +7,12 @@ import { can } from "./session";
 /** Keys into the ICON_MAP the (client) Sidebar component owns. */
 export type NavIconKey =
   | "dashboard"
-  | "my-day"
   | "leads"
   | "pipeline"
+  | "orphans"
   | "accounts"
   | "finance"
   | "students"
-  | "batches"
   | "whatsapp"
   | "profile-forms"
   | "insights"
@@ -51,7 +50,6 @@ interface NavItemDef {
  */
 const NAV_ITEM_DEFS: NavItemDef[] = [
   { href: "/dashboard", iconKey: "dashboard", label: "Dashboard" },
-  { href: "/my-day", iconKey: "my-day", permission: "lead.read", label: "My Day" },
   {
     href: "/leads",
     iconKey: "leads",
@@ -59,6 +57,16 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     label: { term: "lead", form: "plural" },
   },
   { href: "/pipeline", iconKey: "pipeline", permission: "lead.read", label: "Pipeline" },
+  // The unassigned pile. It had a screen from Phase 2 and no way to reach
+  // it but by typing the URL, which for a queue whose entire job is "these
+  // are being forgotten" is close to not having it. Gated on lead.assign,
+  // so only the people who can actually claim one see it.
+  {
+    href: "/leads/orphans",
+    iconKey: "orphans",
+    permission: "lead.assign",
+    label: "Unassigned",
+  },
   {
     // "Admissions", not "Accounts": this is the per-student fee-collection
     // queue, and the moment a Finance section existed the old name read as
@@ -86,15 +94,6 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     iconKey: "whatsapp",
     permission: "whatsapp.read",
     label: "WhatsApp",
-  },
-  {
-    // Academics' own screen. Gated on batch.manage rather than
-    // student.read: seeing a student's batch is one thing, deciding who
-    // is in it is another.
-    href: "/batches",
-    iconKey: "batches",
-    permission: "batch.manage",
-    label: "Batches",
   },
   {
     href: "/profile-forms",

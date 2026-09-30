@@ -15,7 +15,7 @@ import type { ParamSource } from "@/lib/whatsapp/personalise";
 
 import { idColumn, timestamps } from "./_helpers";
 import { profiles } from "./auth";
-import { students } from "./finance";
+import { students } from "./academics";
 import { leads } from "./leads";
 import { tags } from "./tags";
 

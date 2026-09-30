@@ -23,6 +23,8 @@ export const integrationProviderEnum = pgEnum("integration_provider", [
   "google",
   "whatsapp",
   "telephony",
+  /** The institute's own website forms — see api/webhooks/website. */
+  "website",
 ]);
 
 export const integrationCredentials = pgTable(

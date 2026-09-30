@@ -106,8 +106,8 @@ export async function saveBatch(_prev: BatchFormState, formData: FormData): Prom
     after: values,
   });
 
-  revalidatePath("/batches");
-  revalidatePath(`/batches/${savedId}`);
+  revalidatePath("/settings/batches");
+  revalidatePath(`/settings/batches/${savedId}`);
   return { success: batchId ? "Batch saved." : `Created ${name}.` };
 }
 
@@ -194,8 +194,8 @@ export async function assignStudentToBatch(
     after: { studentId, studentName: student.fullName, batchName: batch.name },
   });
 
-  revalidatePath(`/batches/${batchId}`);
-  revalidatePath("/batches");
+  revalidatePath(`/settings/batches/${batchId}`);
+  revalidatePath("/settings/batches");
   revalidatePath(`/students/${studentId}`);
   revalidatePath("/students");
 
@@ -276,8 +276,8 @@ export async function removeStudentFromBatch(
     after: { studentId, reason, batchName: batch.name },
   });
 
-  revalidatePath(`/batches/${batchId}`);
-  revalidatePath("/batches");
+  revalidatePath(`/settings/batches/${batchId}`);
+  revalidatePath("/settings/batches");
   revalidatePath(`/students/${studentId}`);
   revalidatePath("/students");
   return { success: "Removed from the batch." };

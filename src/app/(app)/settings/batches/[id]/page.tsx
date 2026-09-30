@@ -107,7 +107,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <Link href="/batches" className="text-xs text-muted-foreground hover:underline">
+          <Link href="/settings/batches" className="text-xs text-muted-foreground hover:underline">
             ← All batches
           </Link>
           <h1 className="text-2xl font-semibold">{batch.name}</h1>

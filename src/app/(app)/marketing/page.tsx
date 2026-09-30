@@ -1,4 +1,4 @@
-import { and, asc, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
 import { DatabaseZap } from "lucide-react";
 
 import { AccessDenied } from "@/components/layout/access-denied";
@@ -25,7 +25,15 @@ import {
   type SpendRow,
 } from "@/lib/reports/ad-performance";
 
+import {
+  AD_PLATFORMS,
+  isAdPlatform,
+  platformLabel,
+  platformShort,
+} from "@/lib/integrations/platforms";
+
 import { DateRangeControls } from "./date-range-controls";
+import { PlatformTabs } from "./platform-tabs";
 
 /**
  * What the advertising cost and what it produced.
@@ -148,6 +156,12 @@ export default async function MarketingPage({
   const from = readOne("from") || istDate(90);
   const to = readOne("to") || istDate(0);
 
+  // An unknown platform reads as "all" rather than 404ing or showing an empty
+  // table: the value comes off a URL somebody may have typed or kept from
+  // before a platform was renamed, and an empty screen would look broken.
+  const platformParam = Array.isArray(params.platform) ? params.platform[0] : params.platform;
+  const platform = typeof platformParam === "string" && isAdPlatform(platformParam) ? platformParam : "";
+
   const presets = [
     { label: "Last 30 days", from: istDate(30), to: istDate(0) },
     { label: "Last 90 days", from: istDate(90), to: istDate(0) },
@@ -171,7 +185,13 @@ export default async function MarketingPage({
           clicks: adSpendDaily.clicks,
         })
         .from(adSpendDaily)
-        .where(and(gte(adSpendDaily.date, from), lte(adSpendDaily.date, to))),
+        .where(
+          and(
+            gte(adSpendDaily.date, from),
+            lte(adSpendDaily.date, to),
+            platform ? eq(adSpendDaily.platform, platform) : undefined,
+          ),
+        ),
     );
 
     const leadRows = await timed("leads", () =>
@@ -253,8 +273,20 @@ export default async function MarketingPage({
     throw error;
   }
 
-  const rows = combinePerformance(spendRows, attributed);
+  // Filtering the spend alone would leave the other platform's campaigns on
+  // screen with no spend against them, which reads as "this campaign cost
+  // nothing" rather than "wrong tab". Both sides get filtered.
+  const platformLeads = platform
+    ? attributed.filter((lead) => lead.platform === platform)
+    : attributed;
+
+  const rows = combinePerformance(spendRows, platformLeads);
   const totals = performanceTotals(rows);
+
+  // Counted from the unfiltered set on purpose: a walk-in belongs to no
+  // platform, so on a single-platform tab it is not zero but
+  // not-applicable — and the tile is hidden rather than showing a nought
+  // somebody would read as "we got no referrals".
   const organicLeads = attributed.filter((lead) => lead.campaignId === null).length;
 
   return (
@@ -262,12 +294,16 @@ export default async function MarketingPage({
       <div>
         <h1 className="text-2xl font-semibold">Ad performance</h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
-          What Meta and Google charged, and what it turned into. Spend is counted in the dates
-          below; a lead is counted if it arrived in them, and its admission counts whenever it
-          happened — so a recent period&apos;s admissions are genuinely incomplete and will keep
-          rising for weeks.
+          {platform
+            ? `What ${platformLabel(platform)} charged, and what it turned into. `
+            : "What each platform charged, and what it turned into. "}
+          Spend is counted in the dates below; a lead is counted if it arrived in them, and its
+          admission counts whenever it happened — so a recent period&apos;s admissions are
+          genuinely incomplete and will keep rising for weeks.
         </p>
       </div>
+
+      <PlatformTabs platforms={AD_PLATFORMS} active={platform} />
 
       <DateRangeControls from={from} to={to} presets={presets} />
 
@@ -296,11 +332,13 @@ export default async function MarketingPage({
           value={formatMultiple(totals.ltvToCac)}
           hint={`Average fee ${money(totals.averageAdmissionValuePaise)} against ${money(totals.costPerAdmissionPaise)} to win it`}
         />
-        <Metric
-          label="Leads not from ads"
-          value={String(organicLeads)}
-          hint="Walk-ins, referrals, the website — no campaign, so no cost against them here"
-        />
+        {platform ? null : (
+          <Metric
+            label="Leads not from ads"
+            value={String(organicLeads)}
+            hint="Walk-ins, referrals, the website — no campaign, so no cost against them here"
+          />
+        )}
       </div>
 
       <div className="flex flex-col gap-2">
@@ -331,9 +369,7 @@ export default async function MarketingPage({
                   <TableRow key={`${row.platform}:${row.campaignId}`}>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="capitalize">
-                          {row.platform}
-                        </Badge>
+                        <Badge variant="outline">{platformShort(row.platform)}</Badge>
                         <span className="font-medium">{row.campaignName}</span>
                       </div>
                     </TableCell>

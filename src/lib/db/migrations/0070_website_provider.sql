@@ -1,0 +1,12 @@
+-- A `website` provider, so the site's own enquiry forms can be signed.
+--
+-- `webhook_source` has listed 'website' since the first migration —
+-- CLAUDE.md's directory layout named the route from the start — but
+-- `integration_provider` never gained a matching value, so there was
+-- nowhere to store the signing secret the route needs. This adds it.
+--
+-- Postgres will not let a new enum value be used in the same transaction
+-- that adds it, and drizzle-kit runs a migration batch inside one. The
+-- value is therefore added here and used from application code only
+-- afterwards, never by a later statement in this same file.
+alter type integration_provider add value if not exists 'website';

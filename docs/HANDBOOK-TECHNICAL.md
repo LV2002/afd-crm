@@ -352,27 +352,40 @@ type *Import — from clicks*, pasted into Settings → Integrations → Google.
 
 ## 10. Scheduled work — read this before touching `vercel.json`
 
-**The hosting plan allows one cron a day.** That single constraint shapes the
-whole scheduling story, and there are currently three consequences:
+**The hosting plan allows one cron a day, and there is now exactly one.**
+`vercel.json` has a single entry — `/api/cron/daily` at 04:30 UTC, 10:00 IST —
+and that route calls all ten sweeps in sequence. This replaced a spread across
+different days of the week, which had made retargeting weekly and left two
+routes with no slot at all.
 
-| Job | Runs |
-|---|---|
-| `whatsapp-broadcast-sweep` | Weekly, Sunday 01:00 UTC |
-| `payment-reminders` | Daily |
-| SLA, temperature, ad spend, retargeting | Weekly, spread across days |
-| **`whatsapp-flows`** | **Not scheduled** — called by the broadcast sweep |
-| **`google-conversions`** | **Not scheduled** — called by the Google spend sync |
+Read `src/lib/cron/nightly-runner.ts` before changing any of it. The parts that
+matter:
 
-The last two are real routes with real auth; they are simply not in
-`vercel.json` because there is no slot. Their work is idempotent and guarded by
-`wake_at` / a unique index, which is what makes the piggybacking safe.
+- **Sequential, not parallel.** The db pool is one connection, so parallel
+  gains nothing and multiplies the external API calls in flight.
+- **Called in process.** Each route is an ordinary `async (Request) =>
+  Response`, and `requireCronSecret` reads only the `authorization` header — so
+  the orchestrator passes its own verified request straight through. No
+  synthetic request, no second invocation per job.
+- **A failing job does not stop the run**, but the route returns 500 so the
+  platform retries and the alert email fires. Skipped jobs are not failures.
+- **The order is by how fast the value decays**, not by cost: sweeps that are
+  time-critical, then retargeting, then reporting. `CRON_BUDGET_SECONDS`
+  (default 50, Hobby-safe) decides how much fits; anything that does not start
+  is skipped and picked up tomorrow, because every job is incremental.
+- Every route stays **independently callable** for testing one in isolation.
 
-**The right fix, and the top item on the backlog, is a single
-`/api/cron/tick` route that calls every sweep in sequence** — then one daily
-cron drives the entire system and nothing piggybacks. Until then, be aware that
-a broadcast scheduled for Tuesday 10am actually leaves the following Sunday, and
-that `SWEEP_CADENCE_NOTE` in `lib/whatsapp/schedule.ts` is the one sentence on
-screen that must be updated when the schedule changes.
+`whatsapp-flows` and `google-conversions` are now scheduled explicitly. The old
+piggyback calls inside the broadcast sweep and the Google spend sync are left in
+place: their work is idempotent and guarded by `wake_at` / a unique index, so a
+second call in the same night is a no-op, and they remain a fallback for anyone
+running only one of those routes by hand.
+
+**What one run a day still costs:** a broadcast scheduled for 3pm leaves at
+10am the next morning. That is the single slot, not the code —
+**the same route on an hourly cron gives retargeting and broadcasts within the
+hour with no code change.** `SWEEP_CADENCE_NOTE` in `lib/whatsapp/schedule.ts`
+is the one sentence on screen that must be updated if the cadence changes.
 
 Every cron route checks `Authorization: Bearer ${CRON_SECRET}` and returns 401
 without it.
@@ -409,6 +422,20 @@ them immediately.
 **4. There were no loading states.** Clicking a link left the old page frozen
 until the server finished. `(app)/loading.tsx` is a skeleton shown instantly on
 every navigation. If you add a route group, give it one.
+
+**5. The functions ran on a different continent from the database.** Vercel
+defaults to `iad1` (Washington DC) when `vercel.json` names no region. AFD's
+Supabase project is in Mumbai (`ap-south-1`), so *every* database round trip
+crossed the Atlantic and the Indian Ocean — and a page makes several in
+sequence, not one. Roughly 250ms each, on a screen that makes six of them,
+before counting the user's own hop from Kerala to Washington and back.
+
+> `vercel.json` now pins `"regions": ["bom1"]`. **The rule is to sit beside the
+> database, not beside the user**: there are many database round trips per page
+> and exactly one browser round trip, so co-locating with Postgres wins by an
+> order of magnitude. It happens to also be near the staff here, which is luck
+> rather than design. If the Supabase project is ever moved, this must move with
+> it — they are one decision, not two.
 
 **When adding a screen:**
 
@@ -517,10 +544,13 @@ in `docs/DECISIONS.md`.
 
 Honest list, in the order I would close them:
 
-1. **The cron budget** (§10). Several features have no schedule of their own,
-   and inbound WhatsApp media now wants one too — images arrive inline in the
-   webhook, but anything bigger waits for a sweep that has no cron of its own
-   yet. Meta deletes inbound media after thirty days, so this one has a clock.
+1. **`CRON_BUDGET_SECONDS`** (§10). The single daily cron now drives everything,
+   but on the Hobby-plan default of 50 seconds the last jobs in the order can be
+   skipped on a slow night. Either raise the budget on a plan that allows longer
+   functions, or move the cron to hourly — both are one line. Inbound WhatsApp
+   media is no longer the worry it was: the sweep that fetches anything too big
+   for the webhook rides along with the broadcast sweep, so it now runs daily
+   rather than weekly, against Meta's thirty-day deletion clock.
 2. **Rate-limiting on `/f/*`** (§12).
 3. **Telephony** — the whole of Phase 6 is blocked on choosing a vendor.
 4. **Opening balances** must be set before any finance figure means anything.

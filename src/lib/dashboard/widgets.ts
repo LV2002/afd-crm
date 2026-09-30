@@ -33,11 +33,23 @@ export interface WidgetDefinition {
 
 export const DASHBOARD_WIDGETS: WidgetDefinition[] = [
   {
+    key: "my_numbers",
+    name: "Your numbers",
+    description:
+      "Leads assigned today, this month's new leads and admissions, and the running admission rate.",
+    permission: "lead.read",
+  },
+  {
+    // No `requireScope: "own"` any more. It used to be here on the grounds
+    // that nothing is assigned to a centre head directly — which is wrong:
+    // heads carry their own leads, and Leon asked for their day too. The
+    // query filters on `assigned_to = me`, so it is correct at any scope,
+    // and an admin with nothing assigned is handled by hiding the widget in
+    // their layout rather than by a rule in code.
     key: "my_day",
     name: "Your day",
-    description: "Overdue, due today, new and at-risk leads assigned to the person looking.",
+    description: "The work queue: overdue, due today, new and at-risk leads assigned to you.",
     permission: "lead.read",
-    requireScope: "own",
   },
   {
     key: "centre",
@@ -46,15 +58,27 @@ export const DASHBOARD_WIDGETS: WidgetDefinition[] = [
     permission: "lead.assign",
   },
   {
+    // `report.center` rather than `lead.assign`: this card is one person's
+    // numbers shown to another person, which is a reporting act. A
+    // counsellor holds `report.read` at `own` and so never sees it.
+    key: "centre_team",
+    name: "Counsellor performance",
+    description: "Each counsellor's active leads, new leads, admissions and overdue follow-ups.",
+    permission: "report.center",
+  },
+  {
     key: "accounts",
     name: "Accounts",
     description: "Waiting for a first payment, collected this month, overdue instalments.",
     permission: "payment.read",
   },
   {
+    // Keeps the `academics` key: the database stores these as text, and
+    // renaming the key would orphan every saved layout row for no gain.
+    // Only the label an admin reads has changed.
     key: "academics",
-    name: "Academics",
-    description: "Students, batches, and who has not been placed in one yet.",
+    name: "Students",
+    description: "Active students and who joined this month.",
     permission: "student.read",
   },
   {

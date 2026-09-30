@@ -26,8 +26,8 @@ export async function AcademicsWidget() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Academics</CardTitle>
-        <CardDescription>Students at your centre(s).</CardDescription>
+        <CardTitle>Students</CardTitle>
+        <CardDescription>Enrolled and paid, at your centre(s).</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">

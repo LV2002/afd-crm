@@ -224,8 +224,8 @@ src/
   app/
     (auth)/login/
     (app)/
-      dashboard/          role-aware landing
-      my-day/             counsellor work queue — the default screen for counsellors
+      dashboard/          role-aware landing: the work queue AND the numbers, per role
+      my-day/             redirect to /dashboard — the queue lives there now
       leads/
         page.tsx          list + filters
         [id]/             detail: profile, timeline, whatsapp, files, payments
@@ -234,11 +234,12 @@ src/
       ask/                AI analyst chat
       settings/
         centers/ users/ stages/ rules/ dropdowns/ forms/ fees/ templates/ integrations/
+        batches/          class groups — setup, not a daily workspace
     api/
       webhooks/
         whatsapp/         Meta WABA inbound + status
         meta-leads/       Lead Ads
-        website/          your existing site forms — NOT BUILT YET
+        website/          your existing site forms, posted by the Apps Script
         knorish/          course purchase events — NOT BUILT YET, pending a decision on whether Knorish is still in use
       cron/
         sla-sweep/ recompute-temperature/ ad-spend-sync/ digest/

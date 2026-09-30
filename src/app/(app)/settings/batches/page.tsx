@@ -73,7 +73,7 @@ export default async function BatchesPage() {
           </p>
         </div>
         <Button asChild size="sm">
-          <Link href="/batches/new">
+          <Link href="/settings/batches/new">
             <Plus className="size-4" /> New batch
           </Link>
         </Button>
@@ -103,7 +103,7 @@ export default async function BatchesPage() {
                 return (
                   <TableRow key={row.id}>
                     <TableCell>
-                      <Link href={`/batches/${row.id}`} className="font-medium hover:underline">
+                      <Link href={`/settings/batches/${row.id}`} className="font-medium hover:underline">
                         {row.name}
                       </Link>
                       <p className="text-xs text-muted-foreground">

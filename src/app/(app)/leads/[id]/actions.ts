@@ -1,12 +1,12 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { enrolments, leads } from "@/lib/db/schema";
+import { batches, enrolments, leads } from "@/lib/db/schema";
 import { confirmAdmission } from "@/lib/enrolment/confirm-admission";
 import { resolveDiscount } from "@/lib/enrolment/discount-authority";
 import { getDiscountLimit } from "@/lib/enrolment/get-discount-limit";
@@ -315,6 +315,9 @@ export async function confirmAdmissionAction(
     return { error: "Academic year is required." };
   }
 
+  const batchIdRaw = formData.get("batchId");
+  const batchId = typeof batchIdRaw === "string" && batchIdRaw.trim() !== "" ? batchIdRaw.trim() : null;
+
   const discountPaise = parseRupeesToPaise(formData.get("discount")) ?? 0;
   const feeOverrideRaw = formData.get("totalFeeOverride");
   const totalFeePaiseOverride =
@@ -337,6 +340,28 @@ export async function confirmAdmissionAction(
     return { error: "This lead has no centre assigned yet — set one before confirming admission." };
   }
 
+  // The picker only offers batches at this centre running this course, but a
+  // posted form is not the picker: an id could be stale (the batch was
+  // deactivated while the form sat open) or simply wrong. Checked here rather
+  // than trusted, because a wrong batch is invisible afterwards — the
+  // enrolment looks complete either way.
+  if (batchId) {
+    const [batch] = await db
+      .select({ centerId: batches.centerId, course: batches.course, isActive: batches.isActive })
+      .from(batches)
+      .where(and(eq(batches.id, batchId), isNull(batches.deletedAt)));
+
+    if (!batch || !batch.isActive) {
+      return { error: "That batch is no longer available — pick another." };
+    }
+    if (batch.centerId !== lead.centerId) {
+      return { error: "That batch is at a different centre." };
+    }
+    if (batch.course !== course) {
+      return { error: `That batch runs ${batch.course}, not ${course}.` };
+    }
+  }
+
   // The same authority check the fee panel applies. Confirming an
   // admission is the OTHER way a discount gets set, and leaving it open
   // would make the whole limit theatre: type the figure here instead.
@@ -355,6 +380,7 @@ export async function confirmAdmissionAction(
       const confirmed = await confirmAdmission(tx, {
         leadId,
         course,
+        batchId,
         centerId: lead.centerId!,
         mode,
         academicYear: academicYear.trim(),

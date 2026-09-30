@@ -50,7 +50,7 @@ export default function AppError({
           Try again
         </Button>
         <Button variant="outline" asChild>
-          <a href="/my-day">Go to My Day</a>
+          <a href="/dashboard">Go to the dashboard</a>
         </Button>
       </div>
       {error.digest && (

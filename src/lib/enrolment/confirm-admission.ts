@@ -9,6 +9,18 @@ export interface ConfirmAdmissionInput {
   centerId: string;
   mode: string;
   academicYear: string;
+  /**
+   * Which class group they are joining, chosen by the counsellor at the
+   * moment of confirming.
+   *
+   * The column has existed since Phase 4 and nothing ever set it, because
+   * no screen asked. That left the batch to be filled in later by somebody
+   * who was not in the conversation — so it mostly was not, and `students`
+   * arrived at Gate 2 with no batch at all. Optional here, because an
+   * institute that has not created its batches yet must still be able to
+   * take an admission.
+   */
+  batchId?: string | null;
   /** Overrides the fee_structures lookup when no matching row exists yet. */
   totalFeePaiseOverride?: number | null;
   discountPaise?: number;
@@ -90,6 +102,7 @@ export async function confirmAdmission(
     .values({
       leadId: input.leadId,
       course: input.course,
+      batchId: input.batchId ?? null,
       centerId: input.centerId,
       mode: input.mode,
       academicYear: input.academicYear,

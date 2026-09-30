@@ -94,6 +94,13 @@ export const leads = pgTable(
 
     brochureSent: boolean("brochure_sent").notNull().default(false),
 
+    /**
+     * When this lead was last handed to whoever owns it now. Maintained by
+     * a database trigger (migration 0071), not by the four places that
+     * write `assigned_to` — a fifth will be added one day and would not
+     * know to set it.
+     */
+    assignedAt: timestamp("assigned_at", { withTimezone: true }),
     firstResponseAt: timestamp("first_response_at", { withTimezone: true }),
     lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
     nextFollowupAt: timestamp("next_followup_at", { withTimezone: true }),

@@ -484,6 +484,27 @@
       "when": 1788573314458,
       "tag": "0068_audit_log_actor_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1788573315458,
+      "tag": "0069_foreign_key_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1788573316458,
+      "tag": "0070_website_provider",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1788573317458,
+      "tag": "0071_lead_assigned_at",
+      "breakpoints": true
     }
   ]
 }
