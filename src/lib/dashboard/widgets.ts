@@ -73,9 +73,12 @@ export const DASHBOARD_WIDGETS: WidgetDefinition[] = [
     permission: "payment.read",
   },
   {
+    // Keeps the `academics` key: the database stores these as text, and
+    // renaming the key would orphan every saved layout row for no gain.
+    // Only the label an admin reads has changed.
     key: "academics",
-    name: "Academics",
-    description: "Students, batches, and who has not been placed in one yet.",
+    name: "Students",
+    description: "Active students and who joined this month.",
     permission: "student.read",
   },
   {

@@ -4349,3 +4349,73 @@ Pipeline card, the merged queue, the redirect.
 two more cards. As an admin, exactly what was there before.
 **Next:** open items 2–10 from the academics questions are still unanswered, and
 `enrolments.batch_id` is still never set at Gate 1.
+
+---
+
+## Session 59 — The lifecycle chain made legible
+
+Five changes, all of them Leon noticing the navigation did not describe the flow.
+
+**Leads → Admissions → Students is now the whole story.** A counsellor confirms
+the admission and picks the batch; accounts records the first payment; the student
+appears in Students with their batch already on the record. That last part is new:
+`enrolments.batch_id` has existed since Phase 4 and **nothing ever set it**, because
+no screen asked. So the batch was left for somebody who was not in the conversation
+to fill in later, which mostly meant never — the batch column on the students list
+was permanently blank.
+
+Now the Confirm Admission form has a batch picker that only offers batches at this
+student's centre running the course just selected. Short list, hard to get wrong.
+The posted id is still re-checked server-side against centre, course and active
+state, because a picker is not a form: an id can go stale while the form sits open,
+and a wrong batch is invisible afterwards. Confirming **without** a batch is still
+allowed — an institute that has not created next year's batches must still be able
+to take an admission — and there is a test for that case too.
+
+At Gate 2 the batch lands on `students.current_batch_id` *and* as a `student_batches`
+row: the pointer answers "which batch now", the roster row is the history a later
+move needs.
+
+**Batches moved to Settings.** A batch is defined once a term and referred to
+constantly, which makes it setup rather than a daily workspace. It left the left
+menu; `/batches` is now `/settings/batches`.
+
+**"Academics" as a section is gone.** The department still exists and still works —
+in Admissions, where a new joiner appears first, and in Students. The dashboard card
+is now called "Students" (the key stays `academics`, since renaming a text key would
+orphan every saved layout row for no gain).
+
+**The duplicate Unassigned link is gone.** The leads header had an "Orphan queue"
+button beside the sidebar entry that already led there. Two routes to one screen is
+how somebody decides one of them is stale.
+
+**Counsellor activity, per day** — Insights → Activity. Every call, message and
+walk-in logged on a chosen day, by whom, against which lead, with the outcome.
+Collapsed to a summary line per person; the names are one click away, because a
+centre head with six counsellors does not want two hundred rows on load. Gated on
+`report.center`, the same bar as the counsellor-performance card.
+
+One decision worth keeping: **outcomes are not classified into reached / not
+reached.** `interaction_outcome` is a dropdown an admin edits, so hardcoding which
+values count as a successful contact would be exactly the buried list CLAUDE.md
+forbids, and it would silently misclassify anything added later. The screen reports
+the real outcome names with counts instead — "Not Reachable: 7" is a number the
+reader can see rather than one the code guessed at, and it stays correct when the
+list changes. A counsellor who logged nothing gets a row saying so in words, not a
+zero: a zero in a column of numbers reads as unremarkable; "nothing logged" is the
+finding.
+
+**Students list: every column filterable** — centre, course, batch, status and a
+joined-from/to range, alongside the existing search. "The Kochi Foundation students
+who joined in July" was previously unaskable, and it is the question academics has
+every time a batch starts. Filters live in the URL, so a view is shareable and
+survives a refresh.
+
+**Shipped:** the batch at both gates, batches under Settings, the activity screen
+(`lib/reports/activity-log.ts`, pure, 15 tests), student filters, the two navigation
+removals.
+**Verify by:** confirm an admission on a lead whose centre has a batch for that
+course — the picker offers it, and after accounts take the first payment the student
+shows that batch. Insights → Activity for today, arrows to step back a day.
+**Next:** open academics questions 2–10 remain unanswered; the academics module
+itself is still parked (`git cherry-pick c3e6e83 9c6ca8c`).

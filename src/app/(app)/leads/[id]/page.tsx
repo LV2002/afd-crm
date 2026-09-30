@@ -22,6 +22,7 @@ import { PendingDiscount } from "@/components/enrolment/pending-discount";
 import { ProfileFormPanel } from "@/components/profile-form/profile-form-panel";
 import { listAttachments } from "@/lib/storage/attachments";
 import { currentSignedAgreement, otherDocuments } from "@/lib/storage/shared";
+import { getBatchOptionsForCentre } from "@/lib/enrolment/batch-options";
 import { getLeadFeePlan } from "@/lib/enrolment/get-fee-plan";
 import { getStudentFieldLabels } from "@/lib/profile-form/field-labels";
 import { getWhatsAppThread, isWithinCustomerServiceWindow } from "@/lib/whatsapp/get-thread";
@@ -82,12 +83,21 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   const canCreateEnrolment = can(user, "enrolment.create");
 
-  const [interactionTypes, interactionOutcomes, courseOptions, modeOptions, { data: enrolment }] =
-    await Promise.all([
+  const [
+    interactionTypes,
+    interactionOutcomes,
+    courseOptions,
+    modeOptions,
+    batchOptions,
+    { data: enrolment },
+  ] = await Promise.all([
       getDropdownOptions(supabase, "interaction_type"),
       getDropdownOptions(supabase, "interaction_outcome"),
       canCreateEnrolment ? getDropdownOptions(supabase, "course") : Promise.resolve([]),
       canCreateEnrolment ? getDropdownOptions(supabase, "preferred_mode") : Promise.resolve([]),
+      canCreateEnrolment
+        ? getBatchOptionsForCentre(supabase, row.center_id as string | null)
+        : Promise.resolve([]),
       supabase
         .from("enrolments")
         .select("id, course, net_fee_paise, status, dropped_at, drop_reason, sales_to_accounts_at")
@@ -260,7 +270,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                 </div>
               )
             : canCreateEnrolment && (
-                <ConfirmAdmissionForm leadId={id} courses={courseOptions} modes={modeOptions} />
+                <ConfirmAdmissionForm
+                  leadId={id}
+                  courses={courseOptions}
+                  modes={modeOptions}
+                  batches={batchOptions}
+                />
               )}
           {can(user, "interaction.create") && (
             <InteractionForm leadId={id} types={interactionTypes} outcomes={interactionOutcomes} />

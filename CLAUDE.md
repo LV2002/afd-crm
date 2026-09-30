@@ -234,6 +234,7 @@ src/
       ask/                AI analyst chat
       settings/
         centers/ users/ stages/ rules/ dropdowns/ forms/ fees/ templates/ integrations/
+        batches/          class groups — setup, not a daily workspace
     api/
       webhooks/
         whatsapp/         Meta WABA inbound + status

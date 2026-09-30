@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useMemo, useState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Combobox } from "@/components/ui/combobox";
@@ -41,18 +41,38 @@ const initialState: FormState = {};
  * fee_structures coverage is admin-maintained and won't always have a row
  * for every course/mode/year combination from day one.
  */
+export interface AdmissionBatchOption {
+  id: string;
+  name: string;
+  course: string;
+  academicYear: string;
+  spacesLeft: number | null;
+}
+
 export function ConfirmAdmissionForm({
   leadId,
   courses,
   modes,
+  batches,
 }: {
   leadId: string;
   courses: FieldOption[];
   modes: FieldOption[];
+  batches: AdmissionBatchOption[];
 }) {
   const [state, formAction, pending] = useActionState(
     confirmAdmissionAction.bind(null, leadId),
     initialState,
+  );
+  const [course, setCourse] = useState("");
+
+  // Only the batches for the course being confirmed. Showing all of them
+  // invites picking a Crash batch for a Foundation admission, and that
+  // mistake is invisible afterwards — the enrolment looks complete either
+  // way. Before a course is chosen the list is empty and says so.
+  const batchesForCourse = useMemo(
+    () => (course ? batches.filter((batch) => batch.course === course) : []),
+    [batches, course],
   );
 
   return (
@@ -73,6 +93,7 @@ export function ConfirmAdmissionForm({
             options={courses}
             placeholder="Select course"
             searchPlaceholder="Type to search…"
+            onChange={setCourse}
           />
         </div>
         <div className="flex flex-col gap-2">
@@ -88,15 +109,39 @@ export function ConfirmAdmissionForm({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="admission-academic-year">Academic year</Label>
-        <Combobox
-          id="admission-academic-year"
-          name="academicYear"
-          options={academicYearOptions()}
-          placeholder="Choose a year"
-          required
-        />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="admission-academic-year">Academic year</Label>
+          <Combobox
+            id="admission-academic-year"
+            name="academicYear"
+            options={academicYearOptions()}
+            placeholder="Choose a year"
+            required
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="admission-batch">Batch</Label>
+          <Combobox
+            id="admission-batch"
+            name="batchId"
+            options={batchesForCourse.map((batch) => ({
+              value: batch.id,
+              label:
+                batch.spacesLeft === null
+                  ? `${batch.name} · ${batch.academicYear}`
+                  : `${batch.name} · ${batch.academicYear} · ${batch.spacesLeft} left`,
+            }))}
+            placeholder={course ? "Choose a batch" : "Pick a course first"}
+            searchPlaceholder="Type to search…"
+          />
+          <p className="text-xs text-muted-foreground">
+            {course && batchesForCourse.length === 0
+              ? "No batch for this course yet — an admin adds them in Settings → Batches. You can confirm without one and set it later."
+              : "Carried through to the student record once accounts take the first payment."}
+          </p>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">

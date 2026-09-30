@@ -72,6 +72,16 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["rules.manage"],
   },
   {
+    // Moved out of the left menu in September 2026. A batch is defined once
+    // a term and then referred to constantly — which makes it setup, not a
+    // daily workspace. Counsellors pick a batch when they confirm an
+    // admission; nobody needs a whole section for it.
+    href: "/settings/batches",
+    label: "Batches",
+    description: "Class groups, their timings and who is in them",
+    permissions: ["batch.manage"],
+  },
+  {
     href: "/settings/fee-structures",
     label: "Fee Structures",
     description: "Base fee by course, centre, mode and academic year",

@@ -3,7 +3,6 @@
 import {
   ArrowRightLeft,
   BarChart3,
-  CalendarRange,
   ClipboardList,
   GraduationCap,
   Inbox,
@@ -34,7 +33,6 @@ export const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   accounts: Wallet,
   finance: Landmark,
   students: GraduationCap,
-  batches: CalendarRange,
   whatsapp: MessageCircle,
   "profile-forms": ClipboardList,
   insights: BarChart3,

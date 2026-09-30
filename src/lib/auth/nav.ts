@@ -13,7 +13,6 @@ export type NavIconKey =
   | "accounts"
   | "finance"
   | "students"
-  | "batches"
   | "whatsapp"
   | "profile-forms"
   | "insights"
@@ -95,15 +94,6 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     iconKey: "whatsapp",
     permission: "whatsapp.read",
     label: "WhatsApp",
-  },
-  {
-    // Academics' own screen. Gated on batch.manage rather than
-    // student.read: seeing a student's batch is one thing, deciding who
-    // is in it is another.
-    href: "/batches",
-    iconKey: "batches",
-    permission: "batch.manage",
-    label: "Batches",
   },
   {
     href: "/profile-forms",

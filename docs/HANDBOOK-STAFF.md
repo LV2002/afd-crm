@@ -106,12 +106,11 @@ sign in again. If it keeps happening, tell your administrator.
 | **Dashboard** | Your numbers *and* your work queue. Start here every morning. |
 | **Leads** | Everybody in the pipeline. Search, filter, open. |
 | **Pipeline** | The same people as a drag-and-drop board by stage. |
-| **Accounts** | Confirmed admissions and their fees. |
+| **Admissions** | Confirmed admissions waiting on, or having made, a first payment. |
 | **Students** | People who have paid and started. |
-| **Batches** | Class groups, and who is in them. |
 | **Finance** | The institute's own money — income, expenses, banking. |
 | **WhatsApp** | Inbox, templates, broadcasts, automations, opt-outs. |
-| **Insights** | Slice the data any way you like. |
+| **Insights** | Slice the data any way you like — including what each counsellor did on a given day. |
 | **Ad Performance** | What the advertising actually bought. |
 | **Handovers** | How long admissions take to clear each gate. |
 | **Ask AI** | Ask a question about the data in plain English. |
@@ -177,6 +176,11 @@ tells nobody anything.
 
 ### Confirming an admission (Gate 1)
 
+You choose the **course, mode, academic year and batch**, plus any discount. The
+batch list only offers batches at this student's centre running the course you
+picked — so it is short, and picking the wrong one is hard. If no batch exists
+yet you can confirm without one and an administrator sets it later.
+
 When the family has genuinely agreed: **Confirm admission** on the lead.
 
 You'll enter the course, mode, academic year, fee and any discount. Once
@@ -219,7 +223,10 @@ Everything in Part 3, plus:
 - **Leads → Unassigned** — leads at your centre with nobody assigned. Nobody is
   working these. Assign them.
 - **Leads → Merge review** — possible duplicate people. Merge or dismiss.
-- **Insights** is scoped to your centre.
+- **Insights** is scoped to your centre, and its **Activity** tab shows what each
+  counsellor did on any given day: every call, message and walk-in they logged,
+  who it was with, and what the outcome was. A counsellor who logged nothing
+  gets a row saying so — that is the row worth looking for.
 - **Handovers** shows your centre's gate lag, and who is confirmed but unpaid.
 - You may be able to **approve discounts** up to your own limit. You cannot
   approve one larger than you could have given yourself — that is deliberate,
@@ -292,12 +299,22 @@ student fees.
 
 ## Part 6 — If you are in academics
 
+Academics does not have a section of its own — it works in the two screens the
+students actually pass through.
+
+- **Admissions** — every confirmed admission, including the ones still waiting
+  on a first payment. This is where a new joiner appears first, before they are
+  a student.
 - **Students** — everybody past Gate 2. Their profile, course, batch and
-  contact details.
+  contact details. Filter by centre, course, batch, status or joining date —
+  "the Kochi Foundation students who joined in July" is one row of controls.
 - **Print** a one-page student profile from their record.
-- **Batches** — create class groups and put students in them. Moving somebody
-  between batches keeps the history: "she was in the morning batch until
-  August" stays answerable.
+- **Settings → Batches** — create class groups and put students in them.
+  A batch is defined once a term and then referred to constantly, which makes
+  it setup rather than a daily workspace. Counsellors pick the batch when they
+  confirm the admission, and it follows the student through to their record.
+  Moving somebody between batches keeps the history: "she was in the morning
+  batch until August" stays answerable.
 - A batch **over capacity warns you, it does not stop you.** Real classes take
   one more student; a system that refuses just gets worked around.
 

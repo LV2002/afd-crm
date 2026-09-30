@@ -21,9 +21,18 @@ if (!process.env.DATABASE_URL) {
 }
 
 const { db } = await import("../src/lib/db/client");
-const { centers, enrolments, feeStructures, leads, payments, pipelineStages, receipts, students } = await import(
-  "../src/lib/db/schema"
-);
+const {
+  batches,
+  centers,
+  enrolments,
+  feeStructures,
+  leads,
+  payments,
+  pipelineStages,
+  receipts,
+  studentBatches,
+  students,
+} = await import("../src/lib/db/schema");
 const { confirmAdmission } = await import("../src/lib/enrolment/confirm-admission");
 const { recordPayment } = await import("../src/lib/enrolment/record-payment");
 
@@ -48,9 +57,17 @@ async function sweep() {
     }
     await db.delete(enrolments).where(eq(enrolments.leadId, lead.id));
   }
+  const testStudents = await db
+    .select({ id: students.id })
+    .from(students)
+    .where(like(students.fullName, `${MARKER}%`));
+  for (const student of testStudents) {
+    await db.delete(studentBatches).where(eq(studentBatches.studentId, student.id));
+  }
   await db.delete(students).where(like(students.fullName, `${MARKER}%`));
   await db.delete(leads).where(like(leads.studentName, `${MARKER}%`));
   await db.delete(feeStructures).where(like(feeStructures.course, `${MARKER}%`));
+  await db.delete(batches).where(like(batches.name, `${MARKER}%`));
   await db.delete(centers).where(like(centers.name, `${MARKER}%`));
 }
 
@@ -75,6 +92,17 @@ describe("Phase 4 lifecycle chain", () => {
       baseFeePaise: 18000000,
     });
 
+    const [batch] = await db
+      .insert(batches)
+      .values({
+        name: testName("batch"),
+        centerId,
+        course,
+        mode: "offline",
+        academicYear: "2026-27",
+      })
+      .returning({ id: batches.id });
+
     const [lead] = await db
       .insert(leads)
       .values({
@@ -95,6 +123,7 @@ describe("Phase 4 lifecycle chain", () => {
         centerId,
         mode: "offline",
         academicYear: "2026-27",
+        batchId: batch.id,
         discountPaise: 1000000,
         confirmedBy: null,
       }),
@@ -110,6 +139,9 @@ describe("Phase 4 lifecycle chain", () => {
 
     const [enrolmentAfterGate1] = await db.select().from(enrolments).where(eq(enrolments.id, gate1.enrolmentId));
     expect(enrolmentAfterGate1.status).toBe("pending_payment");
+    // The batch the counsellor chose at Gate 1 is on the enrolment from the
+    // start, not filled in later by somebody who was not in the conversation.
+    expect(enrolmentAfterGate1.batchId).toBe(batch.id);
     expect(enrolmentAfterGate1.studentId).toBeNull();
     expect(enrolmentAfterGate1.accountsToAcademicsAt).toBeNull();
 
@@ -139,6 +171,17 @@ describe("Phase 4 lifecycle chain", () => {
     expect(student.currentCourse).toBe(course);
     expect(student.parentPhone).toBe("+919847400102");
     expect(student.targetExams).toEqual(["UCEED"]);
+    // Carried across Gate 2. Before this the batch column on the students
+    // list was permanently blank, because nothing ever set it.
+    expect(student.currentBatchId).toBe(batch.id);
+
+    const roster = await db
+      .select({ batchId: studentBatches.batchId })
+      .from(studentBatches)
+      .where(eq(studentBatches.studentId, gate2.studentId!));
+    // Both the pointer and the roster row: `current_batch_id` answers "which
+    // batch now", `student_batches` is the history a later move needs.
+    expect(roster.map((row) => row.batchId)).toEqual([batch.id]);
 
     // A second, later instalment against the same enrolment must not spawn
     // a second student record or re-fire the gate.
@@ -155,5 +198,62 @@ describe("Phase 4 lifecycle chain", () => {
     const totalPaid = allPayments.reduce((sum, p) => sum + (p.direction === "credit" ? p.amountPaise : -p.amountPaise), 0);
     expect(totalPaid).toBe(17000000);
     expect(totalPaid).toBe(gate1.netFeePaise);
+  });
+
+  it("still takes an admission when no batch has been created yet", async () => {
+    // A fresh instance has no batches, and an institute mid-term may not
+    // have set up next year's. Refusing the admission for want of a batch
+    // would stop the only thing that actually matters happening.
+    const course = testName("course");
+    await db.insert(feeStructures).values({
+      course,
+      centerId,
+      mode: "offline",
+      academicYear: "2026-27",
+      baseFeePaise: 9000000,
+    });
+
+    const [lead] = await db
+      .insert(leads)
+      .values({
+        studentName: testName("student-nobatch"),
+        primaryPhone: "+919847400201",
+        centerId,
+      })
+      .returning({ id: leads.id });
+
+    const gate1 = await db.transaction((tx) =>
+      confirmAdmission(tx, {
+        leadId: lead.id,
+        course,
+        centerId,
+        mode: "offline",
+        academicYear: "2026-27",
+        confirmedBy: null,
+      }),
+    );
+
+    const [enrolment] = await db.select().from(enrolments).where(eq(enrolments.id, gate1.enrolmentId));
+    expect(enrolment.batchId).toBeNull();
+
+    const gate2 = await db.transaction((tx) =>
+      recordPayment(tx, {
+        enrolmentId: gate1.enrolmentId,
+        amountPaise: 9000000,
+        method: "cash",
+        recordedBy: null,
+      }),
+    );
+    expect(gate2.studentId).not.toBeNull();
+
+    const [student] = await db.select().from(students).where(eq(students.id, gate2.studentId!));
+    expect(student.currentBatchId).toBeNull();
+
+    // And no phantom roster row pointing at nothing.
+    const roster = await db
+      .select({ id: studentBatches.id })
+      .from(studentBatches)
+      .where(eq(studentBatches.studentId, gate2.studentId!));
+    expect(roster).toHaveLength(0);
   });
 });
