@@ -106,7 +106,20 @@ export async function POST(request: Request) {
       interestedExams: mapped.lead.interestedExams,
       coursesInterested: mapped.lead.coursesInterested,
       source: "Website",
+      // Page and form together, so "which landing page produced this" is a
+      // question the existing sources report already answers. The two halves
+      // are also kept apart on `utm` below, for anything that wants to group
+      // by page alone without re-parsing a label.
       subSource: mapped.lead.subSource,
+      utm: mapped.lead.utm || mapped.lead.pagePath || mapped.lead.formName
+        ? {
+            ...(mapped.lead.utm ?? {}),
+            ...(mapped.lead.pagePath ? { page_path: mapped.lead.pagePath } : {}),
+            ...(mapped.lead.formName ? { form_name: mapped.lead.formName } : {}),
+          }
+        : null,
+      gclid: mapped.lead.utm?.gclid ?? null,
+      fbclid: mapped.lead.utm?.fbclid ?? null,
       raw: mapped.lead.raw,
       dedupeKey: externalId,
     });

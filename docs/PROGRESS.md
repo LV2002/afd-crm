@@ -4518,3 +4518,61 @@ a walk-in belongs to no platform, so there it is not-applicable, not nought.
 a JSON body with a line per job. In Vercel, one cron entry instead of eight.
 **Next:** raise `CRON_BUDGET_SECONDS` to ~270 if the plan allows, or move the cron to
 hourly for near-real-time retargeting and broadcasts.
+
+---
+
+## Session 62 — Telling the website forms apart
+
+Leon: *"Each form is on a different page or a different type of form on the same
+page, so I would like to know which page and which form was submitted in the
+sources."*
+
+The webhook from session 54 already took submissions. What it could not do was say
+where they came from — and there was a real bug behind that: **`page` was an alias
+for the form name.** Both collided into one `sub_source`, so whichever field a form
+happened to send won and the other was lost. Two forms on one page were
+indistinguishable.
+
+**They are separate questions now, and both land in the sub-source, page first:**
+`/courses/nift · Book a demo`. Page first so Insights → Sources sorts by page with
+the several forms on that page grouped underneath — which is the shape of the
+question. Either half alone still works, and a form that sends neither still produces
+a lead rather than being refused over a missing label.
+
+**The page is reduced to a path, and that is the load-bearing part.** A sub-source is
+a reporting dimension, and one whose values are full URLs has unbounded cardinality:
+`?utm_source=fb`, `#apply`, a trailing slash, `www.` and a stray capital are five
+rows for one landing page, and the page gets no total at all. `pagePathOf()` collapses
+all of them. It also has to tell `afdindia.com/courses/nift` from `courses/nift`,
+where the only practical discriminator is a dot in the first segment — a test caught
+that treating `courses` as a hostname, which the first version did.
+
+**UTM parameters are captured, which they were not before.** Anything `utm_*`, plus
+`gclid` and `fbclid`, is recorded on the enquiry — so an ad pointing at a landing page
+can be credited with the form fills it produced. Explicit form fields beat the query
+string: a hidden input somebody filled in deliberately is better evidence than
+whatever URL the page was loaded with, since a visitor who browsed around before
+submitting carries a different page's parameters.
+
+Both halves are also stored apart on the enquiry's `utm` (`page_path`, `form_name`),
+so grouping by page alone never needs a label parsed back out.
+
+**A drop-in script rather than hand-edited forms.** Leon's forms are hand-written HTML
+across many pages. Asking him to add hidden inputs to each is how three end up
+unlabelled and their leads unattributable. One `<script>` before `</body>` adds the
+three fields to every form on the page, deriving the form's name from
+`data-crm-form`, then its `id`, then its `name`, then its position — so two unnamed
+forms are still told apart. It **adds hidden fields rather than intercepting submit**:
+the forms keep posting exactly where they post today, so a mistake in it cannot lose
+an enquiry, and neither the Apps Script nor the sheet has to change.
+
+The Apps Script sample now also covers a `doPost` handler taking a direct form POST,
+which is what Leon actually has — the previous sample assumed a Google Form's
+`onFormSubmit`.
+
+**Shipped:** `lib/integrations/website/page-identity.ts` (22 tests), page/form/UTM
+through the mapper and onto the enquiry, the browser snippet and rewritten guidance on
+Settings → Integrations → Website forms, two end-to-end webhook assertions proving it
+reaches the database.
+**Verify by:** paste the snippet, submit two different forms on one page, then
+Insights → Sources — two rows under one page path.

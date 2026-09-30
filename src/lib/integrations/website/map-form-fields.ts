@@ -1,5 +1,7 @@
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 
+import { composeSubSource, pagePathOf, utmFromQuery } from "./page-identity";
+
 /**
  * Turning one website form submission into a lead.
  *
@@ -32,8 +34,17 @@ export interface MappedWebsiteLead {
   examYear: string | null;
   interestedExams: string[] | null;
   coursesInterested: string[] | null;
-  /** The form's own name, so several forms on one site stay distinguishable. */
+  /**
+   * Page and form together — "/courses/nift · Book a demo" — so the sources
+   * report answers "which page produced this" without any new screen.
+   */
   subSource: string | null;
+  /** The page's path, on its own, for anything that wants to group by page. */
+  pagePath: string | null;
+  /** The form's own name or id, on its own. */
+  formName: string | null;
+  /** UTM parameters and click ids off the page's query string, when present. */
+  utm: Record<string, string> | null;
   /** Everything the form sent, recognised or not. */
   raw: Record<string, unknown>;
 }
@@ -60,7 +71,13 @@ const ALIASES = {
   city: ["city", "town", "location", "place"],
   examYear: ["examyear", "year", "targetyear", "yearofexam"],
   exams: ["exam", "exams", "interestedexam", "interestedexams", "course", "courses", "courseinterested", "programme", "program"],
-  formName: ["form", "formname", "source", "page", "formtitle"],
+  formName: ["form", "formname", "formid", "formtitle", "formlabel"],
+  page: ["page", "pageurl", "pagepath", "url", "sourceurl", "pagetitle", "referrer", "location"],
+  /**
+   * Where the UTM parameters come from. Usually the full page URL, but a
+   * form that posts `location.search` on its own works too.
+   */
+  query: ["query", "querystring", "search", "pageurl", "url", "location"],
 } as const;
 
 function pick(payload: WebsiteFormPayload, aliases: readonly string[]): string | null {
@@ -90,6 +107,29 @@ function toList(value: string | null): string[] | null {
   return parts.length > 0 ? parts : null;
 }
 
+/**
+ * `utm_source`, `utm_campaign` and friends sent as their own form fields.
+ *
+ * Separate from the query-string parse because a hidden input a form author
+ * filled in on purpose is better evidence than the URL the page happened to
+ * be loaded with — somebody who navigated around the site before submitting
+ * carries the query string of whichever page they landed on.
+ */
+function explicitUtmFields(payload: WebsiteFormPayload): Record<string, string> | null {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    const name = normaliseKey(key);
+    const isUtm = name.startsWith("utm") && name.length > 3;
+    if (!isUtm && name !== "gclid" && name !== "fbclid") continue;
+    if (typeof value !== "string" || !value.trim()) continue;
+    // Normalised back to the conventional spelling so `utmSource`,
+    // `utm-source` and `UTM_Source` all land on one key.
+    const canonical = isUtm ? `utm_${name.slice(3)}` : name;
+    out[canonical] = value.trim();
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 export function mapWebsiteForm(payload: WebsiteFormPayload): MapResult | MapFailure {
   const name = pick(payload, ALIASES.name);
   const phoneRaw = pick(payload, ALIASES.phone);
@@ -105,6 +145,14 @@ export function mapWebsiteForm(payload: WebsiteFormPayload): MapResult | MapFail
   }
 
   const exams = toList(pick(payload, ALIASES.exams));
+  const pagePath = pagePathOf(pick(payload, ALIASES.page));
+  const formName = pick(payload, ALIASES.formName);
+
+  // Explicit utm_* fields win over anything parsed out of the URL: a form
+  // that posts them as real fields has done the work deliberately, whereas
+  // a query string may be whatever was on the page when it loaded.
+  const explicitUtm = explicitUtmFields(payload);
+  const utm = explicitUtm ?? utmFromQuery(pick(payload, ALIASES.query));
 
   return {
     ok: true,
@@ -119,7 +167,10 @@ export function mapWebsiteForm(payload: WebsiteFormPayload): MapResult | MapFail
       // course name. Recorded on both rather than guessing wrong.
       interestedExams: exams,
       coursesInterested: exams,
-      subSource: pick(payload, ALIASES.formName),
+      subSource: composeSubSource(pagePath, formName),
+      pagePath,
+      formName,
+      utm,
       raw: payload as Record<string, unknown>,
     },
   };

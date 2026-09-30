@@ -52,7 +52,20 @@ function sendToCrm(data) {
   console.log('CRM responded ' + response.getResponseCode() + ': ' + response.getContentText());
 }
 
-// Example of wiring it into a typical handler:
+// ── Wiring it in ─────────────────────────────────────────────────────
+//
+// If your script receives the form POST directly (doPost), pass the whole
+// thing straight through — the CRM matches field names loosely and keeps
+// everything it does not recognise:
+//
+// function doPost(e) {
+//   const data = e.parameter;              // every field the form sent
+//   sheet.appendRow([data.name, data.phone, data.email]);   // as today
+//   sendToCrm(data);                       // and now the CRM
+//   return ContentService.createTextOutput('ok');
+// }
+//
+// If it is bound to a Google Form's sheet instead:
 //
 // function onFormSubmit(e) {
 //   const data = {
@@ -60,12 +73,69 @@ function sendToCrm(data) {
 //     name:  e.namedValues['Name'][0],
 //     phone: e.namedValues['Phone'][0],
 //     email: e.namedValues['Email'][0],
-//     city:  e.namedValues['City'][0],
-//     course: e.namedValues['Course'][0],
-//     form: 'Contact form',
+//     page:  '/contact',                   // which page this form lives on
+//     form:  'Contact form',               // which form it is
 //   };
 //   sendToCrm(data);
 // }`;
+
+/**
+ * The browser half.
+ *
+ * Leon's forms are hand-written HTML on different pages, some pages having
+ * more than one. Asking him to add hidden inputs to each one by hand is how
+ * three of them end up unlabelled and their leads unattributable — so this
+ * snippet fills the page, the form and the campaign parameters in for every
+ * form on the site from one `<script>` tag.
+ *
+ * It adds hidden fields rather than intercepting the submit: the forms keep
+ * posting exactly where they post today, so nothing about the existing Apps
+ * Script or the sheet has to change, and a mistake here cannot lose an
+ * enquiry.
+ */
+const PAGE_SNIPPET = `<!-- AFD CRM — paste once, before </body>, on every page with a form.
+     Adds three hidden fields to each form so the CRM knows which page and
+     which form produced the enquiry. Your forms keep posting where they
+     already post; nothing else changes. -->
+<script>
+(function () {
+  var forms = document.querySelectorAll('form');
+
+  for (var i = 0; i < forms.length; i++) {
+    var form = forms[i];
+
+    // Which form. Prefer a name you chose; fall back to the element's id or
+    // name, then to its position on the page so two unnamed forms are still
+    // told apart.
+    var label =
+      form.getAttribute('data-crm-form') ||
+      form.getAttribute('id') ||
+      form.getAttribute('name') ||
+      'form-' + (i + 1);
+
+    add(form, 'form', label);
+    add(form, 'page', window.location.pathname);
+    // The full URL carries the campaign parameters. The CRM strips the query
+    // string out of the page label and records it as attribution instead.
+    add(form, 'page_url', window.location.href);
+  }
+
+  function add(form, name, value) {
+    if (!value) return;
+    // Never overwrite a field the form already has: a hidden input somebody
+    // filled in deliberately is better evidence than anything guessed here.
+    if (form.querySelector('[name="' + name + '"]')) return;
+    var input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  }
+})();
+</script>
+
+<!-- Give a form a readable name, and it is used instead of the id: -->
+<!-- <form data-crm-form="Book a demo" action="..."> -->`;
 
 export default async function WebsiteIntegrationPage() {
   const user = await getCurrentUser();
@@ -91,7 +161,20 @@ export default async function WebsiteIntegrationPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">2. Add this to your Apps Script</h2>
+        <h2 className="font-medium">2. Paste this on every page with a form</h2>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          One script tag, before <code>&lt;/body&gt;</code>. It adds three hidden fields to every
+          form on the page — which page, which form, and the full address including any campaign
+          parameters — so you can tell your forms apart in reports without editing each one by
+          hand. Your forms keep posting exactly where they post today.
+        </p>
+        <div className="overflow-x-auto rounded-lg border bg-muted/50">
+          <pre className="p-4 font-mono text-xs leading-relaxed">{PAGE_SNIPPET}</pre>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">3. Add this to your Apps Script</h2>
         <p className="max-w-2xl text-sm text-muted-foreground">
           Open the script bound to your form&rsquo;s sheet (Extensions → Apps Script), paste this
           in, and replace the two values at the top. Then call <code>sendToCrm(data)</code> from
@@ -103,7 +186,7 @@ export default async function WebsiteIntegrationPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">3. What the CRM understands</h2>
+        <h2 className="font-medium">4. What the CRM understands</h2>
         <p className="max-w-2xl text-sm text-muted-foreground">
           Only a <strong>name</strong> and a <strong>phone number</strong> are required.
           Everything else is optional, and field names are matched loosely — <code>name</code>,{" "}
@@ -116,13 +199,27 @@ export default async function WebsiteIntegrationPage() {
           never loses the answers submitted in the meantime.
         </p>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Send a <code>form</code> field naming which form it was, and it arrives as the
-          sub-source — so several forms on one site stay distinguishable in reports.
+          <strong>Which page and which form</strong> both arrive as the sub-source, page first: an
+          enquiry from the demo form on your NIFT page reads{" "}
+          <code>/courses/nift · Book a demo</code>. Page first so Insights → Sources sorts by
+          page, with the several forms on one page grouped underneath it. Either half on its own
+          works too.
+        </p>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          The page is reduced to its path, so <code>?utm_source=…</code>, a trailing slash,{" "}
+          <code>www.</code> and a difference in capitals all count as the same page rather than
+          four separate rows in your reports.
+        </p>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          <strong>Campaign parameters are kept as attribution.</strong> Anything starting{" "}
+          <code>utm_</code>, plus <code>gclid</code> and <code>fbclid</code>, is recorded against
+          the enquiry — so an ad pointing at a landing page can be credited with the form fills it
+          produced. Fields your form sends explicitly beat whatever was in the address bar.
         </p>
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">4. Check it worked</h2>
+        <h2 className="font-medium">5. Check it worked</h2>
         <p className="max-w-2xl text-sm text-muted-foreground">
           Submit a test enquiry on your own site. It should appear in the leads list within
           seconds, with <strong>Website</strong> as its source. If it does not, Settings →

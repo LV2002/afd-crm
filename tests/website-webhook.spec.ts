@@ -24,7 +24,9 @@ if (!process.env.INTEGRATION_ENCRYPTION_KEY) throw new Error("INTEGRATION_ENCRYP
 
 const { POST } = await import("../src/app/api/webhooks/website/route");
 const { db } = await import("../src/lib/db/client");
-const { leadIdentifiers, leads, webhookEvents } = await import("../src/lib/db/schema");
+const { enquiries, leadIdentifiers, leads, webhookEvents } = await import(
+  "../src/lib/db/schema"
+);
 const { setIntegrationCredential, deleteIntegrationCredential } = await import(
   "../src/lib/integrations/credentials"
 );
@@ -71,6 +73,7 @@ afterAll(async () => {
   const made = await db.select({ id: leads.id }).from(leads).where(like(leads.studentName, `${MARKER}%`));
   for (const lead of made) {
     await db.delete(leadIdentifiers).where(eq(leadIdentifiers.leadId, lead.id));
+    await db.delete(enquiries).where(eq(enquiries.leadId, lead.id));
     await db.delete(leads).where(eq(leads.id, lead.id));
   }
   await db.delete(webhookEvents).where(eq(webhookEvents.source, "website"));
@@ -187,6 +190,66 @@ describe("a real submission", () => {
       .where(eq(webhookEvents.externalId, submission_id));
     expect(event.status).toBe("failed");
     expect(event.lastError).toContain("phone");
+  });
+
+  it("records which page and which form produced the enquiry", async () => {
+    // Leon has several hand-written forms, some on the same page. Without
+    // this every website enquiry read "Website" and no more, and "which
+    // landing page is working" had no answer.
+    const body = submission({
+      page_url: "https://www.afdindia.com/Courses/NIFT/?utm_source=meta&utm_campaign=nift-june",
+      form: "Book a demo",
+    });
+    const response = await POST(request(body));
+    expect(response.status).toBe(200);
+
+    const { phone } = JSON.parse(body) as { phone: string };
+    const [lead] = await db
+      .select({ id: leads.id, subSource: leads.firstTouchSubSource })
+      .from(leads)
+      .where(eq(leads.primaryPhone, `+91${phone}`));
+
+    // Page first, and normalised — the capitals, the www, the trailing
+    // slash and the query string would otherwise be four separate rows in
+    // the sources report for one page.
+    expect(lead.subSource).toBe("/courses/nift · Book a demo");
+
+    const [enquiry] = await db
+      .select({ utm: enquiries.utm, subSource: enquiries.subSource })
+      .from(enquiries)
+      .where(eq(enquiries.leadId, lead.id));
+
+    // The two halves kept apart as well as combined, so grouping by page
+    // alone needs no label parsing.
+    expect(enquiry.utm).toMatchObject({
+      utm_source: "meta",
+      utm_campaign: "nift-june",
+      page_path: "/courses/nift",
+      form_name: "Book a demo",
+    });
+  });
+
+  it("tells two forms on one page apart", async () => {
+    const first = submission({ page: "/courses/uceed", form: "Hero enquiry" });
+    const second = submission({ page: "/courses/uceed", form: "Footer callback" });
+    await POST(request(first));
+    await POST(request(second));
+
+    const subSources = await Promise.all(
+      [first, second].map(async (body) => {
+        const { phone } = JSON.parse(body) as { phone: string };
+        const [lead] = await db
+          .select({ subSource: leads.firstTouchSubSource })
+          .from(leads)
+          .where(eq(leads.primaryPhone, `+91${phone}`));
+        return lead.subSource;
+      }),
+    );
+
+    expect(subSources).toEqual([
+      "/courses/uceed · Hero enquiry",
+      "/courses/uceed · Footer callback",
+    ]);
   });
 
   it("keeps the unrecognised fields on the raw payload", async () => {
