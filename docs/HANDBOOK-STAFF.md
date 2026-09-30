@@ -150,8 +150,14 @@ through to the full list.
 
 ### Working a lead
 
-Open a lead and you get: their details, their **timeline**, their WhatsApp
-thread, their profile form, their fees and their files.
+Open a lead and you get: their details, their **timeline**, their profile form,
+their fees and their files.
+
+**WhatsApp is not on this screen.** Messaging happens in **WhatsApp → Inbox**,
+where you can see the whole conversation, the approved templates and whether
+the 24-hour reply window is still open — none of which fits beside a form you
+are editing. Search the inbox by the person's name or number to find their
+thread.
 
 **After every real contact — every call, every message, every walk-in —
 log it.** Use *Log interaction*, and always set the **next follow-up date**.

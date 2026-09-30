@@ -4419,3 +4419,33 @@ course — the picker offers it, and after accounts take the first payment the s
 shows that batch. Insights → Activity for today, arrows to step back a day.
 **Next:** open academics questions 2–10 remain unanswered; the academics module
 itself is still parked (`git cherry-pick c3e6e83 9c6ca8c`).
+
+---
+
+## Session 60 — WhatsApp comes off the lead page
+
+Leon: *"we go into that lead and on the bottom we seem to have some sort of
+WhatsApp sending feature — I do not want that there. I only want the student
+profile link and the fee instalment details."*
+
+The panel is gone from `/leads/[id]`. Nothing was deleted: `WhatsAppPanel`,
+`getWhatsAppThread` and `isWithinCustomerServiceWindow` are all shared with the
+WhatsApp inbox, which stays exactly as it is — inbox, templates, broadcasts,
+automations, opt-outs.
+
+Side benefit: the thread query and the 24-hour service-window check went out of the
+lead page's `Promise.all` with it. Two fewer database round trips on the screen
+counsellors open more than any other.
+
+**The cost, stated plainly rather than buried.** WhatsApp messages do not write
+`interactions` rows, so the timeline never carried them — which means this page now
+shows **no** WhatsApp history at all, not just no send box. The conversation is in
+WhatsApp → Inbox, searchable by name or number. If that turns out to be a step too
+far in daily use, the right fix is a read-only link through to the thread, not
+putting the send box back. Recorded here so the next session does not "restore" the
+panel thinking it was dropped by accident.
+
+**Shipped:** the panel removed from the lead page, handbook updated to say where
+messaging lives.
+**Verify by:** open any lead — profile form and fees are the last two sections, no
+WhatsApp. WhatsApp → Inbox still works and still sends.

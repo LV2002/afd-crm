@@ -25,7 +25,6 @@ import { currentSignedAgreement, otherDocuments } from "@/lib/storage/shared";
 import { getBatchOptionsForCentre } from "@/lib/enrolment/batch-options";
 import { getLeadFeePlan } from "@/lib/enrolment/get-fee-plan";
 import { getStudentFieldLabels } from "@/lib/profile-form/field-labels";
-import { getWhatsAppThread, isWithinCustomerServiceWindow } from "@/lib/whatsapp/get-thread";
 
 import { ConfirmAdmissionForm } from "./confirm-admission-form";
 import { InteractionForm } from "./interaction-form";
@@ -34,7 +33,6 @@ import { describeLead } from "@/lib/leads/search-leads";
 import { LeadEditForm } from "./lead-edit-form";
 import { LeadTagsPanel, type TagOption } from "./lead-tags-panel";
 import { TasksPanel, type TaskRow } from "./tasks-panel";
-import { WhatsAppPanel } from "@/components/whatsapp/whatsapp-panel";
 
 interface EnrolmentRow {
   id: string;
@@ -125,7 +123,17 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const currentTagIds = new Set(currentTags.map((t) => t.id));
   const availableTags = (allTagRows ?? []).filter((t) => !currentTagIds.has(t.id));
 
-  const canReadWhatsApp = can(user, "whatsapp.read");
+  // No `canReadWhatsApp` here any more. The WhatsApp panel was removed from
+  // this page in September 2026 at Leon's request — messaging belongs in the
+  // WhatsApp section, which has the inbox, the templates and the 24-hour
+  // service window in view.
+  //
+  // Worth being straight about the cost: WhatsApp messages do NOT write
+  // `interactions` rows, so the timeline below never carried them and this
+  // page now shows no WhatsApp history at all. The conversation lives in
+  // WhatsApp → Inbox, searchable by the lead's name or number. If that turns
+  // out to be a step too far, the honest fix is a read-only link to the
+  // thread, not putting the send box back.
   const canReadFiles = can(user, "file.read");
   const canReadFees = can(user, "enrolment.read");
 
@@ -142,7 +150,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   // time. See docs/HANDBOOK-TECHNICAL.md § 11.
   const [
     timeline,
-    [whatsappMessages, withinWhatsAppWindow],
     attachments,
     feePlan,
     studentFieldLabels,
@@ -151,9 +158,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     { data: referredRows },
   ] = await Promise.all([
     getTimeline(supabase, id),
-    canReadWhatsApp
-      ? Promise.all([getWhatsAppThread(supabase, id), isWithinCustomerServiceWindow(supabase, id)])
-      : Promise.resolve([[], false] as [Awaited<ReturnType<typeof getWhatsAppThread>>, boolean]),
     canReadFiles ? listAttachments(supabase, { kind: "lead", id }) : Promise.resolve([]),
     canReadFees ? getLeadFeePlan(id) : Promise.resolve(null),
     getStudentFieldLabels(supabase),
@@ -302,16 +306,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           )}
         </div>
       </div>
-
-      {canReadWhatsApp && (
-        <WhatsAppPanel
-          leadId={id}
-          toPhone={row.primary_phone}
-          messages={whatsappMessages}
-          canSend={can(user, "whatsapp.send")}
-          withinWindow={withinWhatsAppWindow}
-        />
-      )}
 
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Student profile form</h2>
