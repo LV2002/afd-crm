@@ -4,9 +4,11 @@ import Link from "next/link";
 import { Check, Copy, Link2, Printer } from "lucide-react";
 import { useActionState, useState } from "react";
 
+import { OpenFileButton } from "@/components/files/open-file-button";
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
 import { createProfileFormLink, type ProfileFormState } from "@/lib/profile-form/actions";
+import type { ProfileFormFile } from "@/lib/profile-form/file-answers";
 
 const initialState: ProfileFormState = {};
 
@@ -16,6 +18,7 @@ export function ProfileFormPanel({
   submittedAt,
   answers,
   fieldLabels,
+  files,
   canManage,
 }: {
   leadId: string;
@@ -24,6 +27,12 @@ export function ProfileFormPanel({
   answers: Record<string, unknown> | null;
   /** key -> label, so answers read as the questions they belong to. */
   fieldLabels: Record<string, string>;
+  /**
+   * Anything the student uploaded, keyed back to the question it answers.
+   * The answer itself is only the filename, so without these the ID proof
+   * reads as the word "aadhaar.png" and there is nothing to click.
+   */
+  files: ProfileFormFile[];
   canManage: boolean;
 }) {
   const [state, action, pending] = useActionState(createProfileFormLink, initialState);
@@ -72,14 +81,23 @@ export function ProfileFormPanel({
           </Button>
         </div>
         <dl className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2">
-          {entries.map(([key, value]) => (
-            <div key={key} className="flex flex-col gap-0.5">
-              <dt className="text-xs text-muted-foreground">{fieldLabels[key] ?? key}</dt>
-              <dd className="text-sm font-medium">
-                {Array.isArray(value) ? value.join(", ") : String(value)}
-              </dd>
-            </div>
-          ))}
+          {entries.map(([key, value]) => {
+            const file = files.find((candidate) => candidate.fieldKey === key);
+            return (
+              <div key={key} className="flex flex-col gap-0.5">
+                <dt className="text-xs text-muted-foreground">{fieldLabels[key] ?? key}</dt>
+                <dd className="text-sm font-medium">
+                  {file ? (
+                    <OpenFileButton attachmentId={file.attachmentId} label={file.fileName} />
+                  ) : Array.isArray(value) ? (
+                    value.join(", ")
+                  ) : (
+                    String(value)
+                  )}
+                </dd>
+              </div>
+            );
+          })}
         </dl>
       </div>
     );

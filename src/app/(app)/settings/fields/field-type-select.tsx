@@ -2,7 +2,7 @@
 
 import { Combobox } from "@/components/ui/combobox";
 
-import { FIELD_TYPES } from "./constants";
+import { FIELD_TYPE_OPTIONS } from "./constants";
 
 export function FieldTypeSelect({ defaultValue }: { defaultValue?: string }) {
   return (
@@ -10,9 +10,9 @@ export function FieldTypeSelect({ defaultValue }: { defaultValue?: string }) {
       name="type"
       defaultValue={defaultValue ?? "text"}
       required
-      options={FIELD_TYPES.map((type) => ({ value: type, label: type.replace(/_/g, " ") }))}
+      options={FIELD_TYPE_OPTIONS}
       placeholder="Choose a type"
-      searchPlaceholder="Type to search…"
+      searchPlaceholder="Search — try “upload”, “dropdown”, “money”…"
     />
   );
 }

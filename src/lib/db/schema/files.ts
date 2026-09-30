@@ -59,6 +59,19 @@ export const attachments = pgTable(
      * word "instalment", which was true only for one exact phrasing.
      */
     kind: text("kind").notNull().default("document"),
+    /**
+     * The profile-form question this file answers
+     * (`field_definitions.key`), or null for anything a member of staff
+     * uploaded — which answers no question.
+     *
+     * Sits beside `label` and `kind` because it is the third answer to
+     * "what is this file": what a person calls it, what the system calls
+     * it, and which question it came back against. The submitted-forms
+     * list needs the third to put a link next to the right question, and
+     * neither of the other two can stand in — two questions may share a
+     * label, and a student may attach `image.jpg` to both.
+     */
+    fieldKey: text("field_key"),
     uploadedBy: uuid("uploaded_by").references(() => profiles.id, { onDelete: "set null" }),
     ...timestamps(),
     ...softDelete(),
@@ -67,6 +80,10 @@ export const attachments = pgTable(
     index("attachments_lead_idx").on(table.leadId),
     index("attachments_student_idx").on(table.studentId),
     index("attachments_lead_kind_idx").on(table.leadId, table.kind),
+    // The submitted-forms list's own lookup: every question-answering file
+    // for a set of leads. Partial in migration 0072 — staff uploads are
+    // the majority and none is ever found this way.
+    index("attachments_lead_field_key_idx").on(table.leadId, table.fieldKey),
     // Exactly one parent. Without this a row could attach to both a lead
     // and a student (two different access boundaries at once) or to
     // neither (unreachable, and unauthorisable — no parent to check).

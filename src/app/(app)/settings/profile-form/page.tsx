@@ -15,7 +15,13 @@ import {
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
+import { FIELD_TYPE_LABELS, type FieldTypeName } from "../fields/constants";
 import { PlacementControls, RequiredSwitch } from "./question-row-actions";
+
+/** "File upload" rather than "file" — the same words the type picker uses. */
+function typeLabel(type: string): string {
+  return FIELD_TYPE_LABELS[type as FieldTypeName]?.label ?? type.replace(/_/g, " ");
+}
 
 /**
  * The student profile form, built as a form rather than as a list of
@@ -118,7 +124,7 @@ export default async function ProfileFormSettingsPage() {
                     </p>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {row.type.replace(/_/g, " ")}
+                    {typeLabel(row.type)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{row.section}</TableCell>
                   <TableCell>
@@ -178,7 +184,7 @@ export default async function ProfileFormSettingsPage() {
                     <p className="text-xs text-muted-foreground">{row.key}</p>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {row.type.replace(/_/g, " ")}
+                    {typeLabel(row.type)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{row.section}</TableCell>
                   <TableCell>

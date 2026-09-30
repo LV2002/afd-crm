@@ -42,6 +42,8 @@ export interface StoredUpload {
   /** The field this file answered, so the answer can name it. */
   key: string;
   fileName: string;
+  /** The `attachments` row, so a list can link straight to the file. */
+  attachmentId: string;
 }
 
 export type UploadOutcome =
@@ -116,6 +118,11 @@ export async function storeProfileFormUploads(
         // "ID proof" rather than as an opaque filename nobody can place.
         label: upload.label,
         kind: "document",
+        // Which question this answers. The submitted-forms list needs it to
+        // put the link next to the right question, and neither the label
+        // nor the filename can stand in — two questions may share a label,
+        // and a student may attach `image.jpg` to both.
+        fieldKey: upload.key,
         // `uploaded_by` stays null — a student is not a `profiles` row, and
         // inventing one would put a non-user in the staff list. The lead's
         // own `profile_form_submitted_at` records who sent it.
@@ -124,11 +131,22 @@ export async function storeProfileFormUploads(
     }
 
     // One statement, so either every file is on the record or none is.
-    await db.insert(attachments).values(rows);
+    // `returning` in the same statement rather than a read afterwards: the
+    // caller needs each row's id, and a second query could come back with
+    // a different set if anything else touched the lead in between.
+    //
+    // Matched back by position, which `insert ... returning` over a values
+    // list preserves. Keying on `field_key` would read more explicitly but
+    // could miss, and a missed id here is a link to nowhere.
+    const inserted = await db.insert(attachments).values(rows).returning({ id: attachments.id });
 
     return {
       ok: true,
-      stored: uploads.map((upload) => ({ key: upload.key, fileName: upload.file.name })),
+      stored: uploads.map((upload, index) => ({
+        key: upload.key,
+        fileName: upload.file.name,
+        attachmentId: inserted[index].id,
+      })),
     };
   } catch (error) {
     await rollback(supabase, written);

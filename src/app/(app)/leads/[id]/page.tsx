@@ -21,7 +21,7 @@ import { FeePlanPanel } from "@/components/enrolment/fee-plan-panel";
 import { PendingDiscount } from "@/components/enrolment/pending-discount";
 import { ProfileFormPanel } from "@/components/profile-form/profile-form-panel";
 import { listAttachments } from "@/lib/storage/attachments";
-import { currentSignedAgreement, otherDocuments } from "@/lib/storage/shared";
+import { currentSignedAgreement, otherDocuments, profileFormFiles } from "@/lib/storage/shared";
 import { getBatchOptionsForCentre } from "@/lib/enrolment/batch-options";
 import { getLeadFeePlan } from "@/lib/enrolment/get-fee-plan";
 import { getStudentFieldLabels } from "@/lib/profile-form/field-labels";
@@ -315,6 +315,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           submittedAt={row.profile_form_submitted_at}
           answers={row.profile_form_data}
           fieldLabels={studentFieldLabels}
+          files={profileFormFiles(attachments)}
           canManage={can(user, "lead.update")}
         />
       </div>

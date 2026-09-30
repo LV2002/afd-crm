@@ -8,6 +8,7 @@ import {
   resolveFieldOptions,
   type FieldOption,
 } from "@/lib/fields/resolve-field-options";
+import { listProfileFormFiles } from "@/lib/profile-form/file-answers";
 import { getStudentFieldLabels } from "@/lib/profile-form/field-labels";
 import { defaultColumnKeys, isSheetColumn } from "@/lib/profile-form/sheet";
 import { createClient } from "@/lib/supabase/server";
@@ -108,6 +109,15 @@ export default async function ProfileFormsPage() {
   const all = rows ?? [];
   const submitted = all.filter((r) => r.profile_form_submitted_at !== null);
 
+  // The files students attached, resolved to attachment ids so the table can
+  // link to them. Only submitted forms can have any, so only those leads are
+  // asked about. Read through the same RLS-bound client as the rows
+  // themselves, so a counsellor gets links for their own leads and no others.
+  const filesByLead = await listProfileFormFiles(
+    supabase,
+    submitted.map((row) => row.id),
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -144,6 +154,9 @@ export default async function ProfileFormsPage() {
           defaultColumns={defaultColumnKeys(withOptions)}
           canRevealPhone={can(user, "lead.reveal_phone")}
           phoneKeys={(definitions ?? []).filter((d) => d.type === "phone").map((d) => d.key)}
+          fileKeys={(definitions ?? []).filter((d) => d.type === "file").map((d) => d.key)}
+          filesByLead={filesByLead}
+          canReadFiles={can(user, "file.read")}
         />
       )}
     </div>

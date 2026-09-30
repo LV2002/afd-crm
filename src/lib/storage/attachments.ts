@@ -30,7 +30,9 @@ export async function listAttachments(
 ): Promise<AttachmentRow[]> {
   const { data, error } = await supabase
     .from("attachments")
-    .select("id, storage_path, file_name, mime_type, size_bytes, label, kind, created_at, uploaded_by")
+    .select(
+      "id, storage_path, file_name, mime_type, size_bytes, label, kind, field_key, created_at, uploaded_by",
+    )
     .eq(parentColumn(parent), parent.id)
     .is("deleted_at", null)
     .order("created_at", { ascending: false });

@@ -60,8 +60,29 @@ export interface AttachmentRow {
   size_bytes: number;
   label: string | null;
   kind: string;
+  /** The profile-form question this file answers, or null for a staff upload. */
+  field_key: string | null;
   created_at: string;
   uploaded_by: string | null;
+}
+
+/**
+ * The student's own uploads, keyed back to the questions they answer.
+ *
+ * Derived from a list already loaded rather than queried again: a lead page
+ * has its attachments in hand, and a profile-form answer is only a filename
+ * until it is paired with the file.
+ */
+export function profileFormFiles(
+  rows: AttachmentRow[],
+): Array<{ attachmentId: string; fieldKey: string; fileName: string }> {
+  return rows
+    .filter((row): row is AttachmentRow & { field_key: string } => row.field_key !== null)
+    .map((row) => ({
+      attachmentId: row.id,
+      fieldKey: row.field_key,
+      fileName: row.file_name,
+    }));
 }
 
 /** The current signed agreement is the most recent one; the rest are superseded. */

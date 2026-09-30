@@ -6,9 +6,11 @@ import { z } from "zod";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { countFieldAnswers } from "@/lib/fields/count-answers";
+import type { FieldEntity } from "@/lib/fields/get-field-schema";
 import { createClient } from "@/lib/supabase/server";
 
-import { FIELD_ENTITIES, FIELD_TYPES } from "./constants";
+import { FIELD_ENTITIES, FIELD_TYPE_LABELS, FIELD_TYPES } from "./constants";
 
 export interface FieldFormState {
   error?: string;
@@ -135,7 +137,14 @@ export async function createField(
   redirect(`/settings/fields/${data.id}`);
 }
 
-const updateSchema = baseSchema.omit({ entity: true, key: true, type: true });
+/**
+ * `entity` and `key` are fixed forever — they are where the answers live,
+ * and moving them would orphan every one. `type` is not in that list: it
+ * can change while nothing has answered the field, which is the difference
+ * between "I picked the wrong type five minutes ago" and "forty students
+ * have replied". The guard is below, in `updateField`.
+ */
+const updateSchema = baseSchema.omit({ entity: true, key: true });
 
 export async function updateField(
   fieldId: string,
@@ -157,10 +166,48 @@ export async function updateField(
   const editableByRoles = formData.getAll("editableByRoles").map(String).filter(Boolean);
 
   const supabase = await createClient();
+
+  const { data: current, error: readError } = await supabase
+    .from("field_definitions")
+    .select("entity, key, type, is_core")
+    .eq("id", fieldId)
+    .maybeSingle<{ entity: FieldEntity; key: string; type: string; is_core: boolean }>();
+
+  if (readError) return { error: readError.message };
+  if (!current) return { error: "That field no longer exists." };
+
+  const typeChanged = parsed.data.type !== current.type;
+
+  if (typeChanged) {
+    // A core field's type is the shape of a real column, not a jsonb value.
+    // Nothing in the form offers to change it; this refuses a request that
+    // did not come from the form.
+    if (current.is_core) {
+      return { error: "This is a built-in field. Its type cannot be changed." };
+    }
+
+    const answered = await countFieldAnswers(current.entity, current.key);
+    if (answered > 0) {
+      // Refused rather than migrated. There is no honest conversion from a
+      // typed-in web address to an uploaded file, and guessing one would
+      // silently destroy the answers — CLAUDE.md § Non-negotiables 5.
+      return {
+        error:
+          `${answered} ${answered === 1 ? "person has" : "people have"} already answered this ` +
+          `question, so its type can no longer change — their answers are ` +
+          `${FIELD_TYPE_LABELS[current.type as keyof typeof FIELD_TYPE_LABELS]?.label ?? current.type} ` +
+          `and nothing can turn them into ` +
+          `${FIELD_TYPE_LABELS[parsed.data.type].label}. Add a new question of the right type ` +
+          `and switch this one off instead, so the old answers stay readable.`,
+      };
+    }
+  }
+
   const { error } = await supabase
     .from("field_definitions")
     .update({
       label: parsed.data.label,
+      type: parsed.data.type,
       help_text: parsed.data.helpText || null,
       section: parsed.data.section,
       is_required: parsed.data.isRequired ?? false,
@@ -187,7 +234,15 @@ export async function updateField(
   revalidatePath("/settings/fields");
   revalidatePath("/settings/profile-form");
   revalidatePath(`/settings/fields/${fieldId}`);
-  return { success: "Saved." };
+  // Every screen that renders this field's input reads the type, so they
+  // all have to be told — a lead form still showing a text box for what is
+  // now an upload is the bug this whole change exists to fix.
+  if (typeChanged) revalidatePath("/leads", "layout");
+  return {
+    success: typeChanged
+      ? `Saved. This question is now a ${FIELD_TYPE_LABELS[parsed.data.type].label.toLowerCase()}.`
+      : "Saved.",
+  };
 }
 
 export async function setFieldActive(fieldId: string, isActive: boolean): Promise<void> {

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 import type { FieldFormState } from "./actions";
+import { FIELD_TYPE_LABELS, type FieldTypeName } from "./constants";
 import { EntitySelect } from "./entity-select";
 import { FieldTypeSelect } from "./field-type-select";
 import { RoleCheckboxes } from "./role-checkboxes";
@@ -35,6 +36,7 @@ export function FieldForm({
   values,
   roles,
   locked,
+  answeredCount = 0,
   action,
   submitLabel,
 }: {
@@ -42,10 +44,20 @@ export function FieldForm({
   roles: Array<{ id: string; name: string }>;
   /** True for is_core fields: entity/key/type can't change. */
   locked: boolean;
+  /**
+   * How many people have answered this question. Non-zero freezes the type,
+   * because there is no honest way to reinterpret existing answers as a
+   * different type — see `countFieldAnswers`. Zero on a new field.
+   */
+  answeredCount?: number;
   action: (prevState: FieldFormState, formData: FormData) => Promise<FieldFormState>;
   submitLabel: string;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
+
+  const typeFrozen = locked || answeredCount > 0;
+  const typeLabel =
+    FIELD_TYPE_LABELS[values.type as FieldTypeName]?.label ?? values.type.replace(/_/g, " ");
 
   return (
     <form action={formAction} className="flex max-w-xl flex-col gap-4">
@@ -87,14 +99,27 @@ export function FieldForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="type">Type</Label>
-          {locked ? (
+          {typeFrozen ? (
             <>
-              <Input value={values.type.replace(/_/g, " ")} disabled />
+              <Input value={typeLabel} disabled />
               <input type="hidden" name="type" value={values.type} />
             </>
           ) : (
             <FieldTypeSelect defaultValue={values.type} />
           )}
+          {/*
+            Said on the form rather than only on a refusal. Somebody who
+            picked the wrong type can fix it while nobody has answered, and
+            wants to know that before they try; somebody who cannot needs
+            the reason, not a greyed-out box with no explanation.
+          */}
+          <p className="text-xs text-muted-foreground">
+            {locked
+              ? "A built-in field. Its type is fixed."
+              : answeredCount > 0
+                ? `${answeredCount} ${answeredCount === 1 ? "person has" : "people have"} answered this, so the type is now fixed. To ask for something different, add a new question and switch this one off — that keeps the old answers readable.`
+                : "Nobody has answered this yet, so you can still change the type. Once somebody has, it is fixed."}
+          </p>
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="section">Section</Label>

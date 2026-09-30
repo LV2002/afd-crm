@@ -4643,3 +4643,68 @@ other Insights rows.
 **Shipped:** the page moved to `insights/handovers/`, a tab in the Insights layout,
 the `/handovers` redirect, the nav entry and its icon removed, handbook repointed.
 **Verify by:** Insights → Handovers, and check an old `/handovers` link still lands.
+
+---
+
+## Session 65 — Upload questions, and links to what came back
+
+Two things Leon found once the file control worked.
+
+### The photo question was the wrong type, and the form let him pick it
+
+His "Photo" question was a `url`, so the student got a box to paste a link into.
+That was not a mistake anyone should be blamed for: the type picker showed the raw
+enum — `text`, `long_text`, `url`, `file`, `user_ref` — and `url` is a perfectly
+plausible guess for a photo if nothing says that `file` is the one where the student
+attaches something.
+
+**Every type now says what it is,** with a searchable one-line description:
+"File upload — they attach a photo or a PDF"; "Web address — a link they type or
+paste… NOT for uploading a file". Typing "upload" or "photo" in the picker finds the
+right row. The same words are used on the fields list and in the profile-form builder,
+so a question's type reads the same everywhere.
+
+**And the type can now actually be changed** — while nobody has answered. This was
+worse than it looked: the edit form already showed a type picker for a custom field,
+and `updateSchema` dropped `type` before the write. Picking a new type said "Saved."
+and changed nothing.
+
+The guard is a real count, and it is deliberately not scoped to the caller. A
+co-admin with centre scope would get zero for a field forty people in the other
+centre had answered, and take that as permission to change the type — losing exactly
+the answers they could not see. So `countFieldAnswers()` runs on the direct client;
+a count discloses nothing, and `settings.manage` is already checked. It looks in both
+homes of a student field: `students.custom` *and* `leads.profile_form_data`, because a
+student answers the profile form months before a `students` row exists. A soft-deleted
+lead's answer doesn't count, and neither does a key present but empty.
+
+Once somebody has answered, the type is fixed and the form says so on screen rather
+than waiting to refuse a save. There is no honest conversion from a typed-in web
+address to an uploaded file, and guessing one would destroy the answers.
+
+### The uploads are links now, not filenames
+
+`profile_form_data` stores a filename for a `file` question, which is not something
+anybody can click. The file is an `attachments` row, and nothing connected the two:
+matching on the label breaks when two questions share one, and matching on the
+filename breaks when a student attaches `image.jpg` twice.
+
+So the file carries the question it answers: **`attachments.field_key`** (migration
+0072), beside `label` (what a person calls it) and `kind` (what the system calls it).
+Null for every staff upload, which answers no question. The key is on the file rather
+than in a map on the lead because that is where it belongs.
+
+Student Profile Forms gained an **Uploads** column — a button per file, labelled with
+the question, shown whenever the form asks for a file at all so a student who attached
+nothing reads as a visible gap. The expanded row and the lead page's profile-form panel
+link too. All three go through the existing `OpenFileButton`, so they mint the
+five-minute signed URL on click and pay the same `attachment.view` audit cost as every
+other file in the system. Gated on `file.read`.
+
+**Shipped:** migration 0072 and `attachments.field_key`, `lib/fields/count-answers.ts`
+(8 tests), `FIELD_TYPE_LABELS` (4 tests guarding the three copies of the type list
+against drift), `lib/profile-form/file-answers.ts`, `profileFormFiles()` (2 tests), the
+type change in `updateField`, the Uploads column, handbook.
+**Verify by:** Settings → Custom Fields → your Photo field. If nobody has answered it,
+set the type to **File upload** and save. Send a profile link, attach a photo, then
+open Student Profile Forms — the Uploads column has a button for it.

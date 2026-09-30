@@ -4,6 +4,7 @@ import { ArrowUpDown, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useMemo, useState } from "react";
 
+import { OpenFileButton } from "@/components/files/open-file-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { maskPhone } from "@/lib/leads/mask-phone";
+import type { ProfileFormFile } from "@/lib/profile-form/file-answers";
 import {
   UNANSWERED,
   UNANSWERED_LABEL,
@@ -68,6 +70,9 @@ export function ProfileFormsTable({
   defaultColumns,
   canRevealPhone,
   phoneKeys,
+  fileKeys,
+  filesByLead,
+  canReadFiles,
 }: {
   rows: ProfileFormRow[];
   fieldLabels: Record<string, string>;
@@ -76,6 +81,11 @@ export function ProfileFormsTable({
   canRevealPhone: boolean;
   /** Keys of the phone-typed questions, so the expanded row can mask them. */
   phoneKeys: string[];
+  /** Keys of the upload questions, in the order the form asks them. */
+  fileKeys: string[];
+  /** leadId → the files that student attached, resolved to attachment ids. */
+  filesByLead: Record<string, ProfileFormFile[]>;
+  canReadFiles: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("submitted");
@@ -85,6 +95,18 @@ export function ProfileFormsTable({
   const [filters, setFilters] = useState<Record<string, string>>({});
 
   const phoneKeySet = useMemo(() => new Set(phoneKeys), [phoneKeys]);
+  const fileKeySet = useMemo(() => new Set(fileKeys), [fileKeys]);
+
+  /**
+   * A column of its own rather than an answer column, because what is
+   * useful about an upload is the file, not the filename it happened to
+   * have — so it is a button, and buttons do not sort or filter. It shows
+   * whenever the form asks for a file at all, so a student who attached
+   * nothing reads as a visible gap rather than no column.
+   */
+  const showFiles = canReadFiles && fileKeys.length > 0;
+  /** The fixed columns: Lead #, Student, Submitted, and Files when shown. */
+  const fixedColumnCount = showFiles ? 4 : 3;
   const shown = useMemo(
     () => columns.filter((column) => shownKeys.includes(column.key)),
     [columns, shownKeys],
@@ -255,6 +277,7 @@ export function ProfileFormsTable({
               <TableHead>
                 <SortButton column="submitted">Submitted</SortButton>
               </TableHead>
+              {showFiles && <TableHead>Uploads</TableHead>}
               {shown.map((column) => (
                 <TableHead key={column.key}>
                   <SortButton column={`a:${column.key}`}>{column.label}</SortButton>
@@ -265,7 +288,10 @@ export function ProfileFormsTable({
             </TableRow>
             {shown.length > 0 && (
               <TableRow>
-                <TableHead colSpan={3} className="text-xs font-normal text-muted-foreground">
+                <TableHead
+                  colSpan={fixedColumnCount}
+                  className="text-xs font-normal text-muted-foreground"
+                >
                   Filter
                 </TableHead>
                 {shown.map((column) => (
@@ -304,6 +330,7 @@ export function ProfileFormsTable({
                 ([, value]) => value !== null && value !== "",
               );
               const isOpen = expanded === row.id;
+              const files = filesByLead[row.id] ?? [];
               return (
                 <Fragment key={row.id}>
                   <TableRow>
@@ -321,6 +348,23 @@ export function ProfileFormsTable({
                         <Badge variant="secondary">Awaiting</Badge>
                       )}
                     </TableCell>
+                    {showFiles && (
+                      <TableCell>
+                        {files.length === 0 ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <div className="flex flex-col items-start gap-1">
+                            {files.map((file) => (
+                              <OpenFileButton
+                                key={file.attachmentId}
+                                attachmentId={file.attachmentId}
+                                label={fieldLabels[file.fieldKey] ?? file.fileName}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </TableCell>
+                    )}
                     {shown.map((column) => {
                       const text = answerText(column, data[column.key]);
                       return (
@@ -353,29 +397,50 @@ export function ProfileFormsTable({
                   </TableRow>
                   {isOpen && (
                     <TableRow>
-                      <TableCell colSpan={5 + shown.length} className="bg-muted/30">
+                      <TableCell
+                        colSpan={fixedColumnCount + 2 + shown.length}
+                        className="bg-muted/30"
+                      >
                         <dl className="grid gap-3 p-2 sm:grid-cols-3">
-                          {answers.map(([key, value]) => (
-                            <div key={key} className="flex flex-col gap-0.5">
-                              <dt className="text-xs text-muted-foreground">
-                                {fieldLabels[key] ?? key}
-                              </dt>
-                              <dd className="text-sm">
-                                {/*
-                                  CLAUDE.md non-negotiable #6: a list is a
-                                  bulk view, and a student profile form
-                                  carries four phone numbers. Full numbers
-                                  are on the lead's own page, behind the
-                                  audited reveal.
-                                */}
-                                {phoneKeySet.has(key) && !canRevealPhone
-                                  ? maskPhone(String(value))
-                                  : Array.isArray(value)
-                                    ? value.join(", ")
-                                    : String(value)}
-                              </dd>
-                            </div>
-                          ))}
+                          {answers.map(([key, value]) => {
+                            const file = fileKeySet.has(key)
+                              ? files.find((candidate) => candidate.fieldKey === key)
+                              : undefined;
+                            return (
+                              <div key={key} className="flex flex-col gap-0.5">
+                                <dt className="text-xs text-muted-foreground">
+                                  {fieldLabels[key] ?? key}
+                                </dt>
+                                <dd className="text-sm">
+                                  {/*
+                                    An upload's answer is its filename,
+                                    which is not something anybody can
+                                    click. The file is what was asked for,
+                                    so it is the file that is offered.
+                                  */}
+                                  {file ? (
+                                    <OpenFileButton
+                                      attachmentId={file.attachmentId}
+                                      label={file.fileName}
+                                    />
+                                  ) : /*
+                                      CLAUDE.md non-negotiable #6: a list is
+                                      a bulk view, and a student profile
+                                      form carries four phone numbers. Full
+                                      numbers are on the lead's own page,
+                                      behind the audited reveal.
+                                    */
+                                  phoneKeySet.has(key) && !canRevealPhone ? (
+                                    maskPhone(String(value))
+                                  ) : Array.isArray(value) ? (
+                                    value.join(", ")
+                                  ) : (
+                                    String(value)
+                                  )}
+                                </dd>
+                              </div>
+                            );
+                          })}
                         </dl>
                       </TableCell>
                     </TableRow>

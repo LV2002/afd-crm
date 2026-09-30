@@ -108,6 +108,7 @@ sign in again. If it keeps happening, tell your administrator.
 | **Pipeline** | The same people as a drag-and-drop board by stage. |
 | **Admissions** | Confirmed admissions waiting on, or having made, a first payment. |
 | **Students** | People who have paid and started. |
+| **Student Profile Forms** | Every form you have sent students, and their answers — including anything they uploaded. |
 | **Finance** | The institute's own money — income, expenses, banking. |
 | **WhatsApp** | Inbox, templates, broadcasts, automations, opt-outs. |
 | **Insights** | Slice the data any way you like — sources, timing, handovers, segments, targets, and what each counsellor did on a given day. |
@@ -157,6 +158,15 @@ where you can see the whole conversation, the approved templates and whether
 the 24-hour reply window is still open — none of which fits beside a form you
 are editing. Search the inbox by the person's name or number to find their
 thread.
+
+**Asking a student for a document.** A question on the profile form can be an
+upload — an ID proof, a photograph, a marksheet — and what comes back lands in
+the lead's **Documents** section, labelled with the question that asked for it.
+You will see it in two places: on the lead itself, and in the **Uploads** column
+on **Student Profile Forms**. Both are buttons, not filenames: the file opens in
+a new tab through a link that expires in five minutes, and opening one is
+recorded. Ask an administrator to add the question if it is not there yet —
+Settings → Student Profile Form, with the type set to **File upload**.
 
 **After every real contact — every call, every message, every walk-in —
 log it.** Use *Log interaction*, and always set the **next follow-up date**.
