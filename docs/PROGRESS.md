@@ -4576,3 +4576,47 @@ Settings → Integrations → Website forms, two end-to-end webhook assertions p
 reaches the database.
 **Verify by:** paste the snippet, submit two different forms on one page, then
 Insights → Sources — two rows under one page path.
+
+---
+
+## Session 63 — A student can actually attach a file
+
+**The bug Leon hit:** he added a "photo of your ID" question to the student profile
+form, and the form rendered a plain text box. The field renderer in
+`f/[token]/profile-form-fields.tsx` had cases for text, number, date, select,
+multi-select, checkbox and textarea, and a `default` that returned a text input — and
+`file` fell through to it. So a student typed a filename into a box, and that string
+was saved as the answer.
+
+Had the control been right, the submit path would then have thrown: `formData.get()`
+returns a `File` for a file input, and `parseFieldValue` calls `.trim()` on it.
+
+**What it does now.** A `file` field renders a real file picker carrying the same
+allow-list and size cap as the staff uploader (`ALLOWED_EXTENSIONS`,
+`MAX_FILE_BYTES`), and the file lands in the lead's documents alongside everything a
+counsellor uploaded — labelled with the question's own wording, so it reads "ID proof"
+rather than a filename nobody can place. Private bucket, signed URLs, unchanged.
+
+**All or nothing, deliberately.** A second submission of a profile form is refused by
+design, so a student who attached two documents and had one fail cannot try again —
+they would be thanked with half their evidence missing. So: every file is validated
+before anything is written, then every object is uploaded, then all the `attachments`
+rows go in one statement. A failure anywhere removes the objects this call wrote and
+reports the problem while the form is still on screen. Uploads run *before* the lead
+is marked submitted, for the same reason.
+
+A test caught the first version of this getting it backwards: uploading and inserting
+in one alternating loop left a surviving `attachments` row pointing at an object the
+rollback had just deleted — a broken link in the counsellor's documents list.
+
+**Why this module holds the service-role client.** The form is anonymous; there is no
+JWT for Storage's RLS to check. `submitProfileForm` already runs on the direct `db`
+connection for exactly that reason, and what stands in for a session is the form
+token — 256 bits, bound to one lead, single-use. `store-uploads.ts` is narrow on
+purpose: it uploads and does nothing else with the elevated client.
+
+**Shipped:** `lib/profile-form/store-uploads.ts` (9 tests), the `file` case in the
+form renderer, the wiring in `submit.ts`, and the lead page's "Signed agreement"
+section renamed "Documents" — it is not only agreements any more.
+**Verify by:** Settings → Forms, add a file question; send a profile link; attach a
+photo; open the lead → Documents.

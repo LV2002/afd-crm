@@ -8,6 +8,7 @@ import { NOT_PROVIDED, parseFieldValue } from "@/lib/fields/parse-field-value";
 import { notify } from "@/lib/notifications/notify";
 
 import { getProfileFormByToken } from "./get-form";
+import { storeProfileFormUploads, type PendingUpload } from "./store-uploads";
 
 export interface ProfileSubmitState {
   error?: string;
@@ -54,7 +55,24 @@ export async function submitProfileForm(
   }
 
   const answers: Record<string, unknown> = {};
+  const uploads: PendingUpload[] = [];
+
   for (const field of form.fields) {
+    // A file is not a value to parse. `formData.get()` hands back a `File`,
+    // which has no `.trim()` — before this branch existed, a form with a
+    // file field rendered as a text box and then threw on submit.
+    if (field.type === "file") {
+      const picked = formData.get(field.key);
+      const hasFile = picked instanceof File && picked.size > 0;
+
+      if (!hasFile) {
+        if (field.isRequired) return { error: `${field.label}: please attach a file.` };
+        continue;
+      }
+      uploads.push({ key: field.key, label: field.label, file: picked });
+      continue;
+    }
+
     // Typed, and it says so when an answer is wrong instead of dropping
     // it to null behind a thank-you (security audit 2026-09-15, finding
     // #10). Same parser the counsellor's own edit form uses, so a student
@@ -73,8 +91,22 @@ export async function submitProfileForm(
     answers[field.key] = value;
   }
 
-  if (Object.keys(answers).length === 0) {
+  if (Object.keys(answers).length === 0 && uploads.length === 0) {
     return { error: "Please fill in the form before submitting." };
+  }
+
+  // Files first, and the form is only marked submitted once they are all
+  // stored. The other order would lock a student out on a failed upload —
+  // a second submission is refused by design — leaving them told "thank
+  // you" with their ID proof nowhere.
+  const upload = await storeProfileFormUploads(form.leadId, uploads);
+  if (!upload.ok) return { error: upload.error };
+  for (const file of upload.stored) {
+    // The filename is the answer; the file itself is in the lead's
+    // documents, labelled with this field's own label. That keeps
+    // `profile_form_data` flat strings, which the counsellor's panel, the
+    // printed sheet and the student record all already assume.
+    answers[file.key] = file.fileName;
   }
 
   await db

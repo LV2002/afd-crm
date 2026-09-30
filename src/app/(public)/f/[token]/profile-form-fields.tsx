@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProfileFormField } from "@/lib/profile-form/get-form";
+import { ALLOWED_EXTENSIONS, MAX_FILE_BYTES } from "@/lib/storage/shared";
 import { submitProfileForm, type ProfileSubmitState } from "@/lib/profile-form/submit";
 
 const initialState: ProfileSubmitState = {};
@@ -69,6 +70,25 @@ function Field({ field }: { field: ProfileFormField }) {
         return <Input id={id} name={field.key} type="tel" inputMode="tel" required={required} />;
       case "email":
         return <Input id={id} name={field.key} type="email" inputMode="email" required={required} />;
+      // Without this a `file` field fell through to the text box below, so
+      // asking a student for their ID proof produced a line of typing
+      // instead of a photograph — and the value then crashed the parser,
+      // which has no idea what to do with a File.
+      //
+      // `capture` is deliberately absent: a student photographing an ID
+      // card usually already has the picture in their gallery, and forcing
+      // the camera hides it.
+      case "file":
+        return (
+          <Input
+            id={id}
+            name={field.key}
+            type="file"
+            accept={ALLOWED_EXTENSIONS}
+            required={required}
+            className="file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
+          />
+        );
       default:
         return <Input id={id} name={field.key} required={required} />;
     }
@@ -82,6 +102,12 @@ function Field({ field }: { field: ProfileFormField }) {
       </Label>
       {input}
       {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
+      {field.type === "file" && (
+        <p className="text-xs text-muted-foreground">
+          A photo or PDF, up to {MAX_FILE_BYTES / 1024 / 1024} MB. A clear picture from your
+          phone is fine.
+        </p>
+      )}
     </div>
   );
 }

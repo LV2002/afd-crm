@@ -351,7 +351,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
       {canReadFiles && (
         <div className="flex flex-col gap-3">
-          <h2 className="text-lg font-semibold">Signed agreement</h2>
+          <h2 className="text-lg font-semibold">Documents</h2>
           <SignedAgreementPanel
             leadId={id}
             agreement={signedAgreement}
