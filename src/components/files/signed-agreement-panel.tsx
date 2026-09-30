@@ -129,7 +129,7 @@ export function SignedAgreementPanel({
       {otherFiles.length > 0 && (
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-medium text-muted-foreground">
-            Other documents uploaded earlier
+            Other documents
           </h3>
           <ul className="flex flex-col divide-y rounded-lg border">
             {otherFiles.map((file) => (
