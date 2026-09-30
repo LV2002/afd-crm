@@ -4620,3 +4620,26 @@ form renderer, the wiring in `submit.ts`, and the lead page's "Signed agreement"
 section renamed "Documents" — it is not only agreements any more.
 **Verify by:** Settings → Forms, add a file question; send a profile link; attach a
 photo; open the lead → Documents.
+
+---
+
+## Session 64 — Handovers moves into Insights
+
+Leon's reading was right: Handovers is a performance report, and it had a sidebar
+entry of its own — one level above the seven reports it belongs with. It is now
+**Insights → Handovers**, the fourth tab, next to Timing because it answers the same
+shape of question: how long something takes.
+
+Nothing about the page changed. It still gates on `report.read`, still reads through
+the caller's RLS-bound client so a centre head sees only their own centres, and still
+leads with the waiting list — "nine confirmed and unpaid, the oldest 34 days" is work;
+"median 4 days" is trivia beside it.
+
+`/handovers` stays as a redirect rather than being deleted, the same call `/my-day`
+got: it is in bookmarks and in the staff handbook, and a 404 is worse than one hop.
+The handbook now points at the tab, and the reports table groups the row with the
+other Insights rows.
+
+**Shipped:** the page moved to `insights/handovers/`, a tab in the Insights layout,
+the `/handovers` redirect, the nav entry and its icon removed, handbook repointed.
+**Verify by:** Insights → Handovers, and check an old `/handovers` link still lands.

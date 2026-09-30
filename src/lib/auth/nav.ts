@@ -17,7 +17,6 @@ export type NavIconKey =
   | "profile-forms"
   | "insights"
   | "marketing"
-  | "handovers"
   | "ask"
   | "settings";
 
@@ -102,15 +101,6 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     label: "Student Profile Forms",
   },
   { href: "/insights", iconKey: "insights", permission: "report.read", label: "Insights" },
-  {
-    // Centre-scoped through RLS, unlike Ad Performance: an admission
-    // belongs to exactly one centre, so a centre head reading their own
-    // handover lag is reading a true number.
-    href: "/handovers",
-    iconKey: "handovers",
-    permission: "report.read",
-    label: "Handovers",
-  },
   {
     // Gated on report.read like Insights so it appears for the same people,
     // and the page itself turns away anyone without report.org — spend

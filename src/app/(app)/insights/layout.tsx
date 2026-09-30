@@ -1,19 +1,23 @@
 import { SectionTabs, type SectionTab } from "@/components/layout/section-tabs";
 
 /**
- * Insights is seven screens now, not one.
+ * Insights is eight screens now, not one.
  *
- * The pivot answers "how many"; the six beside it answer questions the
+ * The pivot answers "how many"; the seven beside it answer questions the
  * pivot structurally cannot — which sources open versus close, how long
- * people take to decide, which districts and schools actually convert,
- * how much of the intake is word of mouth, what this quarter is on course
- * to land at, and what each counsellor actually did on a given day. They
- * share a tab row rather than seven sidebar entries.
+ * people take to decide, how long an admission sits between the two
+ * handover gates, which districts and schools actually convert, how much
+ * of the intake is word of mouth, what this quarter is on course to land
+ * at, and what each counsellor actually did on a given day. They share a
+ * tab row rather than eight sidebar entries.
  */
 const TABS: SectionTab[] = [
   { href: "/insights", label: "Explore", exact: true },
   { href: "/insights/sources", label: "Sources" },
   { href: "/insights/timing", label: "Timing" },
+  // Next to Timing because it answers the same shape of question — how
+  // long something takes — rather than next to the counting screens.
+  { href: "/insights/handovers", label: "Handovers" },
   { href: "/insights/segments", label: "Segments" },
   { href: "/insights/referrals", label: "Referrals" },
   { href: "/insights/forecast", label: "Targets" },

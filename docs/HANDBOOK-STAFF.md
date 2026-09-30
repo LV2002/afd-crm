@@ -62,8 +62,8 @@ Marketing  →   SALES   →  ACCOUNTS  →  ACADEMICS
 Neither gate can be walked back without an administrator. Confirm an admission
 when it is *actually* agreed, not when it looks likely.
 
-You can see how long people are spending between the gates on the
-**Handovers** screen.
+You can see how long people are spending between the gates on
+**Insights → Handovers**.
 
 ### 5. Nothing is ever deleted
 
@@ -110,9 +110,8 @@ sign in again. If it keeps happening, tell your administrator.
 | **Students** | People who have paid and started. |
 | **Finance** | The institute's own money — income, expenses, banking. |
 | **WhatsApp** | Inbox, templates, broadcasts, automations, opt-outs. |
-| **Insights** | Slice the data any way you like — including what each counsellor did on a given day. |
+| **Insights** | Slice the data any way you like — sources, timing, handovers, segments, targets, and what each counsellor did on a given day. |
 | **Ad Performance** | What the advertising actually bought. |
-| **Handovers** | How long admissions take to clear each gate. |
 | **Ask AI** | Ask a question about the data in plain English. |
 | **Settings** | Everything an administrator configures. |
 
@@ -233,7 +232,8 @@ Everything in Part 3, plus:
   counsellor did on any given day: every call, message and walk-in they logged,
   who it was with, and what the outcome was. A counsellor who logged nothing
   gets a row saying so — that is the row worth looking for.
-- **Handovers** shows your centre's gate lag, and who is confirmed but unpaid.
+- **Insights → Handovers** shows your centre's gate lag, and who is confirmed but
+  unpaid.
 - You may be able to **approve discounts** up to your own limit. You cannot
   approve one larger than you could have given yourself — that is deliberate,
   or the limits would mean nothing.
@@ -392,10 +392,10 @@ which is which.
 | **Insights → Explore** | Anything. Pick variables, filter, group. Same grammar as broadcast audiences. |
 | **Insights → Sources** | Which sources bring people in, and which ones close them? |
 | **Insights → Timing** | How long do people take to decide, and is this month genuinely worse or just younger? |
+| **Insights → Handovers** | Who is confirmed but unpaid right now, and how long do admissions take? |
 | **Insights → Segments** | Which districts and schools actually enrol — not which send the most enquiries. |
 | **Insights → Targets** | Is this month on course? |
 | **Ad Performance** | What did each campaign cost, and what did it actually bring in? |
-| **Handovers** | Who is confirmed but unpaid right now, and how long do admissions take? |
 | **Finance → Reports** | Monthly, yearly, cash flow, collections, timeliness. |
 | **Ask AI** | A plain-English question. Admins and co-admins only. |
 

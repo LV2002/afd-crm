@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ArrowRightLeft,
   BarChart3,
   ClipboardList,
   GraduationCap,
@@ -37,7 +36,6 @@ export const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   "profile-forms": ClipboardList,
   insights: BarChart3,
   marketing: TrendingUp,
-  handovers: ArrowRightLeft,
   ask: Sparkles,
   settings: Settings,
 };
