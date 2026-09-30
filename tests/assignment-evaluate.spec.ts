@@ -55,6 +55,7 @@ function baseLead(overrides: Partial<Lead> = {}): Lead {
     competitorInstitute: null,
     referredByLeadId: null,
     brochureSent: false,
+    assignedAt: null,
     firstResponseAt: null,
     lastActivityAt: null,
     nextFollowupAt: null,

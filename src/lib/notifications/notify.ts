@@ -237,7 +237,7 @@ async function emailRecipients(
       heading: title,
       lines: [body],
       actionLabel: "Open in the CRM",
-      actionPath: href ?? "/my-day",
+      actionPath: href ?? "/dashboard",
       footer: "You can change which events email you in Settings → Notifications.",
       brand: org ? { name: org.name, primaryColor: org.primaryColor } : undefined,
     });

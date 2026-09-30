@@ -224,8 +224,8 @@ src/
   app/
     (auth)/login/
     (app)/
-      dashboard/          role-aware landing
-      my-day/             counsellor work queue — the default screen for counsellors
+      dashboard/          role-aware landing: the work queue AND the numbers, per role
+      my-day/             redirect to /dashboard — the queue lives there now
       leads/
         page.tsx          list + filters
         [id]/             detail: profile, timeline, whatsapp, files, payments

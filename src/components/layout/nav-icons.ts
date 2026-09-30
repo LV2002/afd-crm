@@ -13,7 +13,6 @@ import {
   LayoutDashboard,
   Settings,
   Sparkles,
-  Sun,
   Users,
   TrendingUp,
   Wallet,
@@ -30,7 +29,6 @@ import type { NavIconKey } from "@/lib/auth/nav";
 export const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   dashboard: LayoutDashboard,
   orphans: Inbox,
-  "my-day": Sun,
   leads: Users,
   pipeline: KanbanSquare,
   accounts: Wallet,

@@ -9,6 +9,8 @@ import { AccountsWidget } from "./accounts-widget";
 import { AdminWidget } from "./admin-widget";
 import { CentreWidget } from "./centre-widget";
 import { MyDayWidget } from "./my-day-widget";
+import { MyNumbersWidget } from "./my-numbers-widget";
+import { TeamWidget } from "./team-widget";
 
 /**
  * The landing page, composed rather than hardcoded.
@@ -27,6 +29,14 @@ import { MyDayWidget } from "./my-day-widget";
  *
  * A role nobody has arranged gets exactly what this page did before —
  * every widget it is allowed, in registry order.
+ *
+ * This is also where My Day went. It used to be a separate screen and a
+ * four-number summary card here, which meant a counsellor checked two
+ * places to start their morning and neither one told them how the month was
+ * going. Now the queue is drawn in full on this page, `/my-day` redirects
+ * here, and "Your numbers" sits above it. The widgets stay separate rows in
+ * the registry rather than one merged card so an admin can still turn either
+ * half off per role.
  */
 export default async function DashboardPage() {
   const user = await getCurrentUser();
@@ -53,10 +63,20 @@ export default async function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         {widgets.map((widget) => {
           switch (widget.key) {
+            case "my_numbers":
+              return <MyNumbersWidget key={widget.key} userId={user.id} />;
             case "my_day":
-              return <MyDayWidget key={widget.key} userId={user.id} />;
+              return (
+                <MyDayWidget
+                  key={widget.key}
+                  userId={user.id}
+                  canRevealPhone={can(user, "lead.reveal_phone")}
+                />
+              );
             case "centre":
               return <CentreWidget key={widget.key} />;
+            case "centre_team":
+              return <TeamWidget key={widget.key} />;
             case "accounts":
               return <AccountsWidget key={widget.key} />;
             case "academics":

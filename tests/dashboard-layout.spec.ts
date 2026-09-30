@@ -12,16 +12,18 @@ function checker(grants: Record<string, Scope>) {
   } as Parameters<typeof resolveDashboard>[1];
 }
 
-const COUNSELLOR = checker({ "lead.read": "own" });
+const COUNSELLOR = checker({ "lead.read": "own", "report.read": "own" });
 const CENTRE_HEAD = checker({
   "lead.read": "center",
   "lead.assign": "center",
+  "report.center": "center",
   "payment.read": "center",
   "student.read": "center",
 });
 const ADMIN = checker({
   "lead.read": "all",
   "lead.assign": "all",
+  "report.center": "all",
   "payment.read": "all",
   "student.read": "all",
   "settings.manage": "all",
@@ -33,21 +35,52 @@ describe("allowsWidget", () => {
     expect(allowsWidget(widgetByKey("accounts")!, CENTRE_HEAD)).toBe(true);
   });
 
-  it("honours a widget that only makes sense at one scope", () => {
-    // "Your day" lists the leads assigned to you. A centre head holds
-    // lead.read at centre scope and has nothing assigned to them, so the
-    // card would be a believable row of zeroes.
+  it("lets everybody with lead.read see their own day, at any scope", () => {
+    // This used to be scope-restricted to `own`, on the theory that only a
+    // counsellor has leads assigned to them. Wrong: centre heads carry a
+    // pipeline too, and Leon asked for their day. The query filters on
+    // `assigned_to = me`, so it is correct at every scope — an admin with
+    // nothing assigned is handled by their seeded layout, not by a rule
+    // here.
     expect(allowsWidget(widgetByKey("my_day")!, COUNSELLOR)).toBe(true);
-    expect(allowsWidget(widgetByKey("my_day")!, CENTRE_HEAD)).toBe(false);
-    expect(allowsWidget(widgetByKey("my_day")!, ADMIN)).toBe(false);
+    expect(allowsWidget(widgetByKey("my_day")!, CENTRE_HEAD)).toBe(true);
+    expect(allowsWidget(widgetByKey("my_day")!, ADMIN)).toBe(true);
+  });
+
+  it("keeps the team table away from a counsellor", () => {
+    // One person's numbers shown to another person is a reporting act, so
+    // it is gated on report.center — which a counsellor holds only at
+    // `own`, and therefore not at all for this purpose.
+    expect(allowsWidget(widgetByKey("centre_team")!, COUNSELLOR)).toBe(false);
+    expect(allowsWidget(widgetByKey("centre_team")!, CENTRE_HEAD)).toBe(true);
+  });
+
+  it("still enforces requireScope for a widget that asks for it", () => {
+    // No shipped widget uses it now, but the mechanism is load-bearing for
+    // the next one that does, so it stays covered.
+    const ownOnly = {
+      key: "hypothetical",
+      name: "Own only",
+      description: "",
+      permission: "lead.read" as const,
+      requireScope: "own" as const,
+    };
+    expect(allowsWidget(ownOnly, COUNSELLOR)).toBe(true);
+    expect(allowsWidget(ownOnly, CENTRE_HEAD)).toBe(false);
   });
 });
 
 describe("resolveDashboard", () => {
   it("falls back to everything permitted, in registry order, when nothing is arranged", () => {
-    expect(resolveDashboard([], COUNSELLOR).map((w) => w.key)).toEqual(["my_day"]);
+    expect(resolveDashboard([], COUNSELLOR).map((w) => w.key)).toEqual([
+      "my_numbers",
+      "my_day",
+    ]);
     expect(resolveDashboard([], ADMIN).map((w) => w.key)).toEqual([
+      "my_numbers",
+      "my_day",
       "centre",
+      "centre_team",
       "accounts",
       "academics",
       "admin",
@@ -55,17 +88,25 @@ describe("resolveDashboard", () => {
   });
 
   it("applies the arranged order", () => {
+    // Every widget arranged, which is what Settings → Dashboards saves: it
+    // writes a row per widget rather than only the ones that moved.
     const layout: LayoutRow[] = [
       { widgetKey: "admin", sortOrder: 0, isVisible: true },
       { widgetKey: "accounts", sortOrder: 1, isVisible: true },
       { widgetKey: "centre", sortOrder: 2, isVisible: true },
       { widgetKey: "academics", sortOrder: 3, isVisible: true },
+      { widgetKey: "centre_team", sortOrder: 4, isVisible: true },
+      { widgetKey: "my_numbers", sortOrder: 5, isVisible: true },
+      { widgetKey: "my_day", sortOrder: 6, isVisible: true },
     ];
     expect(resolveDashboard(layout, ADMIN).map((w) => w.key)).toEqual([
       "admin",
       "accounts",
       "centre",
       "academics",
+      "centre_team",
+      "my_numbers",
+      "my_day",
     ]);
   });
 
@@ -85,18 +126,27 @@ describe("resolveDashboard", () => {
       { widgetKey: "accounts", sortOrder: 0, isVisible: true },
       { widgetKey: "admin", sortOrder: 1, isVisible: true },
       { widgetKey: "my_day", sortOrder: 2, isVisible: true },
+      { widgetKey: "centre_team", sortOrder: 3, isVisible: true },
     ];
-    expect(resolveDashboard(layout, COUNSELLOR).map((w) => w.key)).toEqual(["my_day"]);
+    expect(resolveDashboard(layout, COUNSELLOR).map((w) => w.key)).toEqual([
+      "my_numbers",
+      "my_day",
+    ]);
   });
 
-  it("shows a widget added to the code after the last save, at the end", () => {
-    // Only some widgets arranged: the rest keep their registry position
-    // and stay visible, so shipping a widget does not require editing
-    // every role's layout before anybody sees it.
-    const layout: LayoutRow[] = [{ widgetKey: "admin", sortOrder: 0, isVisible: true }];
+  it("shows a widget added to the code after the last save", () => {
+    // Only one widget arranged, deliberately pushed past every registry
+    // index: the unarranged rest keep their registry position and stay
+    // visible, so shipping a widget does not require editing every role's
+    // layout before anybody sees it.
+    const layout: LayoutRow[] = [{ widgetKey: "admin", sortOrder: 100, isVisible: true }];
     const keys = resolveDashboard(layout, ADMIN).map((w) => w.key);
-    expect(keys[0]).toBe("admin");
-    expect(keys).toHaveLength(4);
+
+    expect(keys).toHaveLength(DASHBOARD_WIDGETS.length);
+    expect(keys.at(-1)).toBe("admin");
+    // The two shipped since that layout was saved are present, in registry
+    // order, without anybody having touched the arrangement.
+    expect(keys.slice(0, 2)).toEqual(["my_numbers", "my_day"]);
   });
 
   it("ignores a saved key the code no longer has", () => {
@@ -114,6 +164,36 @@ describe("resolveDashboard", () => {
       isVisible: false,
     }));
     expect(resolveDashboard(layout, ADMIN)).toEqual([]);
+  });
+});
+
+describe("the seeded admin default", () => {
+  it("leaves an admin exactly what they had before the personal widgets existed", () => {
+    // Leon: "admin portal is good as it is right now." Migration 0071 and
+    // the seed both insert these two hiding rows, so adding the personal
+    // cards to the registry does not change what an admin opens on.
+    const layout: LayoutRow[] = [
+      { widgetKey: "my_numbers", sortOrder: 0, isVisible: false },
+      { widgetKey: "my_day", sortOrder: 1, isVisible: false },
+    ];
+    expect(resolveDashboard(layout, ADMIN).map((w) => w.key)).toEqual([
+      "centre",
+      "centre_team",
+      "accounts",
+      "academics",
+      "admin",
+    ]);
+  });
+
+  it("does not hide them from a centre head, who does carry leads", () => {
+    expect(resolveDashboard([], CENTRE_HEAD).map((w) => w.key)).toEqual([
+      "my_numbers",
+      "my_day",
+      "centre",
+      "centre_team",
+      "accounts",
+      "academics",
+    ]);
   });
 });
 

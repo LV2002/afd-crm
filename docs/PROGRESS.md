@@ -4286,3 +4286,66 @@ Also reverted with them, worth knowing because they were quietly useful: the
 
 **Unchanged and still live:** the website form webhook from session 54, and
 everything before it.
+
+---
+
+## Session 58 — Dashboard and My Day are one screen
+
+Leon: *"I want a dashboard and my day to be merged together so that when a
+counsellor logs in they can see all their leads, how many are assigned today, how
+many they need to get in touch with today, how many are overdue, what are the total
+admissions this month… then the dashboard for the centre head. Admin portal is good
+as it is right now."*
+
+A counsellor was starting the day on two screens. My Day had the queue and no
+numbers; the Dashboard had four numbers and a link to My Day. Neither told them how
+the month was going.
+
+**`/my-day` is now a redirect to `/dashboard`.** The queue is drawn there in full —
+overdue, due today, new, at risk, first five of each with a link to the rest. The
+route stays as a redirect rather than being deleted: it is in bookmarks, in the
+notification fallback path and in the staff handbook, and a 404 for any of those is
+worse than one extra hop. The sidebar entry is gone, because two links to one screen
+is how people come to believe one of them is stale.
+
+They remain two widgets in the registry — "Your numbers" and "Your day" — rather
+than one merged card, so an admin can still turn either half off per role.
+
+**"Your numbers"** is new: active leads, assigned today, new this month, never
+contacted, admissions this month, admission rate, overdue follow-ups, SLA breaches.
+
+**"Counsellor performance"** is new for centre heads: a row per counsellor ordered
+by admissions this month, with *not contacted* and *overdue* flagged in colour
+rather than merely counted — those are the two a head can act on before lunch.
+Gated on `report.center`, not `lead.assign`: showing one person's numbers to another
+person is a reporting act, and a counsellor holds `report.read` only at `own`.
+
+**Two honesty decisions worth keeping.** The admission rate is this month's
+admissions divided by this month's new leads — a running rate, not a cohort
+conversion, since most of a month's admissions come from earlier leads. The field is
+named `admissionsPerLeadThisMonth` so nobody reads it as the other thing, and both
+the card and the handbook say so. And a zero denominator yields **null, not zero**:
+a counsellor who got no leads this month has an undefined rate, and "0%" beside
+their name is an accusation the data cannot support.
+
+**`leads.assigned_at` (migration 0071).** "How many were assigned to me today?" had
+no honest answer — the nearest column was `created_at`, which is a different
+question for any lead that gets reassigned, and reassignment is routine here.
+Maintained by a **database trigger**, not by the four places that write
+`assigned_to`: a fifth will be added one day and would not know to set it. Existing
+rows backfilled from `created_at`.
+
+**The admin view is unchanged, as asked.** Dropping `requireScope: "own"` from "Your
+day" — needed because centre heads carry leads too — would have put two empty cards
+at the top of the screen admins use most. Both are hidden for `admin` and `co_admin`
+by seeded `dashboard_layouts` rows: configuration in the table built for it, not a
+rule in code, and one click in Settings → Dashboards to turn back on.
+
+**Shipped:** migration 0071, `lib/dashboard/scoreboard.ts` (pure, 22 tests),
+`lib/dashboard/get-scoreboard.ts`, "Your numbers", "Counsellor performance", a fuller
+Pipeline card, the merged queue, the redirect.
+**Verify by:** `npm run db:migrate && npm run db:seed`, then sign in as a counsellor
+— one screen, numbers above the queue, no My Day in the sidebar. As a centre head,
+two more cards. As an admin, exactly what was there before.
+**Next:** open items 2–10 from the academics questions are still unanswered, and
+`enrolments.batch_id` is still never set at Gate 1.

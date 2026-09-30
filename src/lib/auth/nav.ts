@@ -7,7 +7,6 @@ import { can } from "./session";
 /** Keys into the ICON_MAP the (client) Sidebar component owns. */
 export type NavIconKey =
   | "dashboard"
-  | "my-day"
   | "leads"
   | "pipeline"
   | "orphans"
@@ -52,7 +51,6 @@ interface NavItemDef {
  */
 const NAV_ITEM_DEFS: NavItemDef[] = [
   { href: "/dashboard", iconKey: "dashboard", label: "Dashboard" },
-  { href: "/my-day", iconKey: "my-day", permission: "lead.read", label: "My Day" },
   {
     href: "/leads",
     iconKey: "leads",

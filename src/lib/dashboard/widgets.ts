@@ -33,17 +33,38 @@ export interface WidgetDefinition {
 
 export const DASHBOARD_WIDGETS: WidgetDefinition[] = [
   {
+    key: "my_numbers",
+    name: "Your numbers",
+    description:
+      "Leads assigned today, this month's new leads and admissions, and the running admission rate.",
+    permission: "lead.read",
+  },
+  {
+    // No `requireScope: "own"` any more. It used to be here on the grounds
+    // that nothing is assigned to a centre head directly — which is wrong:
+    // heads carry their own leads, and Leon asked for their day too. The
+    // query filters on `assigned_to = me`, so it is correct at any scope,
+    // and an admin with nothing assigned is handled by hiding the widget in
+    // their layout rather than by a rule in code.
     key: "my_day",
     name: "Your day",
-    description: "Overdue, due today, new and at-risk leads assigned to the person looking.",
+    description: "The work queue: overdue, due today, new and at-risk leads assigned to you.",
     permission: "lead.read",
-    requireScope: "own",
   },
   {
     key: "centre",
     name: "Centre pipeline",
     description: "New leads this month, what is in the funnel, SLA breaches, admissions.",
     permission: "lead.assign",
+  },
+  {
+    // `report.center` rather than `lead.assign`: this card is one person's
+    // numbers shown to another person, which is a reporting act. A
+    // counsellor holds `report.read` at `own` and so never sees it.
+    key: "centre_team",
+    name: "Counsellor performance",
+    description: "Each counsellor's active leads, new leads, admissions and overdue follow-ups.",
+    permission: "report.center",
   },
   {
     key: "accounts",

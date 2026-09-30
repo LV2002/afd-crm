@@ -103,8 +103,7 @@ sign in again. If it keeps happening, tell your administrator.
 
 | Screen | What it is for |
 |---|---|
-| **My Day** | Your work queue. Start here every morning. |
-| **Dashboard** | Numbers for your role. |
+| **Dashboard** | Your numbers *and* your work queue. Start here every morning. |
 | **Leads** | Everybody in the pipeline. Search, filter, open. |
 | **Pipeline** | The same people as a drag-and-drop board by stage. |
 | **Accounts** | Confirmed admissions and their fees. |
@@ -125,16 +124,30 @@ sign in again. If it keeps happening, tell your administrator.
 Your job in the CRM is: **work your queue, log everything, and be honest about
 temperature.**
 
-### Every morning: My Day
+### Every morning: the Dashboard
 
-Four lists, in the order you should work them:
+It opens with **your numbers** — how many leads are yours, how many landed on
+your desk today, how many you have never replied to, this month's new leads and
+admissions, and your admission rate.
+
+One of those deserves a note. **Admission rate** is this month's admissions
+divided by this month's new leads. It is a running figure for the month, not
+"this share of my leads enrol" — most of the admissions you confirm this month
+came from leads that arrived last month or earlier. Insights has the proper
+cohort figure if you want it.
+
+Below the numbers is **your queue**: four lists, in the order you should work
+them.
 
 1. **Overdue** — you said you'd follow up and the date has passed. Clear this
    first, every day.
 2. **Due today** — your follow-ups for today.
-3. **New assignments** — leads that arrived and were given to you.
-4. **At risk** — leads that have breached the response-time target. Somebody
-   is waiting on you and has been for too long.
+3. **New** — leads that arrived and were given to you and you haven't rung yet.
+4. **At risk** — hot leads with no next step, or leads that have breached the
+   response-time target. Somebody is waiting on you and has been for too long.
+
+The queue shows the first five of each list. If there are more, there's a link
+through to the full list.
 
 ### Working a lead
 
@@ -144,8 +157,8 @@ thread, their profile form, their fees and their files.
 **After every real contact — every call, every message, every walk-in —
 log it.** Use *Log interaction*, and always set the **next follow-up date**.
 
-The next follow-up date is what puts them back in your My Day. A lead with no
-next action is a lead nobody will ever ring again.
+The next follow-up date is what puts them back in your queue on the Dashboard.
+A lead with no next action is a lead nobody will ever ring again.
 
 ### Phone numbers
 
@@ -194,10 +207,19 @@ offer still needs approval.
 Everything in Part 3, plus:
 
 - **You see your whole centre**, not just your own leads.
-- **Leads → Orphans** — leads at your centre with nobody assigned. Nobody is
+- **Your Dashboard has three more cards than a counsellor's.** Your own numbers
+  and queue are still there — you carry leads too — and below them:
+  - **Pipeline** — everything open at your centre: active leads, how many have
+    nobody working them, how many nobody has replied to, overdue follow-ups,
+    this month's intake and admissions.
+  - **Counsellor performance** — one row per counsellor, ordered by admissions
+    this month. Two of the columns are flagged in colour rather than just
+    counted: *Not contacted* and *Overdue*. Those are the two you can do
+    something about this morning; the rest is context.
+- **Leads → Unassigned** — leads at your centre with nobody assigned. Nobody is
   working these. Assign them.
 - **Leads → Merge review** — possible duplicate people. Merge or dismiss.
-- **Dashboard and Insights** are scoped to your centre.
+- **Insights** is scoped to your centre.
 - **Handovers** shows your centre's gate lag, and who is confirmed but unpaid.
 - You may be able to **approve discounts** up to your own limit. You cannot
   approve one larger than you could have given yourself — that is deliberate,
