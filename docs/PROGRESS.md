@@ -4449,3 +4449,72 @@ panel thinking it was dropped by accident.
 messaging lives.
 **Verify by:** open any lead — profile form and fees are the last two sections, no
 WhatsApp. WhatsApp → Inbox still works and still sends.
+
+---
+
+## Session 61 — One cron, and per-platform ad tabs
+
+Leon: *"how can I make sure my leads database automatically gets uploaded for
+retargeting in both these platforms daily? If I get a lead today, by tomorrow they
+should be seeing my ads."*
+
+The retargeting sync was always correct — a real diff against `ad_audience_members`,
+so a lead who opts out comes back *out* of the live audience. Only the schedule was
+wrong: Meta refreshed on Wednesdays, Google on Fridays, so a lead who arrived on a
+Thursday waited six days.
+
+The cause was the cron limit. Ten routes existed, `vercel.json` scheduled eight of
+them on different days of the week to fit inside a plan that allows very few, and
+**`google-conversions` and `whatsapp-flows` were not scheduled at all** — built,
+working, never called except as a piggyback inside two other routes.
+
+**`vercel.json` now has one entry: `/api/cron/daily`, 04:30 UTC (10:00 IST).** That
+route calls all ten sweeps in turn. Still literally one scheduled job a day, which
+was the constraint that produced the weekday spread in the first place.
+
+Decisions worth keeping:
+
+- **Sequential.** The db pool is one connection, so parallel would queue on it
+  anyway while multiplying external API calls in flight.
+- **Called in process.** Each route is an ordinary `async (Request) => Response` and
+  `requireCronSecret` reads only the `authorization` header, so the orchestrator
+  passes its own verified request straight through. No synthetic request, no secret
+  handling, no second invocation per job. Smoke-tested against a running build: all
+  ten execute in order, and the route still returns 401 without the secret.
+- **A failing job does not stop the run; the route still returns 500.** Google being
+  down must not stop the SLA sweep — but a night where three jobs broke is not a
+  healthy night, and the retry and the alert email depend on it saying so.
+- **The order is by how fast the value decays.** Time-critical local sweeps, then
+  retargeting (this is the job whose whole point is same-day freshness), then
+  reporting, which is what gets skipped when time runs short.
+- **`CRON_BUDGET_SECONDS`, default 50.** Vercel kills a Hobby function at 60s
+  whatever `maxDuration` says, and being killed means no report and no alert — the
+  worst outcome, because the job looks healthy. A job with no time to start is
+  skipped, never cut off part-way: half-updating a Meta audience is worse than not
+  touching it, and every job is incremental so tomorrow covers it.
+
+**What one run a day still costs, stated rather than hidden:** a broadcast scheduled
+for 3pm leaves at 10am the next morning. That is the single slot, not the code — the
+same route on an hourly cron gives retargeting *and* broadcasts within the hour, with
+no code change at all. 10:00 IST was chosen over 1am precisely because the broadcast
+sweep has a human on the other end.
+
+**Per-platform tabs on Ad performance.** All platforms / Meta Ads / Google Ads, driven
+by `lib/integrations/platforms.ts` — a registry derived from the `ad_platform` enum,
+with a `satisfies` that **fails the build** if an enum value has no label. Adding a
+platform later is: extend the enum, add one row, build its webhook and spend sync;
+every tab, filter and badge picks it up.
+
+Two correctness details on that filter. It filters the attributed leads as well as the
+spend, because filtering spend alone would leave the other platform's campaigns on
+screen as zero-spend rows — reading as "this campaign cost nothing" rather than "wrong
+tab". And "Leads not from ads" is hidden on a platform tab rather than shown as zero:
+a walk-in belongs to no platform, so there it is not-applicable, not nought.
+
+**Shipped:** `/api/cron/daily`, `lib/cron/nightly-runner.ts` (14 tests), one-line
+`vercel.json`, the platform registry and tabs, `CRON_BUDGET_SECONDS` documented in
+`.env.example`, §10 of the technical handbook rewritten.
+**Verify by:** `curl -H "Authorization: Bearer $CRON_SECRET" .../api/cron/daily` —
+a JSON body with a line per job. In Vercel, one cron entry instead of eight.
+**Next:** raise `CRON_BUDGET_SECONDS` to ~270 if the plan allows, or move the cron to
+hourly for near-real-time retargeting and broadcasts.

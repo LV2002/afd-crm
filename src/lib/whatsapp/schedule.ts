@@ -105,14 +105,17 @@ export function isDue(scheduledFor: Date | string | null, now: Date): boolean {
  * nothing: somebody schedules a message for Tuesday morning, it leaves on
  * Sunday, and they stop trusting the feature.
  *
- * AFD's hosting plan allows one cron a day at most, and the broadcast
- * sweep is currently set to Sunday ("0 1 * * 0"). Raising that line to a
- * quarter-hourly schedule makes scheduling accurate to the minute and
- * needs nothing else changed — including this sentence, which should then
- * read "every fifteen minutes".
+ * AFD's hosting plan allows one cron a day at most. Since September 2026 that
+ * one job is `/api/cron/daily`, which calls this sweep among the others, and
+ * it runs at 10:00 IST — chosen so a broadcast that came due overnight leaves
+ * at a civilised hour rather than at 1am.
+ *
+ * Raising that single cron expression to a quarter-hourly schedule makes
+ * scheduling accurate to the minute and needs nothing else changed — except
+ * this sentence, which should then read "every fifteen minutes".
  */
 export const SWEEP_CADENCE_NOTE =
-  "The job that actually sends currently runs once a week, early on Sunday. A broadcast goes out at the first run after the time you pick — so the time you set is the EARLIEST it can leave, not the exact moment.";
+  "The job that actually sends runs once a day, at 10am. A broadcast goes out at the first run after the time you pick — so the time you set is the EARLIEST it can leave, not the exact moment.";
 
 /**
  * A sensible default for the picker: tomorrow at 10am IST.
