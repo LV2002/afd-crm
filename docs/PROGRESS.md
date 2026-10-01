@@ -4795,3 +4795,79 @@ Students dashboard card, the `student.created` event, handbook. 24 new tests (98
 **Verify by:** record a first payment on an admission → the Students badge turns red,
 the student is on Onboarding and not the roster, the dashboard card says one is waiting.
 Press Onboarding done; they move to the roster and the badge clears.
+
+---
+
+## Session 67 — Deleting a lead, email notifications, and an unfreezing
+
+Three things Leon asked, and all three turned out to be holes rather than
+misunderstandings.
+
+### You could not delete a lead
+
+`lead.delete` has been in the permission registry since Phase 1 with **nothing
+behind it** — no button, no action, no screen. The only way to get a junk lead out
+of the pipeline was to mark it Lost, which is a lie about a real enquiry and
+poisons every conversion number from then on.
+
+Worse, `leads` carried a live **DELETE policy** that nothing called. So the one path
+that did exist was the hard delete CLAUDE.md non-negotiable #5 forbids. Migration
+0074 drops it. The configuration tables keep theirs deliberately — an admin may
+genuinely remove a dropdown option — but a lead is the root of its enquiries,
+interactions, tasks, files and audit trail.
+
+What replaces it: a soft delete with **a required reason**, `deleted_by`, and a
+**Leads → Deleted** recycle bin with Restore. The reason is the load-bearing part —
+the question three months later is never "was this deleted" but "why", and nobody
+remembers.
+
+It refuses two cases. A lead with a **confirmed admission** (that is money and an
+obligation; drop the admission first), and a lead that was **merged away** —
+restoring it would put a second copy of one person back in the pipeline, which is
+what the merge fixed. The panel also says, before you commit, that a duplicate
+should be **merged rather than deleted**: deleting one of two records throws away
+whatever was on the one that went.
+
+**A trigger, not just a Server Action.** A soft delete is an UPDATE, so RLS alone
+would accept plain `lead.update` — which would hand every counsellor the power to
+make a lead vanish. `enforce_lead_delete_permission` refuses the `deleted_at`
+transition in either direction unless the caller holds `lead.delete`, which is what
+makes the primitive real rather than a politeness. Server-side code (no `auth.uid()`
+— the merge path, cron, webhooks) is exempt, or deduplication would break. A policy
+could not do this: it cannot see which column changed.
+
+### Email notifications could never be switched on
+
+`notify()` has sent email since the alerting work shipped. The settings screen
+hard-coded `channels: ["in_app"]` — so the channel was unreachable, **and saving any
+event silently switched it back off**. The screen now has an **Also send an email**
+tick per event, and says plainly at the top when `RESEND_API_KEY`/`EMAIL_FROM` are
+unset, so the tick can never be a switch that quietly does nothing. The schema
+comment claiming email was unwired on purpose outlived its truth and is corrected.
+
+### The type freeze was too strict
+
+Last session froze a custom field's type once anybody had answered it, on the
+grounds that no conversion is honest. The refusal was right about the conversion
+and wrong about the conclusion: it left Leon unable to fix a photo question that
+should never have been a web address, with no path but a second question and a dead
+first one.
+
+Reading the code settles it — **every consumer is already defensive**. `answerText`,
+`formatPrintValue` and `compareAnswers` all fall back to printing a value they
+cannot interpret, so an old typed-in link stays legible on a question that is now an
+upload. Nothing is destroyed by the change; the conversion simply does not happen.
+
+So the freeze becomes a confirmation that says what actually occurs, rather than
+"are you sure?": the N existing answers stay and stay readable, those people would
+need to send the file again, nothing is deleted, and the change is logged — with the
+old type and the answer count in the audit row, which is what somebody reads when a
+report stops making sense.
+
+**Shipped:** migration 0074 (drop `leads_delete`, `deleted_by`/`deleted_reason`,
+partial index, the trigger), `deleteLead`/`restoreLead`, the delete panel, Leads →
+Deleted, the email channel through the notifications screen, the confirmed type
+change, two new handbook sections (deleting a lead; setting up notifications).
+9 new tests (99 files, 1283 total).
+**Verify by:** open a junk lead → bottom of the page → Delete lead with a reason →
+it leaves every list → Leads → Deleted → Restore → it is back in its old stage.

@@ -16,6 +16,8 @@ import { getLeadDetail } from "@/lib/leads/get-lead-detail";
 import { formatDateIST } from "@/lib/format/date";
 import { formatINR } from "@/lib/format/currency";
 import { createClient } from "@/lib/supabase/server";
+
+import { DeleteLeadPanel } from "./delete-lead-panel";
 import { SignedAgreementPanel } from "@/components/files/signed-agreement-panel";
 import { FeePlanPanel } from "@/components/enrolment/fee-plan-panel";
 import { PendingDiscount } from "@/components/enrolment/pending-discount";
@@ -382,6 +384,15 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           ))}
         </ul>
       </div>
+
+      {/*
+        Last on the page, below everything somebody actually works with.
+        A destructive control belongs where nobody reaches it by accident
+        on the way to something else.
+      */}
+      {can(user, "lead.delete") && (
+        <DeleteLeadPanel leadId={id} leadName={row.student_name} />
+      )}
     </div>
   );
 }

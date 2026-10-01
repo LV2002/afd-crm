@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { GitMerge, Plus, Upload } from "lucide-react";
+import { GitMerge, Plus, Trash2, Upload } from "lucide-react";
 
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
@@ -191,6 +191,19 @@ export default async function LeadsPage({
               <Link href="/leads/merge-review">
                 <GitMerge /> Merge review
                 <Badge variant="secondary">{pendingMergeCount}</Badge>
+              </Link>
+            </Button>
+          )}
+          {/*
+            Here rather than in the sidebar: it is the recycle bin for this
+            screen, and a permanent nav entry for something opened twice a
+            year is a line of clutter for everybody else. Only shown to
+            whoever can delete, since restoring is the same authority.
+          */}
+          {can(user, "lead.delete") && (
+            <Button asChild size="sm" variant="ghost">
+              <Link href="/leads/deleted">
+                <Trash2 /> Deleted
               </Link>
             </Button>
           )}

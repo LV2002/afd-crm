@@ -527,6 +527,32 @@ has not filled in **Settings → Organisation** yet.
 
 ---
 
+## Part 9a — Deleting a lead
+
+Only an administrator or co-admin can, and it is **hidden, not destroyed**.
+
+Open the lead, scroll to the bottom, **Delete lead**. You have to type a reason
+— one line is enough, and it is the only thing that will answer "why did this
+go?" months later. The lead disappears from every list, board and report.
+
+**Leads → Deleted** lists everything that has been removed, who removed it, when
+and why, with a **Restore** button on each row. A restored lead comes back
+exactly as it was, in whatever stage it was in.
+
+Two things it will refuse:
+
+- **A lead with a confirmed admission.** That is money and an obligation, not
+  an enquiry. Drop the admission first if it is not going ahead.
+- **A lead that was merged into another one.** It is already folded into the
+  surviving record; restoring it would put a second copy of one person back.
+
+**Is it a duplicate? Merge it, do not delete it.** Deleting one of two records
+for the same person throws away whatever was recorded against the one that
+goes — the calls, the notes, the first-touch source. Merging keeps both
+histories on one person. Leads → Merge review.
+
+---
+
 ## Part 9b — If you are the administrator
 
 Four screens that only you can reach, plus one field everybody should use.
@@ -591,6 +617,61 @@ actually gets mentioned.
 Fill it in and **Insights → Referrals** starts working: how many came by
 referral, whether they enrol more often than everybody else, and who is sending
 them — which is a list of people worth ringing to say thank you.
+
+---
+
+## Part 9c — Setting up notifications
+
+**Settings → Notifications.** One card per event — a real thing the CRM does.
+For each one you choose:
+
+| Control | What it does |
+|---|---|
+| **Notify on this** | Off means nobody is told, ever. |
+| **Notify these roles** | Tick the roles. Everybody in them hears about it. |
+| **Also notify whoever owns the lead** | The counsellor it belongs to, whatever their role. |
+| **Also send an email** | As well as the bell. See below. |
+| **Title** and **Message** | Your own words. `{{student_name}}` and the other tags listed under the box are filled in. A tag the event does not supply prints as "—", and the screen warns you as you type. |
+
+**People only ever hear about centres they work in.** A Kannur centre head is
+never told about a Kochi lead, whatever the roles say. You do not configure
+that and you cannot switch it off.
+
+**"Using defaults"** on a card means nobody has touched it. It is working —
+with the defaults shown — and saving once makes the choices yours.
+
+### Getting email out
+
+The bell works out of the box. Email needs two things set in the hosting
+environment, which is your developer's job, not a screen in the CRM:
+
+- `RESEND_API_KEY` — an API key from resend.com
+- `EMAIL_FROM` — e.g. `AFD India CRM <crm@afdindia.com>`, on a domain verified
+  with Resend
+
+Two optional ones worth setting at the same time:
+
+- `ALERT_EMAIL_TO` — who gets told when the **platform itself** breaks. This is
+  separate from everything on the Notifications screen on purpose: it is the
+  channel that reports the database being down, so it cannot depend on the
+  database.
+- `NEXT_PUBLIC_APP_URL` — your real address, so links inside emails point at
+  it rather than at Vercel's generated one.
+
+Until the first two are set, the Notifications screen says so plainly at the
+top, and the email tick is remembered but does nothing.
+
+### What to turn on first
+
+Three worth having on day one:
+
+- **Lead assigned** → the owner. Somebody being given work should be told.
+- **Response target breached** → centre head. The point of a target.
+- **Student joined (accounts → academics)** → academics. Otherwise the only
+  signal is the red count on Students.
+
+Leave the rest as they come and tighten them once people tell you what they are
+ignoring. A bell nobody reads is worse than no bell.
 
 ---
 

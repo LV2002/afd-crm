@@ -17,6 +17,7 @@ const schema = z.object({
   eventKey: z.string().refine(isNotificationEventKey, "Unknown event."),
   isEnabled: z.boolean(),
   notifyOwner: z.boolean(),
+  alsoEmail: z.boolean(),
   titleTemplate: z.string().trim().min(1, "The title can't be empty."),
   bodyTemplate: z.string().trim().min(1, "The message can't be empty."),
 });
@@ -42,6 +43,7 @@ export async function saveNotificationSetting(
     eventKey: String(formData.get("eventKey") ?? ""),
     isEnabled: formData.get("isEnabled") === "on",
     notifyOwner: formData.get("notifyOwner") === "on",
+    alsoEmail: formData.get("alsoEmail") === "on",
     titleTemplate: String(formData.get("titleTemplate") ?? ""),
     bodyTemplate: String(formData.get("bodyTemplate") ?? ""),
   });
@@ -58,9 +60,11 @@ export async function saveNotificationSetting(
       is_enabled: parsed.data.isEnabled,
       notify_roles: notifyRoles.length > 0 ? notifyRoles : null,
       notify_owner: parsed.data.notifyOwner,
-      // Only in-app is delivered today; see the schema comment. Written
-      // explicitly so a row created here matches one created by the seed.
-      channels: ["in_app"],
+      // In-app always, email when asked for. `notify()` has sent email
+      // since the alerting work shipped and this screen used to hard-code
+      // `["in_app"]` — which meant the channel could never be switched on,
+      // and saving any event silently switched it back off.
+      channels: parsed.data.alsoEmail ? ["in_app", "email"] : ["in_app"],
       title_template: parsed.data.titleTemplate,
       body_template: parsed.data.bodyTemplate,
       updated_at: new Date().toISOString(),

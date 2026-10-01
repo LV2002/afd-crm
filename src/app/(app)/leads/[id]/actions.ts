@@ -2,6 +2,7 @@
 
 import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
@@ -504,4 +505,164 @@ export async function removeLeadTag(leadId: string, tagId: string): Promise<void
   });
 
   revalidatePath(`/leads/${leadId}`);
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Deleting a lead.
+ *
+ * `lead.delete` has been a permission since Phase 1 with nothing behind it:
+ * there was no way to get a junk lead — a test row, a spam form fill, the
+ * same person entered twice by two counsellors — out of the pipeline short
+ * of marking it Lost, which is a lie about a real enquiry and pollutes
+ * every conversion number from then on.
+ *
+ * Soft, always (CLAUDE.md non-negotiable #5). A lead is the root of its
+ * enquiries, interactions, tasks, files and audit trail, so removing the
+ * row would remove the record of a person the institute talked to. The row
+ * stays, `deleted_at` hides it from every list, and an admin can restore it.
+ * Migration 0074 drops the DELETE policy that used to exist, so there is no
+ * hard-delete path left to reach by accident.
+ *
+ * A reason is required. The question somebody asks three months later is
+ * never "was this deleted" — the row says that — but "why", and nobody
+ * remembers. The merge path is the better tool for a duplicate and says so
+ * in the refusal below.
+ *
+ * Runs on the direct client, like every other write in this file, so the
+ * scope check is re-implemented here. The database also enforces the
+ * primitive itself through the trigger in 0074, which is what makes this
+ * more than a politeness.
+ */
+export async function deleteLead(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "lead.delete")) {
+    return { error: "You don't have permission to delete a lead." };
+  }
+  const scope = scopeFor(user, "lead.delete");
+  if (!scope) return { error: "You don't have permission to delete a lead." };
+
+  const leadId = String(formData.get("leadId") ?? "");
+  if (!UUID.test(leadId)) return { error: "That is not a lead." };
+
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (reason.length < 3) {
+    return { error: "Say why you are deleting this lead — somebody will ask." };
+  }
+  if (reason.length > 500) return { error: "Keep the reason under 500 characters." };
+
+  const [lead] = await db
+    .select()
+    .from(leads)
+    .where(and(eq(leads.id, leadId), isNull(leads.deletedAt)));
+  if (!lead) return { error: "That lead does not exist, or is already deleted." };
+
+  if (scope === "center" && !user.centerIds.includes(lead.centerId ?? "")) {
+    return { error: "That lead is not at your centre." };
+  }
+  if (scope === "own" && lead.assignedTo !== user.id) {
+    return { error: "That lead is not yours." };
+  }
+
+  // A confirmed admission is money and an obligation, not a lead any more.
+  // Deleting it would hide an enrolment that accounts is still collecting
+  // against, so it is refused rather than cascaded.
+  const [enrolment] = await db
+    .select({ id: enrolments.id })
+    .from(enrolments)
+    .where(and(eq(enrolments.leadId, leadId), isNull(enrolments.deletedAt)));
+  if (enrolment) {
+    return {
+      error:
+        "This lead has a confirmed admission, so it cannot be deleted. Drop the admission first if it is not going ahead.",
+    };
+  }
+
+  await db
+    .update(leads)
+    .set({
+      deletedAt: new Date(),
+      deletedBy: user.id,
+      deletedReason: reason,
+      updatedAt: new Date(),
+    })
+    .where(eq(leads.id, leadId));
+
+  const supabase = await createClient();
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "lead.delete",
+    entityType: "leads",
+    entityId: leadId,
+    before: { studentName: lead.studentName, stageId: lead.stageId, assignedTo: lead.assignedTo },
+    after: { deletedReason: reason },
+  });
+
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/pipeline");
+  redirect("/leads?deleted=1");
+}
+
+/**
+ * Putting one back.
+ *
+ * The counterpart to the above, and the reason a soft delete is worth
+ * having at all: a lead deleted in error is recoverable, which is not true
+ * of a row that is gone. Restoring clears the reason too — keeping a stale
+ * "duplicate of 4821" on a live lead would be worse than keeping nothing,
+ * and the audit log holds the history either way.
+ */
+export async function restoreLead(_prev: FormState, formData: FormData): Promise<FormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "lead.delete")) {
+    return { error: "You don't have permission to restore a lead." };
+  }
+  const scope = scopeFor(user, "lead.delete");
+  if (!scope) return { error: "You don't have permission to restore a lead." };
+
+  const leadId = String(formData.get("leadId") ?? "");
+  if (!UUID.test(leadId)) return { error: "That is not a lead." };
+
+  const [lead] = await db.select().from(leads).where(eq(leads.id, leadId));
+  if (!lead || !lead.deletedAt) return { error: "That lead is not deleted." };
+
+  if (scope === "center" && !user.centerIds.includes(lead.centerId ?? "")) {
+    return { error: "That lead is not at your centre." };
+  }
+  if (scope === "own" && lead.assignedTo !== user.id) {
+    return { error: "That lead is not yours." };
+  }
+
+  // A lead that was merged away is a different case: restoring it would put
+  // a second copy of one person back in the pipeline, which is the exact
+  // thing the merge fixed. Unmerging is its own job and does not exist yet.
+  if (lead.mergedIntoLeadId) {
+    return {
+      error: "This lead was merged into another one, so it cannot be restored here.",
+    };
+  }
+
+  await db
+    .update(leads)
+    .set({ deletedAt: null, deletedBy: null, deletedReason: null, updatedAt: new Date() })
+    .where(eq(leads.id, leadId));
+
+  const supabase = await createClient();
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "lead.restore",
+    entityType: "leads",
+    entityId: leadId,
+    before: { deletedAt: lead.deletedAt.toISOString(), deletedReason: lead.deletedReason },
+  });
+
+  revalidatePath("/leads");
+  revalidatePath("/leads/deleted");
+  revalidatePath(`/leads/${leadId}`);
+  return { success: `${lead.studentName} is back in the pipeline.` };
 }

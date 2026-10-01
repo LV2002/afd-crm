@@ -177,6 +177,8 @@ export async function updateField(
   if (!current) return { error: "That field no longer exists." };
 
   const typeChanged = parsed.data.type !== current.type;
+  /** How many answers the old type had, recorded in the audit row. */
+  let typeChangeAnswered = 0;
 
   if (typeChanged) {
     // A core field's type is the shape of a real column, not a jsonb value.
@@ -187,20 +189,29 @@ export async function updateField(
     }
 
     const answered = await countFieldAnswers(current.entity, current.key);
-    if (answered > 0) {
-      // Refused rather than migrated. There is no honest conversion from a
-      // typed-in web address to an uploaded file, and guessing one would
-      // silently destroy the answers — CLAUDE.md § Non-negotiables 5.
+
+    // Answers exist, so this needs a deliberate second act rather than a
+    // refusal. Nothing is destroyed either way: the stored answers stay
+    // exactly where they are, and every screen that reads them falls back to
+    // printing the value as text, so an old typed-in link remains legible
+    // on a question that is now an upload. What cannot happen is the
+    // conversion — nobody can turn that link into a file — so the only
+    // honest thing to do is say so and let the admin decide.
+    //
+    // This used to be a flat refusal. That was too strict: it left Leon
+    // unable to fix a photo question that should never have been a web
+    // address, with no path but a second question and a dead first one.
+    if (answered > 0 && formData.get("confirmTypeChange") !== "on") {
+      const was = FIELD_TYPE_LABELS[current.type as keyof typeof FIELD_TYPE_LABELS]?.label ?? current.type;
       return {
         error:
           `${answered} ${answered === 1 ? "person has" : "people have"} already answered this ` +
-          `question, so its type can no longer change — their answers are ` +
-          `${FIELD_TYPE_LABELS[current.type as keyof typeof FIELD_TYPE_LABELS]?.label ?? current.type} ` +
-          `and nothing can turn them into ` +
-          `${FIELD_TYPE_LABELS[parsed.data.type].label}. Add a new question of the right type ` +
-          `and switch this one off instead, so the old answers stay readable.`,
+          `question as "${was}". Changing the type keeps their answers — they stay on the record ` +
+          `and stay readable — but it cannot convert them, so tick the confirmation box and ` +
+          `save again.`,
       };
     }
+    typeChangeAnswered = answered;
   }
 
   const { error } = await supabase
@@ -228,6 +239,11 @@ export async function updateField(
     action: "field_definition.update",
     entityType: "field_definitions",
     entityId: fieldId,
+    // The old type, and how many answers were already stored under it. This
+    // is the row somebody reads when a report stops making sense six months
+    // from now, so "it used to be a web address and 14 people had answered"
+    // is the fact worth keeping.
+    before: typeChanged ? { type: current.type, answersAtChange: typeChangeAnswered } : undefined,
     after: parsed.data,
   });
 

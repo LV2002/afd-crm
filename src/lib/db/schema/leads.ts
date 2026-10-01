@@ -148,6 +148,19 @@ export const leads = pgTable(
     /** The student's own answers, keyed by student field_definitions.key. */
     profileFormData: jsonb("profile_form_data").$type<Record<string, unknown>>(),
     ...timestamps(),
+    /**
+     * Who deleted this lead, and the reason they gave.
+     *
+     * The audit log has both, but a reason you have to look up somewhere
+     * else is a reason nobody reads — and the person deciding whether to
+     * restore a lead is standing in the deleted list, not in the audit
+     * screen. Null for a lead soft-deleted by the merge path, which has its
+     * own explanation in `merged_into_lead_id`.
+     */
+    deletedBy: uuid("deleted_by").references((): AnyPgColumn => profiles.id, {
+      onDelete: "set null",
+    }),
+    deletedReason: text("deleted_reason"),
     ...softDelete(),
   },
   (t) => [uniqueIndex("leads_lead_number_uq").on(t.leadNumber)],
