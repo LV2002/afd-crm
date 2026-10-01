@@ -38,6 +38,26 @@ const IGNORED_REQUESTS = [
 ];
 
 /**
+ * The App Router prefetches every link it can see.
+ *
+ * When a `<Link>` enters the viewport Next fetches that route's payload in
+ * the background — `GET /leads?_rsc=<hash>`. Navigate before it lands, which
+ * a crawler does on every single page, and the browser cancels it:
+ * `net::ERR_ABORTED`.
+ *
+ * That is the framework working. A speculative fetch the browser gave up on
+ * says nothing about the page, and counting it made all six crawl runs fail
+ * with dozens of "problems" that were really one design decision in Next.
+ *
+ * Narrow on purpose: only an `_rsc` prefetch, and only when the reason is
+ * an abort. A prefetch that comes back 500 is still a broken route, and an
+ * ordinary request that aborts is still worth seeing.
+ */
+function isCancelledPrefetch(url: string, reason: string): boolean {
+  return /[?&]_rsc=/.test(url) && /ERR_ABORTED/i.test(reason);
+}
+
+/**
  * Watches a page for the whole time it is open.
  *
  * Returns a collector whose `problems` fills as things go wrong. Attached
@@ -57,10 +77,9 @@ export function watchPage(page: Page): { problems: PageProblem[] } {
   const onFailed = (request: Request) => {
     const url = request.url();
     if (IGNORED_REQUESTS.some((pattern) => pattern.test(url))) return;
-    problems.push({
-      kind: "request",
-      detail: `${request.method()} ${url} — ${request.failure()?.errorText ?? "failed"}`,
-    });
+    const reason = request.failure()?.errorText ?? "failed";
+    if (isCancelledPrefetch(url, reason)) return;
+    problems.push({ kind: "request", detail: `${request.method()} ${url} — ${reason}` });
   };
 
   const onResponse = (response: Response) => {

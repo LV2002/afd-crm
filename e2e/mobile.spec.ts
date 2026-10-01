@@ -21,6 +21,13 @@ test.describe("on a phone", () => {
     // here the breakpoint has regressed.
     await expect(page.locator("aside nav")).toBeHidden();
 
+    // The drawer is a client component, so the button does nothing until
+    // React has hydrated — and Playwright will happily click a button that
+    // is visible but not yet listening. Without this the test passed on the
+    // first attempt and failed on the retry, which is the signature of a
+    // race rather than a bug.
+    await page.waitForLoadState("networkidle").catch(() => {});
+
     await page.getByRole("button", { name: /open menu/i }).click();
     const drawer = page.getByRole("dialog", { name: /menu/i });
     await expect(drawer).toBeVisible();
