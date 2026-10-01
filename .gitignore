@@ -51,3 +51,9 @@ data/
 .swarm/
 ruvector.db
 skills-lock.json
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/e2e/.auth/

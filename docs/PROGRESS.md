@@ -5019,3 +5019,81 @@ places, the New badge and unread count on the list, handbook.
 101 files, 1295 tests.
 **Verify by:** open the lead's printed profile form — the photo is in the box. The
 sidebar shows a red 1 on Student Profile Forms until you press Mark read.
+
+---
+
+## Session 70 — A browser that clicks everything
+
+Leon: *"how can I do a full test — simulate every link, button, and all as if a
+human being was testing it? I'm finding it difficult to test everything manually and
+I think I might miss some things."*
+
+He will miss things. There are about sixty screens, six roles and two viewports, and
+the combination is not something a person checks by hand before a deploy.
+
+### What was missing, precisely
+
+1295 Vitest tests cover the logic with real consequences — assignment, identity,
+SLA, money, RLS. **None of them opens a page.** So a button wired to an action that
+throws, a link to a route that was renamed, a server component that works for an
+admin and throws for a counsellor: all green, all broken. Three of the last four
+sessions fixed bugs of exactly that shape, every one found by Leon in a browser.
+
+### Playwright, with the parts that matter
+
+No crawler-in-a-box and no AI test generator — those produce suites that are flaky
+on day two and deleted by day thirty. The useful thing is a small amount of
+well-aimed code.
+
+**`crawl.spec.ts` is the answer to the literal question.** For each of the six
+roles it signs in, starts at the dashboard, discovers the links on each page and
+follows them, up to sixty screens. It **discovers rather than lists**, so a screen
+added next month is covered the day it gets a link, and a link to a deleted route
+fails here instead of in front of staff.
+
+A screen counts as broken on four signals, not one: an HTTP error, an **error
+boundary** (Next renders a thrown Server Component with a 200, so status alone walks
+past the worst bugs), a console error, and a failed network request.
+
+"Access denied" is deliberately **not** a failure — it is the permission system
+working, and a crawler that treated it as a bug could not test a counsellor at all.
+
+**Per role, because almost every bug this can find is a permission bug.** A screen
+that renders for an admin and throws for academics; a button shown to somebody who
+cannot use it. One admin walkthrough would find none of them.
+
+**`journeys.spec.ts`** covers what the crawler structurally cannot: whether pressing
+a button does anything. A form wired to a failing action renders perfectly.
+Deliberately few — forty journeys is a suite nobody maintains.
+
+**`mobile.spec.ts`** runs a Pixel viewport, where the sidebar does not exist and
+everything goes through the drawer — a different set of elements that has been
+missing entirely before. It also checks the lead list does not scroll sideways,
+which is invisible on a desktop run.
+
+### The seatbelt
+
+These tests create leads and click buttons. Pointed at production they would do that
+to real students, and a recorded payment cannot be undone — the ledger is
+append-only by design. So `e2e/guard.ts` refuses any non-local base URL, **and**
+refuses a local server pointed at a hosted Supabase, which is the same disaster
+through a different door. Overriding it means typing `E2E_ALLOW_NON_LOCAL=1`, which
+is a decision rather than a shrug.
+
+### One real bug found while setting it up
+
+Vitest's default glob picks up any `*.spec.ts` anywhere, so it had already started
+collecting `e2e/` — where every file imports `@playwright/test` and fails on import.
+`npm test` would have broken the moment this landed. Excluded explicitly: `tests/`
+is Vitest's, `e2e/` is Playwright's.
+
+**Verified here:** config loads, all 20 tests enumerate, typecheck and lint clean,
+and the crawler's own mechanics — launching Chromium, the sidebar-link selector, the
+menu-button role selector, link discovery, console-error capture — proven against a
+real browser. **Not verified here:** anything signed in. This container has no
+Supabase, so the login step cannot run; the first local run may need a selector
+adjusted.
+
+**Shipped:** `playwright.config.ts`, `e2e/` (guard, roles, auth setup, page-health,
+crawl, journeys, mobile, README), five npm scripts, the Vitest exclude.
+**Verify by:** `npm run e2e:install` once, then `npm run db:seed && npm run e2e`.

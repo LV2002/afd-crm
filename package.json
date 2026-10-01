@@ -16,7 +16,12 @@
     "db:seed": "tsx src/lib/db/seed.ts",
     "db:local-shim": "psql \"$DATABASE_URL\" -f scripts/local-supabase-shim.sql",
     "db:config-import": "tsx src/lib/db/import-config-cli.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:headed": "playwright test --headed",
+    "e2e:report": "playwright show-report",
+    "e2e:install": "playwright install --with-deps chromium"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",
@@ -48,6 +53,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/papaparse": "^5.5.2",

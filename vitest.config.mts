@@ -25,6 +25,15 @@ export default defineConfig({
   test: {
     environment: "node",
     /**
+     * The browser suite is Playwright's, not Vitest's.
+     *
+     * Vitest's default glob picks up any `*.spec.ts` anywhere, so without
+     * this it tries to run `e2e/` — where every file imports
+     * `@playwright/test` and fails on import. Two runners, two directories:
+     * `tests/` is `npm test`, `e2e/` is `npm run e2e`.
+     */
+    exclude: ["node_modules/**", "e2e/**", "dist/**", ".next/**"],
+    /**
      * Test files share one real Postgres, and several suites deliberately
      * scan the WHOLE `leads` table because that is what their production
      * code does (the retargeting syncs, correctly, for AFD's volume). Run
