@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { NavBadge } from "@/components/layout/nav-badge";
 import { cn } from "@/lib/utils";
 
 export interface SectionTab {
@@ -10,6 +11,10 @@ export interface SectionTab {
   label: string;
   /** Match this href exactly. Set on a section's index page, which is a prefix of all the others. */
   exact?: boolean;
+  /** A red count on the tab. Omitted or zero shows nothing — see NavBadge. */
+  badgeCount?: number;
+  /** What the count is, in words, for the badge's accessible label. */
+  badgeWhat?: string;
 }
 
 /**
@@ -43,7 +48,14 @@ export function SectionTabs({ tabs }: { tabs: SectionTab[] }) {
                 : "border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground",
             )}
           >
-            {tab.label}
+            <span className="inline-flex items-center gap-1.5">
+              {tab.label}
+              <NavBadge
+                count={tab.badgeCount}
+                what={tab.badgeWhat ?? "waiting"}
+                className="ml-0"
+              />
+            </span>
           </Link>
         );
       })}

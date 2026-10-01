@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { MobileNavWithBadges, SidebarWithBadges } from "@/components/layout/nav-with-badges";
 import { NotificationBell } from "@/components/layout/notification-bell";
 import { Sidebar } from "@/components/layout/sidebar";
 import { UserMenu } from "@/components/layout/user-menu";
@@ -36,13 +37,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="border-b px-4 py-4">
           <span className="text-sm font-semibold">{brand.name}</span>
         </div>
-        <Sidebar items={navItems} />
+        {/*
+          The nav renders at once; its red queue counts arrive a moment
+          later. The fallback is the same sidebar without them, so nothing
+          moves except the badges appearing — and four count queries never
+          sit on the critical path of every click in the application.
+        */}
+        <Suspense fallback={<Sidebar items={navItems} />}>
+          <SidebarWithBadges items={navItems} user={user} />
+        </Suspense>
       </aside>
       <div className="flex flex-1 flex-col print:block">
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-4 print:hidden">
           {/* Below `md` the sidebar is hidden and this is the only way to
               reach another screen. It was missing entirely. */}
-          <MobileNav items={navItems} userName={user.fullName} />
+          <Suspense fallback={<MobileNav items={navItems} userName={user.fullName} />}>
+            <MobileNavWithBadges items={navItems} user={user} userName={user.fullName} />
+          </Suspense>
           <span className="truncate text-[0.9375rem] font-semibold md:hidden">{brand.name}</span>
           <div className="ml-auto flex items-center gap-1">
             {/* Suspended so its unread count never delays the rest of

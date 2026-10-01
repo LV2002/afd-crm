@@ -4708,3 +4708,90 @@ type change in `updateField`, the Uploads column, handbook.
 **Verify by:** Settings → Custom Fields → your Photo field. If nobody has answered it,
 set the type to **File upload** and save. Send a profile link, attach a photo, then
 open Student Profile Forms — the Uploads column has a button for it.
+
+---
+
+## Session 66 — Queues that announce themselves
+
+Leon's question was precise: *"when I log into academics I only see Students and
+Dashboard — but how will someone in academics know that a new student has joined?"*
+They wouldn't. Gate 2 fires the instant accounts record a first payment, creates the
+`students` row, and told nobody. The new name appeared somewhere in a list of two
+hundred, ordered by a join date that is almost always today, which is
+indistinguishable from not being told.
+
+The same hole existed three more times: unassigned leads, admissions a counsellor had
+just confirmed, and a WhatsApp reply nobody had answered. Each was visible only to
+somebody who thought to go and look — which, for a queue whose entire purpose is
+"these are being forgotten", is close to not having one.
+
+### Onboarding is a third step after the two gates
+
+`students.onboarded_at` (migration 0073). A student arrives un-onboarded, sits on
+**Students → Onboarding** — oldest first, because it is a queue — and joins the main
+roster when somebody in academics presses **Onboarding done**.
+
+**A timestamp, not a `student_status` value.** Status is the academic lifecycle, and a
+student in onboarding is *active*: they have paid and they are joining. Overloading the
+enum would quietly change what every existing status filter and report means. The
+timestamp also records when, and who, which a status cannot.
+
+The queue shows the **batch**, because that is the field most likely to be wrong at
+this point — the counsellor picked it weeks earlier — and marks a row **red at three
+days**: somebody who paid on Friday and has heard nothing by Monday has had a bad first
+week of the institute.
+
+One way only, and no undo button. Un-accepting a student a week into their course is a
+mistake for an admin to correct with the audit trail to show it, not a control. The
+write is guarded on `onboarded_at is null`, so a double-click cannot restamp the date.
+
+**Existing students were backfilled as onboarded**, as of the day they joined. Leaving
+them null would have greeted academics with a queue of everybody who has ever enrolled,
+which is the opposite of a queue.
+
+### Four red counts in the sidebar
+
+Unassigned, Admissions, Students (onboarding) and WhatsApp each carry a count, and
+nothing at all when empty — a grey zero is noise that teaches people to stop reading
+the badges that matter.
+
+Three things make them honest. **Each count is the caller's own**, through RLS, so a
+centre head's unassigned number is their centre's. **A badge only appears for somebody
+who holds the permission its screen is gated on** — a count on a screen you cannot open
+is a dead end, and a zero shown to somebody with no access reads as "nothing to do"
+rather than "not yours". And **terminal-stage leads are excluded** from the unassigned
+count, or the badge would show a number that cannot be worked down to zero.
+
+**They never delay a page.** The layout renders the nav immediately and swaps in the
+badged version when the counts resolve, inside a Suspense boundary — the counts are
+cheap, but cheap on the critical path of every click is how an application comes to
+feel slow, which Leon has already told us about this sidebar.
+
+The WhatsApp count needed a database object rather than a query: the inbox answers
+"needs a reply" by reading three thousand message rows into memory and grouping them in
+JavaScript, which is fine once on the inbox and absurd on every click. So
+**`whatsapp_thread_latest`** — one row per thread with the direction of its last
+message, `security_invoker = true` so `whatsapp_messages`' own RLS still applies to
+whoever is asking. Its thread key matches `get-threads.ts` exactly so the badge and the
+inbox's own "Needs a reply (N)" cannot disagree. (One deliberate difference: the view
+has no row limit, so it is right about a thread older than the inbox's 3000-message
+scan window. Years away at AFD's volume.)
+
+### And a notification, since that was the literal question
+
+`student.created` fires at Gate 2 and goes to the `academics` role by default — a
+separate event from `payment.recorded`, because it is a different fact told to different
+people: the counsellor hears the money arrived, academics hears somebody has joined and
+is waiting on them. Deliberately **not** sent to the lead's owner; a second message
+about one event is how people learn to ignore the bell. Configurable like every other
+event, and it works on deploy without a reseed.
+
+**Shipped:** migration 0073 (`students.onboarded_at`/`onboarded_by`, backfill, partial
+index, the thread view), the Onboarding queue and its action, the roster now shows
+onboarded students only, `lib/nav/badge-permissions.ts` + `badge-counts.ts`, `NavBadge`
+on the sidebar, the mobile drawer and section tabs, "Waiting to be onboarded" on the
+Students dashboard card, the `student.created` event, handbook. 24 new tests (98 files,
+1274 total).
+**Verify by:** record a first payment on an admission → the Students badge turns red,
+the student is on Onboarding and not the roster, the dashboard card says one is waiting.
+Press Onboarding done; they move to the roster and the badge clears.

@@ -116,6 +116,26 @@ sign in again. If it keeps happening, tell your administrator.
 | **Ask AI** | Ask a question about the data in plain English. |
 | **Settings** | Everything an administrator configures. |
 
+### The red numbers in the sidebar
+
+Four of those screens are **queues** — lists of things waiting for somebody to
+act. Each shows a red count beside its name when there is anything in it, and
+nothing at all when it is empty:
+
+| Where | What the number means |
+|---|---|
+| **Unassigned** | Leads nobody owns. Claim them. |
+| **Admissions** | Admissions a counsellor has confirmed that have not paid yet. |
+| **Students** | Students who have paid and are waiting to be onboarded. |
+| **WhatsApp** | Conversations where the other person wrote last. |
+
+The count is **your** count. A centre head sees their centre's unassigned
+leads; a counsellor sees their own conversations. Nobody's number includes
+somebody else's work.
+
+They appear a moment after the rest of the page. That is deliberate — the
+screen you asked for should never wait on a number in the margin.
+
 ---
 
 ## Part 3 — If you are a counsellor
@@ -262,8 +282,9 @@ discount, the instalment plan and everything paid so far.
 Record it against the admission with the amount, date, method and reference.
 
 **The first payment that clears is Gate 2.** A student record is created
-automatically and academics take over. You do not do anything extra to make
-that happen.
+automatically, academics are notified, and that student appears in their
+**Onboarding** queue. You do not do anything extra to make that happen — and
+you no longer need to ring academics to tell them.
 
 ### Giving somebody a receipt
 
@@ -318,12 +339,39 @@ student fees.
 Academics does not have a section of its own — it works in the two screens the
 students actually pass through.
 
+### How you find out somebody has joined
+
+You do not have to watch for it. The moment a first payment clears:
+
+1. **Students** grows a red number in the sidebar, and your dashboard says how
+   many are waiting.
+2. The new student appears on **Students → Onboarding**, oldest first.
+3. You get a notification.
+
+**They are not on the main student list yet.** That is the point: a new name
+appearing somewhere in two hundred rows is the same as not being told. They
+join the roster when you press **Onboarding done**.
+
+Press it once you have actually done your part — rung them, confirmed the
+batch, given them whatever your centre gives a new student. A row that has been
+waiting **three days or more turns red**: somebody paid on Friday and has heard
+nothing by Monday, which is a bad first week at the institute.
+
+The **batch** column is the one to check. The counsellor picked it when they
+confirmed the admission, possibly weeks ago, and "No batch yet" or the wrong
+batch is the normal thing to find.
+
+There is no undo. If you onboard somebody by mistake, ask an administrator —
+the correction is recorded, which a button quietly putting them back would not
+be.
+
 - **Admissions** — every confirmed admission, including the ones still waiting
   on a first payment. This is where a new joiner appears first, before they are
   a student.
-- **Students** — everybody past Gate 2. Their profile, course, batch and
-  contact details. Filter by centre, course, batch, status or joining date —
-  "the Kochi Foundation students who joined in July" is one row of controls.
+- **Students** — everybody past Gate 2 **and onboarded**. Their profile,
+  course, batch and contact details. Filter by centre, course, batch, status or
+  joining date — "the Kochi Foundation students who joined in July" is one row
+  of controls.
 - **Print** a one-page student profile from their record.
 - **Settings → Batches** — create class groups and put students in them.
   A batch is defined once a term and then referred to constantly, which makes

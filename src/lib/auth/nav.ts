@@ -1,3 +1,4 @@
+import type { NavBadgeKey } from "@/lib/nav/badge-permissions";
 import { formatTerm, type TerminologyMap } from "@/lib/terminology/terms";
 
 import type { PermissionCode } from "./permissions";
@@ -26,12 +27,22 @@ export interface NavItem {
   iconKey: NavIconKey;
   /** Omit for items every signed-in user should see (e.g. Dashboard). */
   permission?: PermissionCode;
+  /**
+   * Which work-queue count to show in red beside this item, if any. Only
+   * the four screens that are genuinely queues have one — a badge on
+   * Insights or Settings would be a number nobody can work down.
+   */
+  badgeKey?: NavBadgeKey;
+  /** What the count is, in words, for the badge's accessible label. */
+  badgeWhat?: string;
 }
 
 interface NavItemDef {
   href: string;
   iconKey: NavIconKey;
   permission?: PermissionCode;
+  badgeKey?: NavBadgeKey;
+  badgeWhat?: string;
   /** Either a fixed screen name, or an entity word resolved via terminology. */
   label: string | { term: "lead"; form: "plural" };
 }
@@ -64,6 +75,8 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     href: "/leads/orphans",
     iconKey: "orphans",
     permission: "lead.assign",
+    badgeKey: "unassigned",
+    badgeWhat: "leads waiting to be assigned",
     label: "Unassigned",
   },
   {
@@ -73,9 +86,21 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     href: "/accounts",
     iconKey: "accounts",
     permission: "payment.read",
+    // Confirmed by a counsellor, not yet paid. This is the signal accounts
+    // had no way to get: an admission was confirmed and the only way to
+    // find out was to open the screen and look.
+    badgeKey: "admissions",
+    badgeWhat: "admissions awaiting a first payment",
     label: "Admissions",
   },
-  { href: "/students", iconKey: "students", permission: "student.read", label: "Students" },
+  {
+    href: "/students",
+    iconKey: "students",
+    permission: "student.read",
+    badgeKey: "onboarding",
+    badgeWhat: "students waiting to be onboarded",
+    label: "Students",
+  },
   {
     // The institute's own money. Gated on finance.read, which a counsellor
     // does not hold — so the whole section is invisible to them, not just
@@ -92,6 +117,8 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     href: "/whatsapp",
     iconKey: "whatsapp",
     permission: "whatsapp.read",
+    badgeKey: "whatsapp",
+    badgeWhat: "conversations waiting for a reply",
     label: "WhatsApp",
   },
   {
@@ -120,6 +147,8 @@ export function navItemsFor(user: SessionUser, terms: TerminologyMap): NavItem[]
       href: item.href,
       iconKey: item.iconKey,
       permission: item.permission,
+      badgeKey: item.badgeKey,
+      badgeWhat: item.badgeWhat,
       label:
         typeof item.label === "string"
           ? item.label

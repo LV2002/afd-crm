@@ -27,7 +27,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   const { data: student } = await supabase
     .from("students")
     .select(
-      "id, student_code, full_name, phone, parent_phone, email, dob, status, joined_at, target_exams, target_exam_year, current_course, current_batch_id, center_id, custom, centers(name), batches(name)",
+      "id, student_code, full_name, phone, parent_phone, email, dob, status, joined_at, onboarded_at, target_exams, target_exam_year, current_course, current_batch_id, center_id, custom, centers(name), batches(name)",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -64,6 +64,13 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           <p className="text-sm text-muted-foreground">{student.student_code}</p>
         </div>
         <div className="flex items-center gap-2">
+          {/*
+            Said here as well as on the queue, because this is the page
+            somebody lands on from a notification — and a student who looks
+            like every other student but is missing from the roster is a
+            puzzle rather than a to-do.
+          */}
+          {!student.onboarded_at && <Badge variant="destructive">In onboarding</Badge>}
           <Badge variant={student.status === "active" ? "default" : "secondary"}>{student.status}</Badge>
           {student.centers?.name && <Badge variant="outline">{student.centers.name}</Badge>}
           <Button asChild size="sm" variant="outline">
