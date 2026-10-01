@@ -2441,3 +2441,29 @@ precisely to stop this class of error.
 
 Indian numbering (lakh, crore) rather than the Intl default, for the same reason the rest of the
 system formats in `en-IN`: "four lakh fifty thousand" is what a family reads back to you.
+
+## 2026-10-01 — Node 22, not 20
+
+`.nvmrc` said 20 while every developer machine and this container ran 22, so
+CI was the only place the difference showed — and it showed in the one step
+nobody runs locally.
+
+`@supabase/supabase-js` 2.112 builds a `RealtimeClient` inside `createClient()`,
+and that constructor demands a native `WebSocket`, which Node 20 does not have.
+The library prints a deprecation notice about Node 20 on every run and then
+throws:
+
+    Error: Node.js detected but native WebSocket not found.
+    Suggested solution: Ensure you are running Node.js 22+
+
+The seed only hits it when `SUPABASE_SERVICE_ROLE_KEY` is set — the step that
+creates the six logins. Locally that is usually unset, so the seed skips it and
+nothing fails. The browser workflow sets it, because a suite that cannot sign in
+tests the login page. So the first CI run died at `seeded 6 finance accounts`.
+
+Raised `.nvmrc` to 22 and `engines.node` to `>=22` rather than pinning around
+it. Node 20 is deprecated by this dependency, 22 is LTS and is what the code is
+actually developed and tested on; `createClient()` is also on the live path in
+the webhook and cron handlers, so a runtime that cannot construct it is not a
+runtime this application supports. Verified: the exact failing call succeeds on
+22, and the full suite, typecheck, lint and build pass there.
