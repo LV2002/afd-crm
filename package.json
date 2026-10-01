@@ -21,7 +21,8 @@
     "e2e:ui": "playwright test --ui",
     "e2e:headed": "playwright test --headed",
     "e2e:report": "playwright show-report",
-    "e2e:install": "playwright install --with-deps chromium"
+    "e2e:install": "playwright install --with-deps chromium",
+    "db:reset-data": "tsx src/lib/db/reset-data-cli.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",

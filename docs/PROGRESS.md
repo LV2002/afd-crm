@@ -5097,3 +5097,64 @@ adjusted.
 **Shipped:** `playwright.config.ts`, `e2e/` (guard, roles, auth setup, page-health,
 crawl, journeys, mobile, README), five npm scripts, the Vitest exclude.
 **Verify by:** `npm run e2e:install` once, then `npm run db:seed && npm run e2e`.
+
+---
+
+## Session 71 — The road from testing to launch
+
+Leon wants to run the browser suite properly, do his own manual pass, and then wipe
+everything that happened while keeping everything he set up. In that order, then
+launch.
+
+### `docs/GO-LIVE.md`
+
+A guide he can follow without me: setting up a local copy, running the suite,
+reading a trace when something fails, the fourteen manual checks no browser test
+can do (does the number *mean* the right thing; did the Meta test lead actually
+arrive), then the reset, then a pre-launch checklist.
+
+Written for somebody non-technical, which mostly meant saying what each command
+changes before saying how to run it.
+
+### `npm run db:reset-data`
+
+**The classification is the whole design.** `src/lib/db/reset-tables.ts` holds two
+explicit lists and `tests/reset-tables.spec.ts` asserts they cover every table in
+the database. A table added in a later migration and classified as neither would be
+left behind by a reset — an `interactions` table surviving a wipe of `leads` is a
+database nobody can open. The script refuses to run until it is classified, and the
+test makes somebody notice before they are at the terminal the night before launch.
+
+The line is the one CLAUDE.md § Plug-and-play already draws: *could this be deployed
+for a different company by changing only database contents?* Yes → configuration.
+
+Three classifications worth arguing about, all decided and written down:
+
+- **`whatsapp_suppressions` is kept**, though it is plainly a record rather than a
+  setting. Deleting it means messaging somebody who replied STOP, which no amount of
+  "we were testing" repairs.
+- **`finance_accounts` is kept, `finance_transactions` goes.** Leon asked for "the
+  bank entries" cleared — the account and the opening balance he typed in are setup.
+- **`audit_log` goes, and the reset writes itself into the empty one.** After a wipe
+  every other audit row points at something that no longer exists, so keeping them
+  preserves no answer to any question, only the appearance of one.
+
+**Safety, in four layers.** A dry run is the default and `--confirm` is required.
+The confirmation is a typed phrase, not a keypress. The whole thing is one
+transaction that counts configuration before and after — a single config row lost to
+a `CASCADE` rolls everything back. And it is a command-line tool, never a button: a
+button like this gets pressed by somebody who thought it meant something else.
+
+`student_code_seq` is reset by hand, because `TRUNCATE ... RESTART IDENTITY` only
+resets sequences *owned* by a truncated column, and that one is standalone
+(migration 0017). Without it the first real student would be coded STU000014.
+
+**Proven on the local database, not just reasoned about.** With a tag (config) that
+a `lead_tags` row (data) pointed at, and a bank account (config) with a transaction
+(data) against it: after the run, `tags` 1 → 1 and `finance_accounts` 6 → 6, while
+`lead_tags`, `leads` and `finance_transactions` went to 0. Lead, receipt and student
+sequences all restart at 1, and the audit log holds exactly one row —
+`system.reset_operational_data`.
+
+**Shipped:** `docs/GO-LIVE.md`, `src/lib/db/reset-tables.ts`,
+`src/lib/db/reset-data-cli.ts`, `npm run db:reset-data`, 6 tests (102 files, 1301).
