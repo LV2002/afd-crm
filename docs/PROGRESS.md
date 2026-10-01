@@ -5209,3 +5209,55 @@ is the normal cost of a CI workflow written without a runner to try it on.
 
 **Shipped:** `.github/workflows/e2e.yml`, `supabase/config.toml`, Part 1 of
 GO-LIVE.md rewritten, the e2e README's running section.
+
+---
+
+## Session 73 — The suite's first real run, and what it caught
+
+The browser workflow got all the way through on Node 22: `supabase start` came up,
+migrations applied, the six logins were created, the app built and served, and
+**the suite signed in as all six roles**. 9 passed, 11 failed, and the report
+uploaded with its traces.
+
+Three distinct causes behind the eleven.
+
+### A real bug: the whole app scrolls sideways on a phone
+
+`mobile.spec.ts` measured **458px of horizontal overflow** on the leads list.
+
+The first guess — a table missing its scroll wrapper — was wrong; `Table` has
+`overflow-x-auto` built in. The actual cause is a layer up. The content column in
+`app/(app)/layout.tsx` is a flex item, and a flex item's default
+`min-width: auto` means it **refuses to shrink below its content**. So a wide
+table pushed the column past the viewport, the page scrolled sideways, and the
+table's own scrollbar never engaged at all.
+
+Measured in Chromium at 412px against a reduction of the real layout: **946px of
+page overflow without `min-w-0`, 0 with it**, and the table scrolling by itself as
+designed. One class.
+
+This is the bug the suite was built to find, and it found it on the first run that
+reached a page. It affects every screen with a wide table — leads, students,
+accounts, finance, settings — for exactly the people who work from phones.
+
+### Ten failures that were the harness, not the app
+
+`net::ERR_ABORTED` on `GET /leads?_rsc=<hash>`, over and over. The App Router
+prefetches every link it can see; navigate before the prefetch lands — which a
+crawler does on every page — and the browser cancels it. That is the framework
+working, and counting it made all six crawl runs fail with dozens of "problems"
+that were one design decision in Next.
+
+Ignored narrowly: only an `_rsc` prefetch, and only when the reason is an abort. A
+prefetch that returns 500 is still a broken route; an ordinary request that aborts
+is still worth seeing.
+
+### One flake
+
+The mobile drawer test passed on the first attempt and failed on the retry — the
+signature of a race, not a bug. The drawer is a client component, so the button
+does nothing until React hydrates, and Playwright will happily click a button that
+is visible but not yet listening. Waits for the page to settle first.
+
+**Shipped:** `min-w-0` on the layout's content column, the cancelled-prefetch rule
+in `page-health.ts`, the hydration wait in `mobile.spec.ts`.

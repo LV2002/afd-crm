@@ -47,7 +47,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <SidebarWithBadges items={navItems} user={user} />
         </Suspense>
       </aside>
-      <div className="flex flex-1 flex-col print:block">
+      {/*
+        `min-w-0` is load-bearing, not tidying. This column is a flex item,
+        and a flex item's default `min-width: auto` means it refuses to
+        shrink below its content — so a wide table pushed the whole column
+        past the viewport and the PAGE scrolled sideways, while the table's
+        own `overflow-x-auto` never engaged at all. Measured on a 412px
+        phone: 946px of page overflow without this class, 0 with it, and the
+        table scrolling by itself as intended. The browser suite caught it
+        on its first real run.
+      */}
+      <div className="flex min-w-0 flex-1 flex-col print:block">
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-4 print:hidden">
           {/* Below `md` the sidebar is hidden and this is the only way to
               reach another screen. It was missing entirely. */}
