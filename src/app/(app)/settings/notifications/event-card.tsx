@@ -23,13 +23,22 @@ export interface EventCardProps {
     isEnabled: boolean;
     notifyRoleIds: string[];
     notifyOwner: boolean;
+    alsoEmail: boolean;
     titleTemplate: string;
     bodyTemplate: string;
   };
   usingDefaults: boolean;
+  /** Whether mail can actually be sent, so the tick can say when it cannot. */
+  emailConfigured: boolean;
 }
 
-export function EventCard({ event, roles, values, usingDefaults }: EventCardProps) {
+export function EventCard({
+  event,
+  roles,
+  values,
+  usingDefaults,
+  emailConfigured,
+}: EventCardProps) {
   const [state, action, pending] = useActionState(saveNotificationSetting, initialState);
   const [title, setTitle] = useState(values.titleTemplate);
   const [body, setBody] = useState(values.bodyTemplate);
@@ -85,6 +94,19 @@ export function EventCard({ event, roles, values, usingDefaults }: EventCardProp
           />
           <Label htmlFor={`${event.key}-owner`} className="font-normal">
             Also notify whoever owns the lead
+          </Label>
+        </div>
+        <div className="mt-1 flex items-center gap-2">
+          <Checkbox
+            id={`${event.key}-email`}
+            name="alsoEmail"
+            defaultChecked={values.alsoEmail}
+          />
+          <Label htmlFor={`${event.key}-email`} className="font-normal">
+            Also send an email
+            {!emailConfigured && (
+              <span className="ml-1.5 text-muted-foreground">(email is not set up yet)</span>
+            )}
           </Label>
         </div>
         {/* Worth stating: it is the reason a Kannur centre head never

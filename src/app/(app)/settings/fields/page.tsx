@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
 
+import { FIELD_TYPE_LABELS, type FieldTypeName } from "./constants";
 import { FieldRowActions } from "./field-row-actions";
 
 interface FieldRow {
@@ -72,7 +73,10 @@ export default async function FieldsSettingsPage() {
                 <p className="text-xs text-muted-foreground">{field.key}</p>
               </TableCell>
               <TableCell className="capitalize text-muted-foreground">{field.entity}</TableCell>
-              <TableCell className="text-muted-foreground">{field.type.replace(/_/g, " ")}</TableCell>
+              <TableCell className="text-muted-foreground">
+                {FIELD_TYPE_LABELS[field.type as FieldTypeName]?.label ??
+                  field.type.replace(/_/g, " ")}
+              </TableCell>
               <TableCell className="text-muted-foreground">{field.section}</TableCell>
               <TableCell>
                 <div className="flex items-center justify-end gap-2">

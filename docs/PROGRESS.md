@@ -4643,3 +4643,569 @@ other Insights rows.
 **Shipped:** the page moved to `insights/handovers/`, a tab in the Insights layout,
 the `/handovers` redirect, the nav entry and its icon removed, handbook repointed.
 **Verify by:** Insights → Handovers, and check an old `/handovers` link still lands.
+
+---
+
+## Session 65 — Upload questions, and links to what came back
+
+Two things Leon found once the file control worked.
+
+### The photo question was the wrong type, and the form let him pick it
+
+His "Photo" question was a `url`, so the student got a box to paste a link into.
+That was not a mistake anyone should be blamed for: the type picker showed the raw
+enum — `text`, `long_text`, `url`, `file`, `user_ref` — and `url` is a perfectly
+plausible guess for a photo if nothing says that `file` is the one where the student
+attaches something.
+
+**Every type now says what it is,** with a searchable one-line description:
+"File upload — they attach a photo or a PDF"; "Web address — a link they type or
+paste… NOT for uploading a file". Typing "upload" or "photo" in the picker finds the
+right row. The same words are used on the fields list and in the profile-form builder,
+so a question's type reads the same everywhere.
+
+**And the type can now actually be changed** — while nobody has answered. This was
+worse than it looked: the edit form already showed a type picker for a custom field,
+and `updateSchema` dropped `type` before the write. Picking a new type said "Saved."
+and changed nothing.
+
+The guard is a real count, and it is deliberately not scoped to the caller. A
+co-admin with centre scope would get zero for a field forty people in the other
+centre had answered, and take that as permission to change the type — losing exactly
+the answers they could not see. So `countFieldAnswers()` runs on the direct client;
+a count discloses nothing, and `settings.manage` is already checked. It looks in both
+homes of a student field: `students.custom` *and* `leads.profile_form_data`, because a
+student answers the profile form months before a `students` row exists. A soft-deleted
+lead's answer doesn't count, and neither does a key present but empty.
+
+Once somebody has answered, the type is fixed and the form says so on screen rather
+than waiting to refuse a save. There is no honest conversion from a typed-in web
+address to an uploaded file, and guessing one would destroy the answers.
+
+### The uploads are links now, not filenames
+
+`profile_form_data` stores a filename for a `file` question, which is not something
+anybody can click. The file is an `attachments` row, and nothing connected the two:
+matching on the label breaks when two questions share one, and matching on the
+filename breaks when a student attaches `image.jpg` twice.
+
+So the file carries the question it answers: **`attachments.field_key`** (migration
+0072), beside `label` (what a person calls it) and `kind` (what the system calls it).
+Null for every staff upload, which answers no question. The key is on the file rather
+than in a map on the lead because that is where it belongs.
+
+Student Profile Forms gained an **Uploads** column — a button per file, labelled with
+the question, shown whenever the form asks for a file at all so a student who attached
+nothing reads as a visible gap. The expanded row and the lead page's profile-form panel
+link too. All three go through the existing `OpenFileButton`, so they mint the
+five-minute signed URL on click and pay the same `attachment.view` audit cost as every
+other file in the system. Gated on `file.read`.
+
+**Shipped:** migration 0072 and `attachments.field_key`, `lib/fields/count-answers.ts`
+(8 tests), `FIELD_TYPE_LABELS` (4 tests guarding the three copies of the type list
+against drift), `lib/profile-form/file-answers.ts`, `profileFormFiles()` (2 tests), the
+type change in `updateField`, the Uploads column, handbook.
+**Verify by:** Settings → Custom Fields → your Photo field. If nobody has answered it,
+set the type to **File upload** and save. Send a profile link, attach a photo, then
+open Student Profile Forms — the Uploads column has a button for it.
+
+---
+
+## Session 66 — Queues that announce themselves
+
+Leon's question was precise: *"when I log into academics I only see Students and
+Dashboard — but how will someone in academics know that a new student has joined?"*
+They wouldn't. Gate 2 fires the instant accounts record a first payment, creates the
+`students` row, and told nobody. The new name appeared somewhere in a list of two
+hundred, ordered by a join date that is almost always today, which is
+indistinguishable from not being told.
+
+The same hole existed three more times: unassigned leads, admissions a counsellor had
+just confirmed, and a WhatsApp reply nobody had answered. Each was visible only to
+somebody who thought to go and look — which, for a queue whose entire purpose is
+"these are being forgotten", is close to not having one.
+
+### Onboarding is a third step after the two gates
+
+`students.onboarded_at` (migration 0073). A student arrives un-onboarded, sits on
+**Students → Onboarding** — oldest first, because it is a queue — and joins the main
+roster when somebody in academics presses **Onboarding done**.
+
+**A timestamp, not a `student_status` value.** Status is the academic lifecycle, and a
+student in onboarding is *active*: they have paid and they are joining. Overloading the
+enum would quietly change what every existing status filter and report means. The
+timestamp also records when, and who, which a status cannot.
+
+The queue shows the **batch**, because that is the field most likely to be wrong at
+this point — the counsellor picked it weeks earlier — and marks a row **red at three
+days**: somebody who paid on Friday and has heard nothing by Monday has had a bad first
+week of the institute.
+
+One way only, and no undo button. Un-accepting a student a week into their course is a
+mistake for an admin to correct with the audit trail to show it, not a control. The
+write is guarded on `onboarded_at is null`, so a double-click cannot restamp the date.
+
+**Existing students were backfilled as onboarded**, as of the day they joined. Leaving
+them null would have greeted academics with a queue of everybody who has ever enrolled,
+which is the opposite of a queue.
+
+### Four red counts in the sidebar
+
+Unassigned, Admissions, Students (onboarding) and WhatsApp each carry a count, and
+nothing at all when empty — a grey zero is noise that teaches people to stop reading
+the badges that matter.
+
+Three things make them honest. **Each count is the caller's own**, through RLS, so a
+centre head's unassigned number is their centre's. **A badge only appears for somebody
+who holds the permission its screen is gated on** — a count on a screen you cannot open
+is a dead end, and a zero shown to somebody with no access reads as "nothing to do"
+rather than "not yours". And **terminal-stage leads are excluded** from the unassigned
+count, or the badge would show a number that cannot be worked down to zero.
+
+**They never delay a page.** The layout renders the nav immediately and swaps in the
+badged version when the counts resolve, inside a Suspense boundary — the counts are
+cheap, but cheap on the critical path of every click is how an application comes to
+feel slow, which Leon has already told us about this sidebar.
+
+The WhatsApp count needed a database object rather than a query: the inbox answers
+"needs a reply" by reading three thousand message rows into memory and grouping them in
+JavaScript, which is fine once on the inbox and absurd on every click. So
+**`whatsapp_thread_latest`** — one row per thread with the direction of its last
+message, `security_invoker = true` so `whatsapp_messages`' own RLS still applies to
+whoever is asking. Its thread key matches `get-threads.ts` exactly so the badge and the
+inbox's own "Needs a reply (N)" cannot disagree. (One deliberate difference: the view
+has no row limit, so it is right about a thread older than the inbox's 3000-message
+scan window. Years away at AFD's volume.)
+
+### And a notification, since that was the literal question
+
+`student.created` fires at Gate 2 and goes to the `academics` role by default — a
+separate event from `payment.recorded`, because it is a different fact told to different
+people: the counsellor hears the money arrived, academics hears somebody has joined and
+is waiting on them. Deliberately **not** sent to the lead's owner; a second message
+about one event is how people learn to ignore the bell. Configurable like every other
+event, and it works on deploy without a reseed.
+
+**Shipped:** migration 0073 (`students.onboarded_at`/`onboarded_by`, backfill, partial
+index, the thread view), the Onboarding queue and its action, the roster now shows
+onboarded students only, `lib/nav/badge-permissions.ts` + `badge-counts.ts`, `NavBadge`
+on the sidebar, the mobile drawer and section tabs, "Waiting to be onboarded" on the
+Students dashboard card, the `student.created` event, handbook. 24 new tests (98 files,
+1274 total).
+**Verify by:** record a first payment on an admission → the Students badge turns red,
+the student is on Onboarding and not the roster, the dashboard card says one is waiting.
+Press Onboarding done; they move to the roster and the badge clears.
+
+---
+
+## Session 67 — Deleting a lead, email notifications, and an unfreezing
+
+Three things Leon asked, and all three turned out to be holes rather than
+misunderstandings.
+
+### You could not delete a lead
+
+`lead.delete` has been in the permission registry since Phase 1 with **nothing
+behind it** — no button, no action, no screen. The only way to get a junk lead out
+of the pipeline was to mark it Lost, which is a lie about a real enquiry and
+poisons every conversion number from then on.
+
+Worse, `leads` carried a live **DELETE policy** that nothing called. So the one path
+that did exist was the hard delete CLAUDE.md non-negotiable #5 forbids. Migration
+0074 drops it. The configuration tables keep theirs deliberately — an admin may
+genuinely remove a dropdown option — but a lead is the root of its enquiries,
+interactions, tasks, files and audit trail.
+
+What replaces it: a soft delete with **a required reason**, `deleted_by`, and a
+**Leads → Deleted** recycle bin with Restore. The reason is the load-bearing part —
+the question three months later is never "was this deleted" but "why", and nobody
+remembers.
+
+It refuses two cases. A lead with a **confirmed admission** (that is money and an
+obligation; drop the admission first), and a lead that was **merged away** —
+restoring it would put a second copy of one person back in the pipeline, which is
+what the merge fixed. The panel also says, before you commit, that a duplicate
+should be **merged rather than deleted**: deleting one of two records throws away
+whatever was on the one that went.
+
+**A trigger, not just a Server Action.** A soft delete is an UPDATE, so RLS alone
+would accept plain `lead.update` — which would hand every counsellor the power to
+make a lead vanish. `enforce_lead_delete_permission` refuses the `deleted_at`
+transition in either direction unless the caller holds `lead.delete`, which is what
+makes the primitive real rather than a politeness. Server-side code (no `auth.uid()`
+— the merge path, cron, webhooks) is exempt, or deduplication would break. A policy
+could not do this: it cannot see which column changed.
+
+### Email notifications could never be switched on
+
+`notify()` has sent email since the alerting work shipped. The settings screen
+hard-coded `channels: ["in_app"]` — so the channel was unreachable, **and saving any
+event silently switched it back off**. The screen now has an **Also send an email**
+tick per event, and says plainly at the top when `RESEND_API_KEY`/`EMAIL_FROM` are
+unset, so the tick can never be a switch that quietly does nothing. The schema
+comment claiming email was unwired on purpose outlived its truth and is corrected.
+
+### The type freeze was too strict
+
+Last session froze a custom field's type once anybody had answered it, on the
+grounds that no conversion is honest. The refusal was right about the conversion
+and wrong about the conclusion: it left Leon unable to fix a photo question that
+should never have been a web address, with no path but a second question and a dead
+first one.
+
+Reading the code settles it — **every consumer is already defensive**. `answerText`,
+`formatPrintValue` and `compareAnswers` all fall back to printing a value they
+cannot interpret, so an old typed-in link stays legible on a question that is now an
+upload. Nothing is destroyed by the change; the conversion simply does not happen.
+
+So the freeze becomes a confirmation that says what actually occurs, rather than
+"are you sure?": the N existing answers stay and stay readable, those people would
+need to send the file again, nothing is deleted, and the change is logged — with the
+old type and the answer count in the audit row, which is what somebody reads when a
+report stops making sense.
+
+**Shipped:** migration 0074 (drop `leads_delete`, `deleted_by`/`deleted_reason`,
+partial index, the trigger), `deleteLead`/`restoreLead`, the delete panel, Leads →
+Deleted, the email channel through the notifications screen, the confirmed type
+change, two new handbook sections (deleting a lead; setting up notifications).
+9 new tests (99 files, 1283 total).
+**Verify by:** open a junk lead → bottom of the page → Delete lead with a reason →
+it leaves every list → Leads → Deleted → Restore → it is back in its old stage.
+
+---
+
+## Session 68 — Twenty-two fields claimed a column they never had
+
+Leon's screenshot of the Photo field answered a question I had got wrong twice. The
+type was greyed out not because somebody had answered it, but because the field was
+marked **`is_core`** — a built-in, backed by a real column. It is not, and neither
+are twenty-one others.
+
+### The bug
+
+`is_core` means "this field's value lives in a column of the same name"; everything
+else lives in the entity's `custom` jsonb. The seed's own comment says the student
+list "mixes real columns (isCore) with genuinely admin-editable custom fields
+(is_core: false, living in `students.custom`)". The code said
+`isCore: field.isCore ?? true`, and only eleven of thirty-three student rows said
+otherwise. So City, Address, Pincode, State, Photo, both parents' names and numbers,
+Percentage 10th, Percentage 12th and twelve more all claimed a column that has never
+existed.
+
+Not cosmetic:
+
+- **Saving a student record could not work at all.** The update path routes a core
+  field to `fieldColumn(key)`, so it sent `update students set city = …, photo_url =
+  …` and Postgres rejected the whole statement — every field on the form, not just
+  the wrong ones.
+- **Reading one showed them permanently blank.** `getRawFieldValue` looked for
+  `row.city`, which was never selected and never existed.
+- **Their type was frozen**, because a core field's type is the shape of a real
+  column. Which is how Leon came to be stuck with a Photo question typed as a web
+  address and no way to make it an upload.
+
+The student-facing profile form was untouched: it writes answers into
+`leads.profile_form_data` by key and never consults `is_core`. Everything students
+have sent is intact.
+
+### The fix
+
+Migration 0075 asks the database which keys are real columns and flips the rest,
+rather than listing twenty-two names that would rot the moment somebody adds a
+column. Nothing to migrate alongside it — every write that would have put a value in
+those columns failed, so there is no data in the wrong place. Leads were already
+correct: only `lead_source`/`sub_source` diverge, and both have explicit overrides.
+
+The seed now defaults `isCore` **per list** — true for leads, where every field has
+had a column from the start, false for students, where the eleven real ones say so
+individually. The common case on each list is the silent one, so a new entry added
+without thinking lands correctly.
+
+**And the seed stops overwriting live configuration.** It rewrote `label`, `type`
+and `section` on every run. That was already shaky and is now plainly wrong: an
+admin renames a question and changes its type in Settings → Custom Fields, so a
+deploy that re-ran the seed would silently put a Photo question back to "web
+address" the day after somebody made it an upload. An existing row is left entirely
+alone; new fields still arrive on deploy.
+
+### Photo is a file upload
+
+Both in the seed and, for Leon's existing data, in 0075 — guarded on the old type,
+so an admin who has already changed it keeps their choice. It also joins the
+student-facing form. It was kept off it with a reason that has expired: "a student
+on a phone has no URL to paste" was true of a `url` field and is not true of a file
+picker.
+
+### The check that would have caught it
+
+`tests/field-core-columns.spec.ts`: every `is_core` field must resolve — through
+`fieldColumn`, so the two deliberate lead overrides still pass — to a column that
+exists. It also refuses to pass vacuously for an entity it has no table mapped for,
+which is the worst kind of green. A second test pins the Photo question as a file
+upload on the form.
+
+**Verified on a scratch database**: migrate and seed from empty now gives 12 core
+and 22 custom student fields, zero broken, Photo as a file question on the form.
+
+**Shipped:** migration 0075, the per-list `isCore` default, `onConflictDoNothing` on
+field seeding, `photo_url` as a `file` on the profile form, 3 new tests, and the
+seed/migration agreement test taught about amendments (100 files, 1286 total).
+**Verify by:** open a student → edit any field → Save. It saves, which it could not
+before. Then Settings → Custom Fields → Photo: the type reads **File upload** and is
+editable.
+
+---
+
+## Session 69 — The photo box, and a fifth queue
+
+### The printed sheet never showed an uploaded photo
+
+Leon submitted a real profile form and the photo box on the printed sheet came out
+empty. Both print pages decided what to put in it with:
+
+```ts
+typeof answers.photo_url === "string" && answers.photo_url.startsWith("http")
+```
+
+Correct while Photo was a pasted link. Since migration 0075 it is a file upload, and
+the stored answer is the **filename** — so that test is false for every real photo
+and the box stayed a dashed outline.
+
+`lib/print/profile-photo.ts` replaces it. It finds the attachment by `field_key`,
+exactly — this file is the answer to that question — and keeps the old heuristic (an
+image whose label contains "photo") as a fallback, because counsellors uploaded
+passport photos by hand for months and those are still the student's photograph.
+Exact first, guess second. A PDF is never a candidate: it is a valid answer to a
+photo question and useless in an `<img>`, and printing a broken image is worse than
+printing the empty box, which at least looks deliberate.
+
+**It also fixes a quieter bug on the student sheet.** That page looked only at the
+*student's* attachments — but a student uploads their photo on the profile form weeks
+before a `students` row exists, so the file hangs off the **lead**. The photo would
+have vanished at Gate 2. Both sides are searched now.
+
+### Student Profile Forms gets a red count
+
+Leon: "when a student submits a profile form, everyone should know about it."
+
+A badge needs a definition of "outstanding", and a submitted form had none. The two
+definitions available without inventing a step were both bad: *every form ever*,
+which never reaches zero and teaches people to ignore the badge, and *submitted in
+the last N days*, which empties itself whether or not anybody looked.
+
+So there is a step, and it is the smallest one that makes the count honest:
+`profile_form_reviewed_at` (migration 0076) and a **Mark read** button — on the list,
+and on the lead page where somebody actually reads the form, because making them go
+back to a list to say they read it is how a queue stops getting cleared. A new form
+also carries a red **New** badge on its own row, so the number in the margin resolves
+to specific rows.
+
+Gated on `lead.read`, the same permission as the screen — so a counsellor sees it
+too. That is what "everyone should know" means, and it is the first badge that is not
+one role's private queue.
+
+**Deliberately not backfilled**, unlike the onboarding queue in 0073. There the
+backfill was truthful: every existing student really had been accepted long ago. Here
+the opposite holds — nobody has read any existing form, because there was no way to.
+Marking them read would be the system claiming work that was never done.
+
+No audit row for marking one read: it is a receipt for attention, not a change to the
+student's record, and an audit log full of "somebody looked at something" is one
+nobody can search.
+
+**Shipped:** `lib/print/profile-photo.ts` (6 tests) wired into both print pages,
+migration 0076, the `profileForms` badge, `markProfileFormRead` and its button in two
+places, the New badge and unread count on the list, handbook.
+101 files, 1295 tests.
+**Verify by:** open the lead's printed profile form — the photo is in the box. The
+sidebar shows a red 1 on Student Profile Forms until you press Mark read.
+
+---
+
+## Session 70 — A browser that clicks everything
+
+Leon: *"how can I do a full test — simulate every link, button, and all as if a
+human being was testing it? I'm finding it difficult to test everything manually and
+I think I might miss some things."*
+
+He will miss things. There are about sixty screens, six roles and two viewports, and
+the combination is not something a person checks by hand before a deploy.
+
+### What was missing, precisely
+
+1295 Vitest tests cover the logic with real consequences — assignment, identity,
+SLA, money, RLS. **None of them opens a page.** So a button wired to an action that
+throws, a link to a route that was renamed, a server component that works for an
+admin and throws for a counsellor: all green, all broken. Three of the last four
+sessions fixed bugs of exactly that shape, every one found by Leon in a browser.
+
+### Playwright, with the parts that matter
+
+No crawler-in-a-box and no AI test generator — those produce suites that are flaky
+on day two and deleted by day thirty. The useful thing is a small amount of
+well-aimed code.
+
+**`crawl.spec.ts` is the answer to the literal question.** For each of the six
+roles it signs in, starts at the dashboard, discovers the links on each page and
+follows them, up to sixty screens. It **discovers rather than lists**, so a screen
+added next month is covered the day it gets a link, and a link to a deleted route
+fails here instead of in front of staff.
+
+A screen counts as broken on four signals, not one: an HTTP error, an **error
+boundary** (Next renders a thrown Server Component with a 200, so status alone walks
+past the worst bugs), a console error, and a failed network request.
+
+"Access denied" is deliberately **not** a failure — it is the permission system
+working, and a crawler that treated it as a bug could not test a counsellor at all.
+
+**Per role, because almost every bug this can find is a permission bug.** A screen
+that renders for an admin and throws for academics; a button shown to somebody who
+cannot use it. One admin walkthrough would find none of them.
+
+**`journeys.spec.ts`** covers what the crawler structurally cannot: whether pressing
+a button does anything. A form wired to a failing action renders perfectly.
+Deliberately few — forty journeys is a suite nobody maintains.
+
+**`mobile.spec.ts`** runs a Pixel viewport, where the sidebar does not exist and
+everything goes through the drawer — a different set of elements that has been
+missing entirely before. It also checks the lead list does not scroll sideways,
+which is invisible on a desktop run.
+
+### The seatbelt
+
+These tests create leads and click buttons. Pointed at production they would do that
+to real students, and a recorded payment cannot be undone — the ledger is
+append-only by design. So `e2e/guard.ts` refuses any non-local base URL, **and**
+refuses a local server pointed at a hosted Supabase, which is the same disaster
+through a different door. Overriding it means typing `E2E_ALLOW_NON_LOCAL=1`, which
+is a decision rather than a shrug.
+
+### One real bug found while setting it up
+
+Vitest's default glob picks up any `*.spec.ts` anywhere, so it had already started
+collecting `e2e/` — where every file imports `@playwright/test` and fails on import.
+`npm test` would have broken the moment this landed. Excluded explicitly: `tests/`
+is Vitest's, `e2e/` is Playwright's.
+
+**Verified here:** config loads, all 20 tests enumerate, typecheck and lint clean,
+and the crawler's own mechanics — launching Chromium, the sidebar-link selector, the
+menu-button role selector, link discovery, console-error capture — proven against a
+real browser. **Not verified here:** anything signed in. This container has no
+Supabase, so the login step cannot run; the first local run may need a selector
+adjusted.
+
+**Shipped:** `playwright.config.ts`, `e2e/` (guard, roles, auth setup, page-health,
+crawl, journeys, mobile, README), five npm scripts, the Vitest exclude.
+**Verify by:** `npm run e2e:install` once, then `npm run db:seed && npm run e2e`.
+
+---
+
+## Session 71 — The road from testing to launch
+
+Leon wants to run the browser suite properly, do his own manual pass, and then wipe
+everything that happened while keeping everything he set up. In that order, then
+launch.
+
+### `docs/GO-LIVE.md`
+
+A guide he can follow without me: setting up a local copy, running the suite,
+reading a trace when something fails, the fourteen manual checks no browser test
+can do (does the number *mean* the right thing; did the Meta test lead actually
+arrive), then the reset, then a pre-launch checklist.
+
+Written for somebody non-technical, which mostly meant saying what each command
+changes before saying how to run it.
+
+### `npm run db:reset-data`
+
+**The classification is the whole design.** `src/lib/db/reset-tables.ts` holds two
+explicit lists and `tests/reset-tables.spec.ts` asserts they cover every table in
+the database. A table added in a later migration and classified as neither would be
+left behind by a reset — an `interactions` table surviving a wipe of `leads` is a
+database nobody can open. The script refuses to run until it is classified, and the
+test makes somebody notice before they are at the terminal the night before launch.
+
+The line is the one CLAUDE.md § Plug-and-play already draws: *could this be deployed
+for a different company by changing only database contents?* Yes → configuration.
+
+Three classifications worth arguing about, all decided and written down:
+
+- **`whatsapp_suppressions` is kept**, though it is plainly a record rather than a
+  setting. Deleting it means messaging somebody who replied STOP, which no amount of
+  "we were testing" repairs.
+- **`finance_accounts` is kept, `finance_transactions` goes.** Leon asked for "the
+  bank entries" cleared — the account and the opening balance he typed in are setup.
+- **`audit_log` goes, and the reset writes itself into the empty one.** After a wipe
+  every other audit row points at something that no longer exists, so keeping them
+  preserves no answer to any question, only the appearance of one.
+
+**Safety, in four layers.** A dry run is the default and `--confirm` is required.
+The confirmation is a typed phrase, not a keypress. The whole thing is one
+transaction that counts configuration before and after — a single config row lost to
+a `CASCADE` rolls everything back. And it is a command-line tool, never a button: a
+button like this gets pressed by somebody who thought it meant something else.
+
+`student_code_seq` is reset by hand, because `TRUNCATE ... RESTART IDENTITY` only
+resets sequences *owned* by a truncated column, and that one is standalone
+(migration 0017). Without it the first real student would be coded STU000014.
+
+**Proven on the local database, not just reasoned about.** With a tag (config) that
+a `lead_tags` row (data) pointed at, and a bank account (config) with a transaction
+(data) against it: after the run, `tags` 1 → 1 and `finance_accounts` 6 → 6, while
+`lead_tags`, `leads` and `finance_transactions` went to 0. Lead, receipt and student
+sequences all restart at 1, and the audit log holds exactly one row —
+`system.reset_operational_data`.
+
+**Shipped:** `docs/GO-LIVE.md`, `src/lib/db/reset-tables.ts`,
+`src/lib/db/reset-data-cli.ts`, `npm run db:reset-data`, 6 tests (102 files, 1301).
+
+---
+
+## Session 72 — Running the browser suite without a laptop
+
+Leon's Mac could not switch branches at all: `git` on macOS is a shim over the
+Xcode Command Line Tools, and his were broken, so `git checkout` and `git pull`
+both failed silently with an `xcrun` error and he stayed on an old branch with an
+old `package.json`. Hence "Missing script: e2e" three times over.
+
+He would rather not install developer tooling, which is entirely reasonable for
+somebody who owns the institute rather than the codebase. So the suite moves to
+where no installation is needed.
+
+### `.github/workflows/e2e.yml`
+
+Actions → **Browser test** → Run workflow. It builds a throwaway copy of the whole
+system, runs the suite against it, and uploads the report — including the traces,
+so a failure can be replayed click by click by somebody who does not read code.
+
+**The hard part is auth.** `ci.yml` runs against a bare Postgres with
+`scripts/local-supabase-shim.sql` standing in for the auth schema, which is enough
+to prove RLS holds and nothing like enough to sign in. A browser suite that cannot
+log in tests the login page. So this workflow runs `supabase start` for a real auth
+server, and reads the generated anon and service-role keys out of
+`supabase status` rather than hardcoding them.
+
+`supabase/config.toml` is the minimum to make that possible. **`supabase/migrations/`
+stays empty deliberately** — drizzle owns the schema, and two tools both believing
+they own it is a bad afternoon.
+
+Two small things worth writing down: the app is served from a production build
+rather than `next dev`, because a dev server compiles each route on first request
+and this suite visits sixty routes exactly once; and `E2E_NO_SERVER=1` stops
+Playwright starting a second server and racing the workflow's own for port 3000.
+
+It runs on demand and on every pull request into `main`, so a screen cannot stop
+rendering on the way to production without somebody being told.
+
+### The guide now leads with it
+
+`docs/GO-LIVE.md` Part 1 is the four-click version; the local route is demoted to
+1.3 and labelled as optional, for watching it click live.
+
+**Not verified here.** This container has no Docker, so `supabase start` could not
+be exercised. YAML parses, the keys are read rather than guessed, and every
+command in it is one that works locally — but the first run may need a fix, which
+is the normal cost of a CI workflow written without a runner to try it on.
+
+**Shipped:** `.github/workflows/e2e.yml`, `supabase/config.toml`, Part 1 of
+GO-LIVE.md rewritten, the e2e README's running section.

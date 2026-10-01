@@ -16,12 +16,14 @@ import { getLeadDetail } from "@/lib/leads/get-lead-detail";
 import { formatDateIST } from "@/lib/format/date";
 import { formatINR } from "@/lib/format/currency";
 import { createClient } from "@/lib/supabase/server";
+
+import { DeleteLeadPanel } from "./delete-lead-panel";
 import { SignedAgreementPanel } from "@/components/files/signed-agreement-panel";
 import { FeePlanPanel } from "@/components/enrolment/fee-plan-panel";
 import { PendingDiscount } from "@/components/enrolment/pending-discount";
 import { ProfileFormPanel } from "@/components/profile-form/profile-form-panel";
 import { listAttachments } from "@/lib/storage/attachments";
-import { currentSignedAgreement, otherDocuments } from "@/lib/storage/shared";
+import { currentSignedAgreement, otherDocuments, profileFormFiles } from "@/lib/storage/shared";
 import { getBatchOptionsForCentre } from "@/lib/enrolment/batch-options";
 import { getLeadFeePlan } from "@/lib/enrolment/get-fee-plan";
 import { getStudentFieldLabels } from "@/lib/profile-form/field-labels";
@@ -313,8 +315,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           leadId={id}
           token={row.profile_form_token}
           submittedAt={row.profile_form_submitted_at}
+          reviewedAt={row.profile_form_reviewed_at}
           answers={row.profile_form_data}
           fieldLabels={studentFieldLabels}
+          files={profileFormFiles(attachments)}
           canManage={can(user, "lead.update")}
         />
       </div>
@@ -381,6 +385,15 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           ))}
         </ul>
       </div>
+
+      {/*
+        Last on the page, below everything somebody actually works with.
+        A destructive control belongs where nobody reaches it by accident
+        on the way to something else.
+      */}
+      {can(user, "lead.delete") && (
+        <DeleteLeadPanel leadId={id} leadName={row.student_name} />
+      )}
     </div>
   );
 }

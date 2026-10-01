@@ -108,12 +108,39 @@ sign in again. If it keeps happening, tell your administrator.
 | **Pipeline** | The same people as a drag-and-drop board by stage. |
 | **Admissions** | Confirmed admissions waiting on, or having made, a first payment. |
 | **Students** | People who have paid and started. |
+| **Student Profile Forms** | Every form you have sent students, and their answers — including anything they uploaded. |
 | **Finance** | The institute's own money — income, expenses, banking. |
 | **WhatsApp** | Inbox, templates, broadcasts, automations, opt-outs. |
 | **Insights** | Slice the data any way you like — sources, timing, handovers, segments, targets, and what each counsellor did on a given day. |
 | **Ad Performance** | What the advertising actually bought. |
 | **Ask AI** | Ask a question about the data in plain English. |
 | **Settings** | Everything an administrator configures. |
+
+### The red numbers in the sidebar
+
+Four of those screens are **queues** — lists of things waiting for somebody to
+act. Each shows a red count beside its name when there is anything in it, and
+nothing at all when it is empty:
+
+| Where | What the number means |
+|---|---|
+| **Unassigned** | Leads nobody owns. Claim them. |
+| **Admissions** | Admissions a counsellor has confirmed that have not paid yet. |
+| **Student Profile Forms** | Forms a student has sent in that nobody has read. |
+| **Students** | Students who have paid and are waiting to be onboarded. |
+| **WhatsApp** | Conversations where the other person wrote last. |
+
+A submitted form stays **New** until somebody presses **Mark read** — on the
+list, or on the lead itself where you actually read it. That is the only thing
+that clears the count, which is the point: a number that goes away on its own
+tells you nothing.
+
+The count is **your** count. A centre head sees their centre's unassigned
+leads; a counsellor sees their own conversations. Nobody's number includes
+somebody else's work.
+
+They appear a moment after the rest of the page. That is deliberate — the
+screen you asked for should never wait on a number in the margin.
 
 ---
 
@@ -157,6 +184,15 @@ where you can see the whole conversation, the approved templates and whether
 the 24-hour reply window is still open — none of which fits beside a form you
 are editing. Search the inbox by the person's name or number to find their
 thread.
+
+**Asking a student for a document.** A question on the profile form can be an
+upload — an ID proof, a photograph, a marksheet — and what comes back lands in
+the lead's **Documents** section, labelled with the question that asked for it.
+You will see it in two places: on the lead itself, and in the **Uploads** column
+on **Student Profile Forms**. Both are buttons, not filenames: the file opens in
+a new tab through a link that expires in five minutes, and opening one is
+recorded. Ask an administrator to add the question if it is not there yet —
+Settings → Student Profile Form, with the type set to **File upload**.
 
 **After every real contact — every call, every message, every walk-in —
 log it.** Use *Log interaction*, and always set the **next follow-up date**.
@@ -252,8 +288,9 @@ discount, the instalment plan and everything paid so far.
 Record it against the admission with the amount, date, method and reference.
 
 **The first payment that clears is Gate 2.** A student record is created
-automatically and academics take over. You do not do anything extra to make
-that happen.
+automatically, academics are notified, and that student appears in their
+**Onboarding** queue. You do not do anything extra to make that happen — and
+you no longer need to ring academics to tell them.
 
 ### Giving somebody a receipt
 
@@ -308,12 +345,39 @@ student fees.
 Academics does not have a section of its own — it works in the two screens the
 students actually pass through.
 
+### How you find out somebody has joined
+
+You do not have to watch for it. The moment a first payment clears:
+
+1. **Students** grows a red number in the sidebar, and your dashboard says how
+   many are waiting.
+2. The new student appears on **Students → Onboarding**, oldest first.
+3. You get a notification.
+
+**They are not on the main student list yet.** That is the point: a new name
+appearing somewhere in two hundred rows is the same as not being told. They
+join the roster when you press **Onboarding done**.
+
+Press it once you have actually done your part — rung them, confirmed the
+batch, given them whatever your centre gives a new student. A row that has been
+waiting **three days or more turns red**: somebody paid on Friday and has heard
+nothing by Monday, which is a bad first week at the institute.
+
+The **batch** column is the one to check. The counsellor picked it when they
+confirmed the admission, possibly weeks ago, and "No batch yet" or the wrong
+batch is the normal thing to find.
+
+There is no undo. If you onboard somebody by mistake, ask an administrator —
+the correction is recorded, which a button quietly putting them back would not
+be.
+
 - **Admissions** — every confirmed admission, including the ones still waiting
   on a first payment. This is where a new joiner appears first, before they are
   a student.
-- **Students** — everybody past Gate 2. Their profile, course, batch and
-  contact details. Filter by centre, course, batch, status or joining date —
-  "the Kochi Foundation students who joined in July" is one row of controls.
+- **Students** — everybody past Gate 2 **and onboarded**. Their profile,
+  course, batch and contact details. Filter by centre, course, batch, status or
+  joining date — "the Kochi Foundation students who joined in July" is one row
+  of controls.
 - **Print** a one-page student profile from their record.
 - **Settings → Batches** — create class groups and put students in them.
   A batch is defined once a term and then referred to constantly, which makes
@@ -469,6 +533,32 @@ has not filled in **Settings → Organisation** yet.
 
 ---
 
+## Part 9a — Deleting a lead
+
+Only an administrator or co-admin can, and it is **hidden, not destroyed**.
+
+Open the lead, scroll to the bottom, **Delete lead**. You have to type a reason
+— one line is enough, and it is the only thing that will answer "why did this
+go?" months later. The lead disappears from every list, board and report.
+
+**Leads → Deleted** lists everything that has been removed, who removed it, when
+and why, with a **Restore** button on each row. A restored lead comes back
+exactly as it was, in whatever stage it was in.
+
+Two things it will refuse:
+
+- **A lead with a confirmed admission.** That is money and an obligation, not
+  an enquiry. Drop the admission first if it is not going ahead.
+- **A lead that was merged into another one.** It is already folded into the
+  surviving record; restoring it would put a second copy of one person back.
+
+**Is it a duplicate? Merge it, do not delete it.** Deleting one of two records
+for the same person throws away whatever was recorded against the one that
+goes — the calls, the notes, the first-touch source. Merging keeps both
+histories on one person. Leads → Merge review.
+
+---
+
 ## Part 9b — If you are the administrator
 
 Four screens that only you can reach, plus one field everybody should use.
@@ -533,6 +623,61 @@ actually gets mentioned.
 Fill it in and **Insights → Referrals** starts working: how many came by
 referral, whether they enrol more often than everybody else, and who is sending
 them — which is a list of people worth ringing to say thank you.
+
+---
+
+## Part 9c — Setting up notifications
+
+**Settings → Notifications.** One card per event — a real thing the CRM does.
+For each one you choose:
+
+| Control | What it does |
+|---|---|
+| **Notify on this** | Off means nobody is told, ever. |
+| **Notify these roles** | Tick the roles. Everybody in them hears about it. |
+| **Also notify whoever owns the lead** | The counsellor it belongs to, whatever their role. |
+| **Also send an email** | As well as the bell. See below. |
+| **Title** and **Message** | Your own words. `{{student_name}}` and the other tags listed under the box are filled in. A tag the event does not supply prints as "—", and the screen warns you as you type. |
+
+**People only ever hear about centres they work in.** A Kannur centre head is
+never told about a Kochi lead, whatever the roles say. You do not configure
+that and you cannot switch it off.
+
+**"Using defaults"** on a card means nobody has touched it. It is working —
+with the defaults shown — and saving once makes the choices yours.
+
+### Getting email out
+
+The bell works out of the box. Email needs two things set in the hosting
+environment, which is your developer's job, not a screen in the CRM:
+
+- `RESEND_API_KEY` — an API key from resend.com
+- `EMAIL_FROM` — e.g. `AFD India CRM <crm@afdindia.com>`, on a domain verified
+  with Resend
+
+Two optional ones worth setting at the same time:
+
+- `ALERT_EMAIL_TO` — who gets told when the **platform itself** breaks. This is
+  separate from everything on the Notifications screen on purpose: it is the
+  channel that reports the database being down, so it cannot depend on the
+  database.
+- `NEXT_PUBLIC_APP_URL` — your real address, so links inside emails point at
+  it rather than at Vercel's generated one.
+
+Until the first two are set, the Notifications screen says so plainly at the
+top, and the email tick is remembered but does nothing.
+
+### What to turn on first
+
+Three worth having on day one:
+
+- **Lead assigned** → the owner. Somebody being given work should be told.
+- **Response target breached** → centre head. The point of a target.
+- **Student joined (accounts → academics)** → academics. Otherwise the only
+  signal is the red count on Students.
+
+Leave the rest as they come and tighten them once people tell you what they are
+ignoring. A bell nobody reads is worse than no bell.
 
 ---
 

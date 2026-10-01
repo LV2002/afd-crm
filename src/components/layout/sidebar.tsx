@@ -3,11 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { NavBadge } from "@/components/layout/nav-badge";
 import { NAV_ICONS } from "@/components/layout/nav-icons";
 import type { NavItem } from "@/lib/auth/nav";
+import type { NavBadgeCounts } from "@/lib/nav/badge-permissions";
 import { cn } from "@/lib/utils";
 
-export function Sidebar({ items }: { items: NavItem[] }) {
+/**
+ * `badges` is optional and arrives late on purpose. The layout renders this
+ * once without it and once more when the counts resolve, so a slow count
+ * query can never hold up the navigation itself — see app/(app)/layout.tsx.
+ */
+export function Sidebar({ items, badges = {} }: { items: NavItem[]; badges?: NavBadgeCounts }) {
   const pathname = usePathname();
 
   return (
@@ -29,7 +36,10 @@ export function Sidebar({ items }: { items: NavItem[] }) {
             )}
           >
             <Icon className="size-4 shrink-0" />
-            {item.label}
+            <span className="min-w-0 truncate">{item.label}</span>
+            {item.badgeKey && (
+              <NavBadge count={badges[item.badgeKey]} what={item.badgeWhat ?? "waiting"} />
+            )}
           </Link>
         );
       })}

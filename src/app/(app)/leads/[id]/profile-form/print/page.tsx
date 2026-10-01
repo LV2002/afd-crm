@@ -6,6 +6,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { getBrand } from "@/lib/brand/get-brand";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import { formatDateIST } from "@/lib/format/date";
+import { resolveProfilePhotoUrl } from "@/lib/print/profile-photo";
 import { buildSheetCells, resolveOptionsForPrint } from "@/lib/print/profile-sheet";
 import { createClient } from "@/lib/supabase/server";
 
@@ -73,10 +74,18 @@ export default async function LeadProfileFormPrintPage({
     ? answers.full_name.trim()
     : lead.student_name;
 
-  const photoUrl =
-    typeof answers.photo_url === "string" && answers.photo_url.startsWith("http")
-      ? answers.photo_url
-      : null;
+  /**
+   * The photograph, from the file the student attached — which is where it
+   * is now that the Photo question is an upload rather than a pasted link.
+   * The old `startsWith("http")` test could only ever match the pasted
+   * kind, so a real uploaded photo printed as an empty box.
+   *
+   * Gated on `file.read`: the sheet must not print a document its reader
+   * has no right to open.
+   */
+  const photoUrl = can(user, "file.read")
+    ? await resolveProfilePhotoUrl(supabase, { leadId: lead.id }, answers.photo_url)
+    : null;
 
   const caption = lead.profile_form_submitted_at
     ? `Submitted ${formatDateIST(lead.profile_form_submitted_at, "d MMM yyyy, h:mm a")} · Lead #${lead.lead_number}`

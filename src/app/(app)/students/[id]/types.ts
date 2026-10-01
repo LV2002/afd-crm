@@ -8,6 +8,10 @@ export interface StudentDetailRow {
   dob: string | null;
   status: string;
   joined_at: string;
+  /** The lead this student came from — their profile-form uploads hang off it. */
+  lead_id?: string | null;
+  /** Null while academics has not accepted them — see migration 0073. */
+  onboarded_at?: string | null;
   target_exams: string[] | null;
   target_exam_year: string | null;
   current_course: string | null;

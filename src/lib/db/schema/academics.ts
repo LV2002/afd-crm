@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { idColumn, softDelete, timestamps } from "./_helpers";
+import { profiles } from "./auth";
 import { leads } from "./leads";
 import { centers } from "./org";
 
@@ -63,6 +64,22 @@ export const students = pgTable("students", {
     .notNull()
     .references(() => centers.id, { onDelete: "restrict" }),
   joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+  /**
+   * When academics accepted this student. Null means they are still in the
+   * onboarding queue and do not appear on the main roster.
+   *
+   * A third step after the two named gates, and unlike them a to-do rather
+   * than a fact: Gate 2 creates this row the instant accounts take a first
+   * payment, and before this column existed nothing told academics it had
+   * happened — a new name just appeared in a list of two hundred, sorted by
+   * a join date that is almost always today.
+   *
+   * Not a `student_status` value. Status is the academic lifecycle, and a
+   * student in onboarding is *active*: they have paid and they are joining.
+   * See migration 0073.
+   */
+  onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
+  onboardedBy: uuid("onboarded_by").references(() => profiles.id, { onDelete: "set null" }),
   status: studentStatusEnum("status").notNull().default("active"),
   targetExams: text("target_exams").array(),
   targetExamYear: text("target_exam_year"),

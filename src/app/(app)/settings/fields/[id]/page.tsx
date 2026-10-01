@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 
+import { countFieldAnswers } from "@/lib/fields/count-answers";
+import type { FieldEntity } from "@/lib/fields/get-field-schema";
 import { createClient } from "@/lib/supabase/server";
 
 import { updateField } from "../actions";
@@ -23,6 +25,13 @@ export default async function EditFieldPage({ params }: { params: Promise<{ id: 
   const { data: roles } = await supabase.from("roles").select("id, name").order("name").returns<
     Array<{ id: string; name: string }>
   >();
+
+  // How many people have answered, so the form can say plainly whether the
+  // type is still free to change rather than letting somebody pick a new one
+  // and only then be refused.
+  const answered = field.is_core
+    ? 0
+    : await countFieldAnswers(field.entity as FieldEntity, field.key);
 
   const optionsLines = Array.isArray(field.options)
     ? (field.options as Array<{ value: string; label: string }>)
@@ -50,6 +59,7 @@ export default async function EditFieldPage({ params }: { params: Promise<{ id: 
         }}
         roles={roles ?? []}
         locked={field.is_core}
+        answeredCount={answered}
         action={updateField.bind(null, field.id)}
         submitLabel="Save changes"
       />

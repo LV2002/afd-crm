@@ -20,7 +20,7 @@ export interface NotificationEventDefinition {
   /** What actually happened, in the admin's language. */
   description: string;
   /** Where the notification points. Grouped in the settings UI. */
-  category: "Leads" | "SLA" | "Admissions" | "Money";
+  category: "Leads" | "SLA" | "Admissions" | "Money" | "Academics";
   /**
    * Template variables this event supplies. The settings screen lists
    * them, so an admin writing copy can see what they may use rather than
@@ -198,6 +198,25 @@ export const NOTIFICATION_EVENTS = [
     defaultBody: "{{amount}} received by {{method}}. Receipt {{receipt_number}}.",
     defaultNotifyOwner: true,
     defaultNotifyRoleCodes: ["accounts"],
+  },
+  {
+    // The answer to "how does academics find out?". The gate itself was
+    // silent: a `students` row appeared and the people whose job starts
+    // there were told nothing. The Onboarding queue is the durable version
+    // of this signal; the notification is the one that arrives unprompted.
+    key: "student.created",
+    label: "Student joined (accounts → academics)",
+    description:
+      "A first payment cleared, so a student record now exists and is waiting to be onboarded.",
+    category: "Academics",
+    variables: ["student_name", "course", "batch_name", "center_name"],
+    defaultTitle: "New student to onboard: {{student_name}}",
+    defaultBody: "{{course}} · {{batch_name}}. Their first payment has cleared.",
+    // Not the lead's owner. The counsellor already hears about the payment
+    // itself through `payment.recorded`, and a second message about the same
+    // event is how people learn to ignore the bell.
+    defaultNotifyOwner: false,
+    defaultNotifyRoleCodes: ["academics"],
   },
 ] as const satisfies readonly NotificationEventDefinition[];
 

@@ -39,11 +39,18 @@ export const notificationSettings = pgTable(
      */
     notifyOwner: boolean("notify_owner").notNull().default(false),
     /**
-     * Delivery channels. Only `in_app` is wired today; the column is an
-     * array so adding WhatsApp or email later is a config change rather
-     * than a migration. Deliberately NOT surfaced as an editable control
-     * until a second channel actually delivers — a switch that silently
-     * does nothing is the exact failure this whole feature exists to fix.
+     * Delivery channels: `in_app` always, `email` when an admin asks for it
+     * on that event. An array so a third channel is a config change rather
+     * than a migration.
+     *
+     * The comment here used to say email was not wired and the control was
+     * withheld on purpose — true when it was written, and it outlived the
+     * truth: `notify()` has sent mail since the alerting work shipped,
+     * while the settings screen went on hard-coding `["in_app"]`, so the
+     * channel could never be switched on and saving any event switched it
+     * back off. The screen now offers the tick, and says plainly when
+     * `RESEND_API_KEY`/`EMAIL_FROM` are unset so the tick cannot be a
+     * switch that silently does nothing.
      */
     channels: text("channels").array().notNull().default(["in_app"]),
     /** Mustache-lite: `{{lead_name}}`. See renderTemplate(). */

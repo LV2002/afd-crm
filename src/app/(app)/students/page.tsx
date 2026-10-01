@@ -10,6 +10,7 @@ import { maskPhone } from "@/lib/leads/mask-phone";
 import { createClient } from "@/lib/supabase/server";
 
 import { StudentFilters, type StudentFilterOption } from "./student-filters";
+import { StudentsTabs } from "./students-tabs";
 
 interface StudentRow {
   id: string;
@@ -75,7 +76,12 @@ export default async function StudentsPage({
   let query = supabase
     .from("students")
     .select("id, student_code, full_name, phone, current_course, status, joined_at, centers(name), batches(name)")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    // The roster is people academics has accepted. A student whose payment
+    // cleared this morning is on the Onboarding tab instead — appearing
+    // unannounced in a list of two hundred was exactly the problem, see
+    // students-tabs.tsx.
+    .not("onboarded_at", "is", null);
 
   if (status) query = query.eq("status", status);
   if (centerId) query = query.eq("center_id", centerId);
@@ -134,12 +140,14 @@ export default async function StudentsPage({
 
   return (
     <div className="flex flex-col gap-4">
+      <StudentsTabs />
+
       <div>
         <h1 className="text-2xl font-semibold">Students</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          {anyFilter ? `${total} matching` : `${total}`} student{total === 1 ? "" : "s"}. A student
-          appears here the moment accounts records their first fee payment — before that they are
-          an admission, and there is no student record to see.
+          {anyFilter ? `${total} matching` : `${total}`} student{total === 1 ? "" : "s"}. Everybody
+          here has paid their first fee and been onboarded by academics. Somebody who has just paid
+          is on the <strong>Onboarding</strong> tab until that is done.
         </p>
       </div>
 

@@ -110,20 +110,36 @@ describe("storeProfileFormUploads", () => {
     ]);
 
     expect(result.ok).toBe(true);
-    expect(result.ok && result.stored).toEqual([
+    expect(result.ok && result.stored.map((s) => ({ key: s.key, fileName: s.fileName }))).toEqual([
       { key: "id_proof", fileName: "aadhaar.png" },
       { key: "photo", fileName: "me.png" },
     ]);
 
     const rows = await db
-      .select({ label: attachments.label, fileName: attachments.fileName, kind: attachments.kind })
+      .select({
+        id: attachments.id,
+        label: attachments.label,
+        fileName: attachments.fileName,
+        kind: attachments.kind,
+        fieldKey: attachments.fieldKey,
+      })
       .from(attachments)
       .where(eq(attachments.leadId, leadId));
+
+    // The returned ids are the rows that were actually written — this is
+    // what the submitted-forms list links to, so a wrong one is a link to
+    // somebody else's document.
+    const byKey = new Map(rows.map((row) => [row.fieldKey, row.id]));
+    expect(result.ok && result.stored.map((s) => byKey.get(s.key))).toEqual(
+      result.ok ? result.stored.map((s) => s.attachmentId) : [],
+    );
 
     // The label is what makes the file findable — a counsellor opening the
     // lead sees "ID proof", not an opaque filename.
     expect(rows.map((r) => r.label).sort()).toEqual(["ID proof", "Passport photograph"]);
     expect(rows.every((r) => r.kind === "document")).toBe(true);
+    // The question each file answers, which is how the list finds it.
+    expect(rows.map((r) => r.fieldKey).sort()).toEqual(["id_proof", "photo"]);
   });
 
   it("leaves uploaded_by null, because a student is not a staff account", async () => {

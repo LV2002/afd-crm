@@ -5,9 +5,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
 
+import { NavBadge } from "@/components/layout/nav-badge";
 import { NAV_ICONS } from "@/components/layout/nav-icons";
 import { Button } from "@/components/ui/button";
 import type { NavItem } from "@/lib/auth/nav";
+import type { NavBadgeCounts } from "@/lib/nav/badge-permissions";
 import { cn } from "@/lib/utils";
 
 /**
@@ -29,7 +31,15 @@ import { cn } from "@/lib/utils";
  * scroll lock, which are the parts of a drawer that are easy to get
  * subtly wrong.
  */
-export function MobileNav({ items, userName }: { items: NavItem[]; userName: string }) {
+export function MobileNav({
+  items,
+  userName,
+  badges = {},
+}: {
+  items: NavItem[];
+  userName: string;
+  badges?: NavBadgeCounts;
+}) {
   const [open, setOpen] = React.useState(false);
   const pathname = usePathname();
 
@@ -116,7 +126,10 @@ export function MobileNav({ items, userName }: { items: NavItem[]; userName: str
                     )}
                   >
                     <Icon className="size-5 shrink-0" />
-                    {item.label}
+                    <span className="min-w-0 truncate">{item.label}</span>
+                    {item.badgeKey && (
+                      <NavBadge count={badges[item.badgeKey]} what={item.badgeWhat ?? "waiting"} />
+                    )}
                   </Link>
                 );
               })}

@@ -7,7 +7,7 @@ import { writeAuditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { enrolments, leads } from "@/lib/db/schema";
+import { batches, centers, enrolments, leads } from "@/lib/db/schema";
 import { formatINR, parseRupeesToPaise } from "@/lib/format/currency";
 import { dropAdmission, restoreAdmission } from "@/lib/enrolment/drop-admission";
 import { recordPayment } from "@/lib/enrolment/record-payment";
@@ -123,11 +123,40 @@ export async function recordPaymentAction(
     actorId: user.id,
   });
 
+  // Gate 2 fired, so academics has a new person to onboard. A separate
+  // event from `payment.recorded` because it is a different fact told to
+  // different people: the counsellor hears that the money arrived, and
+  // academics hears that somebody has joined and is waiting on them.
+  if (result.isFirstPayment) {
+    const [centre] = enrolment.centerId
+      ? await db.select({ name: centers.name }).from(centers).where(eq(centers.id, enrolment.centerId))
+      : [];
+    const [batch] = enrolment.batchId
+      ? await db.select({ name: batches.name }).from(batches).where(eq(batches.id, enrolment.batchId))
+      : [];
+
+    await notify({
+      eventKey: "student.created",
+      context: {
+        student_name: payingLead?.studentName ?? "Student",
+        course: enrolment.course,
+        batch_name: batch?.name ?? "no batch yet",
+        center_name: centre?.name ?? "",
+      },
+      href: "/students/onboarding",
+      entityType: "students",
+      entityId: result.studentId ?? undefined,
+      centerId: enrolment.centerId,
+      actorId: user.id,
+    });
+  }
+
   revalidatePath(`/accounts/${enrolmentId}`);
   revalidatePath("/accounts");
+  revalidatePath("/students", "layout");
   return {
     success: result.isFirstPayment
-      ? `Payment recorded (receipt #${result.receiptNo}). Student record created.`
+      ? `Payment recorded (receipt #${result.receiptNo}). ${payingLead?.studentName ?? "The student"} is now waiting to be onboarded by academics.`
       : `Payment recorded (receipt #${result.receiptNo}).`,
   };
 }

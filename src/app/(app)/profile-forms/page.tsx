@@ -8,6 +8,7 @@ import {
   resolveFieldOptions,
   type FieldOption,
 } from "@/lib/fields/resolve-field-options";
+import { listProfileFormFiles } from "@/lib/profile-form/file-answers";
 import { getStudentFieldLabels } from "@/lib/profile-form/field-labels";
 import { defaultColumnKeys, isSheetColumn } from "@/lib/profile-form/sheet";
 import { createClient } from "@/lib/supabase/server";
@@ -45,7 +46,7 @@ export default async function ProfileFormsPage() {
     supabase
       .from("leads")
       .select(
-        "id, lead_number, student_name, profile_form_submitted_at, profile_form_token, profile_form_data, center_id",
+        "id, lead_number, student_name, profile_form_submitted_at, profile_form_reviewed_at, profile_form_token, profile_form_data, center_id",
       )
       .is("deleted_at", null)
       .not("profile_form_token", "is", null)
@@ -107,13 +108,31 @@ export default async function ProfileFormsPage() {
 
   const all = rows ?? [];
   const submitted = all.filter((r) => r.profile_form_submitted_at !== null);
+  // The same number the sidebar badge shows, said again where somebody can
+  // act on it.
+  const unread = submitted.filter((r) => r.profile_form_reviewed_at === null).length;
+
+  // The files students attached, resolved to attachment ids so the table can
+  // link to them. Only submitted forms can have any, so only those leads are
+  // asked about. Read through the same RLS-bound client as the rows
+  // themselves, so a counsellor gets links for their own leads and no others.
+  const filesByLead = await listProfileFormFiles(
+    supabase,
+    submitted.map((row) => row.id),
+  );
 
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold">Student Profile Forms</h1>
         <p className="text-sm text-muted-foreground">
-          Forms sent to students who are joining. {submitted.length} submitted of {all.length} sent.
+          Forms sent to students who are joining. {submitted.length} submitted of {all.length} sent
+          {unread > 0 && (
+            <>
+              , <strong className="text-destructive">{unread} not read yet</strong>
+            </>
+          )}
+          .
         </p>
         {/*
           The questions are not edited here — they live on their own
@@ -144,6 +163,10 @@ export default async function ProfileFormsPage() {
           defaultColumns={defaultColumnKeys(withOptions)}
           canRevealPhone={can(user, "lead.reveal_phone")}
           phoneKeys={(definitions ?? []).filter((d) => d.type === "phone").map((d) => d.key)}
+          fileKeys={(definitions ?? []).filter((d) => d.type === "file").map((d) => d.key)}
+          filesByLead={filesByLead}
+          canReadFiles={can(user, "file.read")}
+          canMarkRead={can(user, "lead.update")}
         />
       )}
     </div>

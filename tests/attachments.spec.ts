@@ -17,6 +17,7 @@ import {
   currentSignedAgreement,
   isAttachmentKind,
   otherDocuments,
+  profileFormFiles,
   sanitiseFileName,
   validateUpload,
   type AttachmentRow,
@@ -139,6 +140,7 @@ function row(overrides: Partial<AttachmentRow> & { id: string }): AttachmentRow 
     size_bytes: 1024,
     label: null,
     kind: "document",
+    field_key: null,
     created_at: "2026-01-01T00:00:00.000Z",
     uploaded_by: null,
     ...overrides,
@@ -210,5 +212,27 @@ describe("otherDocuments", () => {
     // what they already uploaded.
     const rows = [row({ id: "old-id-proof", label: "ID proof" })];
     expect(otherDocuments(rows)).toHaveLength(1);
+  });
+});
+
+describe("profileFormFiles", () => {
+  it("picks out only the files a student uploaded against a question", () => {
+    // Everything a counsellor uploaded has no field_key: it answers no
+    // question, and offering it as one would put the signed agreement under
+    // the heading "ID proof".
+    const files = profileFormFiles([
+      row({ id: "a", field_key: "id_proof", file_name: "aadhaar.png" }),
+      row({ id: "b", kind: "signed_agreement", file_name: "agreement.pdf" }),
+      row({ id: "c", field_key: "photo", file_name: "me.jpg" }),
+    ]);
+
+    expect(files).toEqual([
+      { attachmentId: "a", fieldKey: "id_proof", fileName: "aadhaar.png" },
+      { attachmentId: "c", fieldKey: "photo", fileName: "me.jpg" },
+    ]);
+  });
+
+  it("is empty for a lead whose files are all staff uploads", () => {
+    expect(profileFormFiles([row({ id: "a" }), row({ id: "b" })])).toEqual([]);
   });
 });

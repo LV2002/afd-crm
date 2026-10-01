@@ -185,14 +185,23 @@ describe("buildSheetCells", () => {
 });
 
 describe("student profile form composition", () => {
-  it("keeps the seed and the migration backfill in agreement", () => {
-    // Two lists of the same thing: which student fields are NOT asked of
-    // the student. A fresh instance is seeded from one and an existing
-    // one is backfilled from the other, so they diverging means two
-    // installs of the same CRM show different forms.
+  it("keeps the seed and the migrations in agreement", () => {
+    // Two routes to the same form: a fresh instance is seeded, an existing
+    // one is backfilled by migration. They diverging means two installs of
+    // the same CRM ask students different questions.
+    //
+    // There are three sources now, not two. 0035 wrote the original
+    // off-form list; 0075 put `photo_url` back ON the form once it became a
+    // file upload rather than a URL to paste. So the seed's list has to
+    // equal 0035's minus whatever a later migration turned back on — which
+    // is the comparison that stays true as more of them are corrected.
     const seed = readFileSync(join(ROOT, "src/lib/db/seed.ts"), "utf8");
-    const migration = readFileSync(
+    const original = readFileSync(
       join(ROOT, "src/lib/db/migrations/0035_student_profile_form_flag.sql"),
+      "utf8",
+    );
+    const amendment = readFileSync(
+      join(ROOT, "src/lib/db/migrations/0075_student_fields_not_core.sql"),
       "utf8",
     );
 
@@ -202,11 +211,19 @@ describe("student profile form composition", () => {
     );
     const seedKeys = [...seedBlock.matchAll(/"([a-z0-9_]+)"/g)].map((m) => m[1]).sort();
 
-    const notInBlock = migration.slice(migration.indexOf("NOT IN ("));
-    const migrationKeys = [...notInBlock.matchAll(/'([a-z0-9_]+)'/g)].map((m) => m[1]).sort();
+    const notInBlock = original.slice(original.indexOf("NOT IN ("));
+    const originallyOff = [...notInBlock.matchAll(/'([a-z0-9_]+)'/g)].map((m) => m[1]);
+
+    // Keys a later migration moved onto the form.
+    const turnedOn = [
+      ...amendment.matchAll(/set\s+on_profile_form\s*=\s*true[\s\S]*?key\s*=\s*'([a-z0-9_]+)'/g),
+    ].map((m) => m[1]);
+    expect(turnedOn).toContain("photo_url");
+
+    const expected = originallyOff.filter((key) => !turnedOn.includes(key)).sort();
 
     expect(seedKeys.length).toBeGreaterThan(0);
-    expect(migrationKeys).toEqual(seedKeys);
+    expect(expected).toEqual(seedKeys);
   });
 
   it("does not ask a student for anything the institute assigns", () => {
