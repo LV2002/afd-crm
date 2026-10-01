@@ -4871,3 +4871,85 @@ change, two new handbook sections (deleting a lead; setting up notifications).
 9 new tests (99 files, 1283 total).
 **Verify by:** open a junk lead → bottom of the page → Delete lead with a reason →
 it leaves every list → Leads → Deleted → Restore → it is back in its old stage.
+
+---
+
+## Session 68 — Twenty-two fields claimed a column they never had
+
+Leon's screenshot of the Photo field answered a question I had got wrong twice. The
+type was greyed out not because somebody had answered it, but because the field was
+marked **`is_core`** — a built-in, backed by a real column. It is not, and neither
+are twenty-one others.
+
+### The bug
+
+`is_core` means "this field's value lives in a column of the same name"; everything
+else lives in the entity's `custom` jsonb. The seed's own comment says the student
+list "mixes real columns (isCore) with genuinely admin-editable custom fields
+(is_core: false, living in `students.custom`)". The code said
+`isCore: field.isCore ?? true`, and only eleven of thirty-three student rows said
+otherwise. So City, Address, Pincode, State, Photo, both parents' names and numbers,
+Percentage 10th, Percentage 12th and twelve more all claimed a column that has never
+existed.
+
+Not cosmetic:
+
+- **Saving a student record could not work at all.** The update path routes a core
+  field to `fieldColumn(key)`, so it sent `update students set city = …, photo_url =
+  …` and Postgres rejected the whole statement — every field on the form, not just
+  the wrong ones.
+- **Reading one showed them permanently blank.** `getRawFieldValue` looked for
+  `row.city`, which was never selected and never existed.
+- **Their type was frozen**, because a core field's type is the shape of a real
+  column. Which is how Leon came to be stuck with a Photo question typed as a web
+  address and no way to make it an upload.
+
+The student-facing profile form was untouched: it writes answers into
+`leads.profile_form_data` by key and never consults `is_core`. Everything students
+have sent is intact.
+
+### The fix
+
+Migration 0075 asks the database which keys are real columns and flips the rest,
+rather than listing twenty-two names that would rot the moment somebody adds a
+column. Nothing to migrate alongside it — every write that would have put a value in
+those columns failed, so there is no data in the wrong place. Leads were already
+correct: only `lead_source`/`sub_source` diverge, and both have explicit overrides.
+
+The seed now defaults `isCore` **per list** — true for leads, where every field has
+had a column from the start, false for students, where the eleven real ones say so
+individually. The common case on each list is the silent one, so a new entry added
+without thinking lands correctly.
+
+**And the seed stops overwriting live configuration.** It rewrote `label`, `type`
+and `section` on every run. That was already shaky and is now plainly wrong: an
+admin renames a question and changes its type in Settings → Custom Fields, so a
+deploy that re-ran the seed would silently put a Photo question back to "web
+address" the day after somebody made it an upload. An existing row is left entirely
+alone; new fields still arrive on deploy.
+
+### Photo is a file upload
+
+Both in the seed and, for Leon's existing data, in 0075 — guarded on the old type,
+so an admin who has already changed it keeps their choice. It also joins the
+student-facing form. It was kept off it with a reason that has expired: "a student
+on a phone has no URL to paste" was true of a `url` field and is not true of a file
+picker.
+
+### The check that would have caught it
+
+`tests/field-core-columns.spec.ts`: every `is_core` field must resolve — through
+`fieldColumn`, so the two deliberate lead overrides still pass — to a column that
+exists. It also refuses to pass vacuously for an entity it has no table mapped for,
+which is the worst kind of green. A second test pins the Photo question as a file
+upload on the form.
+
+**Verified on a scratch database**: migrate and seed from empty now gives 12 core
+and 22 custom student fields, zero broken, Photo as a file question on the form.
+
+**Shipped:** migration 0075, the per-list `isCore` default, `onConflictDoNothing` on
+field seeding, `photo_url` as a `file` on the profile form, 3 new tests, and the
+seed/migration agreement test taught about amendments (100 files, 1286 total).
+**Verify by:** open a student → edit any field → Save. It saves, which it could not
+before. Then Settings → Custom Fields → Photo: the type reads **File upload** and is
+editable.

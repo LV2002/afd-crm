@@ -795,7 +795,18 @@ interface FieldSeed {
   showInFilters?: boolean;
   options?: Array<{ value: string; label: string }>;
   helpText?: string;
-  /** Defaults to true — everything on this list was a lead-form field from the start. STUDENT_FIELD_SEEDS mixes real columns (true) with admin-added form fields (false), so it's explicit there. */
+  /**
+   * Whether the value lives in a real column of the same name, rather than
+   * in the entity's `custom` jsonb.
+   *
+   * Omitted means the list's own default — true for leads, where every
+   * field has had a column from the start, and FALSE for students, where
+   * only eleven of thirty-three do. It used to default to true everywhere
+   * regardless, which marked twenty-two student fields as columns that have
+   * never existed: saving a student record sent `update students set city =
+   * …` and Postgres rejected the whole statement, so the edit form could not
+   * save at all. Migration 0075 repaired the rows; this is why it happened.
+   */
   isCore?: boolean;
 }
 
@@ -866,11 +877,11 @@ const LEAD_FIELD_SEEDS: FieldSeed[] = [
  * admin can move any question on or off the form afterwards in
  * Settings → Student Profile Form.
  *
- * `photo_url` is here for a different reason from the rest: it is a
- * pasted-URL field, and a student on a phone has no URL to paste.
+ * `photo_url` used to be on this list, because it was a pasted-URL field
+ * and a student on a phone has no URL to paste. It is a file upload now, so
+ * it is exactly the kind of thing to ask a student for.
  */
 const STUDENT_FIELDS_OFF_PROFILE_FORM = new Set([
-  "photo_url",
   "center_id",
   "current_course",
   "current_batch_id",
@@ -892,7 +903,17 @@ const STUDENT_FIELD_SEEDS: FieldSeed[] = [
   { key: "address", label: "Address", type: "long_text", section: "Personal" },
   { key: "pincode", label: "Pincode", type: "text", section: "Personal" },
   { key: "state", label: "State", type: "text", section: "Personal" },
-  { key: "photo_url", label: "Photo", type: "url", section: "Personal" },
+  {
+    key: "photo_url",
+    label: "Photo",
+    // A real upload. It was a `url` because there was no file control, and
+    // was kept off the student-facing form for exactly that reason — "a
+    // student on a phone has no URL to paste". Both of those stopped being
+    // true when `file` questions started rendering a file picker.
+    type: "file",
+    section: "Personal",
+    helpText: "A clear photo of the student. JPG, PNG or PDF.",
+  },
 
   // Parents (custom)
   { key: "mother_name", label: "Mother Name", type: "text", section: "Parents" },
@@ -943,7 +964,11 @@ const STUDENT_FIELD_SEEDS: FieldSeed[] = [
   { key: "comments", label: "Comments", type: "long_text", section: "Interests & Notes" },
 ];
 
-async function seedFieldDefinitionsFor(entity: "lead" | "student", seeds: FieldSeed[]) {
+async function seedFieldDefinitionsFor(
+  entity: "lead" | "student",
+  seeds: FieldSeed[],
+  defaultIsCore: boolean,
+) {
   for (const [index, field] of seeds.entries()) {
     await db
       .insert(fieldDefinitions)
@@ -958,32 +983,36 @@ async function seedFieldDefinitionsFor(entity: "lead" | "student", seeds: FieldS
         isRequired: field.isRequired ?? false,
         showInList: field.showInList ?? false,
         showInFilters: field.showInFilters ?? false,
-        isCore: field.isCore ?? true,
+        isCore: field.isCore ?? defaultIsCore,
         onProfileForm: entity === "student" && !STUDENT_FIELDS_OFF_PROFILE_FORM.has(field.key),
         options: field.options,
       })
-      .onConflictDoUpdate({
+      // An existing row is left entirely alone.
+      //
+      // This used to rewrite `label`, `type` and `section` on every run, on
+      // the grounds that the seed knows best and only `sort_order`,
+      // `on_profile_form` and `help_text` were an admin's to keep. That was
+      // already shaky and is now plainly wrong: an admin renames a question
+      // and changes its type in Settings → Custom Fields, so a deploy that
+      // re-ran the seed would silently put a Photo question back to "web
+      // address" the day after somebody made it an upload.
+      //
+      // The seed's job is to make a fresh instance work, not to keep a live
+      // one in line with the file. New fields still arrive on deploy.
+      .onConflictDoNothing({
         target: [fieldDefinitions.entity, fieldDefinitions.key],
-        set: {
-          label: field.label,
-          type: field.type,
-          section: field.section,
-        },
-        // `sort_order`, `on_profile_form` and `help_text` are deliberately
-        // NOT in this set. All three are things an admin changes — the
-        // first two in Settings → Student Profile Form, the last in
-        // Settings → Fields — and re-running the seed against a live
-        // instance must not quietly undo a reordered form or a reworded
-        // hint. New rows still land with the order and help text written
-        // above, which is all the seed is for.
       });
   }
   console.log(`seeded ${seeds.length} ${entity} field definitions`);
 }
 
 async function seedFieldDefinitions() {
-  await seedFieldDefinitionsFor("lead", LEAD_FIELD_SEEDS);
-  await seedFieldDefinitionsFor("student", STUDENT_FIELD_SEEDS);
+  // Leads default to core and say so once; students default to custom and
+  // the eleven real columns say so individually. The defaults are the way
+  // round that makes the common case on each list the silent one, so a new
+  // entry added without thinking lands correctly.
+  await seedFieldDefinitionsFor("lead", LEAD_FIELD_SEEDS, true);
+  await seedFieldDefinitionsFor("student", STUDENT_FIELD_SEEDS, false);
 }
 
 interface UserSeed {

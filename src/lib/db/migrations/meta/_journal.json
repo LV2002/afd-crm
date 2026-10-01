@@ -526,6 +526,13 @@
       "when": 1790841408392,
       "tag": "0074_lead_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1790843779834,
+      "tag": "0075_student_fields_not_core",
+      "breakpoints": true
     }
   ]
 }
