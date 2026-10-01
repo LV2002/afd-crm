@@ -20,6 +20,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { maskPhone } from "@/lib/leads/mask-phone";
+
+import { MarkReadButton } from "./mark-read-button";
 import type { ProfileFormFile } from "@/lib/profile-form/file-answers";
 import {
   UNANSWERED,
@@ -35,6 +37,8 @@ export interface ProfileFormRow {
   lead_number: number;
   student_name: string;
   profile_form_submitted_at: string | null;
+  /** Null on a submitted form means nobody has read it yet. */
+  profile_form_reviewed_at: string | null;
   profile_form_token: string | null;
   profile_form_data: Record<string, unknown> | null;
   center_id: string | null;
@@ -73,6 +77,7 @@ export function ProfileFormsTable({
   fileKeys,
   filesByLead,
   canReadFiles,
+  canMarkRead,
 }: {
   rows: ProfileFormRow[];
   fieldLabels: Record<string, string>;
@@ -86,6 +91,8 @@ export function ProfileFormsTable({
   /** leadId → the files that student attached, resolved to attachment ids. */
   filesByLead: Record<string, ProfileFormFile[]>;
   canReadFiles: boolean;
+  /** Whether this person may take a form off the queue. */
+  canMarkRead: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("submitted");
@@ -331,6 +338,8 @@ export function ProfileFormsTable({
               );
               const isOpen = expanded === row.id;
               const files = filesByLead[row.id] ?? [];
+              const isNew =
+                row.profile_form_submitted_at !== null && row.profile_form_reviewed_at === null;
               return (
                 <Fragment key={row.id}>
                   <TableRow>
@@ -338,12 +347,27 @@ export function ProfileFormsTable({
                     <TableCell className="font-medium">{row.student_name}</TableCell>
                     <TableCell>
                       {row.profile_form_submitted_at ? (
-                        new Date(row.profile_form_submitted_at).toLocaleDateString("en-IN", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                          timeZone: "Asia/Kolkata",
-                        })
+                        <div className="flex flex-col items-start gap-1">
+                          <span>
+                            {new Date(row.profile_form_submitted_at).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                              timeZone: "Asia/Kolkata",
+                            })}
+                          </span>
+                          {/*
+                            The row-level version of the sidebar count. A
+                            number in the margin tells you there is work;
+                            this tells you which rows it is.
+                          */}
+                          {isNew && (
+                            <div className="flex items-center gap-1.5">
+                              <Badge variant="destructive">New</Badge>
+                              {canMarkRead && <MarkReadButton leadId={row.id} />}
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <Badge variant="secondary">Awaiting</Badge>
                       )}

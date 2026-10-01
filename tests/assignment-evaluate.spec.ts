@@ -80,6 +80,8 @@ function baseLead(overrides: Partial<Lead> = {}): Lead {
     profileFormSentAt: null,
     profileFormSubmittedAt: null,
     profileFormData: null,
+    profileFormReviewedAt: null,
+    profileFormReviewedBy: null,
     ...overrides,
   };
 }

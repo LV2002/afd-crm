@@ -22,12 +22,22 @@ function holding(...codes: PermissionCode[]) {
 }
 
 describe("navBadgesFor", () => {
-  it("gives a counsellor nothing — none of the four queues is theirs", () => {
-    // A counsellor cannot assign, cannot see payments and has no students.
-    // Four grey zeroes in their sidebar would be four dead links.
+  it("gives a counsellor only the two queues that are theirs", () => {
+    // They cannot assign and cannot see payments or students, so those
+    // three would be dead links. Their own conversations and the profile
+    // forms their students send are exactly their work.
     expect(navBadgesFor(holding("lead.read", "lead.update", "whatsapp.read"))).toEqual([
+      "profileForms",
       "whatsapp",
     ]);
+  });
+
+  it("gives the profile-form count to everybody who can see the forms", () => {
+    // Leon's reason for asking: a student submitting a form is something
+    // the office should find out about without going to look. So it is
+    // gated on the same permission as the screen, not on a narrower one.
+    expect(navBadgesFor(holding("lead.read"))).toEqual(["profileForms"]);
+    expect(navBadgesFor(holding("payment.read"))).not.toContain("profileForms");
   });
 
   it("gives academics the onboarding queue and nothing else", () => {
@@ -43,13 +53,18 @@ describe("navBadgesFor", () => {
     expect(navBadgesFor(holding("payment.read", "payment.record"))).toEqual(["admissions"]);
   });
 
+  it("gives academics the onboarding queue and nothing from sales", () => {
+    const keys = navBadgesFor(holding("student.read", "student.update"));
+    expect(keys).toEqual(["onboarding"]);
+  });
+
   it("gives a centre head the unassigned pile", () => {
     const keys = navBadgesFor(holding("lead.assign", "lead.read", "report.center"));
     expect(keys).toContain("unassigned");
     expect(keys).not.toContain("onboarding");
   });
 
-  it("gives an admin all four", () => {
+  it("gives an admin every one of them", () => {
     expect(navBadgesFor(() => true)).toEqual([...NAV_BADGE_KEYS]);
   });
 

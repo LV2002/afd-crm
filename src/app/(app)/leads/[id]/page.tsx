@@ -315,6 +315,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           leadId={id}
           token={row.profile_form_token}
           submittedAt={row.profile_form_submitted_at}
+          reviewedAt={row.profile_form_reviewed_at}
           answers={row.profile_form_data}
           fieldLabels={studentFieldLabels}
           files={profileFormFiles(attachments)}

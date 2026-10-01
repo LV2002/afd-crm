@@ -7,6 +7,7 @@ import { useActionState, useState } from "react";
 import { OpenFileButton } from "@/components/files/open-file-button";
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
+import { MarkReadButton } from "@/app/(app)/profile-forms/mark-read-button";
 import { createProfileFormLink, type ProfileFormState } from "@/lib/profile-form/actions";
 import type { ProfileFormFile } from "@/lib/profile-form/file-answers";
 
@@ -16,6 +17,7 @@ export function ProfileFormPanel({
   leadId,
   token,
   submittedAt,
+  reviewedAt,
   answers,
   fieldLabels,
   files,
@@ -24,6 +26,8 @@ export function ProfileFormPanel({
   leadId: string;
   token: string | null;
   submittedAt: string | null;
+  /** Null on a submitted form means nobody has taken it off the queue yet. */
+  reviewedAt: string | null;
   answers: Record<string, unknown> | null;
   /** key -> label, so answers read as the questions they belong to. */
   fieldLabels: Record<string, string>;
@@ -60,6 +64,7 @@ export function ProfileFormPanel({
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">
+            {!reviewedAt && <span className="mr-1.5 font-medium text-destructive">New ·</span>}
             Submitted{" "}
             {new Date(submittedAt).toLocaleString("en-IN", {
               dateStyle: "medium",
@@ -73,12 +78,20 @@ export function ProfileFormPanel({
             that /students/[id]/print needs exists. Same A4 sheet, same
             layout.
           */}
-          <Button asChild type="button" variant="outline" size="sm">
-            <Link href={`/leads/${leadId}/profile-form/print`} target="_blank">
-              <Printer className="size-4" />
-              Print profile form
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            {/*
+              Here as well as on the list, because this is where somebody
+              actually reads the form — making them go back to a list to
+              say they read it is how a queue stops getting cleared.
+            */}
+            {!reviewedAt && canManage && <MarkReadButton leadId={leadId} />}
+            <Button asChild type="button" variant="outline" size="sm">
+              <Link href={`/leads/${leadId}/profile-form/print`} target="_blank">
+                <Printer className="size-4" />
+                Print profile form
+              </Link>
+            </Button>
+          </div>
         </div>
         <dl className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2">
           {entries.map(([key, value]) => {

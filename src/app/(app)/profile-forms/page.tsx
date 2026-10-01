@@ -46,7 +46,7 @@ export default async function ProfileFormsPage() {
     supabase
       .from("leads")
       .select(
-        "id, lead_number, student_name, profile_form_submitted_at, profile_form_token, profile_form_data, center_id",
+        "id, lead_number, student_name, profile_form_submitted_at, profile_form_reviewed_at, profile_form_token, profile_form_data, center_id",
       )
       .is("deleted_at", null)
       .not("profile_form_token", "is", null)
@@ -108,6 +108,9 @@ export default async function ProfileFormsPage() {
 
   const all = rows ?? [];
   const submitted = all.filter((r) => r.profile_form_submitted_at !== null);
+  // The same number the sidebar badge shows, said again where somebody can
+  // act on it.
+  const unread = submitted.filter((r) => r.profile_form_reviewed_at === null).length;
 
   // The files students attached, resolved to attachment ids so the table can
   // link to them. Only submitted forms can have any, so only those leads are
@@ -123,7 +126,13 @@ export default async function ProfileFormsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Student Profile Forms</h1>
         <p className="text-sm text-muted-foreground">
-          Forms sent to students who are joining. {submitted.length} submitted of {all.length} sent.
+          Forms sent to students who are joining. {submitted.length} submitted of {all.length} sent
+          {unread > 0 && (
+            <>
+              , <strong className="text-destructive">{unread} not read yet</strong>
+            </>
+          )}
+          .
         </p>
         {/*
           The questions are not edited here — they live on their own
@@ -157,6 +166,7 @@ export default async function ProfileFormsPage() {
           fileKeys={(definitions ?? []).filter((d) => d.type === "file").map((d) => d.key)}
           filesByLead={filesByLead}
           canReadFiles={can(user, "file.read")}
+          canMarkRead={can(user, "lead.update")}
         />
       )}
     </div>

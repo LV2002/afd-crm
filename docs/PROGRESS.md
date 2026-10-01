@@ -4953,3 +4953,69 @@ seed/migration agreement test taught about amendments (100 files, 1286 total).
 **Verify by:** open a student → edit any field → Save. It saves, which it could not
 before. Then Settings → Custom Fields → Photo: the type reads **File upload** and is
 editable.
+
+---
+
+## Session 69 — The photo box, and a fifth queue
+
+### The printed sheet never showed an uploaded photo
+
+Leon submitted a real profile form and the photo box on the printed sheet came out
+empty. Both print pages decided what to put in it with:
+
+```ts
+typeof answers.photo_url === "string" && answers.photo_url.startsWith("http")
+```
+
+Correct while Photo was a pasted link. Since migration 0075 it is a file upload, and
+the stored answer is the **filename** — so that test is false for every real photo
+and the box stayed a dashed outline.
+
+`lib/print/profile-photo.ts` replaces it. It finds the attachment by `field_key`,
+exactly — this file is the answer to that question — and keeps the old heuristic (an
+image whose label contains "photo") as a fallback, because counsellors uploaded
+passport photos by hand for months and those are still the student's photograph.
+Exact first, guess second. A PDF is never a candidate: it is a valid answer to a
+photo question and useless in an `<img>`, and printing a broken image is worse than
+printing the empty box, which at least looks deliberate.
+
+**It also fixes a quieter bug on the student sheet.** That page looked only at the
+*student's* attachments — but a student uploads their photo on the profile form weeks
+before a `students` row exists, so the file hangs off the **lead**. The photo would
+have vanished at Gate 2. Both sides are searched now.
+
+### Student Profile Forms gets a red count
+
+Leon: "when a student submits a profile form, everyone should know about it."
+
+A badge needs a definition of "outstanding", and a submitted form had none. The two
+definitions available without inventing a step were both bad: *every form ever*,
+which never reaches zero and teaches people to ignore the badge, and *submitted in
+the last N days*, which empties itself whether or not anybody looked.
+
+So there is a step, and it is the smallest one that makes the count honest:
+`profile_form_reviewed_at` (migration 0076) and a **Mark read** button — on the list,
+and on the lead page where somebody actually reads the form, because making them go
+back to a list to say they read it is how a queue stops getting cleared. A new form
+also carries a red **New** badge on its own row, so the number in the margin resolves
+to specific rows.
+
+Gated on `lead.read`, the same permission as the screen — so a counsellor sees it
+too. That is what "everyone should know" means, and it is the first badge that is not
+one role's private queue.
+
+**Deliberately not backfilled**, unlike the onboarding queue in 0073. There the
+backfill was truthful: every existing student really had been accepted long ago. Here
+the opposite holds — nobody has read any existing form, because there was no way to.
+Marking them read would be the system claiming work that was never done.
+
+No audit row for marking one read: it is a receipt for attention, not a change to the
+student's record, and an audit log full of "somebody looked at something" is one
+nobody can search.
+
+**Shipped:** `lib/print/profile-photo.ts` (6 tests) wired into both print pages,
+migration 0076, the `profileForms` badge, `markProfileFormRead` and its button in two
+places, the New badge and unread count on the list, handbook.
+101 files, 1295 tests.
+**Verify by:** open the lead's printed profile form — the photo is in the box. The
+sidebar shows a red 1 on Student Profile Forms until you press Mark read.

@@ -7,7 +7,7 @@ import { getBrand } from "@/lib/brand/get-brand";
 import { getRawFieldValue } from "@/lib/fields/field-column";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import { buildSheetCells, resolveOptionsForPrint } from "@/lib/print/profile-sheet";
-import { createSignedUrl, listAttachments } from "@/lib/storage/attachments";
+import { resolveProfilePhotoUrl } from "@/lib/print/profile-photo";
 import { createClient } from "@/lib/supabase/server";
 
 import type { StudentDetailRow } from "../types";
@@ -31,7 +31,7 @@ export default async function StudentPrintPage({ params }: { params: Promise<{ i
     supabase
       .from("students")
       .select(
-        "id, student_code, full_name, phone, parent_phone, email, dob, status, joined_at, target_exams, target_exam_year, current_course, current_batch_id, center_id, custom, centers(name), batches(name)",
+        "id, lead_id, student_code, full_name, phone, parent_phone, email, dob, status, joined_at, target_exams, target_exam_year, current_course, current_batch_id, center_id, custom, centers(name), batches(name)",
       )
       .eq("id", id)
       .is("deleted_at", null)
@@ -59,17 +59,17 @@ export default async function StudentPrintPage({ params }: { params: Promise<{ i
    * picture. The signed URL is minted here, at render, because the bucket
    * is private — an <img> tag cannot authenticate on its own.
    */
-  const pastedPhotoUrl = rawValue("photo_url");
-  const uploadedPhoto = can(user, "file.read")
-    ? (await listAttachments(supabase, { kind: "student", id })).find(
-        (a) => a.mime_type.startsWith("image/") && (a.label ?? "").toLowerCase().includes("photo"),
+  const photoUrl = can(user, "file.read")
+    ? await resolveProfilePhotoUrl(
+        supabase,
+        // Both sides of Gate 2. A student uploads their photo on the
+        // profile form weeks before a `students` row exists, so the file
+        // hangs off the LEAD — looking only at the student's own files
+        // lost the photo the moment they became a student.
+        { studentId: id, leadId: student.lead_id },
+        rawValue("photo_url"),
       )
-    : undefined;
-  const signedPhotoUrl = uploadedPhoto
-    ? await createSignedUrl(supabase, uploadedPhoto.storage_path)
     : null;
-  const photoUrl =
-    signedPhotoUrl ?? (typeof pastedPhotoUrl === "string" && pastedPhotoUrl ? pastedPhotoUrl : null);
 
   return (
     <ProfileSheet

@@ -13,12 +13,22 @@ import type { PermissionCode } from "@/lib/auth/permissions";
  * Each permission is the one the badge's own screen is gated on, so the
  * badge and the link it sits on always appear and disappear together.
  */
-export const NAV_BADGE_KEYS = ["unassigned", "admissions", "whatsapp", "onboarding"] as const;
+export const NAV_BADGE_KEYS = [
+  "unassigned",
+  "admissions",
+  "profileForms",
+  "whatsapp",
+  "onboarding",
+] as const;
 export type NavBadgeKey = (typeof NAV_BADGE_KEYS)[number];
 
 export const NAV_BADGE_PERMISSION: Record<NavBadgeKey, PermissionCode> = {
   unassigned: "lead.assign",
   admissions: "payment.read",
+  // Same permission the screen itself is gated on, so everybody who can see
+  // the forms sees the count — which is what "everyone should know a form
+  // came in" means in practice.
+  profileForms: "lead.read",
   whatsapp: "whatsapp.read",
   onboarding: "student.read",
 };

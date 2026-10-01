@@ -16,13 +16,13 @@ export {
 /**
  * The red counts beside the sidebar's queues.
  *
- * Four screens in this system are work queues somebody is supposed to
+ * Five screens in this system are work queues somebody is supposed to
  * notice: unassigned leads nobody owns, admissions a counsellor has
- * confirmed and accounts has not collected on, WhatsApp threads where the
- * other person wrote last, and students academics has not onboarded. Each
- * was only visible to somebody who thought to go and look, which for a
- * queue whose whole point is "these are being forgotten" is close to not
- * having one.
+ * confirmed and accounts has not collected on, profile forms a student has
+ * sent that nobody has read, WhatsApp threads where the other person wrote
+ * last, and students academics has not onboarded. Each was only visible to
+ * somebody who thought to go and look, which for a queue whose whole point
+ * is "these are being forgotten" is close to not having one.
  *
  * ## Scope comes from RLS, not from here
  *
@@ -48,6 +48,7 @@ type Client = Awaited<ReturnType<typeof createClient>>;
 const COUNTERS: Record<NavBadgeKey, (supabase: Client) => Promise<number>> = {
   unassigned: countUnassignedLeads,
   admissions: countAwaitingFirstPayment,
+  profileForms: countUnreadProfileForms,
   whatsapp: countThreadsAwaitingReply,
   onboarding: countStudentsInOnboarding,
 };
@@ -109,6 +110,24 @@ async function countAwaitingFirstPayment(supabase: Client): Promise<number> {
     .is("dropped_at", null)
     .not("sales_to_accounts_at", "is", null)
     .is("accounts_to_academics_at", null);
+  return count ?? 0;
+}
+
+/**
+ * Profile forms a student has sent that nobody has read.
+ *
+ * "Read" is a real step rather than a guess at one (migration 0076). The
+ * alternative definitions were "every form ever", which never reaches zero
+ * and teaches people to ignore the badge, and "the last few days", which
+ * empties itself whether or not anybody looked.
+ */
+async function countUnreadProfileForms(supabase: Client): Promise<number> {
+  const { count } = await supabase
+    .from("leads")
+    .select("id", { count: "exact", head: true })
+    .is("deleted_at", null)
+    .not("profile_form_submitted_at", "is", null)
+    .is("profile_form_reviewed_at", null);
   return count ?? 0;
 }
 

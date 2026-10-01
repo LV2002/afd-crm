@@ -126,8 +126,14 @@ nothing at all when it is empty:
 |---|---|
 | **Unassigned** | Leads nobody owns. Claim them. |
 | **Admissions** | Admissions a counsellor has confirmed that have not paid yet. |
+| **Student Profile Forms** | Forms a student has sent in that nobody has read. |
 | **Students** | Students who have paid and are waiting to be onboarded. |
 | **WhatsApp** | Conversations where the other person wrote last. |
+
+A submitted form stays **New** until somebody presses **Mark read** — on the
+list, or on the lead itself where you actually read it. That is the only thing
+that clears the count, which is the point: a number that goes away on its own
+tells you nothing.
 
 The count is **your** count. A centre head sees their centre's unassigned
 leads; a counsellor sees their own conversations. Nobody's number includes

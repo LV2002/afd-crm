@@ -13,6 +13,8 @@ export interface LeadDetailRow {
   custom: Record<string, unknown> | null;
   profile_form_token: string | null;
   profile_form_submitted_at: string | null;
+  /** Null on a submitted form means nobody has read it yet — see migration 0076. */
+  profile_form_reviewed_at: string | null;
   profile_form_data: Record<string, unknown> | null;
   [column: string]: unknown;
 }

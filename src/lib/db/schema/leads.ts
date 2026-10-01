@@ -147,6 +147,20 @@ export const leads = pgTable(
     profileFormSubmittedAt: timestamp("profile_form_submitted_at", { withTimezone: true }),
     /** The student's own answers, keyed by student field_definitions.key. */
     profileFormData: jsonb("profile_form_data").$type<Record<string, unknown>>(),
+    /**
+     * When somebody read the submitted form. Null on a submitted form means
+     * it is still new, which is what the red count on Student Profile Forms
+     * counts — see migration 0076.
+     *
+     * The step exists so the badge can mean something. Without it the only
+     * honest counts were "every form ever", which never reaches zero, and
+     * "the last few days", which empties itself whether or not anybody
+     * looked.
+     */
+    profileFormReviewedAt: timestamp("profile_form_reviewed_at", { withTimezone: true }),
+    profileFormReviewedBy: uuid("profile_form_reviewed_by").references((): AnyPgColumn => profiles.id, {
+      onDelete: "set null",
+    }),
     ...timestamps(),
     /**
      * Who deleted this lead, and the reason they gave.

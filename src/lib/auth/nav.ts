@@ -125,6 +125,11 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     href: "/profile-forms",
     iconKey: "profile-forms",
     permission: "lead.read",
+    // A student filling in their profile form is a thing the office should
+    // find out about without being told twice. The count is the ones
+    // nobody has read yet.
+    badgeKey: "profileForms",
+    badgeWhat: "profile forms nobody has read",
     label: "Student Profile Forms",
   },
   { href: "/insights", iconKey: "insights", permission: "report.read", label: "Insights" },
