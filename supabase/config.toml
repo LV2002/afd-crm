@@ -1,0 +1,51 @@
+# Minimum configuration for `supabase start`.
+#
+# This exists so the browser suite can run on GitHub Actions, where there
+# is no developer to set anything up: `supabase start` brings up Postgres
+# and — the part that matters — a real auth server, so the tests can
+# actually sign in. Every other check in CI runs against a bare Postgres
+# with `scripts/local-supabase-shim.sql` standing in for the auth schema,
+# which is enough to test RLS and nothing like enough to test a login.
+#
+# The CRM's own schema is NOT managed here. Migrations are drizzle's
+# (`npm run db:migrate`), applied against the Postgres this brings up.
+# `supabase/migrations/` is deliberately empty and must stay that way, or
+# there would be two tools both believing they own the schema.
+project_id = "afd-crm"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+# Matches the Postgres the hosted project runs, so a function or a view
+# that works locally works there — migration 0073's `security_invoker`
+# view needs 15 or newer.
+major_version = 17
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["http://127.0.0.1:3000"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+# Nobody can click a link in a CI run, and the seed creates its users with
+# `email_confirm: true` regardless.
+enable_confirmations = false
+
+[studio]
+enabled = false
+
+[inbucket]
+enabled = false
+
+[storage]
+enabled = true

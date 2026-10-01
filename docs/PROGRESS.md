@@ -5158,3 +5158,54 @@ sequences all restart at 1, and the audit log holds exactly one row —
 
 **Shipped:** `docs/GO-LIVE.md`, `src/lib/db/reset-tables.ts`,
 `src/lib/db/reset-data-cli.ts`, `npm run db:reset-data`, 6 tests (102 files, 1301).
+
+---
+
+## Session 72 — Running the browser suite without a laptop
+
+Leon's Mac could not switch branches at all: `git` on macOS is a shim over the
+Xcode Command Line Tools, and his were broken, so `git checkout` and `git pull`
+both failed silently with an `xcrun` error and he stayed on an old branch with an
+old `package.json`. Hence "Missing script: e2e" three times over.
+
+He would rather not install developer tooling, which is entirely reasonable for
+somebody who owns the institute rather than the codebase. So the suite moves to
+where no installation is needed.
+
+### `.github/workflows/e2e.yml`
+
+Actions → **Browser test** → Run workflow. It builds a throwaway copy of the whole
+system, runs the suite against it, and uploads the report — including the traces,
+so a failure can be replayed click by click by somebody who does not read code.
+
+**The hard part is auth.** `ci.yml` runs against a bare Postgres with
+`scripts/local-supabase-shim.sql` standing in for the auth schema, which is enough
+to prove RLS holds and nothing like enough to sign in. A browser suite that cannot
+log in tests the login page. So this workflow runs `supabase start` for a real auth
+server, and reads the generated anon and service-role keys out of
+`supabase status` rather than hardcoding them.
+
+`supabase/config.toml` is the minimum to make that possible. **`supabase/migrations/`
+stays empty deliberately** — drizzle owns the schema, and two tools both believing
+they own it is a bad afternoon.
+
+Two small things worth writing down: the app is served from a production build
+rather than `next dev`, because a dev server compiles each route on first request
+and this suite visits sixty routes exactly once; and `E2E_NO_SERVER=1` stops
+Playwright starting a second server and racing the workflow's own for port 3000.
+
+It runs on demand and on every pull request into `main`, so a screen cannot stop
+rendering on the way to production without somebody being told.
+
+### The guide now leads with it
+
+`docs/GO-LIVE.md` Part 1 is the four-click version; the local route is demoted to
+1.3 and labelled as optional, for watching it click live.
+
+**Not verified here.** This container has no Docker, so `supabase start` could not
+be exercised. YAML parses, the keys are read rather than guessed, and every
+command in it is one that works locally — but the first run may need a fix, which
+is the normal cost of a CI workflow written without a runner to try it on.
+
+**Shipped:** `.github/workflows/e2e.yml`, `supabase/config.toml`, Part 1 of
+GO-LIVE.md rewritten, the e2e README's running section.

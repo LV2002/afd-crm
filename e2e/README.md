@@ -24,6 +24,16 @@ E2E_ALLOW_NON_LOCAL=1 E2E_BASE_URL=https://staging.example npm run e2e
 
 ## Running it
 
+**On GitHub, which is the normal way.** Actions → *Browser test* → Run
+workflow. It builds a throwaway copy of the whole system — Postgres, a real
+Supabase auth server, the six logins — runs against that and throws it away.
+The report is an artifact on the run. It also runs on every pull request into
+`main`. See `.github/workflows/e2e.yml`.
+
+**On your own machine**, if you want to watch it click. Needs Docker, for
+`npx supabase start` — the suite signs in, so it needs a real auth server and
+the bare-Postgres shim the other tests use is not enough.
+
 One-time, on a new machine:
 
 ```

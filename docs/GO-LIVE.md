@@ -12,74 +12,54 @@ Do not reset until you are finished testing. It cannot be undone.
 # Part 1 — The automated test
 
 This signs in as all six roles and opens every screen each of them can reach,
-on a desktop and on a phone. It runs on **your computer against a local copy**,
-never against the live CRM — the suite creates leads and clicks buttons, and
-you do not want that happening to real students.
+on a desktop and on a phone. It runs **on GitHub's machines**, so there is
+nothing to install on your laptop.
 
-## 1.1 One-time setup
+It never touches the live CRM. It builds a throwaway copy of the whole system —
+database, logins and all — runs against that, and throws it away.
 
-You need these installed: Node 20+, Git, and Postgres (or Docker). If your
-developer set the project up already, skip to 1.2.
+## 1.1 Run it
+
+1. Go to **github.com/LV2002/afd-crm → Actions**.
+2. In the left-hand list, click **Browser test**.
+3. **Run workflow** (right-hand side) → pick the branch → **Run workflow**.
+4. Wait. Ten to fifteen minutes — it builds the whole application first.
+
+A green tick means every screen opened for every role, with no errors, no
+broken links and no failed requests.
+
+It also runs by itself on any pull request into `main`, so a change cannot
+reach the live site without this passing.
+
+## 1.2 When something fails
+
+1. Click the failed run.
+2. Scroll to **Artifacts** at the bottom and download **browser-test-report**.
+3. Unzip it and open `playwright-report/index.html` in your browser.
+4. Click the red test, then **Trace**.
+
+The trace is a replay: every click, the page as it looked at each step, the
+network, a screenshot and a video. You do not need to read any code to see
+what happened. Send me the test name and what you see.
+
+## 1.3 Running it on your own machine instead
+
+Optional, and only worth it if you want to watch it click through live. It
+needs Docker Desktop and working git, which is why it is not the main route.
 
 ```bash
-git clone https://github.com/LV2002/afd-crm.git
-cd afd-crm
 npm install
-npm run e2e:install          # downloads the test browser, ~150 MB
+npm run e2e:install          # downloads the test browser
+npx supabase start           # needs Docker running
+npm run db:migrate
+npm run db:seed
+npm run e2e                  # or: npm run e2e:ui, to watch
 ```
 
-Create `.env.local` with a **local** database, never the live one:
-
-```
-DATABASE_URL=postgresql://postgres:postgres@localhost:54322/postgres
-NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<from `supabase start`>
-SUPABASE_SERVICE_ROLE_KEY=<from `supabase start`>
-CRON_SECRET=anything-random
-INTEGRATION_ENCRYPTION_KEY=<openssl rand -base64 32>
-```
-
-The local Supabase stack comes from `npx supabase start` (needs Docker). It
-prints all three values when it finishes.
-
-## 1.2 Prepare the database
-
-```bash
-npm run db:migrate           # builds the tables
-npm run db:seed              # creates the six test logins
-```
-
-The logins are `admin@afd-crm.test`, `coadmin@`, `centerhead.kochi@`,
-`counsellor.kochi@`, `accounts@` and `academics@` — all with the password
-printed by the seed. They exist only on your local copy.
-
-## 1.3 Run it
-
-```bash
-npm run e2e
-```
-
-A few minutes. It starts the app itself. You will see each role's run and a
-count of screens visited.
-
-**Green:** every screen opened for every role, with no errors, no broken links
-and no failed requests.
-
-**Red:** open the report and look.
-
-```bash
-npm run e2e:report
-```
-
-Click the failed test, then the **trace**. You get a replay of exactly what it
-did — the clicks, the page at each step, the network, a screenshot and a video.
-Send me the failing test name and what the trace shows and I will fix it.
-
-To watch it work rather than read a report:
-
-```bash
-npm run e2e:ui
-```
+`npx supabase start` prints the two keys; put them in `.env.local` as
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY`, along with
+`DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres` and
+`NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321`.
 
 ## 1.4 What it does not check
 
