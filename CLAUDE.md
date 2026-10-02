@@ -158,11 +158,20 @@ data scope             own | center | all
 role                   a named bundle of primitives, each with a scope
 ```
 
-RLS policies call `auth_scope('lead.read')` and
-`can_access_center('lead.read', center_id, owner_id)`, never `role = 'admin'`.
+RLS policies call `private.auth_scope('lead.read')` and
+`private.can_access_center('lead.read', center_id, owner_id)`, never `role = 'admin'`.
 (Earlier drafts of this file named a function `auth_has(permission, scope)`; it has
 never existed. The two above are what every policy actually uses.)
 See `docs/01-DATA-MODEL.md` § Permissions.
+
+**Schema-qualify them.** The helpers live in `private`, not `public`, because
+PostgREST exposes `public` and a function there gets a `/rest/v1/rpc/<name>`
+endpoint anyone can call — migration 0077 moved them for that reason. Policies
+written before the move still work (a policy stores the function's OID), but a
+NEW policy writing `auth_scope(...)` unqualified will fail at migration time with
+*function does not exist*. That is the intended failure: loud, immediate, and
+impossible to ship. `npm run db:audit` fails the build if a helper ever lands back
+in `public`.
 
 Six roles ship as seed data — `admin`, `co_admin`, `center_head`, `counsellor`,
 `accounts`, `academics` — but they are ordinary editable rows. Only `admin` is protected:

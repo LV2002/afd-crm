@@ -5261,3 +5261,83 @@ is visible but not yet listening. Waits for the page to settle first.
 
 **Shipped:** `min-w-0` on the layout's content column, the cancelled-prefetch rule
 in `page-health.ts`, the hydration wait in `mobile.spec.ts`.
+
+---
+
+## Session 74 — Closing every security finding Supabase reported
+
+Leon sent the export from his live Supabase **Security** tab: 28 schema findings plus
+one Auth setting. All 28 are now gone, and a CI check stops them coming back.
+
+### Ten helper functions had public API endpoints
+
+`auth_scope`, `can_access_center` and eight others are `SECURITY DEFINER` and live in
+`public` — the schema PostgREST exposes — so each had a `/rest/v1/rpc/<name>`
+endpoint reachable by a **logged-out** visitor. Most only answer questions about the
+caller, but `shares_center_with(uuid)` tells a stranger whether two staff share a
+centre, and none was ever meant to be an API.
+
+**The advisor's own advice would have taken the CRM down.** Revoking EXECUTE from
+`authenticated` turns an ordinary `select` on `leads` into
+`ERROR: permission denied for function can_access_center` — a policy expression is
+evaluated as the querying user, so that user needs EXECUTE on whatever the policy
+calls. Measured, not reasoned about.
+
+A first experiment said the opposite: revoking `auth_scope` alone changed nothing,
+because the policies reach it only *inside* `can_access_center`, where it runs as the
+definer. The near-miss is the reason the second test used a function a policy calls
+directly — and that one failed immediately.
+
+**What works is moving them out of the exposed schema.** PostgREST introspects
+`public` only, so a function in `private` has no endpoint, while policies keep working
+because a policy stores the function's **OID**, not its name, and follows it across
+the move. Grants travel too, so `authenticated` keeps the EXECUTE the policies need.
+
+The one thing that does not follow is a function calling a sibling by bare name, which
+is why each moved function's `search_path` moved with it. **The test suite caught me
+getting that wrong**: section 2 pinned eight trigger functions to `search_path = public`,
+and one of them — `prevent_self_privilege_escalation` — calls `auth_scope`. Three RLS
+tests failed, including the two guarding against an administrator removing the last
+administrator.
+
+### The other three groups
+
+- **Eight functions with a mutable search_path.** Milder than it reads — all eight are
+  `SECURITY INVOKER` trigger bodies, so the usual escalation does not apply. Pinned
+  anyway; one line each.
+- **`audit_log_insert` was `WITH CHECK (true)`.** Not the hole it looks like: the
+  `enforce_audit_actor` trigger already refuses a row whose actor is not the acting
+  user. But the policy leaned on the trigger to say what it should have said itself,
+  so it now says it.
+- **Five policies re-ran `auth.uid()` per row**, and two tables evaluated the same
+  policy twice on every read. Pure speed, no behaviour change — and `profiles` and
+  `user_centers` are read on the way to almost every page.
+
+### `npm run db:audit`, and it runs in CI
+
+Splinter vendored at `scripts/splinter.sql` rather than downloaded: a check that
+reaches the network fails for reasons unrelated to the schema, and a rule set that
+changes under CI turns a build red with no commit to explain it.
+
+Fails on any ERROR or WARN not on an exemption list, and each exemption carries a
+reason — `rls_enabled_no_policy` is deny-all by design, the index lints are judgement
+calls about traffic CI does not have. It also **refuses to report success on an empty
+result**, because a broken reader looks exactly like a perfect schema, and that is the
+most dangerous way for this particular script to be wrong. (It was: the first version
+read a multi-statement result as a flat array, found nothing, and said so cheerfully.)
+
+Verified both directions — a deliberately bad `SECURITY DEFINER` function exits 1, a
+clean schema exits 0.
+
+### Verified on a database built from scratch
+
+Dropped `public`, `private` **and** `drizzle` (the migration bookkeeping lives outside
+`public`, so the first attempt silently no-opped), re-ran all 78 migrations, reseeded,
+and ran everything: **1301 tests pass, and splinter reports 0 ERROR and 0 WARN.**
+
+**Left for Leon:** one dashboard toggle — Authentication → leaked password protection.
+Not reachable from SQL.
+
+**Shipped:** migration 0077, `scripts/splinter.sql`, `src/lib/db/audit-cli.ts`,
+`npm run db:audit`, the CI step, and the CLAUDE.md rule that new policies must write
+`private.auth_scope(...)`.
