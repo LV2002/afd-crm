@@ -596,9 +596,9 @@ describe("a runtime-created role gets exactly the RLS boundary it was granted", 
     const [row] = await asUser(dynamicUserId, (tx) =>
       tx<Array<{ report: string | null; settings: string | null; roles: string | null }>>`
         select
-          auth_scope('report.read') as report,
-          auth_scope('settings.manage') as settings,
-          auth_scope('roles.manage') as roles
+          private.auth_scope('report.read') as report,
+          private.auth_scope('settings.manage') as settings,
+          private.auth_scope('roles.manage') as roles
       `,
     );
     expect(row.report).toBe("own");

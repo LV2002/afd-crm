@@ -90,5 +90,13 @@ jobs:
       - name: Test
         run: npm test
 
+      # Supabase's own Security and Performance advisors, run here instead of
+      # only in the dashboard — the difference between finding out when
+      # somebody looks and finding out when somebody pushes. Fails on any
+      # ERROR or WARN that is not deliberately exempted with a reason; see
+      # src/lib/db/audit-cli.ts.
+      - name: Database advisors
+        run: npm run db:audit
+
       - name: Build
         run: npm run build
