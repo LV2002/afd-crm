@@ -5980,3 +5980,34 @@ existing person rather than appearing at the top of the list (CLAUDE.md § Ident
 CRM never rejects a duplicate, it links it).
 
 **1334 tests pass**, lint and production build clean.
+
+---
+
+## Session 24n — An empty delivery list meant two things
+
+A correctly-signed Meta callback carrying no leadgen id — a subscription ping, a field we
+do not handle, or a leadgen change with no id in it — returned 200 and wrote **nothing**.
+
+That was defensible until yesterday. Now that the delivery panel is how "is anything
+arriving?" gets answered, it is a hole in the middle of the answer: an empty list meant
+either *Meta never called* or *Meta called and we said nothing about it*, and only one of
+those is a reason to go and search the Meta side.
+
+Those callbacks are now recorded, with the fields they carried and a plain note that
+delivery works and this was not a lead submission. Status `done`, because nothing failed,
+and the panel renders a note on a successful row in muted text rather than red — the
+point of recording it would be undone by colouring it like a fault.
+
+The synthetic ids those rows carry (`no-lead:…`, `invalid:…`) are shown as "not a lead"
+and "rejected" rather than as a UUID, which is noise on screen even though what it stands
+for is not.
+
+**Also, for the guide:** Leon's forms already deliver to a Google Sheet through Meta's
+CRM Setup. That is a separate path from webhooks and the two do not conflict — so the
+advice is to leave the sheet connected and run both until the CRM has gone a week without
+a discrepancy. The sheet is the proof a lead existed, and the thing to compare against
+when one does not arrive. Noted alongside it: **Page → Lead Access**, which governs which
+apps may retrieve a Page's leads and is maintained separately from everything else in
+Part 1 — a Page that writes happily to a sheet can still be refusing an app.
+
+**1334 tests pass**, lint and production build clean.

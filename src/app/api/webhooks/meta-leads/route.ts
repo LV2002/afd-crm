@@ -96,9 +96,37 @@ export async function POST(request: Request) {
     .filter(Boolean);
 
   if (leadgenIds.length === 0) {
-    // A real, correctly-signed Meta callback that isn't a leadgen event
-    // (e.g. a page subscription ping) — nothing to process, nothing to
-    // fail on. Still 200s so Meta doesn't keep retrying a no-op.
+    /*
+      A real, correctly-signed Meta callback that isn't a leadgen event —
+      a subscription ping, a field we don't handle, or a leadgen change
+      with no id in it. Nothing to process and nothing to fail on.
+
+      Recorded anyway, because otherwise it leaves no trace at all: with
+      the delivery panel now being the way "is anything arriving?" gets
+      answered, an unrecorded delivery makes an empty list mean two very
+      different things — "Meta never called" and "Meta called and we said
+      nothing about it" — and only one of them is a reason to go and look
+      at the Meta side.
+
+      Still 200s, so Meta doesn't retry a no-op.
+    */
+    const fields = (payload.entry ?? [])
+      .flatMap((entry) => entry.changes ?? [])
+      .map((change) => change.field)
+      .filter(Boolean);
+
+    await db.insert(webhookEvents).values({
+      source: "meta_leads",
+      externalId: `no-lead:${randomUUID()}`,
+      signatureOk: true,
+      raw: payload as unknown as Record<string, unknown>,
+      status: "done",
+      processedAt: new Date(),
+      lastError: `Signed callback carrying no lead — ${
+        fields.length > 0 ? `fields: ${fields.join(", ")}` : "no changes at all"
+      }. Delivery works; this was not a lead submission.`,
+    });
+
     return NextResponse.json({ ok: true, processed: 0 });
   }
 

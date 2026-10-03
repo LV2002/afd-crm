@@ -218,6 +218,22 @@ assignment rules.
 > app is in Development mode — a role on the app too. Without the second, Meta drops the
 > delivery with no error anywhere.
 
+#### If you already send these leads to a Google Sheet
+
+Meta's **CRM Setup** on an instant form (Google Sheets, Zapier and the rest) is a
+*separate* delivery path from webhooks. Connecting one does not switch off the other, and
+both receive the same lead.
+
+**Leave the sheet connected.** Run the two side by side until you trust the CRM — the
+sheet is your proof that a lead existed, and the thing you compare against when one does
+not appear here. Disconnect it when you have gone a week without a discrepancy, not
+before.
+
+One thing worth checking if leads reach the sheet and not the CRM: **Meta Business Suite
+→ your Page → Lead Access**. That list controls which people and which partner apps may
+retrieve a Page's leads, and it is maintained separately from everything in Part 1. A
+Page that happily writes to a sheet can still be refusing your app.
+
 #### Two things that are working, even though they look like failures
 
 **"Test" in App Dashboard → Webhooks** sends a fixed sample payload with the fake lead id
