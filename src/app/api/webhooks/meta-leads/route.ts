@@ -104,6 +104,20 @@ export async function POST(request: Request) {
 
   let allOk = true;
 
+  /**
+   * Meta's own "Test" button in the App Dashboard sends a fixed sample
+   * payload carrying this leadgen id. There is no such lead, so fetching
+   * it fails with `code 100, subcode 33` — correctly, and alarmingly:
+   * the admin who pressed Test to check their webhook gets a red failure
+   * for having done exactly the right thing, and it looks identical to a
+   * genuinely broken token.
+   *
+   * So it is recognised and reported for what it is. Not marked `done`,
+   * because no lead was created and the row must not read as though one
+   * was — it stays a failure with an explanation and the next step.
+   */
+  const META_SAMPLE_LEADGEN_ID = "444444444444";
+
   for (const leadgenId of leadgenIds) {
     const [inserted] = await db
       .insert(webhookEvents)
@@ -116,6 +130,13 @@ export async function POST(request: Request) {
     try {
       if (!pageAccessToken) {
         throw new Error("No Meta page access token configured (Settings → Integrations → Meta)");
+      }
+
+      if (leadgenId === META_SAMPLE_LEADGEN_ID) {
+        throw new Error(
+          "This is Meta's sample test payload, not a real lead — delivery is working and the signature verified. " +
+            "To create a lead you can actually see, use the Lead Ads Testing Tool: developers.facebook.com/tools/lead-ads-testing",
+        );
       }
 
       const lead = await fetchMetaLead(leadgenId, pageAccessToken);
