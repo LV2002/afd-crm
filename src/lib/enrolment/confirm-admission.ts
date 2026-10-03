@@ -83,8 +83,14 @@ export async function confirmAdmission(
         ),
       );
     if (!structure) {
+      // Written for the counsellor who sees it on the form, not for the
+      // developer who wrote it. The old wording ended "provide
+      // totalFeePaiseOverride", which names a function argument nobody
+      // outside this file has ever heard of; the field it means is
+      // labelled "Manual fee override" two inches further up the screen.
       throw new Error(
-        `confirmAdmission: no fee structure for ${input.course}/${input.mode}/${input.academicYear} at this centre — provide totalFeePaiseOverride`,
+        `No fee is set up for ${input.course} / ${input.mode} / ${input.academicYear} at this centre. ` +
+          `Add it in Settings → Fee Structures, or type the amount into "Manual fee override".`,
       );
     }
     totalFeePaise = structure.baseFeePaise;

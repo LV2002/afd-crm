@@ -27,9 +27,27 @@ export interface PendingDiscountInfo {
   requestedAt: string | null;
 }
 
+/**
+ * What the admission itself says, as opposed to what the lead's profile
+ * says they were interested in.
+ *
+ * The two drift, routinely and legitimately: somebody enquires about DWO
+ * in March, talks to a counsellor, and joins DAO in June. The lead keeps
+ * the enquiry; the enrolment is the commitment. Anything a student signs
+ * has to read from the enrolment.
+ */
+export interface AdmissionTerms {
+  course: string;
+  mode: string;
+  academicYear: string;
+  centerId: string;
+}
+
 export interface LeadFeePlan {
   hasEnrolment: boolean;
   enrolmentId: string | null;
+  /** Null until Gate 1 — there is no admission to describe yet. */
+  admission: AdmissionTerms | null;
   values: FeePlanValues;
   totalFeePaise: number;
   pendingDiscount: PendingDiscountInfo | null;
@@ -60,6 +78,8 @@ export async function getLeadFeePlan(leadId: string): Promise<LeadFeePlan> {
       pendingDiscountBy: enrolments.pendingDiscountBy,
       pendingDiscountAt: enrolments.pendingDiscountAt,
       course: enrolments.course,
+      mode: enrolments.mode,
+      academicYear: enrolments.academicYear,
       centerId: enrolments.centerId,
     })
     .from(enrolments)
@@ -69,6 +89,7 @@ export async function getLeadFeePlan(leadId: string): Promise<LeadFeePlan> {
     return {
       hasEnrolment: false,
       enrolmentId: null,
+      admission: null,
       values: EMPTY,
       totalFeePaise: 0,
       pendingDiscount: null,
@@ -143,6 +164,12 @@ export async function getLeadFeePlan(leadId: string): Promise<LeadFeePlan> {
   return {
     hasEnrolment: true,
     enrolmentId: enrolment.id,
+    admission: {
+      course: enrolment.course,
+      mode: enrolment.mode,
+      academicYear: enrolment.academicYear,
+      centerId: enrolment.centerId,
+    },
     totalFeePaise: enrolment.totalFeePaise,
     promos: availablePromos,
     pendingDiscount:

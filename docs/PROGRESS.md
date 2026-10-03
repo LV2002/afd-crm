@@ -5669,3 +5669,64 @@ contains the entire failing migration — so a SQL error in a file whose comment
 now. Advice pointing at the wrong half of the system is worse than no advice.
 
 **1320 tests pass**, lint, `db:audit` and production build clean.
+
+---
+
+## Session 24f — The admission, the agreement, and two ways to write a year
+
+With the crash fixed, Leon confirmed an admission and hit the next thing:
+
+> confirmAdmission: no fee structure for dwo/online/2026-27 at this centre — provide
+> totalFeePaiseOverride
+
+A fee structure for DWO / Online at Kannur was sitting right there on screen. Its academic
+year read **2027**; the admission form sends **2026-27**. The lookup is an exact match on
+course, centre, mode and year, so it found nothing.
+
+### One spelling of an academic year
+
+The admission form has always offered a fixed list. The Settings form was a free text box
+with `2026-27` as a *placeholder* — so `2027` is a perfectly reasonable thing to type, and
+it produced a fee structure no admission could ever match. Two ways to write one value,
+joined on equality.
+
+`lib/enrolment/academic-year.ts` is now the only one, used by both. An existing value
+outside the window is kept and marked `(as stored)` rather than silently rewritten when
+somebody edits the row.
+
+### "The courses I have are not the courses I have in my settings"
+
+They were. The Fee Structures table printed the stored values — `dwo`, `online` — while
+every other screen in the CRM shows the labels — `DWO`, `Online`. The same course looked
+like a different course depending on where you read it. Fixed; a value with no matching
+option still shows as stored, because that usually means somebody deleted the dropdown
+entry under it and the row still needs finding.
+
+The course list itself is seed data in **Settings → Dropdowns → Course** — the eight AFD
+courses — and is admin-editable, which is the intended design and not a bug.
+
+### The error now names a thing on the screen
+
+"provide totalFeePaiseOverride" is a function argument. The field it means is labelled
+**Manual fee override**, two inches up the same form. It says that instead.
+
+### The printed agreement
+
+- **Padding.** `@page { margin }` is a request; Chrome's own Margins control overrides it,
+  and Leon had it on Minimum, so the agreement printed hard against all four edges. The
+  document now carries print padding of its own, which the dialog cannot take away.
+- **It read the lead, not the admission.** Course came from `courses_interested` — the
+  multi-select of what somebody *enquired* about — and the centre came from the lead.
+  Those drift routinely and legitimately: enquire about DWO in March, join DAO in June.
+  Printing the enquiry on a document a family signs commits the institute to the wrong
+  course. It now reads course, mode and centre from the enrolment, with labels.
+
+### `docs/ADS-SETUP.md`
+
+Step-by-step for Meta Lead Ads and Google Ads — every step a page in a browser, no
+terminal. Written against what is actually built: the credential fields the Settings
+screens ask for, the two webhook paths, and which capability each credential unlocks, so
+lead delivery can be switched on in ten minutes and the API-heavy reporting parts can
+follow.
+
+**1329 tests pass**, lint and production build clean.

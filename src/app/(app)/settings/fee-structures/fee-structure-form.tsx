@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Combobox } from "@/components/ui/combobox";
+import { academicYearOptions } from "@/lib/enrolment/academic-year";
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 
 import type { FeeStructureFormState } from "./actions";
@@ -79,15 +80,29 @@ export function FeeStructureForm({
         />
       </div>
 
+      {/*
+        A list, not a text box.
+        `fee_structures` is found by an EXACT match on course, centre, mode
+        and academic year, and the admission form has always offered a
+        fixed list. This was free text with `2026-27` as a placeholder, so
+        a perfectly reasonable `2027` typed here produced a fee structure
+        that no admission could ever match — while sitting visibly in the
+        table. Two ways to write one value, joined on equality.
+      */}
       <div className="flex flex-col gap-2">
         <Label htmlFor="fee-structure-academic-year">Academic year</Label>
-        <Input
+        <Combobox
           id="fee-structure-academic-year"
           name="academicYear"
           defaultValue={values.academicYear}
-          placeholder="2026-27"
+          options={academicYearOptions(values.academicYear)}
+          placeholder="Select academic year"
           required
         />
+        <p className="text-xs text-muted-foreground">
+          Must match the year a counsellor picks when confirming an admission, which is why
+          it is chosen rather than typed.
+        </p>
       </div>
 
       <div className="flex flex-col gap-2">

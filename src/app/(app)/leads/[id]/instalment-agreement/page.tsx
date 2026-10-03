@@ -6,6 +6,7 @@ import { PrintButton } from "@/components/print/print-button";
 import { documentPrefix, getBrand } from "@/lib/brand/get-brand";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { getLeadFeePlan } from "@/lib/enrolment/get-fee-plan";
+import { getDropdownOptions } from "@/lib/fields/resolve-field-options";
 import { formatINR } from "@/lib/format/currency";
 import { formatDateIST } from "@/lib/format/date";
 import { getLeadDetail } from "@/lib/leads/get-lead-detail";
@@ -93,11 +94,44 @@ export default async function InstalmentAgreementPage({
   const plan = await getLeadFeePlan(id);
   if (!plan.hasEnrolment) notFound();
 
-  const brand = await getBrand();
+  /*
+    Course, mode, year and centre come from the ADMISSION, never from the
+    lead's profile.
+
+    They used to be read off the lead — `courses_interested`, which is the
+    multi-select of what somebody enquired about, and the lead's centre.
+    Those drift from the real admission routinely and legitimately: a
+    student enquires about DWO in March, talks it through, and joins DAO
+    in June. Printing the enquiry on the document they sign commits the
+    institute to the wrong course, at possibly the wrong centre, for a
+    fee schedule that belongs to neither.
+
+    The enrolment is the commitment, so the paper reads from the
+    enrolment. Labels rather than stored values, because `dao` is not what
+    the course is called.
+  */
+  const { row, centerName } = detail;
+  const admission = plan.admission;
+  const [brand, courseOptions, modeOptions, admissionCentre] = await Promise.all([
+    getBrand(),
+    getDropdownOptions(supabase, "course"),
+    getDropdownOptions(supabase, "preferred_mode"),
+    admission
+      ? supabase.from("centers").select("name").eq("id", admission.centerId).maybeSingle<{ name: string }>()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const optionLabel = (options: Array<{ value: string; label: string }>, value: string) =>
+    options.find((option) => option.value === value)?.label ?? value;
+
+  const courseName = admission ? optionLabel(courseOptions, admission.course) : "";
+  const modeName = admission ? optionLabel(modeOptions, admission.mode) : "";
+  // The lead's centre is the fallback only if the admission's centre row
+  // has been renamed away or deleted — never the preferred source.
+  const admissionCentreName = admissionCentre.data?.name ?? centerName ?? "";
+
   const accent = brand.primaryColor || FALLBACK_ACCENT;
   const formPrefix = `${documentPrefix(brand.name)}/FEE`;
-
-  const { row, centerName } = detail;
   const toPaise = (v: string) => Math.round(Number(v || 0) * 100);
 
   // Four rows always drawn, so an agreement with two instalments still
@@ -111,7 +145,7 @@ export default async function InstalmentAgreementPage({
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: A4_LANDSCAPE_CSS }} />
-      <div className="mx-auto max-w-[297mm] bg-white p-6 text-black print:p-0">
+      <div className="mx-auto max-w-[297mm] bg-white p-6 text-black print:p-[10mm]">
         <div className="no-print">
           <PrintButton />
         </div>
@@ -131,8 +165,12 @@ export default async function InstalmentAgreementPage({
             <div className="mb-4 flex flex-col gap-1.5">
               <FieldLine label="Student Name:" value={row.student_name} accent={accent} />
               <FieldLine label="Roll No / Ref:" value={`Lead #${row.lead_number}`} accent={accent} />
-              <FieldLine label="Course Name:" value={String(row.courses_interested ?? "")} accent={accent} />
-              <FieldLine label="Center / Branch:" value={centerName ?? ""} accent={accent} />
+              <FieldLine
+                label="Course Name:"
+                value={modeName ? `${courseName} · ${modeName}` : courseName}
+                accent={accent}
+              />
+              <FieldLine label="Center / Branch:" value={admissionCentreName} accent={accent} />
               <FieldLine label="Parent / Guardian:" value={parentName} accent={accent} />
               <FieldLine label="Contact Number:" value={row.primary_phone} accent={accent} />
             </div>

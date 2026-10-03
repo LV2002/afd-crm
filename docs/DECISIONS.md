@@ -2596,3 +2596,34 @@ and `to_regprocedure` guards around `alter function`.
 not recorded as applied anywhere that mattered, so it was going to run again whatever we
 did; the only question was whether it would succeed. The rule still holds everywhere else:
 a migration that is recorded as applied is repaired by a NEW migration, never by an edit.
+
+## 2026-10-03 — An academic year is chosen, never typed
+
+`fee_structures` is found by an exact match on course, centre, mode and academic year.
+Any field on both sides of that match must be produced the same way in both places, so the
+academic year is a list in the admission form and in Settings, from one shared function.
+
+**Rejected:** normalising on read (accepting `2027`, `2026-2027`, `26-27` and folding them
+together). It makes the stored data ambiguous, every future query has to remember to
+normalise, and the first one that forgets reintroduces the bug silently. Constraining the
+input is one place; normalising is everywhere forever.
+
+Existing out-of-window values are offered as `(as stored)` rather than hidden, so editing
+an old row cannot silently change what it says.
+
+## 2026-10-03 — Printed documents carry their own padding
+
+`@page { margin }` is a request the browser's own print dialog overrides — Chrome's
+"Minimum" setting ignores it entirely, which is how the instalment agreement printed to
+the paper's edge. Documents now set a modest `@page` margin AND their own print padding,
+which nothing in the dialog can remove.
+
+## 2026-10-03 — Signed documents read from the enrolment, never the lead
+
+The instalment agreement took its course from `courses_interested` and its centre from the
+lead. Both are enquiry data and both drift from the admission legitimately — a student
+enquires about one course and joins another.
+
+`leads` is the sales object and stops changing at Gate 1 (CLAUDE.md § lifecycle chain);
+the enrolment is the commercial record. Anything a family signs reads from the enrolment,
+and `getLeadFeePlan` now returns its terms for exactly that purpose.
