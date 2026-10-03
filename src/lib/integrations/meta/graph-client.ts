@@ -9,9 +9,45 @@ export class MetaGraphApiError extends Error {
     public readonly status: number,
     public readonly body: unknown,
   ) {
-    super(message);
+    super(`${message}${metaErrorDetail(body)}`);
     this.name = "MetaGraphApiError";
   }
+}
+
+/**
+ * What Meta actually said, appended to our own description of the call.
+ *
+ * Meta puts a genuinely useful sentence in `error.message` — "(#200)
+ * Requires pages_manage_metadata permission", "Object with ID … does not
+ * exist" — and this client used to discard all of it, reporting only
+ * "returned 400". That is the same failure as a migration that exits 1
+ * without saying why: the platform told us, and we threw it away, and
+ * then somebody spent an afternoon guessing.
+ *
+ * `error_user_msg` is Meta's own plain-English version where it exists,
+ * and is worth more than the developer string, so it goes first.
+ */
+function metaErrorDetail(body: unknown): string {
+  if (typeof body !== "object" || body === null) return "";
+  const error = (body as { error?: Record<string, unknown> }).error;
+  if (!error) return "";
+
+  const parts: string[] = [];
+  const userMessage = error.error_user_msg;
+  if (typeof userMessage === "string" && userMessage) parts.push(userMessage);
+
+  const message = error.message;
+  if (typeof message === "string" && message && message !== userMessage) parts.push(message);
+
+  const code = error.code;
+  const subcode = error.error_subcode;
+  const codes = [
+    typeof code === "number" || typeof code === "string" ? `code ${code}` : null,
+    typeof subcode === "number" || typeof subcode === "string" ? `subcode ${subcode}` : null,
+  ].filter(Boolean);
+  if (codes.length > 0) parts.push(`(${codes.join(", ")})`);
+
+  return parts.length > 0 ? ` — ${parts.join(" ")}` : "";
 }
 
 /**

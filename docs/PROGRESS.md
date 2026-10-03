@@ -5847,3 +5847,38 @@ belongs — the other invisible mistake, and the two are indistinguishable once 
 identifying the Page and proving the token's type are the same call.
 
 **1329 tests pass**, lint and production build clean.
+
+---
+
+## Session 24j — Meta said why, and we were throwing it away
+
+The new Subscribe button returned:
+
+> Meta rejected the request: Meta Graph API returned 400 subscribing the Page.
+
+Which is the same sentence as "exited with 1". Meta's 400 body carries a real
+explanation — `(#200) Requires pages_manage_metadata permission to manage the object`,
+`Object with ID … does not exist` — in `error.message`, `error.error_user_msg`,
+`error.code` and `error.error_subcode`. `MetaGraphApiError` captured the body and then
+reported only the status.
+
+Exactly the failure this project spent the morning on with `drizzle-kit`: the platform
+said what was wrong, the wrapper discarded it, and the next person guessed.
+
+`MetaGraphApiError` now appends Meta's own words to every message, so it is fixed for
+`fetchMetaLead` and `debugMetaToken` too — including inside the webhook handler, where a
+lead that fails to fetch previously left a status code and nothing else.
+`error_user_msg` leads where it exists, because Meta's plain-English version is worth more
+than the developer string; the developer string still follows, because it names the
+parameter.
+
+`tests/meta-graph-error.spec.ts` pins it, including the cases that matter when something
+is already going wrong: a body that is null, a string, or has no `error` at all, where
+the wrapper must degrade to its own description rather than throwing while reporting a
+throw.
+
+Also dropped the guessed "this is probably a User token" hint from the subscribe action.
+It was a reasonable guess and it is no longer needed — Meta names the cause now, and a
+guess printed next to the truth only competes with it.
+
+**1334 tests pass**, lint and production build clean.
