@@ -146,3 +146,26 @@ export async function hasIntegrationCredential(
     .where(and(eq(integrationCredentials.provider, provider), eq(integrationCredentials.key, key), scopeCondition(scopeId)));
   return Boolean(row);
 }
+
+/**
+ * Is the encryption key present and the right size?
+ *
+ * `getKey()` throws, which is correct where it is used — a credential
+ * must never be written unencrypted — but useless as a thing to render.
+ * On 3 October an admin typed six Meta secrets into a form and lost the
+ * screen on Save, because the key was not set in production and the
+ * throw reached the error boundary. Nothing had told them beforehand,
+ * and the digest afterwards told them nothing either.
+ *
+ * So the Integrations screen asks this first and says so up front.
+ * Returns a reason rather than a boolean: "not set" and "set but the
+ * wrong length" have different fixes.
+ */
+export function integrationEncryptionStatus(): { ready: boolean; reason: string | null } {
+  try {
+    getKey();
+    return { ready: true, reason: null };
+  } catch (error) {
+    return { ready: false, reason: error instanceof Error ? error.message : "The encryption key is unusable." };
+  }
+}

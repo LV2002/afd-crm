@@ -2641,3 +2641,17 @@ different fixes.
 So the lead keeps the stage it reached and the drop is **displayed** by reading the
 enrolment. That was always the stated design; what was missing is that only the lead's
 detail page did the reading. The leads list and the pipeline board now do too.
+
+## 2026-10-03 — Setup problems are shown to admins in their own words
+
+`reportActionFailure` takes `revealMessage`. On admin-only settings screens the failure is
+nearly always a setup problem the reader is the right person to fix — a missing
+environment variable, a key of the wrong length — and hiding that behind "something went
+wrong" sends an admin to ask somebody who knows less than the message did.
+
+Counsellor-facing actions keep a generic fallback: an internal message is noise there at
+best, and the real one is on Platform Health either way.
+
+**Rejected:** inferring "this is a setup error" from the message text. Brittle, and it
+would silently start hiding things the moment a wording changed. The caller knows who is
+reading its screen; that is where the decision belongs.
