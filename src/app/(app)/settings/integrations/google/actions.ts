@@ -2,6 +2,7 @@
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { reportActionFailure } from "@/lib/errors/action-failure";
 import {
   getIntegrationCredentials,
   hasIntegrationCredential,
@@ -44,7 +45,35 @@ const KEY_LABELS: Record<GoogleKey, string> = {
  * (e.g. a re-issued refresh token) shouldn't force re-entering everything
  * else.
  */
+/**
+ * Saving credentials must never cost the admin the screen.
+ *
+ * Every write here runs through AES-256-GCM keyed by
+ * `INTEGRATION_ENCRYPTION_KEY`, and that key lives in the deploy
+ * environment rather than the database. When it is missing — which it was
+ * in production on 3 October — the encrypt call throws, the throw was
+ * unhandled, and Settings -> Integrations -> Google went blank mid-setup
+ * with only a digest to show for it.
+ *
+ * The real message is shown rather than a generic one: this screen is
+ * admin-only, and "INTEGRATION_ENCRYPTION_KEY is not set" is precisely
+ * what the person reading it needs to know.
+ */
 export async function saveGoogleCredentials(_prevState: GoogleFormState, formData: FormData): Promise<GoogleFormState> {
+  try {
+    return await runGoogleCredentials(formData);
+  } catch (error) {
+    return {
+      error: await reportActionFailure("action:saveGoogleCredentials", error, {
+        context: { provider: "google" },
+        fallback: "Could not save these credentials. The problem has been reported.",
+        revealMessage: true,
+      }),
+    };
+  }
+}
+
+async function runGoogleCredentials(formData: FormData): Promise<GoogleFormState> {
   const user = await getCurrentUser();
   if (!user || !can(user, "settings.manage")) {
     return { error: "You don't have permission to do that." };

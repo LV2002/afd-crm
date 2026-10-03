@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
 import { can, getCurrentUser } from "@/lib/auth/session";
-import { hasIntegrationCredential } from "@/lib/integrations/credentials";
+import { hasIntegrationCredential, integrationEncryptionStatus } from "@/lib/integrations/credentials";
 
 interface IntegrationCard {
   href: string | null;
@@ -15,6 +15,8 @@ interface IntegrationCard {
 export default async function IntegrationsPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "settings.manage")) return <AccessDenied />;
+
+  const encryption = integrationEncryptionStatus();
 
   const metaConnected = await hasIntegrationCredential("meta", "page_access_token");
   const googleConnected = await hasIntegrationCredential("google", "refresh_token");
@@ -57,6 +59,28 @@ export default async function IntegrationsPage() {
           Connect an external platform by entering its credentials here — no deploy needed.
         </p>
       </div>
+
+      {/*
+        Said before anybody types a secret, not after they press Save.
+        Every credential is encrypted with a key that lives in the deploy
+        environment. When it is missing the encrypt call throws — and an
+        admin who had just entered six Meta tokens lost the whole screen
+        to it, with nothing beforehand to suggest the form could not work.
+      */}
+      {!encryption.ready && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4">
+          <p className="text-[0.9375rem]">
+            <strong>Credentials cannot be saved yet.</strong> {encryption.reason}
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Set <code>INTEGRATION_ENCRYPTION_KEY</code> in the hosting environment
+            (Vercel → Settings → Environment Variables) and redeploy. Generate one with{" "}
+            <code>openssl rand -base64 32</code>. It is the key everything else is encrypted
+            under, so it cannot itself live in the database — this is the one setting that
+            genuinely needs a deploy.
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         {cards.map((card) => {

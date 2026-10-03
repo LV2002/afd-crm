@@ -33,8 +33,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen print:block">
       <style dangerouslySetInnerHTML={{ __html: A4_SCREEN_CSS }} />
-      <aside className="hidden w-56 shrink-0 border-r bg-background md:flex md:flex-col print:hidden">
-        <div className="border-b px-4 py-4">
+      {/*
+        Sticky, with its own scrollbar.
+        The page scrolls as one document, so the sidebar used to scroll
+        away with it — on a long leads list you lost the navigation
+        entirely and had to scroll back up to go anywhere. `h-screen`
+        plus `sticky top-0` pins it to the viewport; the nav below gets
+        `overflow-y-auto` so a long nav on a short laptop screen scrolls
+        inside the sidebar rather than being cut off.
+
+        Only from `md` up. Below that the sidebar is hidden and the
+        header's mobile menu is the way around.
+      */}
+      <aside className="hidden w-56 shrink-0 border-r bg-background md:sticky md:top-0 md:flex md:h-screen md:flex-col print:hidden">
+        <div className="shrink-0 border-b px-4 py-4">
           <span className="text-sm font-semibold">{brand.name}</span>
         </div>
         {/*
@@ -43,9 +55,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           moves except the badges appearing — and four count queries never
           sit on the critical path of every click in the application.
         */}
-        <Suspense fallback={<Sidebar items={navItems} />}>
-          <SidebarWithBadges items={navItems} user={user} />
-        </Suspense>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <Suspense fallback={<Sidebar items={navItems} />}>
+            <SidebarWithBadges items={navItems} user={user} />
+          </Suspense>
+        </div>
       </aside>
       {/*
         `min-w-0` is load-bearing, not tidying. This column is a flex item,

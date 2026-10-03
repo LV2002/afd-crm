@@ -5770,3 +5770,47 @@ The drop → `students.status = 'dropped'` path itself is correct and covered by
 `tests/drop-admission.spec.ts`, both directions.
 
 **1329 tests pass**, lint and production build clean.
+
+---
+
+## Session 24h — A sticky sidebar, and a form that could not save
+
+### The navigation stays put
+
+The page scrolls as one document, so the sidebar scrolled away with it — on a long leads
+list you lost the navigation entirely and had to scroll back up to go anywhere. It is now
+`sticky top-0` at full viewport height from `md` up, with the nav itself scrolling inside
+on a short screen. Below `md` nothing changes: the sidebar is hidden there and the
+header's menu is the way around.
+
+### Settings → Integrations → Meta crashed on Save
+
+Every credential is encrypted with AES-256-GCM keyed by `INTEGRATION_ENCRYPTION_KEY`,
+which lives in the deploy environment rather than the database — it is the key everything
+else is encrypted under, so it cannot itself be a database row. When it is missing,
+`getKey()` throws. Nothing caught it, so Leon lost the whole screen mid-setup having just
+typed six Meta secrets, and got a digest for his trouble.
+
+Two fixes, because one of them is only a safety net:
+
+1. **Said up front.** `integrationEncryptionStatus()` is a non-throwing check, and
+   Settings → Integrations now carries a red banner naming the variable, where to set it
+   and how to generate one — *before* anybody types a secret into a form that cannot save
+   it.
+2. **A save never costs the screen.** All three credential actions (Meta, Google,
+   WhatsApp) now catch, report and return a message on the form.
+
+`lib/errors/action-failure.ts` is the shared version of the pattern `confirmAdmissionAction`
+proved this morning. It reports with `await`, deliberately: on Vercel a function can be
+frozen the moment its response is sent, which is why `instrumentation.ts` logged the
+3 October admission failure to the console and never got its row into `error_events`.
+Inside the action, before it returns, it lands — which is why `action:confirmAdmission`
+appears on Platform Health with its full query and the page-render failures still do not.
+
+It shows the error's own message on these screens, `revealMessage: true`, because they are
+admin-only and "INTEGRATION_ENCRYPTION_KEY is not set" is exactly what the reader needs.
+Counsellor-facing actions keep the generic fallback.
+
+**1329 tests pass**, lint and production build clean. (A first run showed 51 failures
+across 31 files; Postgres had stopped in the container — `pg_isready` said so, and every
+failure was a connection error, not a regression.)
