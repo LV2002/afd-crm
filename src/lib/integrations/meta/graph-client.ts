@@ -78,6 +78,10 @@ export interface MetaTokenDebugInfo {
   appId?: string;
   scopes?: string[];
   expiresAt?: number;
+  /** "USER" | "PAGE" — the distinction nothing else in Meta's UI makes visible. */
+  type?: string;
+  /** The user or Page the token speaks for. */
+  profileId?: string;
 }
 
 /** Used by the "Test connection" button in Settings — confirms a token is real and shows what it can actually do, without ever echoing the token itself back to the browser. */
@@ -99,6 +103,8 @@ export async function debugMetaToken(accessToken: string, appAccessToken: string
     appId: data.app_id,
     scopes: data.scopes,
     expiresAt: data.expires_at,
+    type: data.type,
+    profileId: data.profile_id ?? data.user_id,
   };
 }
 
@@ -199,4 +205,55 @@ export async function fetchPageSubscribedFields(
   return apps.flatMap((app: { subscribed_fields?: unknown }) =>
     Array.isArray(app.subscribed_fields) ? (app.subscribed_fields as string[]) : [],
   );
+}
+
+
+export interface MetaManagedPage {
+  id: string;
+  name: string;
+  accessToken: string;
+}
+
+/**
+ * The Pages a USER token can act for, each with its own Page token.
+ *
+ * This is the escape hatch from the single most common dead end in a Meta
+ * setup. A User token and a Page token are both opaque strings, are
+ * generated two clicks apart, and look identical once pasted into a
+ * settings field — but only a Page token can subscribe a Page to leads.
+ * Save the wrong one and Meta answers
+ * `Object with ID … does not exist (code 100, subcode 33)`, naming an
+ * app-scoped user id that means nothing to the person reading it.
+ *
+ * `/me/accounts` turns the wrong token into the right one, which is
+ * better than sending somebody back to a UI that already defeated them.
+ *
+ * Requires `pages_show_list` on the user token; without it the list comes
+ * back empty rather than erroring, so callers must treat empty as
+ * "cannot tell" and say so.
+ */
+export async function fetchMetaPagesForUser(userAccessToken: string): Promise<MetaManagedPage[]> {
+  const url = new URL(`${GRAPH_BASE_URL}/me/accounts`);
+  url.searchParams.set("fields", "id,name,access_token");
+  url.searchParams.set("access_token", userAccessToken);
+
+  const response = await fetch(url.toString());
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new MetaGraphApiError(
+      `Meta Graph API returned ${response.status} listing the Pages this token manages`,
+      response.status,
+      body,
+    );
+  }
+
+  const pages = Array.isArray(body.data) ? body.data : [];
+  return pages
+    .filter((page: { access_token?: unknown }) => typeof page.access_token === "string")
+    .map((page: { id: unknown; name: unknown; access_token: string }) => ({
+      id: String(page.id),
+      name: String(page.name ?? ""),
+      accessToken: page.access_token,
+    }));
 }

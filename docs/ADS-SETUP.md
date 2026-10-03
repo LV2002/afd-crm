@@ -177,8 +177,19 @@ check looks right.
 
 The button makes the call for you and then **reads the subscription back** to confirm it,
 rather than trusting Meta's "OK" — which is exactly the reassurance that misleads people
-here. If it reports that the Page Access Token looks like a User token, see 1.3: that is
-the other invisible mistake, and the two look identical once saved.
+here.
+
+**It also fixes the wrong-token mistake rather than reporting it.** A User token and a
+Page token are both opaque strings, generated two clicks apart, and indistinguishable
+once pasted into a settings field — but only a Page token can subscribe a Page. Meta's
+refusal is
+`Object with ID '1221…' does not exist … (code 100, subcode 33)`, naming an app-scoped
+user id that means nothing to the reader. So the button asks `debug_token` what kind of
+token it has first, and if it is a User token it looks up the Page token through
+`/me/accounts`, saves that in its place and carries on — telling you it did. With more
+than one Page it lists them and stops, because picking on your behalf is not its call.
+
+**Test connection** reports the same thing, so it is caught before you get here.
 
 ### 1.6 Spend and retargeting
 

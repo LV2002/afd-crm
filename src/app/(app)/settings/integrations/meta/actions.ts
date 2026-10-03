@@ -11,6 +11,7 @@ import {
 import {
   debugMetaToken,
   fetchMetaPageIdentity,
+  fetchMetaPagesForUser,
   fetchPageSubscribedFields,
   MetaGraphApiError,
   subscribePageToLeadgen,
@@ -125,10 +126,26 @@ export interface TestConnectionResult {
 }
 
 /** Confirms one token is real, issued by this app, and not expired — never returns the token itself, only what Meta says about it. */
-async function checkToken(token: string, appId: string, appSecret: string, label: string): Promise<string> {
+async function checkToken(
+  token: string,
+  appId: string,
+  appSecret: string,
+  label: string,
+  /** "PAGE" for the Page Access Token. Left unset where either is fine. */
+  expectedType?: "PAGE" | "USER",
+): Promise<string> {
   const info = await debugMetaToken(token, `${appId}|${appSecret}`);
   if (!info.isValid) return `${label}: no longer valid — generate a new one.`;
   if (info.appId && info.appId !== appId) return `${label}: issued by a different Meta app than the App ID configured here.`;
+
+  // Said here so it is caught by a Test connection rather than three steps
+  // later by a Graph API refusal naming an app-scoped id. A User token and
+  // a Page token are indistinguishable once saved, and only `debug_token`
+  // knows which is which.
+  if (expectedType && info.type && info.type.toUpperCase() !== expectedType) {
+    return `${label}: this is a ${info.type.toUpperCase()} token, not a ${expectedType} token — "Subscribe this Page to leads" below can swap it for the right one.`;
+  }
+
   const expiry = info.expiresAt ? (info.expiresAt === 0 ? "never expires" : `expires ${new Date(info.expiresAt * 1000).toLocaleDateString()}`) : "expiry unknown";
   return `${label}: valid, ${expiry}.`;
 }
@@ -160,9 +177,9 @@ export async function testMetaConnection(): Promise<TestConnectionResult> {
 
   try {
     const messages: string[] = [];
-    if (pageAccessToken) messages.push(await checkToken(pageAccessToken, appId, appSecret, "Page Access Token"));
+    if (pageAccessToken) messages.push(await checkToken(pageAccessToken, appId, appSecret, "Page Access Token", "PAGE"));
     if (adsAccessToken) messages.push(await checkToken(adsAccessToken, appId, appSecret, "Ads Access Token"));
-    const ok = !messages.some((m) => m.includes("no longer valid") || m.includes("different Meta app"));
+    const ok = !messages.some((m) => m.includes("no longer valid") || m.includes("different Meta app") || m.includes("not a PAGE token"));
     return { ok, message: messages.join(" ") };
   } catch (err) {
     const message = err instanceof MetaGraphApiError ? `Meta rejected the request: ${err.message}` : "Could not reach Meta's API.";
@@ -196,17 +213,66 @@ export async function subscribeMetaPage(): Promise<TestConnectionResult> {
     return { ok: false, message: "You don't have permission to do that." };
   }
 
-  const { page_access_token: pageAccessToken } = await getIntegrationCredentials("meta", [
-    "page_access_token",
-  ]);
-  if (!pageAccessToken) {
+  const {
+    app_id: appId,
+    app_secret: appSecret,
+    page_access_token: storedToken,
+  } = await getIntegrationCredentials("meta", ["app_id", "app_secret", "page_access_token"]);
+
+  if (!storedToken) {
     return { ok: false, message: "Save a Page Access Token first — this call is made with it." };
   }
 
   try {
-    const page = await fetchMetaPageIdentity(pageAccessToken);
-    await subscribePageToLeadgen(page.id, pageAccessToken);
-    const fields = await fetchPageSubscribedFields(page.id, pageAccessToken);
+    let pageToken = storedToken;
+    let swappedFrom: string | null = null;
+
+    /*
+      Is this actually a Page token?
+
+      A User token and a Page token are both opaque strings, generated two
+      clicks apart, and indistinguishable once saved. Only a Page token can
+      subscribe a Page. Meta's refusal names an app-scoped user id that
+      means nothing to the reader, so the check happens here instead —
+      `debug_token` says `type: USER` or `type: PAGE` outright.
+
+      Needs the app credentials; without them we skip the check rather than
+      refuse to try, because the subscribe call may well still work.
+    */
+    if (appId && appSecret) {
+      const info = await debugMetaToken(storedToken, `${appId}|${appSecret}`);
+      if (!info.isValid) {
+        return { ok: false, message: "That Page Access Token is no longer valid — generate a new one." };
+      }
+
+      if (info.type && info.type.toUpperCase() !== "PAGE") {
+        // Rather than send them back to the UI that produced the wrong
+        // token, turn it into the right one.
+        const pages = await fetchMetaPagesForUser(storedToken);
+
+        if (pages.length === 0) {
+          return {
+            ok: false,
+            message:
+              "The token saved as Page Access Token is a User token, not a Page token, and it cannot list any Pages — it is missing the pages_show_list permission. Generate a new token that has it, or use the System User route in docs/ADS-SETUP.md 1.3.",
+          };
+        }
+        if (pages.length > 1) {
+          return {
+            ok: false,
+            message: `The token saved is a User token, not a Page token. It manages ${pages.length} Pages (${pages.map((p) => p.name).join(", ")}), so paste the Page Access Token for the one you want rather than having one picked for you.`,
+          };
+        }
+
+        pageToken = pages[0].accessToken;
+        swappedFrom = pages[0].name;
+        await setIntegrationCredential("meta", "page_access_token", pageToken);
+      }
+    }
+
+    const page = await fetchMetaPageIdentity(pageToken);
+    await subscribePageToLeadgen(page.id, pageToken);
+    const fields = await fetchPageSubscribedFields(page.id, pageToken);
 
     if (!fields.includes("leadgen")) {
       return {
@@ -220,15 +286,17 @@ export async function subscribeMetaPage(): Promise<TestConnectionResult> {
       actorId: user.id,
       action: "integration.page_subscribed",
       entityType: "integration_credentials",
-      after: { provider: "meta", pageId: page.id, pageName: page.name, fields },
+      after: { provider: "meta", pageId: page.id, pageName: page.name, fields, swappedFromUserToken: swappedFrom !== null },
     });
 
-    return { ok: true, message: `"${page.name}" is subscribed and will send leads here.` };
+    // Said plainly, because the stored credential changed underneath them.
+    const swapNote = swappedFrom
+      ? ` The token you had saved was a User token, so the Page token for "${swappedFrom}" was fetched and saved in its place.`
+      : "";
+
+    return { ok: true, message: `"${page.name}" is subscribed and will send leads here.${swapNote}` };
   } catch (err) {
     if (err instanceof MetaGraphApiError) {
-      // Meta's own words, which the client now keeps rather than
-      // discarding — they name the missing permission or the wrong object
-      // outright, and a guess in their place costs an afternoon.
       return { ok: false, message: `Meta rejected the request. ${err.message}` };
     }
     return { ok: false, message: "Could not reach Meta's API." };
