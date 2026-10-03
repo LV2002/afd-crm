@@ -8,7 +8,13 @@ import {
   hasIntegrationCredential,
   setIntegrationCredential,
 } from "@/lib/integrations/credentials";
-import { debugMetaToken, MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
+import {
+  debugMetaToken,
+  fetchMetaPageIdentity,
+  fetchPageSubscribedFields,
+  MetaGraphApiError,
+  subscribePageToLeadgen,
+} from "@/lib/integrations/meta/graph-client";
 import { createClient } from "@/lib/supabase/server";
 
 export interface MetaFormState {
@@ -161,5 +167,72 @@ export async function testMetaConnection(): Promise<TestConnectionResult> {
   } catch (err) {
     const message = err instanceof MetaGraphApiError ? `Meta rejected the request: ${err.message}` : "Could not reach Meta's API.";
     return { ok: false, message };
+  }
+}
+
+
+/**
+ * Turn on the second of Meta's two lead-delivery switches.
+ *
+ * Subscribing the APP to the `leadgen` field in the App Dashboard says
+ * "this app wants leadgen events". Subscribing the PAGE to the app — this
+ * — says "this Page will send its events to that app". Both must be on,
+ * they live in different places, and with only the first Meta verifies
+ * the webhook, reports it as subscribed, and delivers nothing: no error,
+ * no failed request, no log. Just silence where the enquiries should be.
+ *
+ * A button rather than a step in a guide because the CRM already holds
+ * the Page token, which is the only thing the call needs, and because a
+ * manual step whose omission is invisible is a manual step that will be
+ * omitted.
+ *
+ * It reads the subscription back afterwards rather than trusting the
+ * write, since "Meta said OK" is exactly the reassurance that was
+ * misleading in the first place.
+ */
+export async function subscribeMetaPage(): Promise<TestConnectionResult> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "settings.manage")) {
+    return { ok: false, message: "You don't have permission to do that." };
+  }
+
+  const { page_access_token: pageAccessToken } = await getIntegrationCredentials("meta", [
+    "page_access_token",
+  ]);
+  if (!pageAccessToken) {
+    return { ok: false, message: "Save a Page Access Token first — this call is made with it." };
+  }
+
+  try {
+    const page = await fetchMetaPageIdentity(pageAccessToken);
+    await subscribePageToLeadgen(page.id, pageAccessToken);
+    const fields = await fetchPageSubscribedFields(page.id, pageAccessToken);
+
+    if (!fields.includes("leadgen")) {
+      return {
+        ok: false,
+        message: `Meta accepted the request for "${page.name}" but still does not list leadgen as subscribed. Check the app is subscribed to the leadgen field in the App Dashboard.`,
+      };
+    }
+
+    const supabase = await createClient();
+    await writeAuditLog(supabase, {
+      actorId: user.id,
+      action: "integration.page_subscribed",
+      entityType: "integration_credentials",
+      after: { provider: "meta", pageId: page.id, pageName: page.name, fields },
+    });
+
+    return { ok: true, message: `"${page.name}" is subscribed and will send leads here.` };
+  } catch (err) {
+    if (err instanceof MetaGraphApiError) {
+      // The commonest cause by a distance: a User token saved where a Page
+      // token belongs. They look identical and nothing else tells you.
+      return {
+        ok: false,
+        message: `Meta rejected the request: ${err.message}. If the Page Access Token is actually a User token, this is what that looks like — see docs/ADS-SETUP.md step 1.3.`,
+      };
+    }
+    return { ok: false, message: "Could not reach Meta's API." };
   }
 }

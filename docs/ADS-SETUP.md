@@ -41,6 +41,30 @@ and type the same value in two places. Anything long and random is fine.
 
 # Part 1 — Meta Ads
 
+> ## Read this before you spend an afternoon on it
+>
+> A Meta app starts in **Development mode**, and a development-mode app
+> **does not receive real leads**. It only receives leads submitted by somebody
+> who holds a role on the app — which is exactly what the Lead Ads Testing Tool
+> does, so you can prove the whole chain works today.
+>
+> For leads from actual members of the public you need two more things:
+>
+> 1. **App Review** for `leads_retrieval` (submitted together with
+>    `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata`), which
+>    moves that permission from Standard to **Advanced Access**
+> 2. The app switched to **Live** mode
+>
+> Review takes days, sometimes longer, and usually wants Business Verification
+> first. So treat it as two phases: **set it up and test it now**, submit for
+> review in parallel, and switch to Live when it comes back. Do not point a live
+> ad campaign at this until the app is Live — the leads are not queued anywhere,
+> they are simply never delivered.
+>
+> The same two-phase split applies to the ad spend and retargeting syncs, which
+> need `ads_read` / `ads_management` on the same review.
+
+
 ### 1.1 Create a Meta app
 
 1. Go to **developers.facebook.com** → **My Apps** → **Create App**
@@ -57,19 +81,67 @@ In the new app: **App settings → Basic**.
 Now in the CRM: **Settings → Integrations → Meta**, paste both, and put your made-up Meta
 password in **Verify Token**. Save.
 
-### 1.3 Get a Page Access Token
+### 1.3 Get a token — use a System User, not the Graph API Explorer
 
-This is what lets the CRM read the answers somebody typed into your lead form.
+The Explorer is the route most tutorials show, and on a **Business**-type app with
+Facebook Login for Business it fights you: the token controls stay inert until a Login
+Configuration exists, and even when it works the token it hands you expires and has to be
+extended by hand every sixty days. A token that silently dies in two months is a lead
+source that silently dies in two months.
 
-1. In your app: **Add Product → Facebook Login** (just add it; no setup needed)
-2. Go to **developers.facebook.com/tools/explorer**
-3. Top right: select your app, then **User Token**
-4. Add permissions: `leads_retrieval`, `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata`
-5. **Generate Access Token** → approve → choose your AFD Page
-6. Swap it for a long-lived one at **developers.facebook.com/tools/debug/accesstoken** — paste the token, click **Debug**, then **Extend Access Token**
-7. Copy the extended token into the CRM's **Page Access Token**. Save.
+A **System User** avoids all of it. It is a non-human account inside your Business
+portfolio, built for exactly this, and its token can be set to **never expire**.
 
-> Without step 6 the token dies in about an hour and leads stop arriving silently.
+1. Go to **business.facebook.com** → **Business settings**
+2. **Users → System users → Add**
+   - Name: `AFD CRM Sync`
+   - Role: **Admin**
+3. **Add the app as an asset. Do this one first** — without it, Generate new token
+   shows *"No permissions available — assign an app role to the system user"* and
+   offers you nothing to tick.
+   - First check **Business settings → Accounts → Apps** lists `AFD CRM`. If it does
+     not, **Add → Add an app** (you need to be an admin of both the app and the
+     business portfolio).
+   - Then, with the system user selected: **Add assets → Apps** → tick `AFD CRM` →
+     turn on **Manage app** → **Save changes**
+   - **And add the products whose permissions you want.** A system user can only be
+     granted permissions the app itself has. A new app has none of the ones here, so
+     the wizard offers an empty list however the assets are assigned. In the app at
+     **developers.facebook.com → AFD CRM → Add Product**, add **Marketing API** (for
+     `ads_read` / `ads_management`) and **Webhooks** (for lead delivery). Then check
+     **App Review → Permissions and Features** lists `leads_retrieval`,
+     `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata`, `ads_read`
+     and `ads_management` — Standard Access is enough to generate a token.
+4. **Add assets → Pages**
+   - Tick your AFD Page
+   - Turn on **Access Page**, **Create ads for the Page** and **Manage Page**
+   - **Save changes**
+5. **Add assets → Ad accounts** → tick your ad account → **Manage campaigns** → Save
+   *(this is what makes the spend and retargeting syncs work — same token, one trip)*
+6. Click **Generate new token**
+   - App: `AFD CRM`
+   - **Expiration: Never**
+   - Permissions: `leads_retrieval`, `pages_show_list`, `pages_read_engagement`,
+     `pages_manage_metadata`, `ads_read`, `ads_management`
+   - **Generate token**
+7. **Copy it now.** Meta shows it once and never again.
+
+In the CRM (**Settings → Integrations → Meta**), paste that same token into **both**
+**Page Access Token** and **Ads Access Token**, then Save. They are separate fields
+because they are often separate tokens; one System User token that holds both sets of
+permissions is allowed to be both, and is one fewer thing to renew.
+
+**Ad Account ID**: in Ads Manager it reads `act_1234567890` — enter **only the digits**.
+
+> If you would rather use the Graph API Explorer: **User or Page → Get User Access
+> Token**, tick the four page permissions, **Generate Access Token**, then re-open that
+> same dropdown and pick your Page under **Page Access Tokens** — a User token is not a
+> Page token. Then extend it at **/tools/debug/accesstoken** → Debug → Extend Access
+> Token, and put a reminder in your calendar for sixty days' time.
+>
+> The banner reading **"Facebook Login for Business requires advanced access"** is
+> unrelated — it concerns using Facebook as a sign-in button for other people, which this
+> CRM does not do.
 
 ### 1.4 Point Meta at the CRM
 
@@ -83,19 +155,35 @@ This is what lets the CRM read the answers somebody typed into your lead form.
 If verification fails, the token doesn't match what you saved in the CRM. That's almost
 always it.
 
-### 1.5 Subscribe your Page
+### 1.5 Subscribe your Page — press the button in the CRM
 
-Still in Webhooks, under the Page object, select your AFD Page and subscribe it. A Page
-that isn't subscribed sends nothing, with no error anywhere.
+**CRM → Settings → Integrations → Meta → "Subscribe this Page to leads".**
 
-### 1.6 Spend and retargeting (optional, do it later if you like)
+That is the whole step. It needs the Page Access Token saved first, and nothing else.
 
-1. **business.facebook.com** → **Business settings → Users → System users** → **Add**
-2. Name it `AFD CRM Sync`, role **Admin**
-3. **Assign assets** → your ad account → **Manage campaigns**
-4. **Generate new token** → pick your app → permissions `ads_read`, `ads_management` → generate
-5. Paste into the CRM's **Ads Access Token**
-6. **Ad Account ID**: in Ads Manager it looks like `act_1234567890` — enter **only the digits**, no `act_`
+**Why this exists as its own step.** Meta has *two* switches for lead delivery, in two
+different places:
+
+| | Says | Where |
+|---|---|---|
+| 1 | "This app wants leadgen events" | App Dashboard → Webhooks → Page → `leadgen` (step 1.4) |
+| 2 | "This Page sends its events to that app" | Per Page — this step |
+
+With only the first, Meta accepts your webhook, verifies it, shows it as subscribed, and
+**delivers nothing.** No error, no failed request, nothing in any log — the enquiries
+simply never arrive. It is the most common reason a correctly built Lead Ads integration
+produces silence, and the hardest to find precisely because everything you would think to
+check looks right.
+
+The button makes the call for you and then **reads the subscription back** to confirm it,
+rather than trusting Meta's "OK" — which is exactly the reassurance that misleads people
+here. If it reports that the Page Access Token looks like a User token, see 1.3: that is
+the other invisible mistake, and the two look identical once saved.
+
+### 1.6 Spend and retargeting
+
+Already done, if you followed 1.3 — the same System User token carries `ads_read` and
+`ads_management`, and step 4 gave it the ad account. Nothing further to set up.
 
 ### 1.7 Check it
 
@@ -185,11 +273,14 @@ CRM → **Settings → Integrations → Google → Test connection.**
 
 | Symptom | Almost always |
 |---|---|
-| Meta leads stop arriving | Page Access Token expired — redo 1.3, including the extend step |
+| Meta leads stop arriving | The token expired. A System User token set to Never does not; a Graph Explorer one does, every 60 days |
 | Meta webhook won't verify | Verify Token doesn't match the CRM exactly |
-| No leads, no errors | Page not subscribed to **leadgen** (step 1.5) |
+| No leads, no errors | Page not subscribed — press **Subscribe this Page to leads** (step 1.5) |
 | Google test data fails | Key doesn't match the CRM's Webhook Verify Key |
 | Spend shows zero | Ads token lacks `ads_read`, or the Ad Account ID still has `act_` on it |
+| Can't generate a token in the Graph API Explorer | Use the System User route in 1.3 instead — it does not need Facebook Login configured |
+| "No permissions available — assign an app role to the system user" | Three causes, in this order: (1) the app has no product granting those permissions — add **Marketing API** and **Webhooks** to it; (2) the app is not an asset of the system user — **Add assets → Apps → Manage app**; (3) link it from the app side too — **Accounts → Apps → AFD CRM → Assign people** → the system user, Full control |
 | Google API errors | Developer token still pending approval, or it's a test token |
+| Test leads arrive, real ones never do | The Meta app is still in Development mode — it needs App Review and Live mode |
 
 Every failure above is recorded in **Settings → Platform Health** with the real error.
