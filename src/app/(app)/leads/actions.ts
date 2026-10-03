@@ -6,6 +6,7 @@ import { csvEscape } from "@/lib/format/csv";
 import { fieldColumn, getRawFieldValue } from "@/lib/fields/field-column";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import { formatFieldValue } from "@/lib/fields/format-field-value";
+import { mergeUserRefLabels } from "@/lib/fields/user-ref-labels";
 import {
   OPTION_BEARING_TYPES,
   resolveFieldOptions,
@@ -121,6 +122,11 @@ export async function exportLeadsCsv(filterValues: LeadFilterValues): Promise<Ex
     return { error: error.message };
   }
 
+  // Same reason as the list view, and it matters more here: a uuid in a
+  // column headed "Assigned Counsellor" is bad on screen and worse in a
+  // spreadsheet somebody forwards.
+  const optionsWithUsers = await mergeUserRefLabels(supabase, fields, rows ?? [], optionsByKey);
+
   const header = fields.map((f) => csvEscape(f.label)).join(",");
   const lines = (rows ?? []).map((row) =>
     fields
@@ -129,7 +135,7 @@ export async function exportLeadsCsv(filterValues: LeadFilterValues): Promise<Ex
         if (field.type === "phone" && !canRevealPhone) {
           return csvEscape(maskPhone(value as string | null));
         }
-        return csvEscape(formatFieldValue(field, value, optionsByKey));
+        return csvEscape(formatFieldValue(field, value, optionsWithUsers));
       })
       .join(","),
   );

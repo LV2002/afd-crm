@@ -6051,3 +6051,32 @@ attribution, same assignment rules — so a Google Sheet export is a working CRM
 rather than one waiting on Meta's review queue, and none of it has to be undone later.
 
 **1339 tests pass**, lint and production build clean.
+
+---
+
+## Session 24p — A uuid in a column headed "Assigned Counsellor"
+
+Two independent bugs producing one symptom, which is why it read as a data problem.
+
+**`formatFieldValue` had no `user_ref` case at all.** It fell through to `String(value)`,
+so every list printed the raw uuid. The lead *detail* page resolves its assignee
+separately, which is why only the list was wrong.
+
+**And the options map could not have helped it.** `resolveFieldOptions` answers "who may a
+lead be assigned to" — deliberately narrow, whoever holds `lead.read` at scope `own`,
+today counsellors. That is a good picker and a poor lookup table: a lead assigned to an
+admin, to a centre head who carries their own leads, or to somebody who has since changed
+role is not in it.
+
+Who *can* be assigned and who *has* been assigned are different sets, and conflating them
+is what put `28d12296-8de1-4a52-8838-0a3ae0228c58` in front of a counsellor.
+`mergeUserRefLabels` looks up exactly the ids present on the page, with no role filter,
+and adds any the picker did not know about.
+
+Inactive and former staff are included deliberately. "Assigned to somebody who has left"
+is a real and important state; a uuid hides it and a name is how anybody notices.
+
+**The CSV export had it too**, and worse — a uuid on screen is confusing, a uuid in a
+spreadsheet somebody forwards is permanent.
+
+**1343 tests pass**, lint and production build clean.
