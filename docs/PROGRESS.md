@@ -5882,3 +5882,36 @@ It was a reasonable guess and it is no longer needed — Meta names the cause no
 guess printed next to the truth only competes with it.
 
 **1334 tests pass**, lint and production build clean.
+
+---
+
+## Session 24k — The wrong token, fixed rather than reported
+
+With Meta's own words now surfacing, the Subscribe button said:
+
+> Object with ID '122105801283490892' does not exist, cannot be loaded due to missing
+> permissions, or does not support this operation (code 100, subcode 33)
+
+That id is an **app-scoped user id**, not a Page id. The token saved as *Page Access
+Token* was a **User token** — which is the single most common dead end in a Meta setup,
+because the two are opaque strings generated two clicks apart and indistinguishable once
+saved, and because Meta's refusal names an id that means nothing to the person reading it.
+
+The earlier guessed hint ("this might be a User token") was right. A guess is still the
+wrong shape of answer, so now:
+
+- **`debug_token` is asked first.** It reports `type: USER` or `type: PAGE` outright,
+  which nothing in Meta's UI does.
+- **A User token is turned into the right one.** `/me/accounts` returns each managed Page
+  with its own Page token; with exactly one Page the button saves it in place of the
+  wrong one and carries on, saying so plainly because a stored credential changed
+  underneath the admin. With several it lists them and stops — picking on somebody's
+  behalf is not its call. With none it says the token is missing `pages_show_list` rather
+  than pretending the list being empty means anything else.
+- **Test connection catches it earlier**, reporting "this is a USER token, not a PAGE
+  token" instead of a cheerful "valid".
+
+Sending Leon back to the Meta UI that produced the wrong token would have been the
+obvious answer and the wrong one — that UI had already defeated him twice.
+
+**1334 tests pass**, lint and production build clean.
