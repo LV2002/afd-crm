@@ -33,12 +33,12 @@ import { cn } from "@/lib/utils";
 export default async function WhatsAppInboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ thread?: string; q?: string; filter?: string }>;
+  searchParams: Promise<{ thread?: string; q?: string; filter?: string; who?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.read")) return <AccessDenied />;
 
-  const { thread: selectedKey, q, filter } = await searchParams;
+  const { thread: selectedKey, q, filter, who } = await searchParams;
   const search = (q ?? "").trim().toLowerCase();
   const onlyAwaiting = filter === "awaiting";
   const onlyUnmatched = filter === "unmatched";
@@ -48,9 +48,35 @@ export default async function WhatsAppInboxPage({
 
   const awaitingCount = threads.filter((t) => t.awaitingReply).length;
   const unmatchedCount = threads.filter((t) => t.leadId === null).length;
+
+  /*
+    Whose conversations to show.
+
+    This adds no access: RLS already scopes `whatsapp_messages` through
+    the lead, so a counsellor's `threads` is their own and this picker
+    has nothing to offer them. For a centre head, a co-admin or an admin,
+    `threads` already spans their people — and an undifferentiated pile of
+    everybody's conversations is close to unreadable, which is the actual
+    problem. So the counsellors are the ones present in what the caller
+    can already see, derived rather than queried, and the picker only
+    appears when there is more than one of them.
+  */
+  const counsellors = Array.from(
+    new Map(
+      threads
+        .filter((t) => t.assignedTo && t.counsellorName)
+        .map((t) => [t.assignedTo as string, t.counsellorName as string]),
+    ),
+  ).sort((a, b) => a[1].localeCompare(b[1]));
+
+  const unassignedCount = threads.filter((t) => !t.assignedTo).length;
+  const canSwitchCounsellor = counsellors.length > 1 || (counsellors.length === 1 && unassignedCount > 0);
+
   const visible = threads.filter((thread) => {
     if (onlyAwaiting && !thread.awaitingReply) return false;
     if (onlyUnmatched && thread.leadId !== null) return false;
+    if (who === "unassigned" && thread.assignedTo) return false;
+    if (who && who !== "unassigned" && thread.assignedTo !== who) return false;
     if (!search) return true;
     return (
       thread.leadName.toLowerCase().includes(search) ||
@@ -75,9 +101,11 @@ export default async function WhatsAppInboxPage({
     const thread = params.thread ?? selectedKey;
     const query = params.q ?? q;
     const nextFilter = params.filter ?? filter;
+    const nextWho = params.who ?? who;
     if (thread) next.set("thread", thread);
     if (query) next.set("q", query);
     if (nextFilter) next.set("filter", nextFilter);
+    if (nextWho) next.set("who", nextWho);
     const search = next.toString();
     return search ? `/whatsapp?${search}` : "/whatsapp";
   }
@@ -97,6 +125,7 @@ export default async function WhatsAppInboxPage({
           <form action="/whatsapp" method="get" className="flex flex-col gap-2">
             {selectedKey && <input type="hidden" name="thread" value={selectedKey} />}
             {filter && <input type="hidden" name="filter" value={filter} />}
+            {who && <input type="hidden" name="who" value={who} />}
             <Input
               name="q"
               defaultValue={q ?? ""}
@@ -118,6 +147,27 @@ export default async function WhatsAppInboxPage({
               </FilterLink>
             )}
           </div>
+
+          {canSwitchCounsellor && (
+            <div className="flex flex-wrap items-center gap-1 text-sm">
+              <span className="pr-1 text-xs uppercase tracking-wide text-muted-foreground">
+                Counsellor
+              </span>
+              <FilterLink href={href({ who: "" })} active={!who}>
+                Everyone
+              </FilterLink>
+              {counsellors.map(([id, name]) => (
+                <FilterLink key={id} href={href({ who: id })} active={who === id}>
+                  {name}
+                </FilterLink>
+              ))}
+              {unassignedCount > 0 && (
+                <FilterLink href={href({ who: "unassigned" })} active={who === "unassigned"}>
+                  Unassigned ({unassignedCount})
+                </FilterLink>
+              )}
+            </div>
+          )}
 
           <div className="flex max-h-[70vh] flex-col overflow-y-auto rounded-lg border">
             {visible.length === 0 ? (

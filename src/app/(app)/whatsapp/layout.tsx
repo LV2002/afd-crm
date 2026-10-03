@@ -4,7 +4,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { WhatsAppNav } from "./whatsapp-nav";
 
 /**
- * The WhatsApp Business API section.
+ * The Chats section — one place for every conversation channel.
  *
  * One heading and one tab strip for every screen underneath, so the
  * inbox and the template manager read as one product rather than two
@@ -18,13 +18,12 @@ export default async function WhatsAppLayout({ children }: { children: React.Rea
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold">WhatsApp</h1>
+        <h1 className="text-2xl font-semibold">Chats</h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
-          The institute&apos;s WhatsApp Business API number — a marketing and broadcasting
-          channel. Enquiries don&apos;t arrive here: they reach the counsellors&apos; own WhatsApp
-          Business apps and are entered in the CRM by hand. What arrives here are replies to what
-          you send, and each one is matched to the lead it belongs to so their counsellor hears
-          about it.
+          Every conversation with a student, by channel. The institute&apos;s WhatsApp Business
+          API number is the one that is live: replies to what you send are matched to the lead
+          they belong to, so the assigned counsellor hears about them. The other two tabs say
+          where they stand.
         </p>
       </div>
       <WhatsAppNav canCampaign={can(user, "whatsapp.campaign")} />

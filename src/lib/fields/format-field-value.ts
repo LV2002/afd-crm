@@ -31,7 +31,13 @@ export function formatFieldValue(
         .map((v) => options?.find((o) => o.value === v)?.label ?? String(v))
         .join(", ");
     }
-    case "select": {
+    case "select":
+    // A `user_ref` is an id that resolves to a person exactly as a
+    // `select` resolves to a label, and it had no case here at all — so
+    // every list printed the raw uuid. The lead detail page resolves the
+    // assignee itself, which is why only the list was wrong and why it
+    // looked like a data problem rather than a missing branch.
+    case "user_ref": {
       const options = optionsByKey[field.key];
       return options?.find((o) => o.value === rawValue)?.label ?? String(rawValue);
     }

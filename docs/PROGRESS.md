@@ -6051,3 +6051,91 @@ attribution, same assignment rules — so a Google Sheet export is a working CRM
 rather than one waiting on Meta's review queue, and none of it has to be undone later.
 
 **1339 tests pass**, lint and production build clean.
+
+---
+
+## Session 24p — A uuid in a column headed "Assigned Counsellor"
+
+Two independent bugs producing one symptom, which is why it read as a data problem.
+
+**`formatFieldValue` had no `user_ref` case at all.** It fell through to `String(value)`,
+so every list printed the raw uuid. The lead *detail* page resolves its assignee
+separately, which is why only the list was wrong.
+
+**And the options map could not have helped it.** `resolveFieldOptions` answers "who may a
+lead be assigned to" — deliberately narrow, whoever holds `lead.read` at scope `own`,
+today counsellors. That is a good picker and a poor lookup table: a lead assigned to an
+admin, to a centre head who carries their own leads, or to somebody who has since changed
+role is not in it.
+
+Who *can* be assigned and who *has* been assigned are different sets, and conflating them
+is what put `28d12296-8de1-4a52-8838-0a3ae0228c58` in front of a counsellor.
+`mergeUserRefLabels` looks up exactly the ids present on the page, with no role filter,
+and adds any the picker did not know about.
+
+Inactive and former staff are included deliberately. "Assigned to somebody who has left"
+is a real and important state; a uuid hides it and a name is how anybody notices.
+
+**The CSV export had it too**, and worse — a uuid on screen is confusing, a uuid in a
+spreadsheet somebody forwards is permanent.
+
+**1343 tests pass**, lint and production build clean.
+
+---
+
+## Session 24q — "Chats", three channels, and one that cannot be built
+
+Leon asked for the WhatsApp section renamed to **Chats**, with three channels switchable
+at the top — the Business API, each counsellor's personal WhatsApp, and Instagram DMs —
+and for centre heads, co-admins and admins to switch between the counsellors under them.
+
+Two of the three are shipped or buildable. One is not, and the honest answer is worth
+more than a feature.
+
+### Personal WhatsApp: not built, on purpose
+
+There is no official API for a personal or WhatsApp **Business app** account. Every tool
+offering one — whatsapp-web.js, Baileys, and the services built on them — drives WhatsApp
+Web through a reverse-engineered protocol, which breaks WhatsApp's terms.
+
+Checked rather than remembered: roughly **one in five** accounts using an unofficial API
+is banned within a year, reverse-engineered WhatsApp Web tools typically last **2–8
+weeks** before detection, the ban is permanent, and there is no appeal. In April 2026 an
+"anti-ban" package with 56,000 downloads was found exfiltrating session credentials.
+
+What gets banned is the number — the line a counsellor answers enquiries on. The cost is
+not a broken integration, it is the conversations in progress and the number students
+already have.
+
+So the tab exists and says that, plus the three real options: a Business API number per
+counsellor (supported, costs per number, and they lose the app on that number), the
+shared number already working today, or leaving personal WhatsApp alone and logging what
+matters. Leon's call, made with the trade in front of him rather than hidden inside a
+feature he asked for.
+
+### Instagram: a build, not a blocker
+
+Meta does publish the Instagram Messaging API for Professional accounts linked to a
+Facebook Page, which `afdindia` already is. The tab says what it needs — the account's
+message access, `instagram_manage_messages` on the same App Review as the lead-ads
+permissions, a `messages` webhook on the same verify-persist-process path, and a decision
+about matching a handle to a lead when it is not a phone number. Worth doing on the same
+submission.
+
+### The counsellor switcher
+
+Shipped. It adds **no access**: RLS already scopes `whatsapp_messages` through the lead,
+so a counsellor sees their own threads and the picker has nothing to offer them. For a
+centre head or admin, `threads` already spans their people — and an undifferentiated pile
+of everybody's conversations is close to unreadable, which is the actual problem it
+solves.
+
+The counsellors offered are derived from the threads the caller can already see, not
+queried, so the list cannot show somebody whose conversations they could not open. Plus
+an **Unassigned** chip, because a conversation with nobody's name on it is the one most
+likely to be dropped.
+
+**The route stays `/whatsapp`.** Only the label changed. Renaming it would break every
+bookmark and link already sent round and buys nothing a label does not.
+
+**1343 tests pass**, lint and production build clean.
