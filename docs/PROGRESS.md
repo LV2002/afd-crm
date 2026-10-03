@@ -5341,3 +5341,75 @@ Not reachable from SQL.
 **Shipped:** migration 0077, `scripts/splinter.sql`, `src/lib/db/audit-cli.ts`,
 `npm run db:audit`, the CI step, and the CLAUDE.md rule that new policies must write
 `private.auth_scope(...)`.
+
+---
+
+## Session 24 — The server can finally say what broke
+
+Leon confirmed an admission on 3 October and got "This screen didn't load … quote
+3348501131". That number was the only thing the system had kept about it.
+
+### The actual problem was that we could not tell
+
+A production Next.js build never sends an error message to the browser — it
+substitutes an opaque digest, deliberately, so a stack trace cannot leak to whoever
+is looking at the screen. The React error boundary posts that digest to
+`/api/report-error`, which is how it reached Platform Health. The message, the stack
+and the line all existed on the server and were all thrown away.
+
+So the lead page and `confirmAdmissionAction` were read end to end, a local
+reproduction of the whole post-admission data path (`confirmAdmission` →
+`getLeadFeePlan`) was built and **passed clean**, and every candidate was eliminated
+without the one piece of evidence that would have settled it in a second. That is the
+bug worth fixing.
+
+### `src/instrumentation.ts`
+
+Next.js calls `onRequestError` for every uncaught server error. It now reports to the
+existing `captureError`, so the real message, the real stack and the route land in
+`error_events` and show up on Settings → Platform Health like everything else.
+
+- `source` separates `server:render` (a screen that crashed while drawing) from
+  `server:action` (a save that threw) and `server:route`. A single `page` bucket is
+  precisely what made this one hard to place.
+- The digest is recorded in `context` on both sides, so the number a counsellor reads
+  off the broken screen matches the row that has the stack in it.
+- `notFound()` and `redirect()` work by throwing; they are filtered out, or every
+  mistyped URL becomes a "problem".
+- Query strings are stripped from the recorded path. The id in `/leads/<id>` is what
+  makes a crash reproducible; everything after `?` is a counsellor's search terms,
+  which are students' names, and an error table is not a place to collect those.
+
+**Gotcha, written down because it cost a build:** `instrumentation.ts` is compiled for
+the Edge runtime too (this app has `middleware.ts`), and the Edge runtime has no TCP
+sockets, so anything reaching the Postgres client fails the build with
+`Can't resolve 'net'`. The `NEXT_RUNTIME === 'nodejs'` check must **wrap** the dynamic
+import, not guard it with an early return — only an `if` block becomes dead code
+webpack can drop.
+
+**Verified, not assumed:** built for production, started the real server, threw from a
+route, and confirmed the row — message, full stack, path, `routeType` — appeared in
+`error_events`. The emitted `edge-instrumentation.js` contains zero references to
+`postgres`.
+
+### Platform Health now tells you if the database is behind the code
+
+`vercel-build` runs `drizzle-kit migrate && next build`, and drizzle-kit does not
+reliably fail the build when a migration fails. The result is new code talking to an
+old database: a screen that worked yesterday throws `column x does not exist`, on one
+page, with nothing in the deploy log.
+
+`meta/_journal.json` ships inside the build, so the running code knows exactly which
+migrations it expects; `drizzle.__drizzle_migrations` says what the database has run.
+Platform Health now names any that are missing, above the fault list — because when
+this is wrong, most of what is below it is a symptom.
+
+`tests/migration-status.spec.ts` also pins every `.sql` file to a journal entry, which
+catches "wrote the migration, forgot the journal entry" — a silent failure in a
+project where that file is hand-edited.
+
+**Also:** corrected the doc comment in `src/lib/audit/log.ts`, which still described
+the `audit_log_insert` policy as `with check (true)` after 0077 narrowed it.
+
+**What this does not do:** it does not explain Leon's 3 October crash. Nothing kept
+enough to. The next occurrence will explain itself.
