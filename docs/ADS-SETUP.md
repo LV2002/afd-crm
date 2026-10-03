@@ -41,6 +41,30 @@ and type the same value in two places. Anything long and random is fine.
 
 # Part 1 — Meta Ads
 
+> ## Read this before you spend an afternoon on it
+>
+> A Meta app starts in **Development mode**, and a development-mode app
+> **does not receive real leads**. It only receives leads submitted by somebody
+> who holds a role on the app — which is exactly what the Lead Ads Testing Tool
+> does, so you can prove the whole chain works today.
+>
+> For leads from actual members of the public you need two more things:
+>
+> 1. **App Review** for `leads_retrieval` (submitted together with
+>    `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata`), which
+>    moves that permission from Standard to **Advanced Access**
+> 2. The app switched to **Live** mode
+>
+> Review takes days, sometimes longer, and usually wants Business Verification
+> first. So treat it as two phases: **set it up and test it now**, submit for
+> review in parallel, and switch to Live when it comes back. Do not point a live
+> ad campaign at this until the app is Live — the leads are not queued anywhere,
+> they are simply never delivered.
+>
+> The same two-phase split applies to the ad spend and retargeting syncs, which
+> need `ads_read` / `ads_management` on the same review.
+
+
 ### 1.1 Create a Meta app
 
 1. Go to **developers.facebook.com** → **My Apps** → **Create App**
@@ -61,15 +85,20 @@ password in **Verify Token**. Save.
 
 This is what lets the CRM read the answers somebody typed into your lead form.
 
-1. In your app: **Add Product → Facebook Login** (just add it; no setup needed)
-2. Go to **developers.facebook.com/tools/explorer**
-3. Top right: select your app, then **User Token**
-4. Add permissions: `leads_retrieval`, `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata`
-5. **Generate Access Token** → approve → choose your AFD Page
-6. Swap it for a long-lived one at **developers.facebook.com/tools/debug/accesstoken** — paste the token, click **Debug**, then **Extend Access Token**
-7. Copy the extended token into the CRM's **Page Access Token**. Save.
+1. Go to **developers.facebook.com/tools/explorer**
+2. **Meta App**: select your app (`AFD CRM`)
+3. **User or Page** → **Get User Access Token**
+4. Tick these permissions: `leads_retrieval`, `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata`
+5. **Generate Access Token** → approve in the popup → choose your AFD Page
+6. Now go back to **User or Page** and pick your Page under **Page Access Tokens**. That swaps the box to a *Page* token, which is the one you want — a User token is not
+7. Swap it for a long-lived one at **developers.facebook.com/tools/debug/accesstoken** — paste the token, click **Debug**, then **Extend Access Token**
+8. Copy the extended token into the CRM's **Page Access Token**. Save.
 
-> Without step 6 the token dies in about an hour and leads stop arriving silently.
+> Without step 7 the token dies in about an hour and leads stop arriving silently.
+>
+> You may see a banner saying **"Facebook Login for Business requires advanced access"**.
+> Ignore it. That concerns using Facebook as a sign-in button for other people,
+> which this CRM does not do. It does not block token generation.
 
 ### 1.4 Point Meta at the CRM
 
@@ -191,5 +220,6 @@ CRM → **Settings → Integrations → Google → Test connection.**
 | Google test data fails | Key doesn't match the CRM's Webhook Verify Key |
 | Spend shows zero | Ads token lacks `ads_read`, or the Ad Account ID still has `act_` on it |
 | Google API errors | Developer token still pending approval, or it's a test token |
+| Test leads arrive, real ones never do | The Meta app is still in Development mode — it needs App Review and Live mode |
 
 Every failure above is recorded in **Settings → Platform Health** with the real error.
