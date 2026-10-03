@@ -96,19 +96,27 @@ portfolio, built for exactly this, and its token can be set to **never expire**.
 2. **Users → System users → Add**
    - Name: `AFD CRM Sync`
    - Role: **Admin**
-3. With it selected, click **Add assets → Pages**
+3. **Add the app as an asset. Do this one first** — without it, Generate new token
+   shows *"No permissions available — assign an app role to the system user"* and
+   offers you nothing to tick.
+   - First check **Business settings → Accounts → Apps** lists `AFD CRM`. If it does
+     not, **Add → Add an app** (you need to be an admin of both the app and the
+     business portfolio).
+   - Then, with the system user selected: **Add assets → Apps** → tick `AFD CRM` →
+     turn on **Manage app** → **Save changes**
+4. **Add assets → Pages**
    - Tick your AFD Page
    - Turn on **Access Page**, **Create ads for the Page** and **Manage Page**
    - **Save changes**
-4. **Add assets → Ad accounts** → tick your ad account → **Manage campaigns** → Save
+5. **Add assets → Ad accounts** → tick your ad account → **Manage campaigns** → Save
    *(this is what makes the spend and retargeting syncs work — same token, one trip)*
-5. Click **Generate new token**
+6. Click **Generate new token**
    - App: `AFD CRM`
    - **Expiration: Never**
    - Permissions: `leads_retrieval`, `pages_show_list`, `pages_read_engagement`,
      `pages_manage_metadata`, `ads_read`, `ads_management`
    - **Generate token**
-6. **Copy it now.** Meta shows it once and never again.
+7. **Copy it now.** Meta shows it once and never again.
 
 In the CRM (**Settings → Integrations → Meta**), paste that same token into **both**
 **Page Access Token** and **Ads Access Token**, then Save. They are separate fields
@@ -243,6 +251,7 @@ CRM → **Settings → Integrations → Google → Test connection.**
 | Google test data fails | Key doesn't match the CRM's Webhook Verify Key |
 | Spend shows zero | Ads token lacks `ads_read`, or the Ad Account ID still has `act_` on it |
 | Can't generate a token in the Graph API Explorer | Use the System User route in 1.3 instead — it does not need Facebook Login configured |
+| "No permissions available — assign an app role to the system user" | The app is not an asset of the system user. Step 3 of 1.3: **Add assets → Apps → Manage app** |
 | Google API errors | Developer token still pending approval, or it's a test token |
 | Test leads arrive, real ones never do | The Meta app is still in Development mode — it needs App Review and Live mode |
 
