@@ -2467,3 +2467,37 @@ actually developed and tested on; `createClient()` is also on the live path in
 the webhook and cron handlers, so a runtime that cannot construct it is not a
 runtime this application supports. Verified: the exact failing call succeeds on
 22, and the full suite, typecheck, lint and build pass there.
+
+## 2026-10-03 — Server errors are reported by `instrumentation.ts`, and both reports are kept
+
+A crashed screen was reported only by the React error boundary, which runs in the
+browser and is given a digest rather than a message. Next.js's `onRequestError` hook
+now reports the same failures from the server, with the message and stack.
+
+Both reporters stay. The boundary catches errors that happen in the browser —
+hydration mismatches, a client component throwing on interaction — which never reach
+the server and so never reach `onRequestError`. The server hook catches render and
+action failures, which the browser is never told the detail of. Neither covers the
+other, so the duplicate row for a server crash is accepted; the digest is recorded in
+both so they can be matched.
+
+**Rejected:** replacing the boundary's report with the server's. It would have made
+every client-side crash invisible, which is the class of failure Leon is least able to
+describe over the phone.
+
+**Rejected:** recording the full URL including its query string. A lead id in a path is
+worth having and carries nothing a colleague could not already see; a search query is
+the name of somebody's student, and an error table that accumulates those is a liability
+that grows on its own.
+
+## 2026-10-03 — The migration count is shown on Platform Health, not enforced at boot
+
+`drizzle-kit migrate` can fail without failing `vercel-build`, leaving new code on an
+old database. The alternative to showing it was refusing to serve — a boot check that
+throws when the database is behind.
+
+Not done, because the failure it guards against is partial: most screens work fine
+when one migration is missing, and taking the whole CRM down during admissions season
+to prevent one screen from erroring is the worse trade. It is shown prominently
+instead, above the fault list, where somebody investigating a broken screen will read
+it before the symptoms.

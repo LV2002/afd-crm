@@ -18,8 +18,11 @@ export interface AuditLogEntry {
  *
  * Deliberately does NOT chain `.select()` — a caller who only holds
  * `audit.read` at no scope (or not at all) can still insert a row (the
- * audit_log_insert policy is `with check (true)` for every authenticated
- * user), but a returned/selected row is checked against the SELECT policy
+ * audit_log_insert policy lets any authenticated user write a row naming
+ * THEMSELVES as the actor; migration 0077 narrowed it from `with check
+ * (true)` to `with check (actor_id = auth.uid())`, which stops one user
+ * forging another's trail without changing anything here), but a
+ * returned/selected row is checked against the SELECT policy
  * too, so `.insert(...).select()` fails RLS for exactly the people who are
  * supposed to be able to write audit rows without being able to read them
  * back. Confirmed against a real Postgres instance in Session 1.

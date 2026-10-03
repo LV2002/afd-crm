@@ -4,6 +4,7 @@ import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
+import { getMigrationStatus } from "@/lib/db/migration-status";
 import { errorEvents } from "@/lib/db/schema";
 import { alertRecipients, emailConfigured } from "@/lib/email/send";
 import { formatDateIST } from "@/lib/format/date";
@@ -25,7 +26,7 @@ export default async function HealthPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "settings.manage")) return <AccessDenied />;
 
-  const [open, recentlyFixed] = await Promise.all([
+  const [open, recentlyFixed, migrations] = await Promise.all([
     db
       .select()
       .from(errorEvents)
@@ -37,6 +38,7 @@ export default async function HealthPage() {
       .from(errorEvents)
       .orderBy(desc(errorEvents.resolvedAt))
       .limit(5),
+    getMigrationStatus(),
   ]);
 
   const configured = emailConfigured();
@@ -73,6 +75,43 @@ export default async function HealthPage() {
               ? "Set ALERT_EMAIL_TO to the addresses that should hear about failures."
               : "Set RESEND_API_KEY and EMAIL_FROM to turn email on, then ALERT_EMAIL_TO for who hears about failures."}{" "}
             Problems are still recorded below.
+          </p>
+        )}
+      </div>
+
+      {/*
+        Above the fault list on purpose. When this is wrong, most of what
+        is below it is a symptom: a build that deployed without its
+        migrations throws "column x does not exist" on one screen and
+        nothing anywhere explains why. Somebody opening this page because
+        something broke should read the cause before the effects.
+      */}
+      <div
+        className={
+          migrations.pending.length > 0 || migrations.error
+            ? "rounded-lg border border-destructive/50 bg-destructive/5 p-4"
+            : "rounded-lg border p-4"
+        }
+      >
+        {migrations.error ? (
+          <p className="text-[0.9375rem]">
+            <strong>The database&rsquo;s migration record could not be read.</strong>{" "}
+            {migrations.error} This build expects {migrations.expected} migrations.
+          </p>
+        ) : migrations.pending.length > 0 ? (
+          <p className="text-[0.9375rem]">
+            <strong>
+              The database is {migrations.pending.length}{" "}
+              {migrations.pending.length === 1 ? "migration" : "migrations"} behind this build.
+            </strong>{" "}
+            It has run {migrations.applied} of {migrations.expected}. Screens that use anything
+            added by {migrations.pending.join(", ")} will fail until the migration step runs.
+            Re-deploy, and check the build log for the <code>drizzle-kit migrate</code> step.
+          </p>
+        ) : (
+          <p className="text-[0.9375rem]">
+            <strong>The database is up to date.</strong> All {migrations.expected} migrations have
+            run, so no screen is talking to a table older than the code.
           </p>
         )}
       </div>
