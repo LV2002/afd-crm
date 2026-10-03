@@ -50,14 +50,32 @@ export function RecentDeliveries({
                 lead fetch — it means the App Secret saved here does not
                 match the one that signed the request. */}
             {!delivery.signature_ok && <Badge variant="destructive">bad signature</Badge>}
-            <span className="font-mono text-xs text-muted-foreground">{delivery.external_id}</span>
+            <span className="font-mono text-xs text-muted-foreground">
+              {/* The synthetic ids a handler writes when there was no real
+                  one to record are noise on screen; what they mean is not. */}
+              {delivery.external_id.startsWith("no-lead:")
+                ? "not a lead"
+                : delivery.external_id.startsWith("invalid:")
+                  ? "rejected"
+                  : delivery.external_id}
+            </span>
           </div>
           <span className="text-xs text-muted-foreground">
             {formatDateIST(delivery.received_at, "d MMM, h:mm a")}
             {delivery.attempts > 1 && ` · ${delivery.attempts} attempts`}
           </span>
           {delivery.last_error && (
-            <p className="w-full break-words text-xs text-destructive">{delivery.last_error}</p>
+            // Red only when something actually failed. A note on a
+            // successful row — "this was a ping, not a lead" — is
+            // information, and colouring it like a fault would undo the
+            // point of recording it.
+            <p
+              className={`w-full break-words text-xs ${
+                delivery.status === "failed" ? "text-destructive" : "text-muted-foreground"
+              }`}
+            >
+              {delivery.last_error}
+            </p>
           )}
         </div>
       ))}
