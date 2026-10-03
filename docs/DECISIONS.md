@@ -2555,3 +2555,27 @@ net, not a guarantee.
 
 It also returns a message on the form instead of throwing, so a failed save costs the save
 and not the whole screen.
+
+## 2026-10-03 — The deploy verifies the schema, and a row count never decides anything
+
+drizzle applies a migration only when its journal `when` is strictly greater than the
+newest `created_at` in `drizzle.__drizzle_migrations`. That makes the bookkeeping table
+authoritative over the migration files: one row with a timestamp at or ahead of the
+journal skips everything behind it *and reports success*.
+
+Two consequences are now built in.
+
+**A count never decides whether to migrate.** The first version of `db:migrate` returned
+early when the number of recorded rows matched the journal — which is how a migration
+that never ran looked like a clean deploy. `migrate()` now runs unconditionally; the
+count is printed, not obeyed.
+
+**The deploy verifies the schema afterwards and fails on drift.** Rejected the gentler
+option of warning and continuing: a build that ships code selecting a column the database
+does not have is a build that has already failed, and it fails on the counsellor's screen
+instead of in the log. The failure names the missing columns and the timestamp rule, so it
+is actionable rather than merely alarming.
+
+**Repairs go in a new migration with a later `when`, never as an edit to the old one.**
+An edited migration file cannot re-run — its row is already there and its timestamp is no
+longer greater than the newest.

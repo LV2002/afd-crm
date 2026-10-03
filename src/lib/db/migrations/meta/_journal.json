@@ -554,6 +554,13 @@
       "when": 1790921043149,
       "tag": "0078_repair_lead_assigned_at",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1791011606254,
+      "tag": "0079_apply_lead_assigned_at_repair",
+      "breakpoints": true
     }
   ]
 }

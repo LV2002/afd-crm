@@ -1,11 +1,12 @@
 import "server-only";
 
-import { is, sql } from "drizzle-orm";
-import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 import { db } from "./client";
-import * as schema from "./schema";
-import { compareSchema, type ExpectedTable, type SchemaDifference } from "./schema-compare";
+import { compareSchema, type SchemaDifference } from "./schema-compare";
+import { expectedTables } from "./schema-drift-tables";
+
+export { expectedTables };
 
 /**
  * Does the live database have the shape this build was written against?
@@ -15,25 +16,6 @@ import { compareSchema, type ExpectedTable, type SchemaDifference } from "./sche
  * here reads a migration file, which is the point — migration bookkeeping
  * is exactly what was wrong the day this was written.
  */
-
-/** Every table the code declares, with the column names it will select. */
-export function expectedTables(): ExpectedTable[] {
-  const tables: ExpectedTable[] = [];
-
-  for (const value of Object.values(schema)) {
-    if (!is(value, PgTable)) continue;
-    const config = getTableConfig(value as PgTable);
-    // Only `public`. Anything a migration put elsewhere is not something
-    // the Drizzle schema describes.
-    if (config.schema !== undefined && config.schema !== "public") continue;
-    tables.push({
-      name: config.name,
-      columns: config.columns.map((column) => column.name),
-    });
-  }
-
-  return tables.sort((a, b) => a.name.localeCompare(b.name));
-}
 
 export interface SchemaDriftReport extends SchemaDifference {
   tablesChecked: number;
