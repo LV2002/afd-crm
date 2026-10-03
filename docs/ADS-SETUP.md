@@ -81,24 +81,51 @@ In the new app: **App settings → Basic**.
 Now in the CRM: **Settings → Integrations → Meta**, paste both, and put your made-up Meta
 password in **Verify Token**. Save.
 
-### 1.3 Get a Page Access Token
+### 1.3 Get a token — use a System User, not the Graph API Explorer
 
-This is what lets the CRM read the answers somebody typed into your lead form.
+The Explorer is the route most tutorials show, and on a **Business**-type app with
+Facebook Login for Business it fights you: the token controls stay inert until a Login
+Configuration exists, and even when it works the token it hands you expires and has to be
+extended by hand every sixty days. A token that silently dies in two months is a lead
+source that silently dies in two months.
 
-1. Go to **developers.facebook.com/tools/explorer**
-2. **Meta App**: select your app (`AFD CRM`)
-3. **User or Page** → **Get User Access Token**
-4. Tick these permissions: `leads_retrieval`, `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata`
-5. **Generate Access Token** → approve in the popup → choose your AFD Page
-6. Now go back to **User or Page** and pick your Page under **Page Access Tokens**. That swaps the box to a *Page* token, which is the one you want — a User token is not
-7. Swap it for a long-lived one at **developers.facebook.com/tools/debug/accesstoken** — paste the token, click **Debug**, then **Extend Access Token**
-8. Copy the extended token into the CRM's **Page Access Token**. Save.
+A **System User** avoids all of it. It is a non-human account inside your Business
+portfolio, built for exactly this, and its token can be set to **never expire**.
 
-> Without step 7 the token dies in about an hour and leads stop arriving silently.
+1. Go to **business.facebook.com** → **Business settings**
+2. **Users → System users → Add**
+   - Name: `AFD CRM Sync`
+   - Role: **Admin**
+3. With it selected, click **Add assets → Pages**
+   - Tick your AFD Page
+   - Turn on **Access Page**, **Create ads for the Page** and **Manage Page**
+   - **Save changes**
+4. **Add assets → Ad accounts** → tick your ad account → **Manage campaigns** → Save
+   *(this is what makes the spend and retargeting syncs work — same token, one trip)*
+5. Click **Generate new token**
+   - App: `AFD CRM`
+   - **Expiration: Never**
+   - Permissions: `leads_retrieval`, `pages_show_list`, `pages_read_engagement`,
+     `pages_manage_metadata`, `ads_read`, `ads_management`
+   - **Generate token**
+6. **Copy it now.** Meta shows it once and never again.
+
+In the CRM (**Settings → Integrations → Meta**), paste that same token into **both**
+**Page Access Token** and **Ads Access Token**, then Save. They are separate fields
+because they are often separate tokens; one System User token that holds both sets of
+permissions is allowed to be both, and is one fewer thing to renew.
+
+**Ad Account ID**: in Ads Manager it reads `act_1234567890` — enter **only the digits**.
+
+> If you would rather use the Graph API Explorer: **User or Page → Get User Access
+> Token**, tick the four page permissions, **Generate Access Token**, then re-open that
+> same dropdown and pick your Page under **Page Access Tokens** — a User token is not a
+> Page token. Then extend it at **/tools/debug/accesstoken** → Debug → Extend Access
+> Token, and put a reminder in your calendar for sixty days' time.
 >
-> You may see a banner saying **"Facebook Login for Business requires advanced access"**.
-> Ignore it. That concerns using Facebook as a sign-in button for other people,
-> which this CRM does not do. It does not block token generation.
+> The banner reading **"Facebook Login for Business requires advanced access"** is
+> unrelated — it concerns using Facebook as a sign-in button for other people, which this
+> CRM does not do.
 
 ### 1.4 Point Meta at the CRM
 
@@ -117,14 +144,10 @@ always it.
 Still in Webhooks, under the Page object, select your AFD Page and subscribe it. A Page
 that isn't subscribed sends nothing, with no error anywhere.
 
-### 1.6 Spend and retargeting (optional, do it later if you like)
+### 1.6 Spend and retargeting
 
-1. **business.facebook.com** → **Business settings → Users → System users** → **Add**
-2. Name it `AFD CRM Sync`, role **Admin**
-3. **Assign assets** → your ad account → **Manage campaigns**
-4. **Generate new token** → pick your app → permissions `ads_read`, `ads_management` → generate
-5. Paste into the CRM's **Ads Access Token**
-6. **Ad Account ID**: in Ads Manager it looks like `act_1234567890` — enter **only the digits**, no `act_`
+Already done, if you followed 1.3 — the same System User token carries `ads_read` and
+`ads_management`, and step 4 gave it the ad account. Nothing further to set up.
 
 ### 1.7 Check it
 
@@ -214,11 +237,12 @@ CRM → **Settings → Integrations → Google → Test connection.**
 
 | Symptom | Almost always |
 |---|---|
-| Meta leads stop arriving | Page Access Token expired — redo 1.3, including the extend step |
+| Meta leads stop arriving | The token expired. A System User token set to Never does not; a Graph Explorer one does, every 60 days |
 | Meta webhook won't verify | Verify Token doesn't match the CRM exactly |
 | No leads, no errors | Page not subscribed to **leadgen** (step 1.5) |
 | Google test data fails | Key doesn't match the CRM's Webhook Verify Key |
 | Spend shows zero | Ads token lacks `ads_read`, or the Ad Account ID still has `act_` on it |
+| Can't generate a token in the Graph API Explorer | Use the System User route in 1.3 instead — it does not need Facebook Login configured |
 | Google API errors | Developer token still pending approval, or it's a test token |
 | Test leads arrive, real ones never do | The Meta app is still in Development mode — it needs App Review and Live mode |
 
