@@ -5462,3 +5462,69 @@ instead of 1,885 characters of SQL and no reason.
 **Still open:** migration 0077 fails against the live Supabase and applies cleanly
 against a database built from scratch here. The next deploy will name the error instead
 of swallowing it.
+
+---
+
+## Session 24c — `column "assigned_at" does not exist`
+
+The admission bug, found. Confirming an admission begins with `select *` on `leads`,
+naming every column the Drizzle schema declares. Production's `leads` table did not have
+`assigned_at`:
+
+```
+column "assigned_at" does not exist          code: 42703
+hint: Perhaps you meant to reference the column "leads.assigned_to".
+[server:action]  routePath: /leads/[id]  routeType: action  digest: 3348501131
+```
+
+That second line is this morning's `instrumentation.ts` doing exactly its job — naming
+the failing route, the kind of failure, and tying it to the digest Leon had been reading
+off the screen since 11:17.
+
+### Migration 0071 was recorded as applied with only part of it there
+
+`set_lead_assigned_at()` and its trigger exist in production. The column the trigger
+writes to does not. How that happened is not known, and the honest reason is that
+`drizzle-kit migrate` reported its own failures as an exit code and nothing else, so a
+batch that went wrong on 1 October left no evidence of what it did.
+
+**Migration 0078** re-runs all of 0071 idempotently — column, function, trigger,
+backfill, index and the dashboard rows — because the database may have all of it, none
+of it, or any part. A new migration rather than an edit to 0071, which is recorded as
+applied and will never run again anywhere.
+
+Verified by reproducing production exactly: dropped the column and index locally, watched
+`select assigned_at` fail with the same error, ran 0078, confirmed column, index and
+trigger all returned, then ran it twice more to prove it is a no-op.
+
+### Counting migrations was not enough, and this is the proof
+
+The Platform Health banner shipped this morning said **"all 78 migrations have run"** —
+correctly — while the database was missing a column the code selects on every admission.
+A count answers *did the migrations run*. It cannot answer *is the database the shape the
+code expects*, which was the question all along.
+
+`lib/db/schema-drift.ts` now compares the columns the Drizzle schema declares against
+`information_schema.columns` in the live database, and Platform Health names anything
+missing. One-directional on purpose: a column the database has and the code does not is
+harmless, and listing those would bury the ones that matter.
+
+**It is also a test.** `tests/schema-drift.spec.ts` runs the real check against the real
+migrated database, so a Drizzle column that no migration creates now fails CI instead of
+failing a counsellor's screen. Verified it can fail: dropping `assigned_at` produces
+`expected '1 missing column (leads.assigned_at)' to be null`. A test that cannot fail is
+not a test.
+
+### A failed save no longer destroys the screen
+
+An unhandled throw in a Server Action takes out the nearest error boundary — here, the
+whole lead. For a save that is the wrong failure mode: the admission either happens or it
+does not, and either way the counsellor is still sitting with the student and needs the
+screen. `confirmAdmissionAction` now reports and returns a message on the form.
+
+Reported with `await`, deliberately. On Vercel a function can be frozen the moment its
+response is sent, which is why `onRequestError` printed this error to the console but
+never got its row into `error_events` — reporting that outlives the response may never be
+written at all. Inside the action, it is.
+
+**1320 tests pass**, `db:audit` clean, production build clean.

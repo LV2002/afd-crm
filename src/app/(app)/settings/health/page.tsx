@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { getMigrationStatus } from "@/lib/db/migration-status";
+import { getSchemaDrift } from "@/lib/db/schema-drift";
+import { describeDifference } from "@/lib/db/schema-compare";
 import { errorEvents } from "@/lib/db/schema";
 import { alertRecipients, emailConfigured } from "@/lib/email/send";
 import { formatDateIST } from "@/lib/format/date";
@@ -26,7 +28,7 @@ export default async function HealthPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "settings.manage")) return <AccessDenied />;
 
-  const [open, recentlyFixed, migrations] = await Promise.all([
+  const [open, recentlyFixed, migrations, drift] = await Promise.all([
     db
       .select()
       .from(errorEvents)
@@ -39,7 +41,10 @@ export default async function HealthPage() {
       .orderBy(desc(errorEvents.resolvedAt))
       .limit(5),
     getMigrationStatus(),
+    getSchemaDrift(),
   ]);
+
+  const driftSummary = drift.error ? null : describeDifference(drift);
 
   const configured = emailConfigured();
   const recipients = alertRecipients();
@@ -112,6 +117,41 @@ export default async function HealthPage() {
           <p className="text-[0.9375rem]">
             <strong>The database is up to date.</strong> All {migrations.expected} migrations have
             run, so no screen is talking to a table older than the code.
+          </p>
+        )}
+      </div>
+
+      {/*
+        Counting migrations was not enough, and this is the evidence.
+        On 3 October the banner above said all 78 had run — correctly —
+        while `leads.assigned_at` was missing, because migration 0071 was
+        recorded as applied with only part of it there. Confirming an
+        admission starts with `select *` on `leads`, so it died on a column
+        the bookkeeping swore was present. This compares the columns the
+        code actually selects against the ones the database actually has.
+      */}
+      <div
+        className={
+          driftSummary || drift.error
+            ? "rounded-lg border border-destructive/50 bg-destructive/5 p-4"
+            : "rounded-lg border p-4"
+        }
+      >
+        {drift.error ? (
+          <p className="text-[0.9375rem]">
+            <strong>The database&rsquo;s shape could not be checked.</strong> {drift.error}
+          </p>
+        ) : driftSummary ? (
+          <p className="text-[0.9375rem]">
+            <strong>The database is not the shape this build expects:</strong> {driftSummary}.
+            Any screen that reads one of these will fail outright. This is a migration that was
+            recorded as applied without fully running — it needs a repair migration, not a
+            re-deploy.
+          </p>
+        ) : (
+          <p className="text-[0.9375rem]">
+            <strong>The database matches the code.</strong> All {drift.tablesChecked} tables have
+            every column the application expects to read.
           </p>
         )}
       </div>
