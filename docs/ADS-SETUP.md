@@ -196,12 +196,43 @@ than one Page it lists them and stops, because picking on your behalf is not its
 Already done, if you followed 1.3 — the same System User token carries `ads_read` and
 `ads_management`, and step 4 gave it the ad account. Nothing further to set up.
 
-### 1.7 Check it
+### 1.7 Send yourself a test lead
 
-CRM → **Settings → Integrations → Meta → Test connection.**
+**First you need a lead form to exist.** The testing tool can only submit against a real
+instant form, and you do not have to run an ad to make one: **Meta Business Suite → your
+Page → Lead forms** (or Ads Manager → the lead form asset), create one with at least a
+name and a phone number, and publish it.
 
-Then submit a test lead through Meta's **Lead Ads Testing Tool**
-(developers.facebook.com/tools/lead-ads-testing) and watch it appear under **Leads**.
+Then:
+
+1. Go to **developers.facebook.com/tools/lead-ads-testing**
+2. Select your **Page**, then your **form**
+3. **Preview form** to see it, then **Create lead**
+4. Open the CRM's **Leads** list — it should be there within seconds
+
+A lead created this way costs nothing, does not touch your ad budget, and is a genuine
+`leadgen_id`, so it exercises the whole chain: webhook → signature → fetch → dedupe →
+assignment rules.
+
+> **You need a role on both.** An Admin or Advertiser role on the Page, and — while the
+> app is in Development mode — a role on the app too. Without the second, Meta drops the
+> delivery with no error anywhere.
+
+#### Two things that are working, even though they look like failures
+
+**"Test" in App Dashboard → Webhooks** sends a fixed sample payload with the fake lead id
+`444444444444`. It proves delivery and the signature, and then fails to fetch a lead that
+does not exist. **Recent deliveries** says so in as many words; it is not a fault.
+
+**A lead that arrives but does not appear under Leads** has usually been merged into an
+existing person — the CRM never rejects a duplicate, it links it (CLAUDE.md § Identity).
+Search the phone number rather than scanning the top of the list.
+
+### 1.8 Check the connection
+
+CRM → **Settings → Integrations → Meta → Test connection**, and read **Recent deliveries**
+underneath — that panel is the answer to "is anything arriving?" and says where to look
+when nothing is.
 
 ---
 

@@ -5947,3 +5947,36 @@ deliberately **no raw payload on screen** — the metadata is what diagnoses del
 an admin screen is still not a place to spray phone numbers.
 
 **1334 tests pass**, lint and production build clean.
+
+---
+
+## Session 24m — The webhook works; the test payload is not a lead
+
+The delivery panel earned its place within minutes of shipping. Leon's first row:
+
+```
+failed   444444444444                                        3 Oct, 5:46 PM
+Meta Graph API returned 400 fetching lead 444444444444 — Unsupported get request.
+Object with ID '444444444444' does not exist … (code 100, subcode 33)
+```
+
+Which is **good news told badly**. Meta reached the CRM, the signature verified, the
+payload was persisted and processing was attempted — the whole chain works. `444444444444`
+is the fixed sample id in the payload Meta's own **Test** button sends from the App
+Dashboard. There is no such lead, so fetching it fails, correctly.
+
+The admin who pressed Test to check their webhook got a red failure for doing exactly the
+right thing, and it looked identical to a broken token. The handler now recognises that id
+and says what it is, along with how to send a lead that is real.
+
+Deliberately still `failed` rather than `done`: no lead was created, and a row that reads
+as though one was is a worse lie than an alarming truth.
+
+`docs/ADS-SETUP.md` 1.7 is now "send yourself a test lead" — including the prerequisite
+nobody mentions, that the Lead Ads Testing Tool needs an instant form to already exist,
+and that one can be created without running an ad. Plus the two things that look like
+failures and are not: the sample payload above, and a real lead that was merged into an
+existing person rather than appearing at the top of the list (CLAUDE.md § Identity — the
+CRM never rejects a duplicate, it links it).
+
+**1334 tests pass**, lint and production build clean.
