@@ -35,6 +35,22 @@ export interface MappedMetaLead {
   city: string | null;
 }
 
+/**
+ * Meta's testing tool, "Create lead" button, fills every answer with a
+ * literal placeholder: `<test lead: dummy data for phone_number>`.
+ *
+ * It is a genuine lead with a genuine id, fetched over the real API —
+ * only its contents are not data. The CRM then rejects it on the last
+ * step for not being a phone number, which is correct and reads exactly
+ * like a broken integration at the end of a long setup.
+ *
+ * Recognised so it can be reported as what it is: the whole chain
+ * working, with nothing real at the end of it.
+ */
+export function isMetaTestPlaceholder(value: string | null | undefined): boolean {
+  return typeof value === "string" && /^<test lead:/i.test(value.trim());
+}
+
 /** Returns null when the lead has no usable name or phone — the two fields resolveOrCreateLead() cannot proceed without. */
 export function mapMetaLeadFields(lead: MetaLeadgenResponse): MappedMetaLead | null {
   const fd = lead.field_data ?? [];

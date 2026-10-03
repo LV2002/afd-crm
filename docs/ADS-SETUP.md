@@ -43,23 +43,28 @@ and type the same value in two places. Anything long and random is fine.
 
 > ## Read this before you spend an afternoon on it
 >
-> A Meta app starts in **Development mode**, and a development-mode app
-> **does not receive real leads**. It only receives leads submitted by somebody
-> who holds a role on the app — which is exactly what the Lead Ads Testing Tool
-> does, so you can prove the whole chain works today.
+> A Meta app starts in **Development mode**. In that state it delivers leads only
+> for people who hold a role on the app — which includes you, so **your own test
+> leads do arrive** and the whole chain can be proven today.
 >
-> For leads from actual members of the public you need two more things:
+> What it will **not** deliver is a lead from a member of the public. For that:
 >
-> 1. **App Review** for `leads_retrieval` (submitted together with
->    `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata`), which
->    moves that permission from Standard to **Advanced Access**
+> 1. **App Review** for `leads_retrieval` (submitted with `pages_show_list`,
+>    `pages_read_engagement`, `pages_manage_metadata`), moving it from Standard to
+>    **Advanced Access**
 > 2. The app switched to **Live** mode
 >
 > Review takes days, sometimes longer, and usually wants Business Verification
-> first. So treat it as two phases: **set it up and test it now**, submit for
-> review in parallel, and switch to Live when it comes back. Do not point a live
-> ad campaign at this until the app is Live — the leads are not queued anywhere,
-> they are simply never delivered.
+> first. Do not point a live ad campaign at this until the app is Live — the leads
+> are not queued anywhere, they are simply never delivered.
+>
+> **Meanwhile, use the CSV import.** `Leads → Import` runs the same
+> `resolveOrCreateLead()` path every webhook uses, so a spreadsheet of leads gets
+> the same de-duplication, the same first-touch attribution and the same
+> assignment rules as a live one. If your forms already deliver to a Google Sheet
+> (Meta's CRM Setup), export it and import it — daily if you like. That is a
+> working CRM today rather than one waiting on Meta, and nothing about it has to
+> be undone when the webhook starts.
 >
 > The same two-phase split applies to the ad spend and retargeting syncs, which
 > need `ads_read` / `ads_management` on the same review.
@@ -234,11 +239,29 @@ One thing worth checking if leads reach the sheet and not the CRM: **Meta Busine
 retrieve a Page's leads, and it is maintained separately from everything in Part 1. A
 Page that happily writes to a sheet can still be refusing your app.
 
-#### Two things that are working, even though they look like failures
+#### Press "Preview form", not "Create lead"
+
+The testing tool's two buttons do very different things.
+
+- **Preview form** opens the form for you to fill in and submit. The answers are yours,
+  so the lead is real all the way through and lands in the CRM.
+- **Create lead** submits placeholders — every answer comes through as
+  `<test lead: dummy data for phone_number>`. The lead is genuine, its id is genuine, the
+  CRM fetches it successfully, and then declines to file a person under a phone number
+  that is not one.
+
+Use **Preview form**. If you press **Create lead**, Recent deliveries will say exactly
+that, which is the chain working rather than failing — but you still will not get a lead
+you can work with.
+
+#### Three things that are working, even though they look like failures
 
 **"Test" in App Dashboard → Webhooks** sends a fixed sample payload with the fake lead id
 `444444444444`. It proves delivery and the signature, and then fails to fetch a lead that
 does not exist. **Recent deliveries** says so in as many words; it is not a fault.
+
+**"Create lead" in the testing tool** — as above. Delivery is proven; the contents are
+not data.
 
 **A lead that arrives but does not appear under Leads** has usually been merged into an
 existing person — the CRM never rejects a duplicate, it links it (CLAUDE.md § Identity).
@@ -339,6 +362,7 @@ CRM → **Settings → Integrations → Google → Test connection.**
 | Can't generate a token in the Graph API Explorer | Use the System User route in 1.3 instead — it does not need Facebook Login configured |
 | "No permissions available — assign an app role to the system user" | Three causes, in this order: (1) the app has no product granting those permissions — add **Marketing API** and **Webhooks** to it; (2) the app is not an asset of the system user — **Add assets → Apps → Manage app**; (3) link it from the app side too — **Accounts → Apps → AFD CRM → Assign people** → the system user, Full control |
 | Google API errors | Developer token still pending approval, or it's a test token |
-| Test leads arrive, real ones never do | The Meta app is still in Development mode — it needs App Review and Live mode |
+| Track status sits on "Pending" | Give it a minute and press **Track status** again — it does resolve. Check **Recent deliveries** rather than this table; it is the one that knows. |
+| A test lead arrives but is not created | You pressed **Create lead**, which sends placeholder text. Press **Preview form** and fill it in. |
 
 Every failure above is recorded in **Settings → Platform Health** with the real error.
