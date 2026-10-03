@@ -104,6 +104,14 @@ portfolio, built for exactly this, and its token can be set to **never expire**.
      business portfolio).
    - Then, with the system user selected: **Add assets → Apps** → tick `AFD CRM` →
      turn on **Manage app** → **Save changes**
+   - **And add the products whose permissions you want.** A system user can only be
+     granted permissions the app itself has. A new app has none of the ones here, so
+     the wizard offers an empty list however the assets are assigned. In the app at
+     **developers.facebook.com → AFD CRM → Add Product**, add **Marketing API** (for
+     `ads_read` / `ads_management`) and **Webhooks** (for lead delivery). Then check
+     **App Review → Permissions and Features** lists `leads_retrieval`,
+     `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata`, `ads_read`
+     and `ads_management` — Standard Access is enough to generate a token.
 4. **Add assets → Pages**
    - Tick your AFD Page
    - Turn on **Access Page**, **Create ads for the Page** and **Manage Page**
@@ -251,7 +259,7 @@ CRM → **Settings → Integrations → Google → Test connection.**
 | Google test data fails | Key doesn't match the CRM's Webhook Verify Key |
 | Spend shows zero | Ads token lacks `ads_read`, or the Ad Account ID still has `act_` on it |
 | Can't generate a token in the Graph API Explorer | Use the System User route in 1.3 instead — it does not need Facebook Login configured |
-| "No permissions available — assign an app role to the system user" | The app is not an asset of the system user. Step 3 of 1.3: **Add assets → Apps → Manage app** |
+| "No permissions available — assign an app role to the system user" | Three causes, in this order: (1) the app has no product granting those permissions — add **Marketing API** and **Webhooks** to it; (2) the app is not an asset of the system user — **Add assets → Apps → Manage app**; (3) link it from the app side too — **Accounts → Apps → AFD CRM → Assign people** → the system user, Full control |
 | Google API errors | Developer token still pending approval, or it's a test token |
 | Test leads arrive, real ones never do | The Meta app is still in Development mode — it needs App Review and Live mode |
 
