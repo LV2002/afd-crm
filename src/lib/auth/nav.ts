@@ -111,15 +111,17 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     label: "Finance",
   },
   {
-    // The WhatsApp Business API inbox. Named for the platform, not for
-    // "messages", because the whole point of the screen is that it is a
-    // different thing from the WhatsApp Business app on somebody's phone.
+    // "Chats", not "WhatsApp", because the section now holds more than
+    // one channel — the Business API inbox, and the places the other
+    // conversations will live. The route stays /whatsapp: renaming it
+    // would break every bookmark and every link already sent round, and
+    // buys nothing a label does not.
     href: "/whatsapp",
     iconKey: "whatsapp",
     permission: "whatsapp.read",
     badgeKey: "whatsapp",
     badgeWhat: "conversations waiting for a reply",
-    label: "WhatsApp",
+    label: "Chats",
   },
   {
     href: "/profile-forms",
