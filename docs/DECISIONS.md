@@ -2579,3 +2579,20 @@ is actionable rather than merely alarming.
 **Repairs go in a new migration with a later `when`, never as an edit to the old one.**
 An edited migration file cannot re-run — its row is already there and its timestamp is no
 longer greater than the newest.
+
+## 2026-10-03 — Migrations must be re-runnable, and 0077 was edited to make it so
+
+drizzle decides what to apply from the newest row in its own bookkeeping table, not from
+which files have run. When effects get committed without their row — which is what
+happened to 0077 — that migration is re-applied on every deploy forever. If it cannot run
+twice it fails, and because the batch is one transaction it drags every migration behind
+it into the rollback.
+
+So re-runnability is not a nicety here; it is what stops one bad migration becoming a
+permanent outage. New migrations use `if not exists`, `drop … if exists` before `create`,
+and `to_regprocedure` guards around `alter function`.
+
+**0077 was edited in place**, against the usual rule. It is justified because the file was
+not recorded as applied anywhere that mattered, so it was going to run again whatever we
+did; the only question was whether it would succeed. The rule still holds everywhere else:
+a migration that is recorded as applied is repaired by a NEW migration, never by an edit.

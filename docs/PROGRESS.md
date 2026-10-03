@@ -5605,3 +5605,67 @@ EXIT=1
 
 Then added 0079 and ran it again: applied, column and index back, schema check clean,
 exit 0 — and a third run is a no-op. **1320 tests pass**, lint and build clean.
+
+---
+
+## Session 24e — The one-way door
+
+The real cause, at last, from the deploy's own log:
+
+```
+Newest recorded migration timestamp: 1790844937908 (the journal's last is 1791011606254)
+Already applied: 80.
+A migration failed. Nothing was applied — they run in one transaction.
+  function public.set_lead_assigned_at() does not exist      code: 42883
+```
+
+`1790844937908` is **0076's** timestamp exactly. So `drizzle.__drizzle_migrations` stops
+at 0076, while 0077's effects — the helpers moved into `private` — are committed and
+present. Applied without being recorded.
+
+drizzle re-applies everything newer than the newest recorded row. So every deploy since
+re-ran 0077, 0078 and 0079 as one transaction; 0077 failed on the first `alter function`,
+because the function it names had already moved; **and the rollback took 0078 and 0079
+with it.** `leads.assigned_at` was created and undone on every deploy for a day, which is
+why the column kept being missing no matter what repair was added behind it.
+
+Three repairs were queued behind a door that could not open.
+
+### The fix is one property: 0077 re-runs
+
+Every `alter function` in it is now guarded with `to_regprocedure`, which returns null
+instead of raising when the function is not where you looked. Nothing else changed — same
+moves, same `search_path` pins, same policies.
+
+Editing a shipped migration is normally wrong. It is right here: 0077 is *not recorded*
+anywhere it matters, so it was going to run again regardless, and the only question was
+whether it would succeed. Guarded, it does nothing the second time, records itself, and
+lets 0078 and 0079 through.
+
+**A migration that cannot run twice is a migration that can only be recovered by hand.**
+
+### Verified against production's exact state
+
+Rebuilt it locally — bookkeeping rewound to 0076, 0077's helpers left in `private`,
+`assigned_at` dropped — and ran the deploy step:
+
+```
+Newest recorded migration timestamp: 1790844937908 (the journal's last is 1791011606254).
+Already applied: 77.
+Expecting to run 3: 0077_lock_down_helper_functions, 0078_…, 0079_…
+Migrations finished. 80 recorded, 80 expected.
+Schema check: the database has every table and column the code reads.
+EXIT=0
+```
+
+Column and index back, helpers still in `private`, second run a no-op. A brand-new
+database also takes all 80 cleanly.
+
+### Also
+
+`isConnectionProblem` matched words in the error *message*, and drizzle's wrapper message
+contains the entire failing migration — so a SQL error in a file whose comments mention
+"connection" was announced as a connection problem. It reads the Postgres error **code**
+now. Advice pointing at the wrong half of the system is worse than no advice.
+
+**1320 tests pass**, lint, `db:audit` and production build clean.
