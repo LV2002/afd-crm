@@ -2627,3 +2627,17 @@ enquires about one course and joins another.
 `leads` is the sales object and stops changing at Gate 1 (CLAUDE.md § lifecycle chain);
 the enrolment is the commercial record. Anything a family signs reads from the enrolment,
 and `getLeadFeePlan` now returns its terms for exactly that purpose.
+
+## 2026-10-03 — A dropped admission is shown on the lead, never written to it
+
+Dropping an admission does not change the lead's stage, and will not.
+
+The alternative — moving the lead out of Won, or into Lost — rewrites sales history to say
+a conversion that happened did not. It would change last month's conversion rate after the
+fact, break the funnel counts the institute is measured on, and lose the distinction
+between "never converted" and "converted and then left", which are different problems with
+different fixes.
+
+So the lead keeps the stage it reached and the drop is **displayed** by reading the
+enrolment. That was always the stated design; what was missing is that only the lead's
+detail page did the reading. The leads list and the pipeline board now do too.

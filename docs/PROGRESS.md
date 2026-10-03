@@ -5730,3 +5730,43 @@ lead delivery can be switched on in ten minutes and the API-heavy reporting part
 follow.
 
 **1329 tests pass**, lint and production build clean.
+
+---
+
+## Session 24g — A dropped student still looked like a conversion
+
+Leon dropped an admission in Accounts and it did not show on Leads or the Pipeline.
+
+### Leads and Pipeline: a real gap
+
+A drop is recorded on `enrolments` and, by design, nothing is written back to `leads` —
+the sales record stops changing at Gate 1 (CLAUDE.md § lifecycle chain), and rewriting it
+would claim the admission never happened. The lead genuinely did convert; the student then
+left. Both are true and the funnel has to keep saying both.
+
+`drop-admission.ts` says the drop is "displayed there by reading the enrolment". Only the
+lead's own detail page ever did. The leads **list** and the pipeline **board** never loaded
+enrolment data at all — so the two screens a counsellor actually works from were the two
+that could not tell a student who left from one still attending, sitting side by side in
+Won.
+
+`lib/enrolment/dropped-leads.ts` is that read: scoped to the leads already on the page,
+never a scan of every enrolment the institute has taken, and through the caller's own
+RLS-bound client, so somebody without `enrolment.read` simply sees no badge — the same
+rule the lead page already applies to the admission panel.
+
+Both screens now carry a red **Dropped out** badge. The lead keeps its stage, because it
+reached it; changing it would silently alter that month's conversion figures.
+
+### Students: working as designed, and worth writing down
+
+Nothing appeared there because the `students` row is created at **Gate 2**, when the first
+payment clears — and the roster shows only students academics has **onboarded**
+(`onboarded_at not null`). So a dropped admission with no payment has no student record to
+mark, and one that has just been paid for sits on the **Onboarding** tab rather than the
+roster.
+
+The drop → `students.status = 'dropped'` path itself is correct and covered by
+`tests/drop-admission.spec.ts`, both directions.
+
+**1329 tests pass**, lint and production build clean.

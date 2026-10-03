@@ -1,5 +1,6 @@
 import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { droppedLeadIds } from "@/lib/enrolment/dropped-leads";
 import { getDropdownOptions } from "@/lib/fields/resolve-field-options";
 import { batchNameLookup } from "@/lib/leads/batch-name-lookup";
 import { createClient } from "@/lib/supabase/server";
@@ -66,9 +67,13 @@ export default async function PipelinePage() {
   const centerIds = Array.from(new Set((leadRows ?? []).map((l) => l.center_id).filter(Boolean))) as string[];
   const assignedIds = Array.from(new Set((leadRows ?? []).map((l) => l.assigned_to).filter(Boolean))) as string[];
 
-  const [centerNameById, assigneeNameById] = await Promise.all([
+  const [centerNameById, assigneeNameById, dropped] = await Promise.all([
     batchNameLookup(supabase, "centers", "name", centerIds),
     batchNameLookup(supabase, "profiles", "full_name", assignedIds),
+    // A drop lives on the enrolment and is never written back to the
+    // lead, so without this the board shows a student who left sitting in
+    // Won, indistinguishable from one still attending.
+    droppedLeadIds(supabase, (leadRows ?? []).map((l) => l.id)),
   ]);
 
   const lostReasonLabelByValue = new Map(lostReasonOptions.map((o) => [o.value, o.label]));
@@ -83,6 +88,7 @@ export default async function PipelinePage() {
     centerName: l.center_id ? (centerNameById.get(l.center_id) ?? null) : null,
     assignedToName: l.assigned_to ? (assigneeNameById.get(l.assigned_to) ?? null) : null,
     lostReasonLabel: l.lost_reason ? (lostReasonLabelByValue.get(l.lost_reason) ?? l.lost_reason) : null,
+    isDropped: dropped.has(l.id),
   }));
 
   return (
