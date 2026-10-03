@@ -2522,3 +2522,36 @@ which is the failure this project already has a Platform Health banner for. A de
 that cannot migrate should stop.
 
 `db:migrate:kit` is kept for schema work, where drizzle-kit's own behaviour is wanted.
+
+## 2026-10-03 — Schema drift is checked column by column, not by counting migrations
+
+Platform Health reported all 78 migrations applied, correctly, while production was
+missing `leads.assigned_at` — migration 0071 was recorded as applied with only part of it
+there. Every admission died on it.
+
+Migration bookkeeping is a record of intent. The schema is the fact. Platform Health now
+compares the columns the Drizzle schema declares against the live
+`information_schema.columns`, and the same check runs in the test suite against a migrated
+database, so the two can never silently diverge again.
+
+**One-directional on purpose.** Columns the database has and the code does not are
+harmless — an old column kept for a report, something Supabase manages — and reporting
+them would fill the screen with things nobody should act on.
+
+**Rejected:** comparing types, nullability and defaults as well. Those drift for
+legitimate reasons and would produce noise that teaches people to ignore the screen. A
+missing column is unambiguous and is what actually broke.
+
+## 2026-10-03 — A Server Action reports its own failures, rather than leaving it to instrumentation
+
+`instrumentation.ts` printed this failure to the console and never wrote its row, because
+on Vercel a serverless function can be frozen the moment its response is sent, and
+`onRequestError` runs after that.
+
+So reporting that must survive belongs *inside* the request. `confirmAdmissionAction`
+awaits `captureError` before returning. `instrumentation.ts` stays for everything it does
+catch — page renders, route handlers, anything with no handler of its own — but it is a
+net, not a guarantee.
+
+It also returns a message on the form instead of throwing, so a failed save costs the save
+and not the whole screen.

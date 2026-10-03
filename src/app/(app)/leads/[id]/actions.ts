@@ -14,6 +14,8 @@ import { getDiscountLimit } from "@/lib/enrolment/get-discount-limit";
 import { fieldColumn } from "@/lib/fields/field-column";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import { NOT_PROVIDED, parseFieldValue } from "@/lib/fields/parse-field-value";
+import { captureError } from "@/lib/errors/capture";
+import { isFrameworkControlFlow } from "@/lib/errors/request-error";
 import { parseRupeesToPaise } from "@/lib/format/currency";
 import { notify } from "@/lib/notifications/notify";
 import { startFlows } from "@/lib/whatsapp/flow-runner";
@@ -293,7 +295,54 @@ export async function completeTask(taskId: string, leadId: string): Promise<void
  * point: re-implements the own/center/all scope check `can_access_center()`
  * would apply, checked against the lead before ever touching the database.
  */
+/**
+ * Confirming an admission, with a failure that stays inside the form.
+ *
+ * On 3 October 2026 this threw on `select * from leads` — production was
+ * missing a column — and the counsellor lost the entire screen to a blank
+ * page and an eight-digit number. An unhandled throw in a Server Action
+ * takes out the nearest error boundary, which here is the whole lead.
+ *
+ * That is the wrong failure mode for a save. The admission either happens
+ * or it does not; either way the counsellor should still be looking at the
+ * lead, with the student in front of them, able to try something else. So
+ * anything unexpected is reported and turned into a message on the form.
+ *
+ * Reported with `await`, deliberately: on Vercel a serverless function can
+ * be frozen the moment its response is sent, so reporting that is not
+ * finished before the action returns may never be written at all. That is
+ * why this is here and not left to `instrumentation.ts`, which runs after
+ * the response has gone.
+ */
 export async function confirmAdmissionAction(
+  leadId: string,
+  prevState: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  try {
+    return await runConfirmAdmission(leadId, prevState, formData);
+  } catch (error) {
+    // redirect() and notFound() are implemented as throws and must keep
+    // travelling. Nothing here uses them today; swallowing one silently if
+    // something later does would be a bad afternoon.
+    if (isFrameworkControlFlow(error)) throw error;
+
+    await captureError({
+      source: "action:confirmAdmission",
+      error,
+      // The lead id, not the form: a fee, a discount and a student's course
+      // are not things to copy into an error table.
+      context: { leadId },
+    });
+
+    return {
+      error:
+        "Something went wrong saving this admission, and it has been reported. Nothing was recorded — the lead is unchanged. Please try again, and tell Leon if it keeps happening.",
+    };
+  }
+}
+
+async function runConfirmAdmission(
   leadId: string,
   _prevState: FormState,
   formData: FormData,
