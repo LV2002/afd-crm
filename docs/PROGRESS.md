@@ -5915,3 +5915,35 @@ Sending Leon back to the Meta UI that produced the wrong token would have been t
 obvious answer and the wrong one — that UI had already defeated him twice.
 
 **1334 tests pass**, lint and production build clean.
+
+---
+
+## Session 24l — "Did Meta reach us?" is now a screen
+
+The Page subscribed, and the test lead did not appear. The honest first question is
+whether Meta called the CRM at all — and every handler has written the raw delivery to
+`webhook_events` before processing it since Phase 2 (CLAUDE.md non-negotiable #9).
+
+**Nothing had ever displayed that table.** The one question worth asking when leads are
+not arriving could only be answered from a SQL console, which for this institute means
+not at all. A decision made two phases ago to keep forensic evidence was only half kept:
+the evidence existed and was unreachable.
+
+**Settings → Integrations → {Meta, Google, WhatsApp, Website} → Recent deliveries** now
+shows the last ten, newest first: status, external id, time in IST, attempt count, and
+the error on a failed one. A bad signature gets its own badge, because an App Secret that
+does not match the one that signed the request is a different problem from a lead that
+failed to fetch.
+
+**The empty state is the most useful thing on the panel**, so it says what empty *means*
+rather than "no data": nothing has ever arrived, the problem is upstream of the CRM, and
+no amount of looking at the CRM will show it — followed by exactly where to look instead,
+per platform.
+
+Read through the caller's own client, not a service-role bypass: `webhook_events_select`
+already limits this to `settings.manage` at org scope (migration 0022), because a raw
+payload carries a student's details before anything has resolved them into a lead. And
+deliberately **no raw payload on screen** — the metadata is what diagnoses delivery, and
+an admin screen is still not a place to spray phone numbers.
+
+**1334 tests pass**, lint and production build clean.

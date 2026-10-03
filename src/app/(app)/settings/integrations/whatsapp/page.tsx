@@ -1,5 +1,8 @@
 import { AccessDenied } from "@/components/layout/access-denied";
+import { RecentDeliveries } from "@/components/integrations/recent-deliveries";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { recentWebhookDeliveries } from "@/lib/integrations/recent-deliveries";
+import { createClient } from "@/lib/supabase/server";
 
 import { getWhatsAppConnectionStatus } from "./actions";
 import { WhatsAppCredentialsForm } from "./whatsapp-credentials-form";
@@ -7,6 +10,8 @@ import { WhatsAppCredentialsForm } from "./whatsapp-credentials-form";
 export default async function WhatsAppIntegrationPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "settings.manage")) return <AccessDenied />;
+
+  const deliveries = await recentWebhookDeliveries(await createClient(), "whatsapp");
 
   const status = await getWhatsAppConnectionStatus();
 
@@ -46,6 +51,21 @@ export default async function WhatsAppIntegrationPage() {
         <WhatsAppCredentialsForm status={status} />
       </section>
 
+
+      {/*
+        The one question worth asking when leads are not arriving, and
+        until now the only place it could be answered was a SQL console.
+        Every delivery is written down before it is processed (CLAUDE.md
+        non-negotiable #9), so an empty list here is not missing data —
+        it is the answer.
+      */}
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">Recent deliveries</h2>
+        <RecentDeliveries
+          deliveries={deliveries}
+          emptyHint="Meta has never called this CRM for WhatsApp. Check the Callback URL and Verify Token in App Dashboard → WhatsApp → Configuration, and that the messages field is subscribed."
+        />
+      </section>
     </div>
   );
 }

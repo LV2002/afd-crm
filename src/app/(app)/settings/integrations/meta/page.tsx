@@ -1,5 +1,8 @@
 import { AccessDenied } from "@/components/layout/access-denied";
+import { RecentDeliveries } from "@/components/integrations/recent-deliveries";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { recentWebhookDeliveries } from "@/lib/integrations/recent-deliveries";
+import { createClient } from "@/lib/supabase/server";
 
 import { getMetaConnectionStatus } from "./actions";
 import { MetaCredentialsForm } from "./meta-credentials-form";
@@ -9,6 +12,8 @@ import { TestConnectionButton } from "./test-connection-button";
 export default async function MetaIntegrationPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "settings.manage")) return <AccessDenied />;
+
+  const deliveries = await recentWebhookDeliveries(await createClient(), "meta_leads");
 
   const status = await getMetaConnectionStatus();
 
@@ -57,6 +62,21 @@ export default async function MetaIntegrationPage() {
           error anywhere. Press this once the Page Access Token is saved.
         </p>
         <SubscribePageButton />
+      </section>
+
+      {/*
+        The one question worth asking when leads are not arriving, and
+        until now the only place it could be answered was a SQL console.
+        Every delivery is written down before it is processed (CLAUDE.md
+        non-negotiable #9), so an empty list here is not missing data —
+        it is the answer.
+      */}
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">Recent deliveries</h2>
+        <RecentDeliveries
+          deliveries={deliveries}
+          emptyHint="Meta has never called this CRM. That means the webhook itself is not set up on the app side — check the Callback URL and Verify Token in App Dashboard → Webhooks → Page, and that the app is subscribed to the leadgen field. The Page subscription above is the other half; both are needed."
+        />
       </section>
     </div>
   );

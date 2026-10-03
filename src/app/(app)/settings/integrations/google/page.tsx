@@ -1,5 +1,8 @@
 import { AccessDenied } from "@/components/layout/access-denied";
+import { RecentDeliveries } from "@/components/integrations/recent-deliveries";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { recentWebhookDeliveries } from "@/lib/integrations/recent-deliveries";
+import { createClient } from "@/lib/supabase/server";
 
 import { getGoogleConnectionStatus } from "./actions";
 import { GoogleCredentialsForm } from "./google-credentials-form";
@@ -8,6 +11,8 @@ import { TestConnectionButton } from "./test-connection-button";
 export default async function GoogleIntegrationPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "settings.manage")) return <AccessDenied />;
+
+  const deliveries = await recentWebhookDeliveries(await createClient(), "google_leads");
 
   const status = await getGoogleConnectionStatus();
 
@@ -44,6 +49,21 @@ export default async function GoogleIntegrationPage() {
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">Connection</h2>
         <TestConnectionButton />
+      </section>
+
+      {/*
+        The one question worth asking when leads are not arriving, and
+        until now the only place it could be answered was a SQL console.
+        Every delivery is written down before it is processed (CLAUDE.md
+        non-negotiable #9), so an empty list here is not missing data —
+        it is the answer.
+      */}
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">Recent deliveries</h2>
+        <RecentDeliveries
+          deliveries={deliveries}
+          emptyHint="Google has never called this CRM. Check the Webhook URL and Key in Google Ads → the lead form asset → Lead delivery option, and press Send test data there."
+        />
       </section>
     </div>
   );
