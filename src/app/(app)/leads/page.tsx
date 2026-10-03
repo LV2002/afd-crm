@@ -24,6 +24,7 @@ import {
 } from "@/lib/fields/resolve-field-options";
 import { applyLeadFilters, readFilterValues } from "@/lib/leads/apply-filters";
 import { maskPhone } from "@/lib/leads/mask-phone";
+import { droppedLeadIds } from "@/lib/enrolment/dropped-leads";
 import { createClient } from "@/lib/supabase/server";
 import { formatTerm } from "@/lib/terminology/terms";
 import { getTerminologyMap } from "@/lib/terminology/get-terminology";
@@ -149,6 +150,11 @@ export default async function LeadsPage({
     throw new Error(`Failed to load ${leadPlural.toLowerCase()}: ${error.message}`);
   }
 
+  // Who on this page has dropped out. Read from the enrolment rather than
+  // from the lead, because a drop is never written back to `leads` — see
+  // lib/enrolment/dropped-leads.ts.
+  const dropped = await droppedLeadIds(supabase, (rows ?? []).map((row) => String(row.id)));
+
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -230,7 +236,7 @@ export default async function LeadsPage({
             <TableRow key={String(row.id)}>
               {listFields.map((field) => (
                 <TableCell key={field.id}>
-                  {renderCell(field, row, optionsByKey, canRevealPhone)}
+                  {renderCell(field, row, optionsByKey, canRevealPhone, dropped.has(String(row.id)))}
                 </TableCell>
               ))}
             </TableRow>
@@ -269,14 +275,27 @@ function renderCell(
   row: Record<string, unknown>,
   optionsByKey: Record<string, FieldOption[]>,
   canRevealPhone: boolean,
+  isDropped: boolean,
 ) {
   const value = getRawFieldValue(field, row);
 
   if (field.isCore && field.key === "student_name") {
     return (
-      <Link href={`/leads/${row.id}`} className="font-medium hover:underline">
-        {String(value ?? "—")}
-      </Link>
+      <div className="flex items-center gap-2">
+        <Link href={`/leads/${row.id}`} className="font-medium hover:underline">
+          {String(value ?? "—")}
+        </Link>
+        {/*
+          Beside the name, not in a column of its own: a dropped student
+          sits in the Won stage looking exactly like one still attending,
+          and whoever is scanning this list is reading names.
+        */}
+        {isDropped && (
+          <Badge variant="destructive" className="shrink-0">
+            Dropped out
+          </Badge>
+        )}
+      </div>
     );
   }
 

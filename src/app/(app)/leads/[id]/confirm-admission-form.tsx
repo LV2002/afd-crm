@@ -7,30 +7,10 @@ import { Combobox } from "@/components/ui/combobox";
 import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { MoneyInput } from "@/components/ui/smart-inputs";
 import { Label } from "@/components/ui/label";
+import { academicYearOptions } from "@/lib/enrolment/academic-year";
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 
 import { confirmAdmissionAction, type FormState } from "./actions";
-
-/**
- * Academic years as a list rather than a text box.
- *
- * "2026-27", "2026-2027", "26-27" and "2026/27" are four spellings of one
- * year, and typed freely all four appear — after which every fee
- * structure lookup and every cohort report splits along a formatting
- * difference nobody can see.
- */
-function academicYearOptions() {
-  const now = new Date();
-  // An academic year is named for the calendar year it starts in, and
-  // enrolment for the next one begins well before June.
-  const startYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-  const years = [];
-  for (let year = startYear - 1; year <= startYear + 2; year += 1) {
-    const label = `${year}-${String((year + 1) % 100).padStart(2, "0")}`;
-    years.push({ value: label, label });
-  }
-  return years;
-}
 
 const initialState: FormState = {};
 

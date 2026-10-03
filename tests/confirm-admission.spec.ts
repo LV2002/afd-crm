@@ -137,7 +137,7 @@ describe("confirmAdmission", () => {
           confirmedBy: null,
         }),
       ),
-    ).rejects.toThrow(/no fee structure/);
+    ).rejects.toThrow(/No fee is set up for/);
   });
 
   it("throws when the discount exceeds the total fee", async () => {

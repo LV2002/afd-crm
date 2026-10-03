@@ -35,6 +35,15 @@ export interface KanbanLead {
   centerName: string | null;
   assignedToName: string | null;
   lostReasonLabel: string | null;
+  /**
+   * The student took the admission and then left.
+   *
+   * Stays in whichever stage it reached — usually Won — because it DID
+   * reach it. Rewriting the stage would make the funnel claim the
+   * admission never happened, and the conversion figures for that month
+   * would quietly change. Marked instead.
+   */
+  isDropped: boolean;
 }
 
 interface LostReasonOption {
@@ -224,10 +233,20 @@ function LeadCard({
           </Badge>
         )}
       </div>
+      {/* A student who took the admission and then left. They stay in the
+          stage they reached — usually Won, because they DID reach it — so
+          without this the board shows them as a healthy conversion. */}
+      {lead.isDropped && (
+        <Badge variant="destructive" className="mt-1 w-fit">
+          Dropped out
+        </Badge>
+      )}
+
       {/* Only leads currently sitting in a requires_reason stage (Lost)
           carry a lost_reason at all — enforce_lost_reason clears it the
           moment a lead moves anywhere else, so this only ever shows up in
           the Lost column, which is exactly where it's useful at a glance. */}
+
       {lead.lostReasonLabel && (
         <Badge variant="destructive" className="w-fit text-xs">
           {lead.lostReasonLabel}

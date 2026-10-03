@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { formatINR } from "@/lib/format/currency";
+import { getDropdownOptions } from "@/lib/fields/resolve-field-options";
 import { createClient } from "@/lib/supabase/server";
 
 interface FeeStructureRow {
@@ -24,13 +25,29 @@ export default async function FeeStructuresSettingsPage() {
   if (!user || !can(user, "settings.manage")) return <AccessDenied />;
 
   const supabase = await createClient();
-  const { data: feeStructures } = await supabase
-    .from("fee_structures")
-    .select("id, course, mode, academic_year, base_fee_paise, is_active, centers(name)")
-    .is("deleted_at", null)
-    .order("academic_year", { ascending: false })
-    .order("course")
-    .returns<FeeStructureRow[]>();
+  const [{ data: feeStructures }, courses, modes] = await Promise.all([
+    supabase
+      .from("fee_structures")
+      .select("id, course, mode, academic_year, base_fee_paise, is_active, centers(name)")
+      .is("deleted_at", null)
+      .order("academic_year", { ascending: false })
+      .order("course")
+      .returns<FeeStructureRow[]>(),
+    getDropdownOptions(supabase, "course"),
+    getDropdownOptions(supabase, "preferred_mode"),
+  ]);
+
+  /*
+    Labels, not stored values.
+    This table printed the raw `dwo` and `online` while every other screen
+    in the CRM says `DWO` and `Online`, so the same course looked like a
+    different course depending on where you read it — which is exactly
+    what it was mistaken for. A value with no matching option is shown as
+    it is stored rather than hidden; that usually means somebody removed
+    the dropdown entry under it, and the fee structure still needs finding.
+  */
+  const label = (options: Array<{ value: string; label: string }>, value: string) =>
+    options.find((option) => option.value === value)?.label ?? value;
 
   return (
     <div className="flex flex-col gap-4">
@@ -63,11 +80,11 @@ export default async function FeeStructuresSettingsPage() {
             <TableRow key={row.id}>
               <TableCell>
                 <Link href={`/settings/fee-structures/${row.id}`} className="font-medium hover:underline">
-                  {row.course}
+                  {label(courses, row.course)}
                 </Link>
               </TableCell>
               <TableCell>{row.centers?.name ?? "—"}</TableCell>
-              <TableCell>{row.mode}</TableCell>
+              <TableCell>{label(modes, row.mode)}</TableCell>
               <TableCell>{row.academic_year}</TableCell>
               <TableCell>{formatINR(row.base_fee_paise)}</TableCell>
               <TableCell>

@@ -44,7 +44,17 @@ export const A4_PORTRAIT_CSS = `
  * which matters for a document someone signs.
  */
 export const A4_LANDSCAPE_CSS = `
-  @page { size: A4 landscape; margin: 10mm; }
+  /*
+    The page margin is a REQUEST, not a guarantee.
+    Chrome's print dialog has its own Margins control, and "Minimum"
+    overrides whatever the page rule asks for — which is how this
+    agreement came out printed hard against all four edges. So the sheet
+    asks for a modest margin here AND the document carries its own print
+    padding, which nothing in the dialog can take away. The two together
+    give a comfortable frame on the default setting and a decent one on
+    Minimum.
+  */
+  @page { size: A4 landscape; margin: 8mm; }
   ${SUPPRESS_GENERIC_LETTERHEAD}
   @media print {
     .no-print { display: none !important; }
