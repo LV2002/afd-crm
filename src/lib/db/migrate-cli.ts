@@ -36,7 +36,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
-import { expectedMigrationTags, pendingMigrationTags } from "./migration-journal";
+import { expectedMigrationTags, journalWhen, pendingMigrationTags } from "./migration-journal";
 
 loadEnv({ path: [".env.local", ".env"] });
 
@@ -126,6 +126,76 @@ function isConnectionProblem(error: unknown): boolean {
   );
 }
 
+/** Rows in drizzle's own table, or 0 when it has never been created. */
+async function appliedCount(client: postgres.Sql): Promise<number> {
+  try {
+    const rows = await client<Array<{ count: string }>>`
+      select count(*)::text as count from drizzle.__drizzle_migrations
+    `;
+    return Number(rows[0]?.count ?? 0);
+  } catch {
+    // No `drizzle` schema yet: nothing has ever been migrated here.
+    return 0;
+  }
+}
+
+/**
+ * Does the database have the columns the code is about to select?
+ *
+ * Compares the Drizzle table definitions against `information_schema`,
+ * the same check Settings -> Platform Health shows, and exits non-zero
+ * when anything the code reads is absent. Imported lazily because
+ * `schema-drift` pulls in the Drizzle schema, and a connection failure
+ * should be reported long before that cost is paid.
+ */
+async function verifySchema(client: postgres.Sql): Promise<void> {
+  const [{ expectedTables }, { compareSchema, describeDifference }] = await Promise.all([
+    import("./schema-drift-tables"),
+    import("./schema-compare"),
+  ]);
+
+  const rows = await client<Array<{ table_name: string; column_name: string }>>`
+    select table_name, column_name
+    from information_schema.columns
+    where table_schema = 'public'
+  `;
+
+  if (rows.length === 0) {
+    throw new Error(
+      "The database reported no columns at all. That is a broken read, not an empty database.",
+    );
+  }
+
+  const actual = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const columns = actual.get(row.table_name) ?? new Set<string>();
+    columns.add(row.column_name);
+    actual.set(row.table_name, columns);
+  }
+
+  const difference = describeDifference(compareSchema(expectedTables(), actual));
+  if (difference === null) {
+    console.log("Schema check: the database has every table and column the code reads.");
+    return;
+  }
+
+  console.error("\nThe migrations ran, and the database is still not the shape the code expects.");
+  console.error(`  ${difference}`);
+  console.error(
+    "\nThat means a migration is RECORDED as applied without having run. drizzle applies",
+  );
+  console.error(
+    "a migration only when its timestamp is newer than the newest row in",
+  );
+  console.error(
+    "drizzle.__drizzle_migrations, so a bad row there silently skips everything older.",
+  );
+  console.error(
+    "Repair it with a new migration whose journal `when` is later than that newest row.\n",
+  );
+  process.exit(1);
+}
+
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
   if (!url) {
@@ -161,8 +231,17 @@ async function main(): Promise<void> {
     // Connect first, and on its own, so "cannot reach the database" is
     // never reported as a migration failure.
     try {
-      await client`select 1`;
-      console.log("Connected to the database.");
+      const [where] = await client<Array<{ db: string; schema: string | null; host: string }>>`
+        select current_database() as db,
+               current_schema()::text as schema,
+               coalesce(inet_server_addr()::text, 'local') as host
+      `;
+      // Which database, printed every time. "The migration ran" and "the
+      // app cannot see it" are only contradictory until you check they
+      // were talking to the same place.
+      console.log(
+        `Connected to database "${where?.db}" (schema ${where?.schema ?? "?"}, host ${where?.host}).`,
+      );
     } catch (error) {
       console.error("\nCould not connect to the database. No migration was attempted.");
       console.error(describePostgresError(error));
@@ -178,35 +257,77 @@ async function main(): Promise<void> {
 
     // What has already run, so the log bounds a failure even if the
     // process dies without saying anything else.
-    let applied = 0;
+    const applied = await appliedCount(client);
+
+    /**
+     * The number drizzle actually decides on.
+     *
+     * It applies a migration only when the journal's `when` for it is
+     * GREATER than the newest `created_at` already in its table. One row
+     * with a timestamp ahead of the journal silently skips every migration
+     * behind it — while still reporting success. Printing both numbers
+     * side by side makes that visible instead of mysterious.
+     */
     try {
-      const rows = await client<Array<{ count: string }>>`
-        select count(*)::text as count from drizzle.__drizzle_migrations
+      const [newest] = await client<Array<{ created_at: string | null }>>`
+        select created_at::text from drizzle.__drizzle_migrations
+        order by created_at desc limit 1
       `;
-      applied = Number(rows[0]?.count ?? 0);
+      const lastWhen = journalWhen(expected.at(-1));
+      console.log(
+        `Newest recorded migration timestamp: ${newest?.created_at ?? "none"} (the journal's last is ${lastWhen ?? "?"}).`,
+      );
     } catch {
-      // No `drizzle` schema yet: nothing has ever been migrated here.
-      applied = 0;
+      // The table may not exist yet. Not worth a word.
     }
 
     const pending = pendingMigrationTags(expected, applied);
-    if (pending.length === 0) {
-      console.log(`Already up to date (${applied} applied). Nothing to run.\n`);
-      return;
-    }
-
     console.log(`Already applied: ${applied}.`);
     // Named when it is a handful, counted when it is a first deploy —
     // seventy-eight tags on one line buries the error underneath it.
-    console.log(
-      pending.length <= 10
-        ? `About to run ${pending.length}: ${pending.join(", ")}`
-        : `About to run ${pending.length}, from ${pending[0]} to ${pending.at(-1)}.`,
-    );
+    if (pending.length > 0) {
+      console.log(
+        pending.length <= 10
+          ? `Expecting to run ${pending.length}: ${pending.join(", ")}`
+          : `Expecting to run ${pending.length}, from ${pending[0]} to ${pending.at(-1)}.`,
+      );
+    }
 
+    /**
+     * `migrate()` runs unconditionally, even when the count already looks
+     * right.
+     *
+     * An earlier version of this file returned early when
+     * `applied >= expected` — and that is how a migration that never ran
+     * came to look like a successful deploy, which is the exact failure
+     * this tool exists to stop. The count is a report, never a decision.
+     *
+     * drizzle decides for itself what to apply, from `max(created_at)` in
+     * its own table, and skipping is cheap. Running it always costs one
+     * query against a database that is up to date; not running it cost two
+     * days.
+     */
     await migrate(drizzle(client), { migrationsFolder: MIGRATIONS_FOLDER });
 
-    console.log(`Done. ${pending.length} applied, ${expected.length} total.\n`);
+    const after = await appliedCount(client);
+    console.log(`Migrations finished. ${after} recorded, ${expected.length} expected.`);
+
+    /**
+     * And then check the thing that actually matters.
+     *
+     * Bookkeeping is a record of intent; the schema is the fact. On
+     * 3 October 2026 production had every migration recorded as applied
+     * and was missing `leads.assigned_at`, so every admission died on a
+     * column the bookkeeping swore was present — and the deploy that
+     * produced that state reported success.
+     *
+     * A build that ships code against a database missing columns that
+     * code selects is a build that has already failed; it just has not
+     * noticed. So it fails here, loudly, naming what is missing.
+     */
+    await verifySchema(client);
+
+    console.log("");
   } catch (error) {
     console.error("\nA migration failed. Nothing was applied — they run in one transaction.\n");
     console.error(describePostgresError(error));

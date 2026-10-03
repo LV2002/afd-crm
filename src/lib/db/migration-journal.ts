@@ -31,3 +31,20 @@ export function pendingMigrationTags(expected: string[], applied: number): strin
   if (applied >= expected.length) return [];
   return expected.slice(Math.max(0, applied));
 }
+
+/**
+ * The journal timestamp for one migration tag.
+ *
+ * This is the number drizzle compares against the newest row in its own
+ * bookkeeping table to decide whether to apply a migration — it runs one
+ * only when this is GREATER than that row. A single row with a timestamp
+ * ahead of the journal therefore skips every migration behind it, while
+ * still reporting success, so it is worth being able to print the two
+ * numbers side by side.
+ */
+export function journalWhen(tag: string | undefined): number | null {
+  if (!tag) return null;
+  const entries = (journal as { entries?: Array<JournalEntry & { when?: number }> }).entries ?? [];
+  const entry = entries.find((e) => e.tag === tag);
+  return typeof entry?.when === "number" ? entry.when : null;
+}

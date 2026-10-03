@@ -5528,3 +5528,80 @@ never got its row into `error_events` — reporting that outlives the response m
 written at all. Inside the action, it is.
 
 **1320 tests pass**, `db:audit` clean, production build clean.
+
+---
+
+## Session 24d — Why the repair did not take, and the bug I shipped on the way
+
+Migration 0078 repaired `leads.assigned_at`. It deployed. Platform Health then reported
+**both** of these, from one database in one request:
+
+> The database is up to date. All **79** migrations have run.
+>
+> The database is **not** the shape this build expects: 1 missing column
+> (leads.assigned_at).
+
+Recorded as applied, and not there.
+
+### The mechanism, from drizzle's own source
+
+```js
+select id, hash, created_at from drizzle.__drizzle_migrations
+  order by created_at desc limit 1
+...
+if (!lastDbMigration || Number(lastDbMigration.created_at) < migration.folderMillis) { apply }
+```
+
+A migration runs only when its journal `when` is **strictly greater** than the newest
+`created_at` already recorded. Not greater-or-equal. Once a row carrying 0078's timestamp
+exists, 0078 — and everything behind it — is skipped on every future deploy, and the
+deploy reports success, because from drizzle's point of view there is nothing left to do.
+
+So the repair could not be a re-run of 0078. **Migration 0079** carries 0078's body
+unchanged with a `when` 90,563,105 ms later, which is the only thing that makes it run.
+
+### The bug I shipped, said plainly
+
+The migrator I added this morning had this in it:
+
+```ts
+if (pending.length === 0) {
+  console.log(`Already up to date (${applied} applied). Nothing to run.`);
+  return;              // never calls migrate()
+}
+```
+
+A **row count** deciding whether to migrate at all. I wrote that tool specifically to stop
+migrations failing silently, and gave it a way to skip them silently. The count is a
+report now, never a decision — `migrate()` runs unconditionally and drizzle decides for
+itself, which costs one query against a database that is already current.
+
+### The deploy now checks the schema, not the bookkeeping
+
+Bookkeeping is a record of intent. The schema is the fact. After migrating, the deploy
+compares the columns the Drizzle schema declares against `information_schema` and
+**fails the build** when anything the code selects is missing — naming it, and naming the
+timestamp rule above as the cause. A build that ships code against a database missing its
+columns has already failed; it just had not noticed.
+
+It also prints the database name, schema and host every time. *"The migration ran"* and
+*"the app cannot see it"* are only contradictory until you check they were talking to the
+same place.
+
+### Verified by reproducing production exactly
+
+Dropped the column locally while leaving all 79 migrations recorded — Leon's precise
+state — and ran the deploy step:
+
+```
+Newest recorded migration timestamp: 1790921043149 (the journal's last is 1790921043149)
+Already applied: 79.
+Migrations finished. 79 recorded, 79 expected.
+
+The migrations ran, and the database is still not the shape the code expects.
+  1 missing column (leads.assigned_at)
+EXIT=1
+```
+
+Then added 0079 and ran it again: applied, column and index back, schema check clean,
+exit 0 — and a third run is a no-op. **1320 tests pass**, lint and build clean.
