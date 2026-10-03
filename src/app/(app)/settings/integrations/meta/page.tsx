@@ -3,6 +3,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 
 import { getMetaConnectionStatus } from "./actions";
 import { MetaCredentialsForm } from "./meta-credentials-form";
+import { SubscribePageButton } from "./subscribe-page-button";
 import { TestConnectionButton } from "./test-connection-button";
 
 export default async function MetaIntegrationPage() {
@@ -44,6 +45,18 @@ export default async function MetaIntegrationPage() {
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">Connection</h2>
         <TestConnectionButton />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">Page subscription</h2>
+        <p className="max-w-lg text-sm text-muted-foreground">
+          Meta has two switches for lead delivery. Subscribing the app to the{" "}
+          <code>leadgen</code> field in the App Dashboard is the first; this is the second,
+          and it tells your Facebook Page to send its leads to this app. With only the first,
+          Meta verifies the webhook, reports it as subscribed, and delivers nothing — no
+          error anywhere. Press this once the Page Access Token is saved.
+        </p>
+        <SubscribePageButton />
       </section>
     </div>
   );

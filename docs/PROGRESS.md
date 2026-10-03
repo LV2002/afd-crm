@@ -5814,3 +5814,36 @@ Counsellor-facing actions keep the generic fallback.
 **1329 tests pass**, lint and production build clean. (A first run showed 51 failures
 across 31 files; Postgres had stopped in the container — `pg_isready` said so, and every
 failure was a connection error, not a regression.)
+
+---
+
+## Session 24i — The second switch, as a button
+
+Leon asked what step 1.5 of the ads guide meant. The answer is worth more than an
+explanation, so it became a feature.
+
+Meta has **two** switches for lead delivery, in two different places:
+
+| | Says | Where |
+|---|---|---|
+| 1 | "This app wants leadgen events" | App Dashboard → Webhooks → Page → `leadgen` |
+| 2 | "This Page sends its events to that app" | Per Page |
+
+With only the first, Meta accepts the webhook, verifies it, reports it as subscribed, and
+**delivers nothing** — no error, no failed request, nothing in any log. It is the most
+common reason a correctly built Lead Ads integration produces silence, and the hardest to
+find because everything you would think to check looks right.
+
+**Settings → Integrations → Meta → "Subscribe this Page to leads"** now does it. The CRM
+already holds the Page token, which is the only thing the call needs, and a manual step
+whose omission is invisible is a manual step that will eventually be omitted.
+
+It reads the subscription back after writing it rather than trusting the response, since
+"Meta said OK" is precisely the reassurance that misleads people here. And when the call
+is rejected it names the likeliest cause: a **User** token saved where a **Page** token
+belongs — the other invisible mistake, and the two are indistinguishable once stored.
+
+`fetchMetaPageIdentity` doubles as that check: a Page token's `/me` is the Page itself, so
+identifying the Page and proving the token's type are the same call.
+
+**1329 tests pass**, lint and production build clean.

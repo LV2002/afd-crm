@@ -155,10 +155,30 @@ permissions is allowed to be both, and is one fewer thing to renew.
 If verification fails, the token doesn't match what you saved in the CRM. That's almost
 always it.
 
-### 1.5 Subscribe your Page
+### 1.5 Subscribe your Page — press the button in the CRM
 
-Still in Webhooks, under the Page object, select your AFD Page and subscribe it. A Page
-that isn't subscribed sends nothing, with no error anywhere.
+**CRM → Settings → Integrations → Meta → "Subscribe this Page to leads".**
+
+That is the whole step. It needs the Page Access Token saved first, and nothing else.
+
+**Why this exists as its own step.** Meta has *two* switches for lead delivery, in two
+different places:
+
+| | Says | Where |
+|---|---|---|
+| 1 | "This app wants leadgen events" | App Dashboard → Webhooks → Page → `leadgen` (step 1.4) |
+| 2 | "This Page sends its events to that app" | Per Page — this step |
+
+With only the first, Meta accepts your webhook, verifies it, shows it as subscribed, and
+**delivers nothing.** No error, no failed request, nothing in any log — the enquiries
+simply never arrive. It is the most common reason a correctly built Lead Ads integration
+produces silence, and the hardest to find precisely because everything you would think to
+check looks right.
+
+The button makes the call for you and then **reads the subscription back** to confirm it,
+rather than trusting Meta's "OK" — which is exactly the reassurance that misleads people
+here. If it reports that the Page Access Token looks like a User token, see 1.3: that is
+the other invisible mistake, and the two look identical once saved.
 
 ### 1.6 Spend and retargeting
 
@@ -255,7 +275,7 @@ CRM → **Settings → Integrations → Google → Test connection.**
 |---|---|
 | Meta leads stop arriving | The token expired. A System User token set to Never does not; a Graph Explorer one does, every 60 days |
 | Meta webhook won't verify | Verify Token doesn't match the CRM exactly |
-| No leads, no errors | Page not subscribed to **leadgen** (step 1.5) |
+| No leads, no errors | Page not subscribed — press **Subscribe this Page to leads** (step 1.5) |
 | Google test data fails | Key doesn't match the CRM's Webhook Verify Key |
 | Spend shows zero | Ads token lacks `ads_read`, or the Ad Account ID still has `act_` on it |
 | Can't generate a token in the Graph API Explorer | Use the System User route in 1.3 instead — it does not need Facebook Login configured |
