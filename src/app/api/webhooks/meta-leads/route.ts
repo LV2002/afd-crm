@@ -8,7 +8,11 @@ import { webhookEvents } from "@/lib/db/schema";
 import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { fetchMetaLead } from "@/lib/integrations/meta/graph-client";
-import { buildResolveLeadInput, mapMetaLeadFields } from "@/lib/integrations/meta/map-lead-fields";
+import {
+  buildResolveLeadInput,
+  isMetaTestPlaceholder,
+  mapMetaLeadFields,
+} from "@/lib/integrations/meta/map-lead-fields";
 import { verifyMetaSignature } from "@/lib/integrations/meta/verify-signature";
 
 export const dynamic = "force-dynamic";
@@ -171,6 +175,28 @@ export async function POST(request: Request) {
       const mapped = mapMetaLeadFields(lead);
       if (!mapped) {
         throw new Error(`Lead ${leadgenId} has no usable name/phone in its field_data`);
+      }
+
+      /*
+        Meta's testing tool has two buttons and they do very different
+        things. "Preview form" lets you fill the form in and submit real
+        answers. "Create lead" submits placeholders —
+        `<test lead: dummy data for phone_number>` — so the lead is
+        genuine, the id is genuine, the fetch is genuine, and the contents
+        are not data.
+
+        Without this it fails on the last step for not being a phone
+        number, which is correct and reads exactly like a broken
+        integration at the end of a long setup. Said properly instead,
+        including which button to press to get a real one.
+      */
+      if (isMetaTestPlaceholder(mapped.primaryPhone) || isMetaTestPlaceholder(mapped.studentName)) {
+        throw new Error(
+          "Delivery works end to end — this lead was received from Meta and fetched successfully. " +
+            "It was not created because Meta's testing tool \"Create lead\" button fills every answer with " +
+            "placeholder text rather than data, so there is no phone number to file it under. " +
+            "For a lead you can actually work, use \"Preview form\" in the testing tool and fill the form in yourself.",
+        );
       }
 
       await resolveOrCreateLead(buildResolveLeadInput(lead, mapped));

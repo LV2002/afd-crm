@@ -6011,3 +6011,43 @@ apps may retrieve a Page's leads and is maintained separately from everything el
 Part 1 — a Page that writes happily to a sheet can still be refusing an app.
 
 **1334 tests pass**, lint and production build clean.
+
+---
+
+## Session 24o — It was working the whole time
+
+```
+failed   2185256329065188                                    3 Oct, 6:34 PM
+resolveOrCreateLead: could not normalise primary phone
+  "<test lead: dummy data for phone_number>"
+```
+
+A real leadgen id. Delivered by Meta to a **Development-mode** app, signature verified,
+fetched over the real Graph API, mapped, and refused on the last step for not being a
+phone number — which is correct.
+
+Meta's testing tool has two buttons that do very different things. **Preview form** lets
+you fill the form in and submits your answers. **Create lead** submits
+`<test lead: dummy data for …>` in every field: a genuine lead, a genuine id, a genuine
+fetch, and contents that are not data.
+
+The handler now recognises that and says so — delivery works end to end, nothing was
+created because there is no phone number in it, press **Preview form** for one you can
+actually work. Still `failed`, consistent with the sample-payload decision: no lead was
+created and a row that reads as though one was is the worse lie.
+
+### Two corrections to the guide, both mine
+
+**Development mode does deliver your own test leads.** I had just rewritten the guide to
+say it delivers nothing, on the strength of a Track status stuck on *Pending* and a
+Google Sheet that had the lead. The Pending simply had not resolved yet. Both of my
+previous statements were too confident in opposite directions; the guide now says what
+was actually observed — dev mode delivers for anyone with a role on the app, and will not
+deliver for the public until Live plus App Review.
+
+**The CSV import stays in the guide** regardless. `Leads → Import` runs the same
+`resolveOrCreateLead()` as every webhook — same de-duplication, same first-touch
+attribution, same assignment rules — so a Google Sheet export is a working CRM today
+rather than one waiting on Meta's review queue, and none of it has to be undone later.
+
+**1339 tests pass**, lint and production build clean.
