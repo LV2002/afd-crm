@@ -53,36 +53,87 @@ comment on schema private is
 -- anon has no reason to resolve these.
 grant usage on schema private to authenticated, service_role;
 
-alter function public.auth_scope(text) set schema private;
-alter function public.auth_center_ids() set schema private;
-alter function public.can_access_center(text, uuid, uuid) set schema private;
-alter function public.can_access_enrolment(text, uuid) set schema private;
-alter function public.can_access_lead_files(text, uuid) set schema private;
-alter function public.can_access_student_files(text, uuid) set schema private;
-alter function public.shares_center_with(uuid) set schema private;
+-- ---------------------------------------------------------------------------
+-- RE-RUNNABLE, and why that was not optional
+-- ---------------------------------------------------------------------------
+--
+-- Every `alter function` below is guarded by `to_regprocedure`, which
+-- returns null rather than raising when the function is not where you
+-- looked. The original version was a plain list of ALTERs, and that made
+-- this migration a one-way door — which is how it came to block every
+-- deploy for a day.
+--
+-- The sequence: this migration's effects were committed to production
+-- WITHOUT its bookkeeping row (`drizzle.__drizzle_migrations` stopped at
+-- 0076). drizzle re-applies everything newer than the last recorded row,
+-- so every deploy since has re-run this file, hit
+-- `function public.auth_scope(text) does not exist` — because it had
+-- already been moved — and rolled back the whole batch, taking the
+-- migrations behind it down with it. `leads.assigned_at` was created and
+-- undone on every deploy for a day, and every admission failed on it.
+--
+-- A migration that cannot be run twice is a migration that can only be
+-- recovered by hand. Guarded, this one simply does nothing the second
+-- time, records itself, and lets everything behind it through.
+
+do $$
+declare
+  fn text;
+  -- Moved out of `public` so PostgREST stops exposing them.
+  fns text[] := array[
+    'auth_scope(text)',
+    'auth_center_ids()',
+    'can_access_center(text, uuid, uuid)',
+    'can_access_enrolment(text, uuid)',
+    'can_access_lead_files(text, uuid)',
+    'can_access_student_files(text, uuid)',
+    'shares_center_with(uuid)',
+    -- The three trigger bodies from the next paragraph, moved in the same
+    -- loop because the guard is identical.
+    'write_stage_history()',
+    'enforce_lead_delete_permission()',
+    'check_settings_admin_invariant()'
+  ];
+begin
+  foreach fn in array fns loop
+    if to_regprocedure('public.' || fn) is not null then
+      execute format('alter function public.%s set schema private', fn);
+    end if;
+  end loop;
+end $$;
 
 -- Three more that are SECURITY DEFINER and exposed, but are trigger bodies
 -- rather than policy helpers. Postgres refuses to call a trigger function
 -- directly, so the endpoint was never useful — but an endpoint nobody can
 -- use is still an endpoint, and a reader of the advisor cannot tell the
 -- difference. Triggers resolve by OID, so these move just as safely.
-alter function public.write_stage_history() set schema private;
-alter function public.enforce_lead_delete_permission() set schema private;
-alter function public.check_settings_admin_invariant() set schema private;
+-- (moved in the loop above — the guard is the same.)
 
 -- Each of these calls its siblings by bare name, so `private` has to come
 -- first. `public` stays on the path because they all read `profiles`,
 -- `role_permissions`, `user_centers` and the rest.
-alter function private.auth_scope(text) set search_path = private, public;
-alter function private.auth_center_ids() set search_path = private, public;
-alter function private.can_access_center(text, uuid, uuid) set search_path = private, public;
-alter function private.can_access_enrolment(text, uuid) set search_path = private, public;
-alter function private.can_access_lead_files(text, uuid) set search_path = private, public;
-alter function private.can_access_student_files(text, uuid) set search_path = private, public;
-alter function private.shares_center_with(uuid) set search_path = private, public;
-alter function private.write_stage_history() set search_path = private, public;
-alter function private.enforce_lead_delete_permission() set search_path = private, public;
-alter function private.check_settings_admin_invariant() set search_path = private, public;
+do $$
+declare
+  fn text;
+  fns text[] := array[
+    'auth_scope(text)',
+    'auth_center_ids()',
+    'can_access_center(text, uuid, uuid)',
+    'can_access_enrolment(text, uuid)',
+    'can_access_lead_files(text, uuid)',
+    'can_access_student_files(text, uuid)',
+    'shares_center_with(uuid)',
+    'write_stage_history()',
+    'enforce_lead_delete_permission()',
+    'check_settings_admin_invariant()'
+  ];
+begin
+  foreach fn in array fns loop
+    if to_regprocedure('private.' || fn) is not null then
+      execute format('alter function private.%s set search_path = private, public', fn);
+    end if;
+  end loop;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- 2. Eight functions with a mutable search_path
@@ -93,18 +144,36 @@ alter function private.check_settings_admin_invariant() set search_path = privat
 -- an attacker's object — does not apply; they already run as whoever
 -- triggered them. Pinning the path anyway costs one line each and removes a
 -- class of surprise if any of them is ever made SECURITY DEFINER.
-alter function public.set_updated_at() set search_path = public;
-alter function public.protect_admin_role() set search_path = public;
-alter function public.protect_admin_role_permissions() set search_path = public;
-alter function public.protect_core_field_definitions() set search_path = public;
+do $$
+declare
+  fn text;
+  fns text[] := array[
+    'set_updated_at()',
+    'protect_admin_role()',
+    'protect_admin_role_permissions()',
+    'protect_core_field_definitions()',
+    'enforce_lost_reason()',
+    'enforce_audit_actor()',
+    'set_lead_assigned_at()'
+  ];
+begin
+  foreach fn in array fns loop
+    if to_regprocedure('public.' || fn) is not null then
+      execute format('alter function public.%s set search_path = public', fn);
+    end if;
+  end loop;
+end $$;
 -- The one exception on this list: it calls `auth_scope`, which section 1
 -- just moved, so `public` alone no longer finds it. The RLS suite caught
 -- this — pinning it to `public` broke the lockout triggers that stop an
 -- administrator removing the last person who can administer.
-alter function public.prevent_self_privilege_escalation() set search_path = private, public;
-alter function public.enforce_lost_reason() set search_path = public;
-alter function public.enforce_audit_actor() set search_path = public;
-alter function public.set_lead_assigned_at() set search_path = public;
+do $$
+begin
+  if to_regprocedure('public.prevent_self_privilege_escalation()') is not null then
+    alter function public.prevent_self_privilege_escalation() set search_path = private, public;
+  end if;
+end $$;
+-- (pinned in the loop above.)
 
 -- ---------------------------------------------------------------------------
 -- 3. `audit_log_insert` had WITH CHECK (true)

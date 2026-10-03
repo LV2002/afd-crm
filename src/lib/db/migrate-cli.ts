@@ -113,20 +113,22 @@ function describePostgresError(error: unknown): string {
  * exactly the same. So they are reported as different things.
  */
 function isConnectionProblem(error: unknown): boolean {
-  if (typeof error !== "object" || error === null) return false;
-  const code = String((error as { code?: unknown }).code ?? "");
-  const message = String((error as { message?: unknown }).message ?? "");
+  const pg = rootPostgresError(error);
+  if (!pg) return false;
+
+  // The CODE only, never the message. An earlier version also matched on
+  // words in the message, and since drizzle's wrapper message contains the
+  // whole failing migration, a SQL error in a file that happened to use the
+  // word "connection" in a comment was announced as a connection problem.
+  // Advice pointing at the wrong half of the system is worse than none.
+  const code = String(pg.code ?? "");
   return (
-    // Bad password, no such role, no such database, SSL refused.
-    /^(28P01|28000|3D000|08\d{3}|57P03)$/.test(code) ||
-    /ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|CONNECT_TIMEOUT|ECONNRESET/i.test(code) ||
-    /password authentication failed|role .* does not exist|database .* does not exist|connection|timeout/i.test(
-      message,
-    )
+    /^(28P01|28000|3D000|57P03)$/.test(code) ||
+    /^08[0-9A-Z]{3}$/.test(code) ||
+    /^(ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|CONNECT_TIMEOUT|ECONNRESET)$/.test(code)
   );
 }
 
-/** Rows in drizzle's own table, or 0 when it has never been created. */
 async function appliedCount(client: postgres.Sql): Promise<number> {
   try {
     const rows = await client<Array<{ count: string }>>`
