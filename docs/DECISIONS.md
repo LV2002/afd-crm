@@ -2501,3 +2501,24 @@ when one migration is missing, and taking the whole CRM down during admissions s
 to prevent one screen from erroring is the worse trade. It is shown prominently
 instead, above the fault list, where somebody investigating a broken screen will read
 it before the symptoms.
+
+## 2026-10-03 — The deploy's migration step is ours, not `drizzle-kit`'s
+
+`drizzle-kit migrate` is a schema tool whose output is tuned for a developer watching a
+terminal. As a deploy step it reports a failure as an exit code and nothing else, which
+cost two days of stale production.
+
+`npm run db:migrate` now runs drizzle-orm's migrator directly with operator-grade
+reporting. The mechanism is unchanged — same journal, same bookkeeping table, same
+single transaction — so this is a change to what you are told, not to what happens.
+
+**Rejected:** keeping `drizzle-kit migrate` and adding `--verbose`. It has no such flag,
+and the information that was missing (the Postgres error under drizzle's wrapper) is not
+something a log level would have exposed.
+
+**Rejected:** letting the build continue when a migration fails, so a deploy is never
+blocked by the database. That is how you get new code running against an old schema,
+which is the failure this project already has a Platform Health banner for. A deploy
+that cannot migrate should stop.
+
+`db:migrate:kit` is kept for schema work, where drizzle-kit's own behaviour is wanted.

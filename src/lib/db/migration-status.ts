@@ -2,9 +2,10 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
-import journal from "./migrations/meta/_journal.json";
-
 import { db } from "./client";
+import { expectedMigrationTags, pendingMigrationTags } from "./migration-journal";
+
+export { expectedMigrationTags, pendingMigrationTags };
 
 /**
  * Whether the live database has had every migration this build expects.
@@ -34,29 +35,6 @@ import { db } from "./client";
  * Note the table lives in the `drizzle` schema, not `public` — dropping
  * `public` alone leaves it behind, which is its own afternoon.
  */
-
-interface JournalEntry {
-  idx: number;
-  tag: string;
-}
-
-/** Every migration this build was compiled against, in the order they apply. */
-export function expectedMigrationTags(): string[] {
-  const entries = (journal as { entries?: JournalEntry[] }).entries ?? [];
-  return [...entries].sort((a, b) => a.idx - b.idx).map((entry) => entry.tag);
-}
-
-/**
- * The migrations the database has not run yet.
- *
- * `applied` greater than expected is not an error to report here: it means
- * the database is AHEAD, which happens routinely while a deploy is in
- * flight and resolves itself seconds later. Only being behind is a fault.
- */
-export function pendingMigrationTags(expected: string[], applied: number): string[] {
-  if (applied >= expected.length) return [];
-  return expected.slice(Math.max(0, applied));
-}
 
 export interface MigrationStatus {
   expected: number;

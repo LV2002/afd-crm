@@ -5413,3 +5413,52 @@ the `audit_log_insert` policy as `with check (true)` after 0077 narrowed it.
 
 **What this does not do:** it does not explain Leon's 3 October crash. Nothing kept
 enough to. The next occurrence will explain itself.
+
+---
+
+## Session 24b — The deploy can say what broke too
+
+Production had not deployed since 1 October. Every Vercel build since the security
+migration merged was failing in 12–14 seconds, against 1m25s–2m12s for a good one, and
+the entire log said:
+
+```
+> drizzle-kit migrate && next build
+Error: Command "npm run vercel-build" exited with 1
+```
+
+That is the whole message. No SQL, no Postgres error, not even whether it had managed
+to connect — and the two possible causes (a bad migration, or a changed database
+password) need opposite fixes and look identical from the outside. Two days of stale
+production were spent guessing, and the guesses were wrong.
+
+### `npm run db:migrate` is now ours
+
+Same migration run — drizzle-orm's own migrator, the same journal, the same
+`drizzle.__drizzle_migrations` table, still one transaction, still all-or-nothing — with
+the reporting a deploy needs:
+
+- **Connection is proven separately**, before any SQL, so "cannot reach the database"
+  is never reported as a migration failure. A rotated password now says
+  `password authentication failed`, `code: 28P01`, and what to check.
+- **What is pending is printed before it runs**, so a failure is bounded even if the
+  process dies silently. Named when it is a handful, counted when it is a first deploy.
+- **The real Postgres error on failure** — code, detail, hint, constraint, position and
+  the failing statement.
+
+That last one needed unwrapping. drizzle's migrator rethrows as `Failed query: <SQL>`
+and hangs the actual Postgres error off `cause`, so printing the top-level message gives
+you the statement and *not* the reason — the one thing you needed. It now walks the
+cause chain to the deepest error carrying a Postgres code.
+
+`vercel-build` uses it too. `db:migrate:kit` keeps the old command for schema work.
+
+**Verified against a real database, all four paths:** up to date (no-op), a fresh
+database (all 78 applied), bad credentials (`28P01`, exit 1), an unreachable host
+(`ECONNREFUSED`), and a genuine SQL failure — which now prints
+`relation "leads" already exists / code: 42P07 / statement: CREATE TABLE "leads" …`
+instead of 1,885 characters of SQL and no reason.
+
+**Still open:** migration 0077 fails against the live Supabase and applies cleanly
+against a database built from scratch here. The next deploy will name the error instead
+of swallowing it.

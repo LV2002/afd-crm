@@ -9,13 +9,12 @@
 import { readdirSync } from "node:fs";
 import path from "node:path";
 
-import { config as loadEnv } from "dotenv";
 import { describe, expect, it } from "vitest";
 
-loadEnv({ path: ".env" });
-loadEnv({ path: ".env.local", override: true });
-
-const { expectedMigrationTags, pendingMigrationTags } = await import("../src/lib/db/migration-status");
+// From the journal module, not `migration-status` — these are pure, and a
+// test that only reads a JSON file has no business opening a connection
+// pool to do it.
+import { expectedMigrationTags, pendingMigrationTags } from "../src/lib/db/migration-journal";
 
 describe("expectedMigrationTags", () => {
   it("names one migration per .sql file on disk, in order", () => {
