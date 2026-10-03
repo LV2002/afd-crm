@@ -226,12 +226,10 @@ export async function subscribeMetaPage(): Promise<TestConnectionResult> {
     return { ok: true, message: `"${page.name}" is subscribed and will send leads here.` };
   } catch (err) {
     if (err instanceof MetaGraphApiError) {
-      // The commonest cause by a distance: a User token saved where a Page
-      // token belongs. They look identical and nothing else tells you.
-      return {
-        ok: false,
-        message: `Meta rejected the request: ${err.message}. If the Page Access Token is actually a User token, this is what that looks like — see docs/ADS-SETUP.md step 1.3.`,
-      };
+      // Meta's own words, which the client now keeps rather than
+      // discarding — they name the missing permission or the wrong object
+      // outright, and a guess in their place costs an afternoon.
+      return { ok: false, message: `Meta rejected the request. ${err.message}` };
     }
     return { ok: false, message: "Could not reach Meta's API." };
   }
