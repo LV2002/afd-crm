@@ -2,18 +2,25 @@ import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser } from "@/lib/auth/session";
 
 /**
- * Counsellors' own WhatsApp — deliberately not built, and this page says
- * why rather than leaving a gap somebody fills with an unofficial library.
+ * Counsellors' own WhatsApp.
  *
- * There is no official API for a personal or WhatsApp Business *app*
- * account. Every tool that offers one (whatsapp-web.js, Baileys, and the
- * services built on them) drives WhatsApp Web through a reverse-engineered
- * protocol, which breaks WhatsApp's terms. The number is what gets
- * punished, the ban is permanent, and there is no appeal — and the numbers
- * in question are the lines AFD's counsellors answer enquiries on.
+ * Two things people reach for here, and a third that actually works.
  *
- * So the page presents the three real options and lets Leon choose, rather
- * than quietly shipping the risk inside a feature he asked for.
+ * **An unofficial library** (whatsapp-web.js, Baileys) drives WhatsApp Web
+ * through a reverse-engineered protocol. It breaks WhatsApp's terms, and
+ * what gets banned is the number a counsellor answers enquiries on.
+ *
+ * **An iframe of web.whatsapp.com** cannot render at all: WhatsApp sends
+ * `X-Frame-Options`, and the browser refuses to display the page inside
+ * another site. Nothing in this application can override a header another
+ * domain sends — that is the whole point of it. Stripping it would mean
+ * proxying WhatsApp Web through our own server, which is the
+ * reverse-engineering problem again wearing a different hat.
+ *
+ * **Coexistence** is the real answer, and Meta shipped it in May 2025: one
+ * number running the WhatsApp Business app AND the Cloud API at the same
+ * time. The counsellor keeps their phone and their number; the CRM sees
+ * and sends on it officially. That is this feature, supported.
  */
 export default async function PersonalWhatsAppPage() {
   const user = await getCurrentUser();
@@ -21,47 +28,62 @@ export default async function PersonalWhatsAppPage() {
 
   return (
     <div className="flex max-w-3xl flex-col gap-5">
-      <div className="rounded-lg border border-warning/40 bg-warning-subtle p-4">
+      <div className="rounded-lg border border-success/40 bg-success-subtle p-4">
         <p className="text-[0.9375rem]">
-          <strong>This one cannot be built safely, and it is worth knowing why.</strong>{" "}
-          WhatsApp has no official API for a personal or Business-app account. Reading a
-          counsellor&apos;s own chats means driving WhatsApp Web through a reverse-engineered
-          library, which breaks WhatsApp&apos;s terms.
+          <strong>There is a supported way to do this, called Coexistence.</strong> One number
+          runs the WhatsApp Business app and Meta&apos;s Cloud API at the same time. The
+          counsellor keeps their phone, their number and their chats; the CRM sees and sends
+          on that number officially, through the same webhook the institute&apos;s number
+          already uses.
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
-          What gets punished is the number, the ban is permanent, and there is no appeal.
-          Those are the lines your counsellors answer enquiries on — a ban costs the
-          conversations in progress, not just the integration.
+          Meta shipped it in May 2025. No ban risk, no reverse engineering, and nothing for a
+          counsellor to change about how they work day to day.
         </p>
       </div>
 
       <div>
-        <h2 className="font-medium">What can be done instead</h2>
-        <ul className="mt-2 flex list-disc flex-col gap-3 pl-5 text-sm">
+        <h2 className="font-medium">What Coexistence gives you, and what it does not</h2>
+        <ul className="mt-2 flex list-disc flex-col gap-2 pl-5 text-sm">
+          <li>Messages sent or received on either side mirror to the other in real time.</li>
           <li>
-            <strong>A Business API number per counsellor.</strong> Fully supported, no ban
-            risk, and every conversation lands in the Inbox next to the lead it belongs to.
-            Each number carries a cost and has to be registered, and a counsellor cannot
-            keep using the WhatsApp app on that number afterwards.
+            On approval, up to <strong>180 days</strong> of one-to-one history syncs across.
+            Anything older stays in the app only.
           </li>
           <li>
-            <strong>One shared Business API number, with the conversation assigned.</strong>{" "}
-            Already how the Inbox works today — a reply is matched to its lead and the
-            assigned counsellor is told. Costs nothing more. Students see the institute
-            rather than a person.
+            <strong>Group chats do not sync</strong>, disappearing messages and live location
+            are turned off, and broadcast lists become read-only.
           </li>
           <li>
-            <strong>Leave personal WhatsApp where it is.</strong> Counsellors keep using
-            their own phones, and log what matters against the lead. Nothing is at risk, and
-            nothing is captured automatically.
+            It applies to the <strong>WhatsApp Business app</strong>, not consumer WhatsApp. A
+            counsellor on the ordinary app would move to the free Business one, same number.
           </li>
         </ul>
       </div>
 
-      <p className="text-sm text-muted-foreground">
-        Instagram is a different matter — Meta does publish an API for it, and that tab is
-        a real build rather than a refusal.
-      </p>
+      <div className="rounded-lg border p-4">
+        <h2 className="font-medium">Why not just embed WhatsApp Web in a frame</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          It cannot render. WhatsApp sends an <code>X-Frame-Options</code> header and the
+          browser refuses to display the page inside another site — a protection against
+          exactly the kind of framing that lets one site read another&apos;s session. Nothing
+          in this CRM can override a header a different domain sends. Routing it through our
+          own server to strip that header would mean proxying WhatsApp Web, which is the
+          reverse-engineering problem again under another name.
+        </p>
+      </div>
+
+      <div className="rounded-lg border p-4">
+        <h2 className="font-medium">One thing to decide before switching it on</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Supervisors being able to read a counsellor&apos;s conversations is reasonable for
+          work on a business number and is not reasonable for someone&apos;s private messages.
+          Coexistence keeps that line in the right place — it syncs the business number&apos;s
+          one-to-one chats and not group chats — but the counsellors should be told plainly
+          that admissions conversations on that number are visible to their centre head, in
+          the same way a shared inbox is.
+        </p>
+      </div>
     </div>
   );
 }

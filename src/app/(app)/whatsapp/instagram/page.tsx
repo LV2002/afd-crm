@@ -27,7 +27,34 @@ export default async function InstagramPage() {
       </div>
 
       <div>
-        <h2 className="font-medium">What it needs</h2>
+        <h2 className="font-medium">How it will work</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Decided deliberately, and differently from WhatsApp: a DM does{" "}
+          <strong>not</strong> create a lead. Most Instagram messages are questions, replies
+          to a story, or nothing at all, and a CRM that turns every one of them into a lead
+          stops being a record of who is actually enrolling. So this is a conversation
+          first.
+        </p>
+        <ul className="mt-2 flex list-disc flex-col gap-2 pl-5 text-sm">
+          <li>Every DM arrives here and can be replied to from the CRM.</li>
+          <li>
+            <strong>Convert to lead</strong> is a button on the conversation, pressed by the
+            counsellor when it turns into a real enquiry.
+          </li>
+          <li>
+            Converting goes through the same path as every other source
+            (<code>resolveOrCreateLead</code>), so a person who already exists is linked
+            rather than duplicated, and the assignment rules apply as usual.
+          </li>
+          <li>
+            An Instagram handle is not a phone number, so a conversation stays matched by
+            handle until the counsellor adds one.
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <h2 className="font-medium">What it needs from Meta</h2>
         <ol className="mt-2 flex list-decimal flex-col gap-2 pl-5 text-sm">
           <li>
             The Instagram account set to <strong>Professional</strong> and linked to the AFD
@@ -42,18 +69,12 @@ export default async function InstagramPage() {
             A webhook for the <code>messages</code> field — the same verify-persist-process
             path the WhatsApp and Meta Lead Ads webhooks already use.
           </li>
-          <li>
-            Matching a DM to a lead. An Instagram handle is not a phone number, so this needs
-            a decision: match on handle where a lead already has one, and otherwise treat the
-            conversation as unmatched, exactly as the WhatsApp inbox treats a reply from an
-            unknown number.
-          </li>
         </ol>
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Worth doing after the Meta lead-ads App Review is in, since it rides the same
-        submission and the same app.
+        Worth submitting alongside the lead-ads permissions, since it rides the same review
+        and the same app.
       </p>
     </div>
   );

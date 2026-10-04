@@ -2655,3 +2655,44 @@ best, and the real one is on Platform Health either way.
 **Rejected:** inferring "this is a setup error" from the message text. Brittle, and it
 would silently start hiding things the moment a wording changed. The caller knows who is
 reading its screen; that is where the decision belongs.
+
+## 2026-10-04 — Counsellors' own WhatsApp: Coexistence, not an iframe and not a library
+
+Three ways to get a counsellor's own WhatsApp into the CRM, and only one of them exists.
+
+**An unofficial library** (whatsapp-web.js, Baileys) breaks WhatsApp's terms and gets the
+number banned — permanently, with no appeal. The number is the line a counsellor answers
+enquiries on, so the loss is the conversations in progress, not a feature.
+
+**An iframe of `web.whatsapp.com` cannot render.** WhatsApp sends `X-Frame-Options` and
+the browser refuses to display the page inside another site. Nothing in this application
+can override a header another domain sends; that is the entire purpose of the header.
+Proxying WhatsApp Web through our own server to strip it is the reverse-engineering
+problem again under a different name, and would break the session anyway.
+
+**Coexistence is the supported answer.** Meta shipped it in May 2025: one number running
+the WhatsApp Business app and the Cloud API simultaneously, mirroring messages both ways
+in real time, with up to 180 days of one-to-one history syncing on approval. The
+counsellor keeps their phone and their number. Group chats do not sync, disappearing
+messages and live location switch off, broadcast lists become read-only, and throughput
+is capped — all acceptable for admissions conversations.
+
+It also puts the privacy line in the right place by accident of design: it syncs a
+business number's one-to-one chats, not someone's group chats, so a centre head reading
+their team's admissions conversations is not reading their private messages. Counsellors
+should still be told plainly that the number is visible to their supervisor.
+
+## 2026-10-04 — An Instagram DM does not create a lead
+
+Decided differently from WhatsApp and from every webhook source, on Leon's instruction and
+for a good reason: most Instagram messages are a question, a reply to a story, or nothing.
+A CRM that turns each one into a lead stops being a record of who is enrolling.
+
+So a DM is a conversation first. **Convert to lead** is a button the counsellor presses
+when it becomes a real enquiry, and converting runs `resolveOrCreateLead()` like every
+other source — so somebody who already exists is linked rather than duplicated, and the
+assignment rules apply (CLAUDE.md non-negotiable #8: one ingestion path, no source gets
+its own shortcut).
+
+A handle is not a phone number, so a conversation stays matched by handle until a
+counsellor adds one.
