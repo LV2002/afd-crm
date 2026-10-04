@@ -6139,3 +6139,81 @@ likely to be dropped.
 bookmark and link already sent round and buys nothing a label does not.
 
 **1343 tests pass**, lint and production build clean.
+
+---
+
+## Session 47 — The rest of the Meta form, the spend that never backfilled, and a retargeting window
+
+Four things Leon raised after the Meta integration started delivering real leads. Three
+were bugs with the same shape as every other bug in this project: a tool discarding
+something the platform had already said.
+
+### The qualification and the exam were never read
+
+"My meta leads give us their current qualification & exam interested in which is not
+migrated to the CRM. This could be because the values they enter is not matching with the
+values in the CRM."
+
+**No — the answers were never compared to anything.** The webhook read Meta's four
+standard questions (full name, phone, email, city) and nothing else. Every custom question
+was written to the enquiry's `raw` jsonb, faithfully, and read by no code at all. Fixing
+the dropdown values would not have changed a thing.
+
+Now: each custom question is matched to a CRM field by name, label, or a short keyword
+list, and each answer is matched to that field's dropdown options by value or by the label
+the lead actually saw ("NIFT UG" → `nift_ug`). Verified end to end against a real Postgres
+in `tests/meta-webhook.spec.ts` — a lead carrying a qualification and an exam now arrives
+with **Education Status** and **Interested Exams** filled in.
+
+Two decisions worth knowing about:
+
+- **An answer with no matching option is stored as typed.** It will not group in a report
+  until an admin adds that value in Settings → Dropdowns, and the delivery row says so.
+  The alternative was losing the only answer a person who has now gone ever gave.
+- **An unmatched question is named on the delivery row**, with the instruction that adding
+  a field in Settings → Fields whose *label* is that question will capture it from then
+  on. That is the configuration surface, and it already existed — no new mapping table.
+
+A form question can never set the assigned counsellor, stage, centre, temperature or
+source, however it is named (`lib/leads/ingest-protected-fields.ts`). Assignment is the
+rules engine's job.
+
+### Ad spend: the sync had no history and no recovery
+
+It fetched exactly yesterday, every night. So on the day the ads token was saved the table
+was empty, and it would have gained one day per night against a report that looks back
+ninety — months of real spend sitting on Meta's side, invisible. A skipped or failed run
+left a permanent hole nothing ever went back for.
+
+Now a run syncs from wherever the data stops to yesterday (capped at 90 days unattended),
+**plus a rolling re-read of the last seven days** because Meta restates a day's figures
+for weeks afterwards. `?days=365` backfills a year by hand, once. Each row is stored under
+its own `date_start`, which `time_increment=1` is what makes possible — without it Meta
+would have summed ninety days into one row per ad and the CRM would have filed the lot
+under one Tuesday.
+
+And the part that made it invisible: "not configured" was returning **HTTP 200 with an
+error key**, which the nightly runner reads as a successful run. V1's catch-and-200 in a
+new costume. It now reports `skipped: "not-configured"`, and **Ad Performance asks the
+credential store directly** — so the page distinguishes "no spend in these dates", "never
+synced yet" and "not connected at all", which are three different problems and were one
+sentence.
+
+### Retargeting: a six-month window, and an explanation in the product
+
+The audience had no recency rule — every consenting lead the CRM had ever held, for ever.
+Now `org_settings.retargeting_window_days`, default **180**, editable in
+**Settings → Integrations → Retargeting audiences**, 0 for no cutoff.
+
+Measured from the **later** of the lead's creation and its last activity, so an older lead
+still being followed up stays in and a 2024 enquirer who moved on drops out. The cost is
+written down where it belongs: internal activity the lead knows nothing about keeps them
+in the audience, which for a months-long follow-up cycle is the right trade.
+
+How retargeting works is now explained on that settings screen and in
+`docs/ADS-SETUP.md` — including the two things that always surprise people: a match rate
+of 50–70% is normal, and Meta will not run an audience below about a thousand matched
+people, which at ~200 leads a month means several months of "audience too small" that is
+nobody's fault.
+
+**1378 tests pass**, lint, `db:audit` and the production build clean.

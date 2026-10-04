@@ -4,6 +4,8 @@ const GRAPH_API_VERSION = "v21.0";
 const GRAPH_BASE_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 
 export interface MetaInsightsRow {
+  /** Present because every request asks for one row per day (`time_increment=1`) — this is the day the row is for. */
+  date_start?: string;
   campaign_id: string;
   campaign_name?: string;
   adset_id?: string;
@@ -17,19 +19,34 @@ export interface MetaInsightsRow {
 }
 
 /**
- * Ad-level daily spend for one account on one date — the finest grain
- * `ad_spend_daily` is keyed on. `level=ad` (not campaign/adset) so a
+ * Ad-level daily spend for one account over a range of dates — the finest
+ * grain `ad_spend_daily` is keyed on. `level=ad` (not campaign/adset) so a
  * single row always has a real `ad_id`, matching `enquiries.ad_id` for
  * the CPL/ROAS joins this table exists for.
+ *
+ * `time_increment=1` is what makes the range safe: without it Meta sums
+ * the whole window into one row per ad, and storing that against a single
+ * date would quietly record ninety days of spend as having happened on
+ * one Tuesday. With it, one row per ad per day, each carrying its own
+ * `date_start` — which is the date the caller must store it under, not
+ * the date it asked for.
+ *
+ * `until` defaults to `since`, so the original one-day call is unchanged.
  */
-export async function fetchMetaInsights(adAccountId: string, accessToken: string, date: string): Promise<MetaInsightsRow[]> {
+export async function fetchMetaInsights(
+  adAccountId: string,
+  accessToken: string,
+  since: string,
+  until: string = since,
+): Promise<MetaInsightsRow[]> {
   const url = new URL(`${GRAPH_BASE_URL}/act_${adAccountId}/insights`);
   url.searchParams.set("level", "ad");
   url.searchParams.set(
     "fields",
-    "campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,actions",
+    "date_start,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,actions",
   );
-  url.searchParams.set("time_range", JSON.stringify({ since: date, until: date }));
+  url.searchParams.set("time_range", JSON.stringify({ since, until }));
+  url.searchParams.set("time_increment", "1");
   url.searchParams.set("limit", "500");
   url.searchParams.set("access_token", accessToken);
 

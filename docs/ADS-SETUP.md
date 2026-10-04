@@ -12,7 +12,7 @@ Everything here is already built. These are the credentials that switch it on.
 |---|---|---|
 | **Leads arrive instantly** — somebody submits your ad form, the lead is in the CRM seconds later, assigned by your rules | Webhook + Verify Token + Page Access Token | Webhook + Verify Key |
 | **Cost per lead and ROAS** — spend pulled in nightly and matched to leads | Ads Access Token + Ad Account ID | OAuth + Developer Token + Customer ID |
-| **Retargeting audiences** — consenting leads kept in sync, removed the moment consent is withdrawn | Ads Access Token + Ad Account ID | — |
+| **Retargeting audiences** — consenting leads kept in sync, removed the moment consent is withdrawn | Ads Access Token + Ad Account ID | Same OAuth + Customer ID as the row above |
 | **Teach Google what a real student looks like** — admissions reported back so bidding optimises for enrolments, not form fills | — | Offline Conversion Action |
 
 You do **not** have to do all of it at once. The first row is the one that matters on day
@@ -201,6 +201,68 @@ than one Page it lists them and stops, because picking on your behalf is not its
 Already done, if you followed 1.3 — the same System User token carries `ads_read` and
 `ads_management`, and step 4 gave it the ad account. Nothing further to set up.
 
+Two things about spend that are worth knowing before you go looking for it:
+
+**It appears the morning after, not immediately.** The spend sync runs once a night at
+10:00 AM IST, and it never asks for *today* — ad platforms keep revising a day's figures
+for hours after it ends, so a number pulled at noon would be wrong and would look final.
+Save the credentials today, see yesterday's numbers tomorrow.
+
+**The first run now reaches back ninety days**, so Ad Performance has history in it the
+first morning rather than filling up one day at a time for three months. Every run after
+that also re-reads the last week, because Meta restates a day's figures for up to 28 days
+as late conversions land — those restatements now follow through to the CRM instead of it
+keeping whatever number it saw first.
+
+#### Pulling past spend in
+
+If you want more than ninety days — a full year to compare seasons — it is one request,
+run once, by hand. Ask whoever has the CRM's `CRON_SECRET` (it is in Vercel's environment
+variables) to run:
+
+```
+curl -H "Authorization: Bearer $CRON_SECRET" \
+  "https://afd-crm-one.vercel.app/api/cron/ad-spend-sync/meta?days=365"
+```
+
+It answers with the window it fetched and how many rows it stored. It is safe to run
+twice: a day already stored is updated in place, never duplicated.
+
+### 1.6b What your form's own questions do now
+
+Meta names four questions itself — full name, phone number, email, city — and those are
+what the CRM uses to work out *who* the lead is. Everything else on your form is a
+question you wrote, and Meta sends it under a name made out of the question text:
+"What is your current qualification?" arrives as `what_is_your_current_qualification?`.
+
+Those answers now land on the lead. The CRM matches each question to one of its own
+fields, and then matches the answer to one of that field's dropdown values:
+
+| Your question | Lands in |
+|---|---|
+| anything about qualification, education, class, studying | **Education Status** |
+| anything about an exam or entrance | **Interested Exams** |
+| anything about a course, programme or batch | **Courses Interested** |
+| anything about exam year | **Exam Year** |
+| school, college, institute | **School / College** |
+| online/offline, mode | **Preferred Mode** |
+| district, state, pincode, city, town | the matching address field |
+| parent/father/guardian name, occupation | **Father's Name**, **Parents' Occupation** |
+
+**When an answer doesn't match a dropdown value, it is kept exactly as the lead typed
+it** rather than thrown away — so the information is on the record, it just won't group
+with the others in a report until you add that value in **Settings → Dropdowns**.
+
+**When a question matches no field at all**, the answer stays on the enquiry and the
+delivery row in **Recent deliveries** names the question. To start capturing it, add a
+field in **Settings → Fields** whose label is that question (or rename an existing field's
+label to match it). No deploy, no developer.
+
+Two kinds of question are deliberately ignored however they are named: anything that would
+set the **assigned counsellor**, the **stage**, the **centre**, the **temperature** or the
+**source**. Those are the CRM's own decisions — assignment is your rules engine's job, and
+a stranger's form answer is not allowed to be a shortcut past it.
+
 ### 1.7 Send yourself a test lead
 
 **First you need a lead form to exist.** The testing tool can only submit against a real
@@ -341,6 +403,49 @@ CRM → **Settings → Integrations → Google → Test connection.**
 
 ---
 
+## How retargeting actually works
+
+Worth reading once, because the word covers two different things and only one of them is
+the CRM's job.
+
+**What the CRM does.** Once a night it works out which leads may lawfully be advertised
+to, hashes their phone numbers (a one-way scramble — Meta never receives a readable
+number), and syncs that list to a Meta **Custom Audience** and a Google **Customer Match**
+list. It is a two-way sync, not a list that only grows: somebody new is added, and
+somebody who withdrew consent, was marked do-not-contact, or has gone quiet for longer
+than the window is **removed** from the live audience the same night.
+
+**What you do.** Point a campaign at that audience in Ads Manager. The CRM keeps the list
+accurate; it does not spend money or choose creative. The three things people normally do
+with it:
+
+1. **Re-engage enquirers.** Show the audience ads for the course they enquired about —
+   the cheapest leads you will ever get, because they already know who you are.
+2. **Lookalikes.** Ask Meta for the 1% of Kerala that most resembles your enquirers and
+   prospect into that. This is where the audience earns the most: it improves who your
+   cold ads reach, not just who your warm ones do.
+3. **Exclusion.** Exclude the audience from your prospecting campaigns so you stop paying
+   to find people you already have. Most accounts never do this and quietly pay twice for
+   the same person.
+
+**Who is in it.** Only leads whose consent is recorded as given — a lead with no recorded
+consent is excluded rather than assumed willing, which includes everybody imported before
+consent was being tracked. Enquiring is the consent; opting out withdraws it permanently.
+
+**How far back it reaches.** Six months by default, set in **Settings → Integrations →
+Retargeting audiences**. Counted from the later of *when the lead arrived* and *the last
+thing that happened on the lead* — so a lead from eight months ago whose counsellor spoke
+to them last week stays in, and a 2024 enquirer who sat their exam and moved on drops out.
+Set it to 0 to keep every consenting lead for ever.
+
+**Why the audience looks smaller than your lead count.** Meta and Google can only match a
+number to an account they already hold, so a match rate of 50–70% is normal. Both also
+refuse to *run* an audience below roughly a thousand matched people — at ~200 leads a
+month, expect "audience too small" for the first several months. That is their floor, not
+a fault in the CRM, and the list keeps building in the meantime.
+
+---
+
 ## After both are connected
 
 - **Settings → Assignment Rules** — decide who gets leads from each source. Without a rule
@@ -358,7 +463,11 @@ CRM → **Settings → Integrations → Google → Test connection.**
 | Meta webhook won't verify | Verify Token doesn't match the CRM exactly |
 | No leads, no errors | Page not subscribed — press **Subscribe this Page to leads** (step 1.5) |
 | Google test data fails | Key doesn't match the CRM's Webhook Verify Key |
-| Spend shows zero | Ads token lacks `ads_read`, or the Ad Account ID still has `act_` on it |
+| Spend shows zero | Ads token lacks `ads_read`, or the Ad Account ID still has `act_` on it. Ad Performance now says which of the two it is at the top of the page — "not connected" and "connected, never synced" are different problems |
+| Spend is still empty the day after connecting | The nightly run had not happened yet when you looked. It runs at 10:00 AM IST and never fetches today |
+| A form question's answer is missing from the lead | **Recent deliveries** names the questions nothing matched. Add a field in Settings → Fields whose label is that question (see 1.6b) |
+| An answer is there but spelled oddly | It did not match a dropdown value, so it was kept as the lead typed it. Add that value in Settings → Dropdowns |
+| Meta says the retargeting audience is too small | Below ~1,000 matched people Meta will not run it. Nothing to fix; the list keeps building |
 | Can't generate a token in the Graph API Explorer | Use the System User route in 1.3 instead — it does not need Facebook Login configured |
 | "No permissions available — assign an app role to the system user" | Three causes, in this order: (1) the app has no product granting those permissions — add **Marketing API** and **Webhooks** to it; (2) the app is not an asset of the system user — **Add assets → Apps → Manage app**; (3) link it from the app side too — **Accounts → Apps → AFD CRM → Assign people** → the system user, Full control |
 | Google API errors | Developer token still pending approval, or it's a test token |

@@ -2696,3 +2696,84 @@ its own shortcut).
 
 A handle is not a phone number, so a conversation stays matched by handle until a
 counsellor adds one.
+
+## 2026-10-04 — Meta form questions: matched by name, kept when they don't match
+
+Leon: "my meta leads give us their current qualification & exam interested in which is not
+migrated to the CRM. this could be because the values they enter is not matching with the
+values in the CRM."
+
+The diagnosis was wrong, and in the most understandable way. The values never got as far
+as being compared: `mapMetaLeadFields()` read `full_name`, `phone_number`, `email` and
+`city` and nothing else. Every other answer was written faithfully to the enquiry's `raw`
+payload and read by nothing. The forms have asked both questions since the integration
+went live, so this is months of data sitting in a jsonb column.
+
+Three choices in fixing it.
+
+**Matching is automatic, with configuration through what already exists.** A question
+matches a field by normalised name or label, then by a short keyword list (qualification →
+Education Status, exam → Interested Exams), then by containment. There is no new mapping
+table and no new admin screen, because one already exists: field labels are editable and
+custom fields can be added, both in Settings → Fields, so an unmatched question is made to
+match by renaming a label. The unmatched questions are named on the delivery row, which is
+what makes that possible rather than theoretical.
+
+**An answer with no matching dropdown option is stored as typed, not dropped.** This
+deliberately puts a value in a `select` column that is not one of its options. The
+alternative is losing the only answer a person who has now gone ever gave, which is worse
+than a value that does not group in a report until an admin adds it. `parseFieldValue()`
+makes the opposite call for a form a person is standing in front of, correctly — they can
+fix it; this lead cannot.
+
+**Which fields an ad form may write is a blocklist, not an allowlist**
+(`lib/leads/ingest-protected-fields.ts`). An allowlist would mean every new custom field
+needed a code change before a form could fill it in — the rigidity the rebuild exists to
+remove. The blocked ones are each an invariant elsewhere: identity, attribution, stage,
+ownership, temperature. A form question called "assigned_to" must not be a shortcut past
+the assignment engine.
+
+## 2026-10-04 — Ad spend: a window, not a day
+
+The spend sync fetched exactly yesterday, every night, for ever. Correct for a job that
+has always been running; wrong in every other case, and the reason "the spend isn't
+showing" was true. On the day the credentials were saved the table was empty, and it
+gained one day per night against a report that looks back ninety.
+
+A run now syncs from wherever the stored data stops up to yesterday, capped at ninety days
+unattended, plus a rolling re-read of the last seven days — Meta restates a day's figures
+for up to 28 days as late conversions land, and a sync that only fetched missing days
+would keep the first number it ever saw and disagree with Ads Manager permanently. Seven
+rather than twenty-eight because the cost is paid nightly and the benefit shrinks fast;
+`?days=28` is there when a number is being argued about.
+
+`time_increment=1` is what makes a range safe. Without it Meta sums the whole window into
+one row per ad, and storing that against a single date would record ninety days of spend
+as having happened on one Tuesday. Each row's own `date_start` is the date it is stored
+under; a row without one is skipped rather than given a guessed date.
+
+And the quiet part: "not configured" returned HTTP 200 with an `error` key, which the
+nightly runner reads as success. So an instance with no ads token reported a healthy run
+every night and produced nothing — v1's catch-and-200 in a new costume. It still returns
+200 (an instance with no ad account is not broken, and a nightly failure alert nobody can
+act on teaches everyone to ignore alerts) but says `skipped: "not-configured"`, and Ad
+Performance now asks the credential store directly so the screen can tell "nothing spent"
+from "nothing connected".
+
+## 2026-10-04 — Retargeting has a window now, measured from last activity
+
+Leon asked for the last six months of leads to go to Meta daily. The sync had no recency
+rule at all: every consenting lead the CRM had ever held, for ever. Not only a budget
+question — somebody who enquired about a 2024 batch and moved on is a person the institute
+keeps paying to show course ads to.
+
+180 days, in `org_settings.retargeting_window_days` with an admin field, because it is
+exactly the number a marketing agency changes twice a year. 0 means no cutoff, so the old
+behaviour is still available to anyone who wants it by choosing it.
+
+Measured from the **later** of the lead's creation and its last activity, not creation
+alone. A lead from eight months ago whose counsellor spoke to them last week is live work,
+and dropping them out of the audience mid-conversation is the opposite of the point. The
+cost is real and stated in the code: internal activity the lead knows nothing about keeps
+them in the audience. For a pipeline whose follow-up cycle genuinely runs for months that
+is the right trade.

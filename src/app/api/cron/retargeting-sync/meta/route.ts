@@ -11,6 +11,7 @@ import {
   isRetargetingEligible,
   type RetargetingCandidate,
 } from "@/lib/integrations/audience-sync";
+import { retargetingWindowDays } from "@/lib/integrations/retargeting-window";
 import {
   getIntegrationCredentials,
   setIntegrationCredential,
@@ -79,11 +80,16 @@ async function run(request: Request) {
       optedOutChannels: leads.optedOutChannels,
       primaryPhone: leads.primaryPhone,
       email: leads.email,
+      createdAt: leads.createdAt,
+      lastActivityAt: leads.lastActivityAt,
     })
     .from(leads);
   const leadById = new Map(allLeads.map((l) => [l.id, l]));
 
-  const eligibleLeadIds = allLeads.filter(isRetargetingEligible).map((l) => l.id);
+  // One `now` for the whole run, so a lead cannot fall on either side of
+  // the cutoff depending on which line of this function evaluated it.
+  const window = { windowDays: await retargetingWindowDays(), now: new Date() };
+  const eligibleLeadIds = allLeads.filter((lead) => isRetargetingEligible(lead, window)).map((l) => l.id);
 
   const syncedRows = await db
     .select({ leadId: adAudienceMembers.leadId })

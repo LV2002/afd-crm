@@ -1,7 +1,17 @@
-/** Normalises a header/label for fuzzy matching: lowercase, strip everything but letters and digits. */
-function normalise(s: string): string {
+/**
+ * Normalises a header/label for fuzzy matching: lowercase, strip
+ * everything but letters and digits.
+ *
+ * Exported because the same comparison has to be made of a Meta Lead Ads
+ * question name (`what_is_your_current_qualification?`) against the same
+ * field keys and labels — see lib/integrations/meta/map-custom-answers.ts.
+ * One normaliser, so a header and a form question are judged identically.
+ */
+export function normaliseFieldName(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
+
+const normalise = normaliseFieldName;
 
 /**
  * Best-guess field key for one CSV header, so the column mapper starts
