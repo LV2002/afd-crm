@@ -216,17 +216,24 @@ keeping whatever number it saw first.
 
 #### Pulling past spend in
 
-If you want more than ninety days — a full year to compare seasons — it is one request,
-run once, by hand. Ask whoever has the CRM's `CRON_SECRET` (it is in Vercel's environment
-variables) to run:
+For the history that existed before the CRM did — a year, to compare seasons — there is a
+button: **Settings → Integrations → Meta → Ad spend history** (and the same on the Google
+page). It shows the dates you already have, and the button names the exact window the next
+press will fetch.
 
-```
-curl -H "Authorization: Bearer $CRON_SECRET" \
-  "https://afd-crm-one.vercel.app/api/cron/ad-spend-sync/meta?days=365"
-```
+**Ninety days per press, oldest first, so a year is four presses.** That is deliberate, not
+timidity: a web request that runs too long is killed with no error anyone sees, so a single
+"fetch everything" button would look identical to one that worked and stopped halfway —
+and half-imported spend makes every cost-per-lead figure on the reports confidently wrong.
+Each press tells you what it found and where the history now starts.
 
-It answers with the window it fetched and how many rows it stored. It is safe to run
-twice: a day already stored is updated in place, never duplicated.
+Safe to press twice: a day already stored is updated in place, never duplicated. Both
+platforms keep roughly three years of figures, after which the button says there is nothing
+older and stops.
+
+The same thing is available as a request, if you would rather script it — `?days=365` on
+either sync route with the `CRON_SECRET` as a Bearer token — but the button needs no
+secret and no terminal.
 
 ### 1.6b What your form's own questions do now
 
@@ -433,7 +440,16 @@ for people who fill in forms and starts optimising for people who enrol.
    `customers/1234567890/conversionActions/987654321`
 5. Paste into the CRM's **Offline Conversion Action**
 
-### 2.7 Check it
+### 2.7 Pulling past Google spend in
+
+Identical to Meta's: **Settings → Integrations → Google → Ad spend history**, ninety days
+per press, oldest first. Google Ads keeps about three years, same as Meta.
+
+One difference worth knowing: Google's nightly sync is the last job in the nightly run and
+the first to be skipped when it is short of time, so a gap of a day or two is normal and
+the next night fills it in. Gaps older than a week are what the button is for.
+
+### 2.8 Check it
 
 CRM → **Settings → Integrations → Google → Test connection.**
 

@@ -1,13 +1,23 @@
 import { AccessDenied } from "@/components/layout/access-denied";
+import { ImportAdSpend } from "@/components/integrations/import-ad-spend";
 import { RecentDeliveries } from "@/components/integrations/recent-deliveries";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { adSpendHistory } from "@/lib/integrations/ad-spend-history";
 import { recentWebhookDeliveries } from "@/lib/integrations/recent-deliveries";
 import { createClient } from "@/lib/supabase/server";
 
-import { getMetaConnectionStatus } from "./actions";
+import { getMetaConnectionStatus, importPastMetaAdSpend } from "./actions";
 import { MetaCredentialsForm } from "./meta-credentials-form";
 import { SubscribePageButton } from "./subscribe-page-button";
 import { TestConnectionButton } from "./test-connection-button";
+
+/**
+ * A ninety-day spend import is one paginated API call plus a few hundred
+ * upserts, which is comfortably more than a server action's default
+ * allowance and comfortably less than a minute. Raised here because a
+ * server action runs inside the route segment it was called from.
+ */
+export const maxDuration = 60;
 
 export default async function MetaIntegrationPage() {
   const user = await getCurrentUser();
@@ -18,6 +28,7 @@ export default async function MetaIntegrationPage() {
   const instagramDeliveries = await recentWebhookDeliveries(supabase, "instagram");
 
   const status = await getMetaConnectionStatus();
+  const spend = await adSpendHistory("meta");
 
   return (
     <div className="flex flex-col gap-8">
@@ -52,6 +63,17 @@ export default async function MetaIntegrationPage() {
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">Connection</h2>
         <TestConnectionButton />
+      </section>
+
+      {/*
+        The nightly sync keeps today's numbers right. This is for the
+        history that existed before the CRM did — and it is a button
+        rather than a documented curl command because the alternative
+        means handing somebody a secret and a terminal to run a report.
+      */}
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">Ad spend history</h2>
+        <ImportAdSpend history={spend} action={importPastMetaAdSpend} platformName="Meta" />
       </section>
 
       <section className="flex flex-col gap-3">

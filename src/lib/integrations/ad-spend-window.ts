@@ -124,3 +124,65 @@ export function spendSyncWindow(input: SpendWindowInput): SpendWindow {
 
   return { since, until: yesterday, days: daysBetween(since, yesterday), reason };
 }
+
+/**
+ * One press of **Import past ad spend**.
+ *
+ * The nightly window walks *forward* from the newest day stored. This
+ * walks **backward** from the oldest, because that is the question
+ * somebody with a year of history actually has: not "what is missing
+ * since yesterday" but "how far back does this go".
+ *
+ * One bounded chunk per press rather than a year in one call, for a
+ * reason that is not caution: a serverless function is killed at its time
+ * limit with no error anybody sees, so a single enormous import would
+ * look exactly like one that worked and stopped early. Four presses that
+ * each say what they did beat one that might lie.
+ */
+export interface BackfillWindowInput {
+  /** The oldest date already stored for this platform, or null when there is none. */
+  earliestStored: DateString | null;
+  yesterday: DateString;
+  /** How many days one press pulls. */
+  chunkDays?: number;
+  /** How far back pressing will ever reach, in total. */
+  maxHistoryDays?: number;
+}
+
+export const DEFAULT_BACKFILL_CHUNK_DAYS = 90;
+
+/**
+ * Three years. Meta keeps ad insights for 37 months, so beyond this there
+ * is nothing to fetch — and a button that can always be pressed again is
+ * a button somebody will keep pressing.
+ */
+export const MAX_HISTORY_DAYS = 1095;
+
+export function backfillWindow(input: BackfillWindowInput): SpendWindow | null {
+  const chunkDays = input.chunkDays ?? DEFAULT_BACKFILL_CHUNK_DAYS;
+  const maxHistoryDays = input.maxHistoryDays ?? MAX_HISTORY_DAYS;
+  const horizon = addDaysToDateString(input.yesterday, -(maxHistoryDays - 1));
+
+  // Nothing stored at all: start where the nightly run would have, so a
+  // first press on a fresh instance is the ordinary ninety days rather
+  // than three years ago.
+  if (!input.earliestStored) {
+    const since = addDaysToDateString(input.yesterday, -(chunkDays - 1));
+    const clamped = since < horizon ? horizon : since;
+    return {
+      since: clamped,
+      until: input.yesterday,
+      days: daysBetween(clamped, input.yesterday),
+      reason: "requested",
+    };
+  }
+
+  // Everything before what is already stored, one chunk at a time.
+  const until = addDaysToDateString(input.earliestStored, -1);
+  if (until < horizon) return null; // already back as far as this will go
+
+  const since = addDaysToDateString(until, -(chunkDays - 1));
+  const clamped = since < horizon ? horizon : since;
+
+  return { since: clamped, until, days: daysBetween(clamped, until), reason: "requested" };
+}

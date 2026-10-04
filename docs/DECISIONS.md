@@ -2777,3 +2777,45 @@ and dropping them out of the audience mid-conversation is the opposite of the po
 cost is real and stated in the code: internal activity the lead knows nothing about keeps
 them in the audience. For a pipeline whose follow-up cycle genuinely runs for months that
 is the right trade.
+
+## 2026-10-04 — Backfilling ad spend is a button, not a curl command
+
+Leon: "can you help me pull last 1 years meta ad performance in the CRM" — then "do the
+same for google ads as well".
+
+`?days=365` already existed on both sync routes, and handing him that would have meant
+handing him a terminal and the `CRON_SECRET`. He pasted a database password into this chat
+once already. A report is not worth a secret.
+
+So it is a button on each integration screen, and three decisions shape it.
+
+**Ninety days per press, oldest-first, rather than one "fetch everything".** A serverless
+function is killed at its time limit with no error anybody sees, so one enormous import
+would look exactly like one that worked and stopped early — and half-imported spend is
+worse than none, because every cost-per-lead figure on the reports would be confidently
+wrong. Four presses that each say what they found beat one that might lie. `backfillWindow()`
+walks backwards from the oldest day stored, never overlapping and never leaving a gap,
+and stops at three years because that is roughly as far back as either platform keeps ad
+insights.
+
+**The window arithmetic is pure and tested, including the four-press sequence.** Not
+because the arithmetic is hard, but because the failure mode is a chart that is wrong
+rather than an error anybody sees.
+
+**One sync function per platform, shared by the cron and the button.** A backfill run by
+hand and a backfill run at night must not be able to disagree about what a day's spend was.
+Extracting `syncMetaAdSpend()`/`syncGoogleAdSpend()` also replaced a per-row insert with
+batched upserts of 200 — a year of a busy account is tens of thousands of rows, and a round
+trip each would not finish inside the function's limit, which is the very failure the
+chunking exists to avoid.
+
+Google needed the same change Meta did a day earlier: `segments.date` in the SELECT, not
+just the WHERE. Without it Google sums the whole window into one row per ad, and storing
+that against a single date would record a year of spend as having happened on one Tuesday.
+GAQL has no parameter binding, so the dates are checked against `yyyy-MM-dd` before they
+are interpolated — they come from our own helpers today, but a backfill button puts a
+number a person typed at the far end of the same path.
+
+And Google's "not fully configured" branch was still returning 200 with an `error` key,
+which the nightly runner reads as success. Same fix as Meta's the day before: `skipped:
+"not-configured"`.

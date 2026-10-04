@@ -10,6 +10,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  backfillWindow,
+  DEFAULT_BACKFILL_CHUNK_DAYS,
   DEFAULT_BACKFILL_DAYS,
   DEFAULT_LOOKBACK_DAYS,
   spendSyncWindow,
@@ -110,5 +112,70 @@ describe("spendSyncWindow", () => {
       lookbackDays: 1,
     });
     expect(window).toMatchObject({ since: "2025-11-30", until: "2026-01-02", days: 34 });
+  });
+});
+
+/**
+ * The nightly window walks forward from the newest day stored. The
+ * backfill button walks BACKWARD from the oldest, because that is the
+ * question somebody with a year of history actually has: not "what is
+ * missing since yesterday" but "how far back does this go".
+ */
+describe("backfillWindow", () => {
+  it("starts with the ordinary ninety days when nothing is stored", () => {
+    // A first press on a fresh instance should not reach three years
+    // back; it should do what the nightly run would have done.
+    expect(backfillWindow({ earliestStored: null, yesterday: "2026-10-03" })).toMatchObject({
+      since: "2026-07-06",
+      until: "2026-10-03",
+      days: DEFAULT_BACKFILL_CHUNK_DAYS,
+    });
+  });
+
+  it("fetches the ninety days immediately before what is already stored", () => {
+    expect(backfillWindow({ earliestStored: "2026-07-06", yesterday: "2026-10-03" })).toMatchObject({
+      since: "2026-04-07",
+      until: "2026-07-05",
+      days: 90,
+    });
+  });
+
+  it("never overlaps what is stored, so four presses are four distinct windows", () => {
+    let earliest: string | null = null;
+    const windows: Array<{ since: string; until: string }> = [];
+    for (let press = 0; press < 4; press += 1) {
+      const window = backfillWindow({ earliestStored: earliest, yesterday: "2026-10-03" });
+      if (!window) break;
+      windows.push({ since: window.since, until: window.until });
+      earliest = window.since;
+    }
+
+    expect(windows).toHaveLength(4);
+    // 4 × 90 = 360 days back from yesterday, with no day fetched twice
+    // and no gap between the chunks.
+    expect(windows[3].since).toBe("2025-10-09");
+    for (let i = 1; i < windows.length; i += 1) {
+      const previousSince = new Date(`${windows[i - 1].since}T00:00:00Z`).getTime();
+      const thisUntil = new Date(`${windows[i].until}T00:00:00Z`).getTime();
+      expect(previousSince - thisUntil).toBe(86_400_000);
+    }
+  });
+
+  it("stops at the history horizon rather than letting the button be pressed for ever", () => {
+    // Meta keeps ad insights for about 37 months; past that there is
+    // nothing to fetch and a button that always works is one somebody
+    // keeps pressing.
+    expect(
+      backfillWindow({ earliestStored: "2023-01-01", yesterday: "2026-10-03" }),
+    ).toBeNull();
+  });
+
+  it("clips the last chunk to the horizon instead of overshooting it", () => {
+    const window = backfillWindow({
+      earliestStored: "2026-09-04",
+      yesterday: "2026-10-03",
+      maxHistoryDays: 60,
+    });
+    expect(window).toMatchObject({ since: "2026-08-05", until: "2026-09-03", days: 30 });
   });
 });
