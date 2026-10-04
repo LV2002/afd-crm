@@ -2819,3 +2819,32 @@ number a person typed at the far end of the same path.
 And Google's "not fully configured" branch was still returning 200 with an `error` key,
 which the nightly runner reads as success. Same fix as Meta's the day before: `skipped:
 "not-configured"`.
+
+## 2026-10-04 — The one flaky browser test, and why the pool stays at 1
+
+`journeys.spec.ts › creates a lead and lands on it` has failed three times —
+be0c8f4, a54eefd, a9d2893 — always alone among twenty tests, always by running out of
+time rather than by getting a wrong answer, and always on a commit whose diff had nothing
+to do with leads. Ruled out before changing anything: it is not the dev server (CI runs
+`next build && next start`), and lead creation makes no outbound network call (`startFlows`
+only inserts a run row for the nightly cron, and email is skipped with `RESEND_API_KEY`
+unset).
+
+What is left is the connection pool. `lib/db/client.ts` is `max: 1`, deliberately — a
+serverless function gets one connection, and `resolveOrCreateLead()`'s own comment depends
+on it ("a second connection opened while the transaction still holds the first would
+deadlock"). Creating a lead opens a transaction that holds that single connection while the
+assignment engine runs inside it, and every query the browser has in flight — the App
+Router prefetches every link it can see — queues behind it. On an unlucky interleaving the
+queue is long enough to pass twenty seconds.
+
+**So the budget moved, not the pool.** Raising `max` would be changing production
+behaviour, and a known-deliberate one, to make a test more comfortable. Twenty seconds was
+an arbitrary number; what the test asserts is that the row was written and the assignment
+engine ran, not that it happened quickly. Forty-five seconds, with `test.slow()` to match,
+and a comment saying that a failure at forty-five is a real problem rather than this one.
+
+Worth recording the discipline as much as the fix: three runs were spent treating this as a
+possible regression in whatever had just been merged, because "it only ever fails on its
+own" is exactly what a real intermittent bug looks like too. The history is in the commit
+list now so the next person spends ten minutes rather than an hour.

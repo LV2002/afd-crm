@@ -32,6 +32,31 @@ test.describe("a counsellor's day", () => {
   test.use({ storageState: storageStateFor("counsellor") });
 
   test("creates a lead and lands on it", async ({ page }) => {
+    /*
+      The slowest thing the suite does, and the only test that has ever
+      failed intermittently — three times across commits whose diffs had
+      nothing to do with leads (be0c8f4, a54eefd, a9d2893), always alone,
+      always by running out of time rather than by getting a wrong answer.
+
+      The mechanism is the connection pool. `lib/db/client.ts` is `max: 1`
+      on purpose — a serverless function gets one connection, and
+      `resolveOrCreateLead()`'s own comment depends on it — so creating a
+      lead opens a transaction that holds the single connection while the
+      assignment engine runs inside it, and every other query the browser
+      has in flight (the App Router prefetches every link it can see)
+      queues behind it. On an unlucky interleaving that queue is long.
+
+      So the budget is raised rather than the pool: twenty seconds was an
+      arbitrary number, and what this test asserts is that the row was
+      written and the assignment engine ran, not that it happened quickly.
+      `test.slow()` triples the per-test timeout to match.
+
+      If this ever fails at forty-five seconds, that is not this comment's
+      situation any more — something is genuinely wrong with lead
+      creation.
+    */
+    test.slow();
+
     const watcher = watchPage(page);
     const name = uniqueName();
 
@@ -42,7 +67,7 @@ test.describe("a counsellor's day", () => {
 
     // The lead's own page, which is the only proof the row was written and
     // the assignment engine ran without throwing.
-    await expect(page).toHaveURL(/\/leads\/[0-9a-f-]{36}/, { timeout: 20_000 });
+    await expect(page).toHaveURL(/\/leads\/[0-9a-f-]{36}/, { timeout: 45_000 });
     await expect(page.getByRole("heading", { name })).toBeVisible();
 
     expect(await errorBoundaryText(page)).toBeNull();
