@@ -25,6 +25,7 @@ import {
 import { applyLeadFilters, readFilterValues } from "@/lib/leads/apply-filters";
 import { maskPhone } from "@/lib/leads/mask-phone";
 import { droppedLeadIds } from "@/lib/enrolment/dropped-leads";
+import { mergeUserRefLabels } from "@/lib/fields/user-ref-labels";
 import { createClient } from "@/lib/supabase/server";
 import { formatTerm } from "@/lib/terminology/terms";
 import { getTerminologyMap } from "@/lib/terminology/get-terminology";
@@ -150,6 +151,11 @@ export default async function LeadsPage({
     throw new Error(`Failed to load ${leadPlural.toLowerCase()}: ${error.message}`);
   }
 
+  // Names for whoever these rows are actually assigned to, which is not
+  // the same set as "who may a lead be assigned to" — see
+  // lib/fields/user-ref-labels.ts.
+  const optionsWithUsers = await mergeUserRefLabels(supabase, listFields, rows ?? [], optionsByKey);
+
   // Who on this page has dropped out. Read from the enrolment rather than
   // from the lead, because a drop is never written back to `leads` — see
   // lib/enrolment/dropped-leads.ts.
@@ -236,7 +242,7 @@ export default async function LeadsPage({
             <TableRow key={String(row.id)}>
               {listFields.map((field) => (
                 <TableCell key={field.id}>
-                  {renderCell(field, row, optionsByKey, canRevealPhone, dropped.has(String(row.id)))}
+                  {renderCell(field, row, optionsWithUsers, canRevealPhone, dropped.has(String(row.id)))}
                 </TableCell>
               ))}
             </TableRow>

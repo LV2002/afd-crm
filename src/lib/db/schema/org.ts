@@ -56,6 +56,17 @@ export const orgSettings = pgTable("org_settings", {
   dateFormat: text("date_format").notNull().default("dd/MM/yyyy"),
   /** docs/01-DATA-MODEL.md § Temperature: how long a counsellor's manual temperature override beats the recompute cron. */
   temperatureOverrideDays: integer("temperature_override_days").notNull().default(3),
+  /**
+   * How far back the daily retargeting sync reaches: a lead this many
+   * days old or newer is kept in the Meta/Google audiences, anything
+   * older drops out. 0 means no cutoff.
+   *
+   * Configuration rather than a constant because it is a number a
+   * marketing agency changes twice a year and an institute has an opinion
+   * about. See lib/integrations/audience-sync.ts for which date it is
+   * measured from, and why.
+   */
+  retargetingWindowDays: integer("retargeting_window_days").notNull().default(180),
   ...timestamps(),
 });
 

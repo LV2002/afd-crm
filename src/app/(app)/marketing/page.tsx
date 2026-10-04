@@ -1,5 +1,6 @@
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, max } from "drizzle-orm";
 import { DatabaseZap } from "lucide-react";
+import Link from "next/link";
 
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,7 @@ import {
   type SpendRow,
 } from "@/lib/reports/ad-performance";
 
+import { hasIntegrationCredential } from "@/lib/integrations/credentials";
 import {
   AD_PLATFORMS,
   isAdPlatform,
@@ -122,6 +124,62 @@ function money(paise: number | null): string {
   return paise === null ? "—" : formatINR(paise);
 }
 
+interface SpendSource {
+  platform: string;
+  connected: boolean;
+  lastSyncedDate: string | null;
+}
+
+/**
+ * What an empty spend column actually means.
+ *
+ * There are three different situations behind "this page shows no spend",
+ * and they need three different things done about them: nobody has
+ * entered the ad credentials, they have been entered but the nightly sync
+ * has not run yet, or everything is working and the chosen dates have no
+ * spend in them. The page used to show the same sentence for all three,
+ * which left the only question worth asking — is this broken, or is it
+ * just empty? — unanswerable from the screen.
+ *
+ * Shown above the numbers rather than under them: a zero somebody has
+ * already read is a zero they have already believed.
+ */
+function SpendSourceNotice({ sources }: { sources: SpendSource[] }) {
+  const unconnected = sources.filter((s) => !s.connected);
+  const neverSynced = sources.filter((s) => s.connected && !s.lastSyncedDate);
+  if (unconnected.length === 0 && neverSynced.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+      {unconnected.length > 0 && (
+        <p>
+          <strong>
+            No spend is being imported from {unconnected.map((s) => platformLabel(s.platform)).join(" or ")}.
+          </strong>{" "}
+          The nightly sync needs an ads access token and an ad account id, and they are not set
+          yet — so every cost, cost-per-lead and ROAS figure below is missing that platform&apos;s
+          money, not reporting that it spent nothing.{" "}
+          <Link href="/settings/integrations" className="underline">
+            Settings → Integrations
+          </Link>
+          .
+        </p>
+      )}
+      {neverSynced.length > 0 && (
+        <p className={unconnected.length > 0 ? "mt-2" : undefined}>
+          <strong>
+            {neverSynced.map((s) => platformLabel(s.platform)).join(" and ")} is connected but has
+            never synced.
+          </strong>{" "}
+          The sync runs once a night, at 10:00 IST, so numbers appear tomorrow morning. To pull
+          history in now instead of waiting, a backfill can be run by hand — see
+          docs/ADS-SETUP.md § Pulling past spend in.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default async function MarketingPage({
   searchParams,
 }: {
@@ -168,6 +226,12 @@ export default async function MarketingPage({
     { label: "Last 12 months", from: istDate(365), to: istDate(0) },
   ];
 
+  // Asked of the credential store and of the spend table itself, not of
+  // the rows in the chosen date range: "nothing in these dates" and
+  // "nothing has ever arrived" are different answers, and only one of
+  // them is anybody's job to fix. See SpendSourceNotice.
+  const sources: SpendSource[] = [];
+
   let spendRows: SpendRow[];
   let attributed: AttributedLead[];
 
@@ -193,6 +257,30 @@ export default async function MarketingPage({
           ),
         ),
     );
+
+    const syncedRows = await timed("spend-sync-state", () =>
+      db
+        .select({ platform: adSpendDaily.platform, lastDate: max(adSpendDaily.date) })
+        .from(adSpendDaily)
+        .groupBy(adSpendDaily.platform),
+    );
+    const lastSyncedByPlatform = new Map(syncedRows.map((row) => [row.platform, row.lastDate]));
+
+    for (const { key: name } of AD_PLATFORMS) {
+      if (platform && name !== platform) continue;
+      // The ads token is the one the spend sync actually uses — a Page
+      // token is enough for lead delivery and cannot read ad account
+      // spend, so "Meta is connected" on the integrations index is not
+      // the same question as "can we read what Meta charged".
+      const tokenKey = name === "meta" ? "ads_access_token" : "refresh_token";
+      sources.push({
+        platform: name,
+        connected:
+          (await hasIntegrationCredential(name, tokenKey)) &&
+          (await hasIntegrationCredential(name, name === "meta" ? "ad_account_id" : "customer_id")),
+        lastSyncedDate: lastSyncedByPlatform.get(name) ?? null,
+      });
+    }
 
     const leadRows = await timed("leads", () =>
       db
@@ -302,6 +390,8 @@ export default async function MarketingPage({
           genuinely incomplete and will keep rising for weeks.
         </p>
       </div>
+
+      <SpendSourceNotice sources={sources} />
 
       <PlatformTabs platforms={AD_PLATFORMS} active={platform} />
 

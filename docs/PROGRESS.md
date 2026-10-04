@@ -6051,3 +6051,218 @@ attribution, same assignment rules — so a Google Sheet export is a working CRM
 rather than one waiting on Meta's review queue, and none of it has to be undone later.
 
 **1339 tests pass**, lint and production build clean.
+
+---
+
+## Session 24p — A uuid in a column headed "Assigned Counsellor"
+
+Two independent bugs producing one symptom, which is why it read as a data problem.
+
+**`formatFieldValue` had no `user_ref` case at all.** It fell through to `String(value)`,
+so every list printed the raw uuid. The lead *detail* page resolves its assignee
+separately, which is why only the list was wrong.
+
+**And the options map could not have helped it.** `resolveFieldOptions` answers "who may a
+lead be assigned to" — deliberately narrow, whoever holds `lead.read` at scope `own`,
+today counsellors. That is a good picker and a poor lookup table: a lead assigned to an
+admin, to a centre head who carries their own leads, or to somebody who has since changed
+role is not in it.
+
+Who *can* be assigned and who *has* been assigned are different sets, and conflating them
+is what put `28d12296-8de1-4a52-8838-0a3ae0228c58` in front of a counsellor.
+`mergeUserRefLabels` looks up exactly the ids present on the page, with no role filter,
+and adds any the picker did not know about.
+
+Inactive and former staff are included deliberately. "Assigned to somebody who has left"
+is a real and important state; a uuid hides it and a name is how anybody notices.
+
+**The CSV export had it too**, and worse — a uuid on screen is confusing, a uuid in a
+spreadsheet somebody forwards is permanent.
+
+**1343 tests pass**, lint and production build clean.
+
+---
+
+## Session 24q — "Chats", three channels, and one that cannot be built
+
+Leon asked for the WhatsApp section renamed to **Chats**, with three channels switchable
+at the top — the Business API, each counsellor's personal WhatsApp, and Instagram DMs —
+and for centre heads, co-admins and admins to switch between the counsellors under them.
+
+Two of the three are shipped or buildable. One is not, and the honest answer is worth
+more than a feature.
+
+### Personal WhatsApp: not built, on purpose
+
+There is no official API for a personal or WhatsApp **Business app** account. Every tool
+offering one — whatsapp-web.js, Baileys, and the services built on them — drives WhatsApp
+Web through a reverse-engineered protocol, which breaks WhatsApp's terms.
+
+Checked rather than remembered: roughly **one in five** accounts using an unofficial API
+is banned within a year, reverse-engineered WhatsApp Web tools typically last **2–8
+weeks** before detection, the ban is permanent, and there is no appeal. In April 2026 an
+"anti-ban" package with 56,000 downloads was found exfiltrating session credentials.
+
+What gets banned is the number — the line a counsellor answers enquiries on. The cost is
+not a broken integration, it is the conversations in progress and the number students
+already have.
+
+So the tab exists and says that, plus the three real options: a Business API number per
+counsellor (supported, costs per number, and they lose the app on that number), the
+shared number already working today, or leaving personal WhatsApp alone and logging what
+matters. Leon's call, made with the trade in front of him rather than hidden inside a
+feature he asked for.
+
+### Instagram: a build, not a blocker
+
+Meta does publish the Instagram Messaging API for Professional accounts linked to a
+Facebook Page, which `afdindia` already is. The tab says what it needs — the account's
+message access, `instagram_manage_messages` on the same App Review as the lead-ads
+permissions, a `messages` webhook on the same verify-persist-process path, and a decision
+about matching a handle to a lead when it is not a phone number. Worth doing on the same
+submission.
+
+### The counsellor switcher
+
+Shipped. It adds **no access**: RLS already scopes `whatsapp_messages` through the lead,
+so a counsellor sees their own threads and the picker has nothing to offer them. For a
+centre head or admin, `threads` already spans their people — and an undifferentiated pile
+of everybody's conversations is close to unreadable, which is the actual problem it
+solves.
+
+The counsellors offered are derived from the threads the caller can already see, not
+queried, so the list cannot show somebody whose conversations they could not open. Plus
+an **Unassigned** chip, because a conversation with nobody's name on it is the one most
+likely to be dropped.
+
+**The route stays `/whatsapp`.** Only the label changed. Renaming it would break every
+bookmark and link already sent round and buys nothing a label does not.
+
+**1343 tests pass**, lint and production build clean.
+
+---
+
+## Session 47 — The rest of the Meta form, the spend that never backfilled, and a retargeting window
+
+Four things Leon raised after the Meta integration started delivering real leads. Three
+were bugs with the same shape as every other bug in this project: a tool discarding
+something the platform had already said.
+
+### The qualification and the exam were never read
+
+"My meta leads give us their current qualification & exam interested in which is not
+migrated to the CRM. This could be because the values they enter is not matching with the
+values in the CRM."
+
+**No — the answers were never compared to anything.** The webhook read Meta's four
+standard questions (full name, phone, email, city) and nothing else. Every custom question
+was written to the enquiry's `raw` jsonb, faithfully, and read by no code at all. Fixing
+the dropdown values would not have changed a thing.
+
+Now: each custom question is matched to a CRM field by name, label, or a short keyword
+list, and each answer is matched to that field's dropdown options by value or by the label
+the lead actually saw ("NIFT UG" → `nift_ug`). Verified end to end against a real Postgres
+in `tests/meta-webhook.spec.ts` — a lead carrying a qualification and an exam now arrives
+with **Education Status** and **Interested Exams** filled in.
+
+Two decisions worth knowing about:
+
+- **An answer with no matching option is stored as typed.** It will not group in a report
+  until an admin adds that value in Settings → Dropdowns, and the delivery row says so.
+  The alternative was losing the only answer a person who has now gone ever gave.
+- **An unmatched question is named on the delivery row**, with the instruction that adding
+  a field in Settings → Fields whose *label* is that question will capture it from then
+  on. That is the configuration surface, and it already existed — no new mapping table.
+
+A form question can never set the assigned counsellor, stage, centre, temperature or
+source, however it is named (`lib/leads/ingest-protected-fields.ts`). Assignment is the
+rules engine's job.
+
+### Ad spend: the sync had no history and no recovery
+
+It fetched exactly yesterday, every night. So on the day the ads token was saved the table
+was empty, and it would have gained one day per night against a report that looks back
+ninety — months of real spend sitting on Meta's side, invisible. A skipped or failed run
+left a permanent hole nothing ever went back for.
+
+Now a run syncs from wherever the data stops to yesterday (capped at 90 days unattended),
+**plus a rolling re-read of the last seven days** because Meta restates a day's figures
+for weeks afterwards. `?days=365` backfills a year by hand, once. Each row is stored under
+its own `date_start`, which `time_increment=1` is what makes possible — without it Meta
+would have summed ninety days into one row per ad and the CRM would have filed the lot
+under one Tuesday.
+
+And the part that made it invisible: "not configured" was returning **HTTP 200 with an
+error key**, which the nightly runner reads as a successful run. V1's catch-and-200 in a
+new costume. It now reports `skipped: "not-configured"`, and **Ad Performance asks the
+credential store directly** — so the page distinguishes "no spend in these dates", "never
+synced yet" and "not connected at all", which are three different problems and were one
+sentence.
+
+### Retargeting: a six-month window, and an explanation in the product
+
+The audience had no recency rule — every consenting lead the CRM had ever held, for ever.
+Now `org_settings.retargeting_window_days`, default **180**, editable in
+**Settings → Integrations → Retargeting audiences**, 0 for no cutoff.
+
+Measured from the **later** of the lead's creation and its last activity, so an older lead
+still being followed up stays in and a 2024 enquirer who moved on drops out. The cost is
+written down where it belongs: internal activity the lead knows nothing about keeps them
+in the audience, which for a months-long follow-up cycle is the right trade.
+
+How retargeting works is now explained on that settings screen and in
+`docs/ADS-SETUP.md` — including the two things that always surprise people: a match rate
+of 50–70% is normal, and Meta will not run an audience below about a thousand matched
+people, which at ~200 leads a month means several months of "audience too small" that is
+nobody's fault.
+
+**1378 tests pass**, lint, `db:audit` and the production build clean.
+
+---
+
+## Session 48 — Instagram DMs
+
+Built, and it cannot be exercised until Meta approves `instagram_manage_messages` — said
+plainly so nobody tests it tomorrow and concludes it is broken. Everything on this side is
+done and tested; the remaining steps are Leon's and Meta's, and the screen says which.
+
+**A DM does not create a lead.** The deliberate difference from every other inbound
+channel, on Leon's instruction: most Instagram messages are a question, a reply to a story,
+or nothing at all. So the conversation is the object, and **Convert to lead** is a button
+pressed when it becomes a real enquiry — which runs `resolveOrCreateLead()` like every
+other source, so a person already in the CRM is linked rather than duplicated and the
+assignment rules choose the counsellor. It asks for a phone number, because Instagram never
+gives one; prefilling a lead nobody can ring would be worse than asking.
+
+**What shipped**
+
+- `instagram_conversations` + `instagram_messages`, with RLS (migration 0081). A converted
+  conversation inherits its lead's centre scoping. An unconverted one is visible to anybody
+  who works the inbox — deliberately, and written down in the migration: a DM is addressed
+  to the institute, not to a counsellor, and scoping it to `own` would empty the inbox for
+  exactly the people who answer it.
+- `/api/webhooks/instagram` on the same verify → persist → process path as the other two.
+  Read receipts, reactions, deletions and **echoes of our own messages** are recognised and
+  skipped — an echo stored as inbound would put the CRM's words in the lead's mouth — and a
+  callback that carried nothing is still recorded, so an empty delivery list cannot mean
+  both "Meta never called" and "Meta called and we said nothing".
+- The inbox under **Chats → Instagram**: thread list, filters, the reply box, and the
+  24-hour window enforced in three places for three reasons (the box is disabled so nobody
+  types a reply that cannot be sent, the action refuses so a stale page cannot get round it,
+  and Meta refuses, which is the only authoritative one).
+- Instagram Account ID on the Meta credentials form, and a second delivery panel beside the
+  lead one — "are DMs arriving?" and "are leads arriving?" are different questions.
+
+**Known gaps, by choice.** A message sent from the Instagram app on a phone does not appear
+in the CRM (it arrives as an echo, which is skipped). Attachments are recorded by URL, not
+downloaded, and Meta's URLs expire — so the thread says "may have expired" rather than
+rendering a broken image.
+
+**And one thing found on the way out.** `migrate-cli` now fails a build when a pending
+migration's journal timestamp is not ahead of what the database has recorded. drizzle
+applies a migration only when that number is greater, and silently skips it otherwise — a
+hand-edited or future-dated `when` makes a migration inert while the deploy reports
+success. That is the 3 October outage in one sentence, and it is now detected rather than
+discovered.
+
+**1401 tests pass**, lint, `db:audit` and the production build clean.

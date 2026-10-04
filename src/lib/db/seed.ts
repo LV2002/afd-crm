@@ -498,6 +498,7 @@ const DROPDOWN_SEEDS: DropdownSeed[] = [
       { value: "purchased_database", label: "Purchased Database" },
       { value: "knorish", label: "Knorish" },
       { value: "whatsapp", label: "WhatsApp" },
+      { value: "instagram", label: "Instagram" },
       { value: "other", label: "Other" },
     ],
   },

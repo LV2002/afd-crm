@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { CORE_KEY_TO_DROPDOWN_CATEGORY } from "@/lib/fields/core-dropdown-categories";
 import { INDIAN_STATES_DISTRICTS } from "@/lib/geo/indian-states-districts";
 
 import type { FieldSchemaEntry } from "./get-field-schema";
@@ -14,28 +15,6 @@ export interface FieldOption {
 /** Field types whose raw stored value is an id/code that needs resolving to a human label. */
 export const OPTION_BEARING_TYPES = new Set(["select", "multiselect", "user_ref"]);
 
-/**
- * Core select/multiselect fields that are backed by a real relationship
- * (a dropdown category, or another table) rather than the field
- * definition's own freeform `options`. `field_definitions.options` only
- * applies to genuinely custom fields — a core field's options come from
- * wherever its real column actually gets its values from, same principle
- * as CLAUDE.md's "core fields ... not delete[able]" but for option lists.
- */
-const CORE_KEY_TO_DROPDOWN_CATEGORY: Record<string, string> = {
-  education_status: "education_status",
-  preferred_mode: "preferred_mode",
-  lead_source: "lead_source",
-  temperature: "temperature",
-  interested_exams: "exam",
-  courses_interested: "course",
-  // students.target_exams reuses the same "exam" category as leads'
-  // interested_exams — one admin-editable exam list for the whole system,
-  // not a second one to keep in sync.
-  target_exams: "exam",
-  // Same reasoning: students.current_course reuses leads' "course" list.
-  current_course: "course",
-};
 
 /**
  * Resolves the option list for one select/multiselect field. Not part of

@@ -16,6 +16,7 @@ export const webhookSourceEnum = pgEnum("webhook_source", [
   "whatsapp",
   "website",
   "knorish",
+  "instagram",
 ]);
 
 export const webhookStatusEnum = pgEnum("webhook_status", ["pending", "done", "failed"]);

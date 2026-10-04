@@ -39,3 +39,16 @@ export function yesterdayDateStringIST(instant: Date): string {
   const todayStart = startOfDayIST(instant);
   return formatInTimeZone(addDays(todayStart, -1), DISPLAY_TIMEZONE, "yyyy-MM-dd");
 }
+
+/**
+ * A plain `yyyy-MM-dd` IST date, N days before the given instant.
+ * `daysAgo: 1` is `yesterdayDateStringIST`.
+ *
+ * IST has a fixed +05:30 offset and no DST, so stepping whole days off
+ * the start of the IST day is exact — the same property
+ * `startOfTomorrowIST` relies on.
+ */
+export function dateStringIST(instant: Date, daysAgo: number): string {
+  const todayStart = startOfDayIST(instant);
+  return formatInTimeZone(addDays(todayStart, -daysAgo), DISPLAY_TIMEZONE, "yyyy-MM-dd");
+}

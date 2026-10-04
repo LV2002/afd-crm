@@ -36,7 +36,12 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
-import { expectedMigrationTags, journalWhen, pendingMigrationTags } from "./migration-journal";
+import {
+  expectedMigrationTags,
+  journalWhen,
+  pendingMigrationTags,
+  unreachableMigrationTags,
+} from "./migration-journal";
 
 loadEnv({ path: [".env.local", ".env"] });
 
@@ -270,17 +275,42 @@ async function main(): Promise<void> {
      * behind it — while still reporting success. Printing both numbers
      * side by side makes that visible instead of mysterious.
      */
+    let newestRecorded: number | null = null;
     try {
       const [newest] = await client<Array<{ created_at: string | null }>>`
         select created_at::text from drizzle.__drizzle_migrations
         order by created_at desc limit 1
       `;
+      const parsed = Number(newest?.created_at);
+      newestRecorded = Number.isFinite(parsed) ? parsed : null;
       const lastWhen = journalWhen(expected.at(-1));
       console.log(
         `Newest recorded migration timestamp: ${newest?.created_at ?? "none"} (the journal's last is ${lastWhen ?? "?"}).`,
       );
     } catch {
       // The table may not exist yet. Not worth a word.
+    }
+
+    /**
+     * And then the check that the printed numbers above only hinted at.
+     *
+     * A pending migration whose `when` is not ahead of what the database
+     * has recorded is inert: drizzle will never execute it, and will say
+     * nothing about not having. Failing here is right even though
+     * verifySchema() would eventually catch the consequence, because the
+     * fix is different and specific — bump the journal timestamp — and
+     * naming it saves somebody the afternoon it cost in October.
+     */
+    const unreachable = unreachableMigrationTags(applied, newestRecorded);
+    if (unreachable.length > 0) {
+      console.error(
+        `\n${unreachable.length} migration(s) can never run: ${unreachable.join(", ")}.`,
+      );
+      console.error(
+        `Their \`when\` in migrations/meta/_journal.json is not greater than ${newestRecorded},`,
+      );
+      console.error("which is what drizzle compares against. Raise it above that number.\n");
+      process.exit(1);
     }
 
     const pending = pendingMigrationTags(expected, applied);

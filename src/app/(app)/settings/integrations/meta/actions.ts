@@ -30,6 +30,7 @@ const META_KEYS = [
   "page_access_token",
   "ads_access_token",
   "ad_account_id",
+  "ig_user_id",
 ] as const;
 type MetaKey = (typeof META_KEYS)[number];
 
@@ -40,6 +41,7 @@ const KEY_LABELS: Record<MetaKey, string> = {
   page_access_token: "Page Access Token",
   ads_access_token: "Ads Access Token",
   ad_account_id: "Ad Account ID",
+  ig_user_id: "Instagram Account ID",
 };
 
 /**

@@ -154,6 +154,51 @@ describe("POST /api/webhooks/meta-leads (lead ingestion)", () => {
     expect(event.signatureOk).toBe(true);
   });
 
+  it("writes the form's own questions onto the lead, not only Meta's four standard ones", async () => {
+    /*
+      The thing that was missing. AFD's lead forms ask for the student's
+      current qualification and the exam they are sitting; both arrived on
+      every lead for as long as the integration has run, and neither ever
+      reached a field, because the webhook read only full_name /
+      phone_number / email / city. It looked from the outside like the
+      answers not matching the CRM's dropdown values. They were not being
+      read at all.
+    */
+    const leadgenId = randomUUID();
+    vi.mocked(fetchMetaLead).mockResolvedValue({
+      id: leadgenId,
+      form_id: "form1",
+      field_data: [
+        { name: "full_name", values: [`${MARKER} Custom`] },
+        { name: "phone_number", values: ["+919847500109"] },
+        { name: "what_is_your_current_qualification?", values: ["12th Pass"] },
+        { name: "which_exam_are_you_interested_in?", values: ["NIFT UG"] },
+        { name: "what_is_your_budget?", values: ["Under 50,000"] },
+      ],
+    });
+
+    const body = leadgenPayload(leadgenId);
+    const res = await POST(
+      new Request("https://example.com/api/webhooks/meta-leads", {
+        method: "POST",
+        headers: { "x-hub-signature-256": sign(body, APP_SECRET) },
+        body,
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const [lead] = await db.select().from(leads).where(eq(leads.studentName, `${MARKER} Custom`));
+    expect(lead.educationStatus).toBe("12th_pass");
+    expect(lead.interestedExams).toEqual(["nift_ug"]);
+
+    // And the question nothing matched is named on the delivery, with the
+    // text to match it by — the one place an admin can find out why an
+    // answer did not arrive.
+    const [event] = await db.select().from(webhookEvents).where(eq(webhookEvents.externalId, leadgenId));
+    expect(event.status).toBe("done");
+    expect(event.lastError).toContain("what_is_your_budget?");
+  });
+
   it("does not create a second lead when the same leadgen_id is delivered twice", async () => {
     const leadgenId = randomUUID();
     vi.mocked(fetchMetaLead).mockResolvedValue({

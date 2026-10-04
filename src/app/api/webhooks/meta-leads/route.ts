@@ -5,14 +5,20 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db/client";
 import { webhookEvents } from "@/lib/db/schema";
+import { ingestFieldCatalog } from "@/lib/fields/ingest-field-catalog";
 import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { fetchMetaLead } from "@/lib/integrations/meta/graph-client";
+import {
+  describeCustomAnswerMapping,
+  mapMetaCustomAnswers,
+} from "@/lib/integrations/meta/map-custom-answers";
 import {
   buildResolveLeadInput,
   isMetaTestPlaceholder,
   mapMetaLeadFields,
 } from "@/lib/integrations/meta/map-lead-fields";
+import { writeIngestedLeadFields } from "@/lib/leads/write-ingested-fields";
 import { verifyMetaSignature } from "@/lib/integrations/meta/verify-signature";
 
 export const dynamic = "force-dynamic";
@@ -199,11 +205,46 @@ export async function POST(request: Request) {
         );
       }
 
-      await resolveOrCreateLead(buildResolveLeadInput(lead, mapped));
+      const resolved = await resolveOrCreateLead(buildResolveLeadInput(lead, mapped));
+
+      /*
+        The rest of the form.
+
+        Meta names its own four questions (full_name, phone_number, email,
+        city) and those are what identity resolution runs on. Everything
+        else is a custom question the advertiser wrote — "What is your
+        current qualification?", "Which exam are you interested in?" — and
+        until now those answers were kept on the enquiry's raw payload and
+        read by nothing. AFD's forms have asked both of those since the
+        day the integration went live, and neither ever appeared on a lead.
+
+        Written only onto a NEW lead: a repeat enquiry from somebody
+        already in the system must not have their profile rewritten by
+        whichever ad they clicked this time — the same rule
+        resolveOrCreateLead() applies to the fields it owns.
+      */
+      let mappingNote: string | null = null;
+      if (resolved.isNewLead) {
+        const catalog = await ingestFieldCatalog("lead");
+        const mapping = mapMetaCustomAnswers(lead.field_data ?? [], catalog);
+        if (Object.keys(mapping.values).length > 0) {
+          await writeIngestedLeadFields(resolved.leadId, mapping.values, catalog);
+        }
+        mappingNote = describeCustomAnswerMapping(mapping);
+      }
 
       await db
         .update(webhookEvents)
-        .set({ status: "done", processedAt: new Date(), attempts: sql`${webhookEvents.attempts} + 1` })
+        .set({
+          status: "done",
+          processedAt: new Date(),
+          attempts: sql`${webhookEvents.attempts} + 1`,
+          // A note on a successful delivery, shown muted rather than red:
+          // the lead is in, and this is the one place that can say which
+          // of its answers the CRM had nowhere to put. Nothing to say
+          // leaves the row clean.
+          lastError: mappingNote,
+        })
         .where(eq(webhookEvents.id, inserted.id));
     } catch (err) {
       allOk = false;

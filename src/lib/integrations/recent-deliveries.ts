@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type WebhookSource = "meta_leads" | "google_leads" | "whatsapp" | "website" | "knorish";
+export type WebhookSource = "meta_leads" | "google_leads" | "whatsapp" | "website" | "knorish" | "instagram";
 
 export interface WebhookDelivery {
   id: string;

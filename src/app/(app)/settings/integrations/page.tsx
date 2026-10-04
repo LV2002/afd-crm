@@ -4,6 +4,10 @@ import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { hasIntegrationCredential, integrationEncryptionStatus } from "@/lib/integrations/credentials";
+import { DEFAULT_RETARGETING_WINDOW_DAYS } from "@/lib/integrations/audience-sync";
+import { createClient } from "@/lib/supabase/server";
+
+import { RetargetingForm } from "./retargeting-form";
 
 interface IntegrationCard {
   href: string | null;
@@ -22,6 +26,14 @@ export default async function IntegrationsPage() {
   const googleConnected = await hasIntegrationCredential("google", "refresh_token");
   const whatsappConnected = await hasIntegrationCredential("whatsapp", "access_token");
   const websiteConnected = await hasIntegrationCredential("website", "signing_secret");
+
+  const supabase = await createClient();
+  const { data: org } = await supabase
+    .from("org_settings")
+    .select("retargeting_window_days")
+    .limit(1)
+    .maybeSingle<{ retargeting_window_days: number }>();
+  const retargetingWindowDays = org?.retargeting_window_days ?? DEFAULT_RETARGETING_WINDOW_DAYS;
 
   const cards: IntegrationCard[] = [
     {
@@ -108,6 +120,55 @@ export default async function IntegrationsPage() {
           );
         })}
       </div>
+
+      {/*
+        Explained here rather than only in a doc, because "how does the
+        retargeting work" is a question asked while looking at this
+        screen, and the honest answer has a consent rule in it that
+        matters more than the setting does.
+      */}
+      <section className="flex flex-col gap-3 rounded-lg border p-4">
+        <div>
+          <h2 className="font-medium">Retargeting audiences</h2>
+          <p className="max-w-prose text-sm text-muted-foreground">
+            Once a night the CRM sends your leads&apos; phone numbers — hashed, never in the
+            clear — to Meta as a Custom Audience and to Google as a Customer Match list. Those
+            platforms match them against their own users, and your ads can then be aimed at
+            exactly the people who have already enquired with you, or at the lookalike
+            audiences built from them. The CRM does not show the ads; it keeps the list of who
+            should see them accurate.
+          </p>
+        </div>
+
+        <ul className="max-w-prose list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+          <li>
+            <strong>It is a two-way sync, not a growing list.</strong> Each night the CRM works
+            out who is eligible and compares that with who it last uploaded. Somebody new is
+            added; somebody who withdrew consent, was marked do-not-contact, or dropped out of
+            the window below is <em>removed</em> from the live audience.
+          </li>
+          <li>
+            <strong>Only leads who consented.</strong> A lead with no recorded consent is
+            excluded rather than assumed willing — including every lead imported before consent
+            was being recorded. Enquiring is the consent; opting out withdraws it, permanently.
+          </li>
+          <li>
+            <strong>A match is never guaranteed.</strong> Meta and Google only match a number to
+            an account they already hold, so an audience is always smaller than the list sent —
+            and both platforms refuse to run an audience below roughly a thousand matched
+            people. A new instance will see &quot;audience too small&quot; on the Meta side for
+            a while; that is their floor, not a fault here.
+          </li>
+          <li>
+            <strong>Nothing happens until the audience is used.</strong> The CRM keeps the list
+            up to date. Pointing a campaign at it — or at a lookalike of it, or excluding it
+            from a prospecting campaign so you stop paying twice for the same person — is done
+            in Meta Ads Manager and Google Ads.
+          </li>
+        </ul>
+
+        <RetargetingForm windowDays={retargetingWindowDays} />
+      </section>
     </div>
   );
 }

@@ -104,6 +104,10 @@ export const DATA_TABLES = [
   "error_events",
   "finance_transactions",
   "google_conversion_uploads",
+  // Conversations that happened, and the messages in them. Data, not
+  // configuration, however much the inbox looks like a setting.
+  "instagram_conversations",
+  "instagram_messages",
   "interactions",
   "lead_identifiers",
   "lead_merges",

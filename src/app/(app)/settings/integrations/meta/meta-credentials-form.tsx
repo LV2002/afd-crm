@@ -34,6 +34,12 @@ const FIELDS: Array<{ key: keyof MetaConnectionStatus["configured"]; label: stri
     secret: true,
   },
   { key: "ad_account_id", label: "Ad Account ID", help: "Numeric id, without the act_ prefix.", secret: false },
+  {
+    key: "ig_user_id",
+    label: "Instagram Account ID",
+    help: "The Instagram professional account's own id — needed to send DM replies. Only used by Chats → Instagram DMs; leave blank if you are not using it.",
+    secret: false,
+  },
 ];
 
 export function MetaCredentialsForm({ status }: { status: MetaConnectionStatus }) {
