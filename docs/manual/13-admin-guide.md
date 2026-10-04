@@ -1,6 +1,6 @@
 # Chapter 13 — Admin guide
 
-Everything in **Settings** (`settings.manage`). Twenty-nine screens,
+Everything in **Settings** (`settings.manage`). Twenty-five entries,
 grouped below by what you would actually be trying to do.
 
 **The governing idea:** almost nothing about this system is hardcoded. If

@@ -6348,3 +6348,72 @@ fires, whether Knorish is still in use, and four house rules that are policy
 rather than code.
 
 **1408 tests pass**, lint, typecheck and the production build clean.
+
+---
+
+## Session 51 — The launch film, and five things the manual had wrong
+
+**A 7m26s walkthrough video**, built the same way as the manual: from text
+files, by a program, with nothing in it that is not true of the system.
+
+`docs/video/scenes.mjs` is **56 scenes** — a title, a type and the words on
+screen. `render.mjs` turns them into one self-playing HTML page and records it
+with a real browser at 1920×1080; `script.mjs` turns the same file into
+`script.md`, the timed shot list and the word-for-word text if a voiceover is
+ever recorded. `npm run video`, `npm run video:stills`, `npm run video:script`.
+
+**It is motion graphics, not a screencast.** No app footage, no mocked-up
+interface, no invented student names — the only real data in this system is
+children's names and their parents' fee records, and a faked interface in a
+training film teaches a product that does not exist. Every stage name, role,
+queue bucket and button label in it was read out of the code.
+
+**It is silent.** The video encoder shipped with the browser here is built with
+VP8 and nothing else — no audio codecs at all — so the film is written to be
+read rather than narrated. `--enable-encoder=libvpx_vp8` is the whole of it.
+
+**Timing is computed, not guessed.** Each scene declares a `hold` in seconds
+and the renderer raises it when the words cannot be read that fast: 215 words a
+minute for prose, 330 for a list that is scanned rather than read. Adding a
+sentence lengthens the film instead of making it unreadable, which is the right
+way round for a training video nobody can pause in a meeting.
+
+`docs/video/out/` is gitignored. The film is 26 MB and one command rebuilds it,
+so the repository carries the script rather than the print.
+
+### Five corrections to the manual
+
+Re-reading the chapters against the code — the same accuracy rule, applied
+once more rather than assumed — found five claims that were wrong:
+
+| Said | Actually |
+|---|---|
+| **Mode of payment** on the payment form | **Method**. "Mode of payment" is a row label on the printed receipt, not on the form |
+| Insights has nine tabs | Eight, and the chapter's own table listed eight |
+| Settings has twenty-nine screens | Twenty-five entries on the Settings page |
+| 45 permission primitives | 44 — and the list in `_inventory.md` had 44 names under a heading that said 45 |
+| 14 dropdown categories | 17: `finance_expense_category` and the two WhatsApp keyword lists were missing |
+
+`103 pages`, `18 API routes`, `66 tables`, `6 roles`, `14 stages`, `30 lead
+fields`, `34 student fields` and `7 dashboard widgets` re-counted and correct.
+The wrong figures were in the inventory's own verification note, which is worth
+saying plainly: a verification pass that writes down a number without counting
+it is not a verification pass.
+
+### The intermittent e2e failure, with evidence this time
+
+Run 37225884874 produced the first real signal, and it contradicted the
+suspect list. The submission was recorded as `POST /leads/new —
+net::ERR_ABORTED`: the browser cancelled it. On the retry the same abort
+appeared **and the journey finished correctly** — right URL, right heading —
+which is a redirect cancelling its own request, and is the framework working.
+
+So two things changed. `e2e/page-health.ts` no longer counts an aborted POST as
+a problem: a submission that truly went nowhere already fails the assertion
+about what it produced, with a far better message. And the test now waits for
+React to hydrate before clicking, via `e2e/hydration.ts` — a click on an
+unhydrated form submits it natively, which is the one thing in that path that
+can drop a submission. If it fails again after this, that race is ruled out too
+and the read-back in `createLeadManually()` is what is left.
+
+**1408 tests pass**, lint and typecheck clean.

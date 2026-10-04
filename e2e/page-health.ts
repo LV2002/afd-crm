@@ -51,10 +51,27 @@ const IGNORED_REQUESTS = [
  *
  * Narrow on purpose: only an `_rsc` prefetch, and only when the reason is
  * an abort. A prefetch that comes back 500 is still a broken route, and an
- * ordinary request that aborts is still worth seeing.
+ * ordinary GET that aborts is still worth seeing.
+ *
+ * A submitted form aborts the same way, and for the same reason: the
+ * action answers with a redirect, the browser navigates, and the request
+ * that caused the navigation is cancelled by it. CI run 37225884874 caught
+ * exactly that — `POST /leads/new — net::ERR_ABORTED` recorded on a retry
+ * that then landed on the new lead's page with the right heading on it, so
+ * the journey worked and only this collector objected.
+ *
+ * Ignoring an aborted POST cannot hide a submission that did nothing,
+ * because the test that submitted it asserts on what the submission
+ * produced: a POST that truly went nowhere fails that assertion instead,
+ * and with a far clearer message than "1 problem".
  */
-function isCancelledPrefetch(url: string, reason: string): boolean {
-  return /[?&]_rsc=/.test(url) && /ERR_ABORTED/i.test(reason);
+function isCancelledBySubsequentNavigation(
+  request: Request,
+  url: string,
+  reason: string,
+): boolean {
+  if (!/ERR_ABORTED/i.test(reason)) return false;
+  return /[?&]_rsc=/.test(url) || request.method() === "POST";
 }
 
 /**
@@ -78,7 +95,7 @@ export function watchPage(page: Page): { problems: PageProblem[] } {
     const url = request.url();
     if (IGNORED_REQUESTS.some((pattern) => pattern.test(url))) return;
     const reason = request.failure()?.errorText ?? "failed";
-    if (isCancelledPrefetch(url, reason)) return;
+    if (isCancelledBySubsequentNavigation(request, url, reason)) return;
     problems.push({ kind: "request", detail: `${request.method()} ${url} — ${reason}` });
   };
 

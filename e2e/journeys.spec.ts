@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { waitForHydration } from "./hydration";
 import { errorBoundaryText, watchPage } from "./page-health";
 import { storageStateFor } from "./roles";
 
@@ -50,22 +51,27 @@ test.describe("a counsellor's day", () => {
       guess — `lib/db/client.ts` is `max: 1`, so a transaction holds the
       only connection while everything else queues — and raising the
       budget from twenty seconds to forty-five disproved it. Forty-five
-      seconds is not a queue. The server action is not finishing.
+      seconds is not a queue.
 
-      ## What this instrumentation is for
+      ## What the instrumentation then showed
 
-      Two very different failures look identical from the outside: the
-      server action never answering, and it answering fine while the
-      browser fails to navigate. Waiting for the POST itself tells them
-      apart, so the next occurrence produces an answer rather than a
-      fourth guess.
+      Run 37225884874 produced the first real evidence, and it was not
+      what the suspect list predicted. The submission was recorded as
+      `POST /leads/new — net::ERR_ABORTED`: the browser cancelled it. On
+      the retry the same abort appeared and the journey nevertheless
+      finished — right URL, right heading — which is what a redirect
+      cancelling its own request looks like, so `page-health.ts` no longer
+      counts that as a problem.
 
-      Prime suspect, on the evidence so far: `createLeadManually()` reads
-      the new lead back through Supabase (`leadIsVisibleToCaller`, the
-      scope seatbelt) before redirecting. That is the one network call in
-      the path — to the local Supabase stack, over Kong — and a request
-      that never returns would look exactly like this, including the
-      intermittency and including the row being created anyway.
+      A cancelled submission with nothing after it, though, is exactly the
+      stuck run: the click lands, the POST is dropped, and the page sits
+      on the form. The one thing in this test that can drop a submission
+      is clicking before the page has hydrated — React submits the form
+      natively until its JavaScript runs — so that race is now waited out
+      rather than argued about. If this test fails again after this, the
+      hydration race is ruled out too, and the remaining suspect is the
+      read-back in `createLeadManually()` (`leadIsVisibleToCaller`, the
+      scope seatbelt), the one network call in the path.
     */
     test.slow();
 
@@ -73,6 +79,9 @@ test.describe("a counsellor's day", () => {
     const name = uniqueName();
 
     await page.goto("/leads/new");
+    // Before touching anything: a click on an unhydrated form submits it
+    // the old way, and that submission is the one that goes missing.
+    await waitForHydration(page, "form");
     await page.locator("#studentName").fill(name);
     await page.locator("#primaryPhone").fill(uniquePhone());
 

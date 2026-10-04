@@ -5,9 +5,9 @@ every line here must appear somewhere in the manual. The right-hand column
 is the chapter that covers it.
 
 Counts at the time of writing: **103 pages**, **18 API routes**, **66 database
-tables**, **45 permissions**, **6 seeded roles**, **14 pipeline stages**,
-**14 dropdown categories**, **30 lead fields**, **34 student fields**,
-**7 dashboard widgets**, **29 settings screens**.
+tables**, **44 permissions**, **6 seeded roles**, **14 pipeline stages**,
+**17 dropdown categories**, **30 lead fields**, **34 student fields**,
+**7 dashboard widgets**, **25 settings screens**.
 
 ---
 
@@ -95,7 +95,7 @@ Student Profile Forms. — Chapter 4.
 | Ad Performance | `/marketing` | 11 |
 | Ask AI | `/ask` | 11 |
 
-## 6. Screens — settings (29)
+## 6. Screens — settings (25)
 
 Organisation · Terminology · Centres · Users · Roles & Permissions ·
 Pipeline Stages · Temperatures · Assignment Rules · SLA Policies ·
@@ -118,7 +118,7 @@ WhatsApp, Website). — Chapter 13.
 Admin · Co-Admin · Centre Head · Counsellor · Accounts · Academics.
 Roles are database rows and can be renamed, edited or created. — Chapter 3.
 
-## 9. Permissions (45 primitives)
+## 9. Permissions (44 primitives)
 
 `lead.read` `lead.create` `lead.update` `lead.delete` `lead.assign`
 `lead.merge` `lead.export` `lead.reveal_phone` `lead.import`
@@ -144,12 +144,13 @@ Lost · Parked. — Chapter 5, Appendix.
 Stage types (fixed in code): `new` `normal` `scheduled` `enrolment_form`
 `payment` `won` `lost` `parked`.
 
-## 11. Dropdown categories (14)
+## 11. Dropdown categories (17)
 
 temperature · lead_source · exam · course · education_status ·
 preferred_mode · gender · lost_reason · consent_status · payment_method ·
 interaction_type · interaction_outcome · finance_income_category ·
-task_type. — Chapter 13, Appendix.
+finance_expense_category · whatsapp_optin_keyword ·
+whatsapp_optout_keyword · task_type. — Chapter 13, Appendix.
 
 ## 12. Business logic and automation
 
@@ -224,9 +225,9 @@ Checked after writing:
   `Yes, record it`, `Skip this column`, `Onboarding done`, `Assign to…`,
   `Escalation ladder (JSON array)` …) grepped back against the source —
   all 57 found.
-- **Seeded data re-read from `seed.ts`**: 6 roles, 45 permissions, 14
-  stages with their types, probabilities and SLA hours, 14 dropdown
-  categories with every option, 29 lead fields, 30 student fields, 7
+- **Seeded data re-read from `seed.ts`**: 6 roles, 44 permissions, 14
+  stages with their types, probabilities and SLA hours, 17 dropdown
+  categories with every option, 30 lead fields, 34 student fields, 7
   dashboard widgets, discount limits per role, finance categories.
 - **Spot-checked against the code**: the export and phone-reveal audit
   writes, the `/my-day` → `/dashboard` redirect, `/handovers` →

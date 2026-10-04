@@ -10,7 +10,7 @@ report and honestly see different totals.
 
 ## 11.1 Insights
 
-**Insights** in the sidebar (`report.read`). Nine tabs.
+**Insights** in the sidebar (`report.read`). Eight tabs.
 
 | Tab | Answers |
 |---|---|

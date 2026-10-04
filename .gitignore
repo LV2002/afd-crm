@@ -57,3 +57,8 @@ skills-lock.json
 /playwright-report/
 /blob-report/
 /e2e/.auth/
+
+# The rendered walkthrough video. Regenerate with `npm run video`; the
+# scenes are the source of truth, and a 10 MB binary does not belong in
+# a repository that already carries the script that produces it.
+/docs/video/out/

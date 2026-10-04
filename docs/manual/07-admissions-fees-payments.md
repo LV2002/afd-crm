@@ -133,7 +133,7 @@ this, deliberately.
 1. Open **Admissions** and click the student.
 2. Find **Record a payment**.
 3. **Amount** — in rupees.
-4. **Mode of payment** — Cash, UPI, Card, NEFT, Cheque or Other.
+4. **Method** — Cash, UPI, Card, NEFT, Cheque or Other.
 5. **Received into** — which bank or cash account the money landed in.
 6. **Reference (optional)** — *UTR / cheque no. / transaction id*. Fill
    this in for anything that is not cash; it is what reconciliation
