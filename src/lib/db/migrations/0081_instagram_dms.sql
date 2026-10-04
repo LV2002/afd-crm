@@ -199,10 +199,21 @@ comment on column instagram_conversations.last_inbound_at is
 
 -- A converted DM needs a source to be filed under, and `lead_source` is
 -- admin-editable data rather than an enum — so this is an insert, not an
--- ALTER TYPE. Guarded, because an admin may well have added it by hand
--- already while waiting for this.
+-- ALTER TYPE.
+--
+-- Guarded twice, and the first guard is the one that matters. On a FRESH
+-- database the categories do not exist yet: `dropdown_categories` is
+-- populated by the seed, which runs after the migrations, so an
+-- unconditional insert here fails the whole batch on a foreign key — which
+-- is exactly what CI caught. On a fresh instance this correctly does
+-- nothing and the seed supplies the option instead (it is in
+-- DROPDOWN_SEEDS). On an existing one it adds it without a deploy.
+--
+-- The second guard is for an admin who already added it by hand while
+-- waiting for this.
 insert into dropdown_options (category, value, label, sort_order)
 select 'lead_source', 'instagram', 'Instagram', 95
-where not exists (
-  select 1 from dropdown_options where category = 'lead_source' and value = 'instagram'
-);
+where exists (select 1 from dropdown_categories where key = 'lead_source')
+  and not exists (
+    select 1 from dropdown_options where category = 'lead_source' and value = 'instagram'
+  );
