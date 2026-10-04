@@ -1,12 +1,17 @@
 import { AccessDenied } from "@/components/layout/access-denied";
+import { ImportAdSpend } from "@/components/integrations/import-ad-spend";
 import { RecentDeliveries } from "@/components/integrations/recent-deliveries";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { adSpendHistory } from "@/lib/integrations/ad-spend-history";
 import { recentWebhookDeliveries } from "@/lib/integrations/recent-deliveries";
 import { createClient } from "@/lib/supabase/server";
 
-import { getGoogleConnectionStatus } from "./actions";
+import { getGoogleConnectionStatus, importPastGoogleAdSpend } from "./actions";
 import { GoogleCredentialsForm } from "./google-credentials-form";
 import { TestConnectionButton } from "./test-connection-button";
+
+/** A ninety-day spend import runs as a server action inside this route segment — see the Meta page's note. */
+export const maxDuration = 60;
 
 export default async function GoogleIntegrationPage() {
   const user = await getCurrentUser();
@@ -15,6 +20,7 @@ export default async function GoogleIntegrationPage() {
   const deliveries = await recentWebhookDeliveries(await createClient(), "google_leads");
 
   const status = await getGoogleConnectionStatus();
+  const spend = await adSpendHistory("google");
 
   return (
     <div className="flex flex-col gap-8">
@@ -49,6 +55,12 @@ export default async function GoogleIntegrationPage() {
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">Connection</h2>
         <TestConnectionButton />
+      </section>
+
+      {/* Same as Meta's: the nightly sync keeps today right, this is for the history that predates the CRM. */}
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">Ad spend history</h2>
+        <ImportAdSpend history={spend} action={importPastGoogleAdSpend} platformName="Google Ads" />
       </section>
 
       {/*

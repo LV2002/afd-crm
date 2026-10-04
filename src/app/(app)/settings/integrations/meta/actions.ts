@@ -1,6 +1,10 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+
 import { writeAuditLog } from "@/lib/audit/log";
+import { runAdSpendBackfill, type BackfillState } from "@/lib/integrations/ad-spend-backfill";
+import { syncMetaAdSpend } from "@/lib/integrations/meta/sync-ad-spend";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { reportActionFailure } from "@/lib/errors/action-failure";
 import {
@@ -302,5 +306,44 @@ export async function subscribeMetaPage(): Promise<TestConnectionResult> {
       return { ok: false, message: `Meta rejected the request. ${err.message}` };
     }
     return { ok: false, message: "Could not reach Meta's API." };
+  }
+}
+
+/**
+ * **Import past ad spend**, Meta.
+ *
+ * The nightly sync keeps today's numbers right; this is for the history
+ * that existed before the CRM did. One bounded chunk per press, walking
+ * backwards from the oldest day already stored — see `backfillWindow()`
+ * for why it is not one call for a whole year (a serverless function
+ * killed at its time limit looks exactly like one that finished).
+ */
+export async function importPastMetaAdSpend(): Promise<BackfillState> {
+  try {
+    const { ad_account_id: adAccountId, ads_access_token: accessToken } =
+      await getIntegrationCredentials("meta", ["ad_account_id", "ads_access_token"]);
+
+    if (!adAccountId || !accessToken) {
+      return {
+        error:
+          "Meta's Ads Access Token and Ad Account ID are not set yet. Spend cannot be read without them — enter both above and save first.",
+      };
+    }
+
+    const state = await runAdSpendBackfill("meta", (since, until) =>
+      syncMetaAdSpend(adAccountId, accessToken, since, until),
+    );
+    if (state.success) revalidatePath("/settings/integrations/meta");
+    return state;
+  } catch (error) {
+    return {
+      error: await reportActionFailure("action:importPastMetaAdSpend", error, {
+        fallback: "Could not import that period. The problem has been reported.",
+        // Meta's own sentence is the useful part — "(#190) token expired",
+        // "unsupported get request" — and an admin is the one who can act
+        // on it.
+        revealMessage: true,
+      }),
+    };
   }
 }

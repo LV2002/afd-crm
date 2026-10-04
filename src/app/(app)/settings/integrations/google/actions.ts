@@ -1,6 +1,10 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+
 import { writeAuditLog } from "@/lib/audit/log";
+import { runAdSpendBackfill, type BackfillState } from "@/lib/integrations/ad-spend-backfill";
+import { syncGoogleAdSpend } from "@/lib/integrations/google/sync-ad-spend";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { reportActionFailure } from "@/lib/errors/action-failure";
 import {
@@ -160,5 +164,52 @@ export async function testGoogleConnection(): Promise<TestConnectionResult> {
   } catch (err) {
     const message = err instanceof GoogleAdsApiError ? `Google rejected the request: ${err.message}` : "Could not reach the Google Ads API.";
     return { ok: false, message };
+  }
+}
+
+/**
+ * **Import past ad spend**, Google. The twin of the Meta one, with the
+ * extra OAuth hop every Google Ads call needs: the stored refresh token
+ * buys a short-lived access token first.
+ */
+export async function importPastGoogleAdSpend(): Promise<BackfillState> {
+  try {
+    const {
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      developer_token: developerToken,
+      customer_id: customerId,
+      login_customer_id: loginCustomerId,
+    } = await getIntegrationCredentials("google", [
+      "client_id",
+      "client_secret",
+      "refresh_token",
+      "developer_token",
+      "customer_id",
+      "login_customer_id",
+    ]);
+
+    if (!clientId || !clientSecret || !refreshToken || !developerToken || !customerId) {
+      return {
+        error:
+          "Google Ads is not fully connected yet — the OAuth credentials, developer token and customer ID all have to be saved above before spend can be read.",
+      };
+    }
+
+    const accessToken = await getGoogleAdsAccessToken(clientId, clientSecret, refreshToken);
+
+    const state = await runAdSpendBackfill("google", (since, until) =>
+      syncGoogleAdSpend(customerId, { developerToken, accessToken, loginCustomerId }, since, until),
+    );
+    if (state.success) revalidatePath("/settings/integrations/google");
+    return state;
+  } catch (error) {
+    return {
+      error: await reportActionFailure("action:importPastGoogleAdSpend", error, {
+        fallback: "Could not import that period. The problem has been reported.",
+        revealMessage: true,
+      }),
+    };
   }
 }

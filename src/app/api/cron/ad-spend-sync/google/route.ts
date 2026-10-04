@@ -1,3 +1,4 @@
+import { eq, max } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { requireCronSecret } from "@/lib/cron/require-secret";
@@ -6,8 +7,9 @@ import { reportingFailures } from "@/lib/errors/capture";
 import { db } from "@/lib/db/client";
 import { adSpendDaily } from "@/lib/db/schema";
 import { yesterdayDateStringIST } from "@/lib/format/date";
+import { spendSyncWindow } from "@/lib/integrations/ad-spend-window";
 import { getGoogleAdsAccessToken } from "@/lib/integrations/google/ads-client";
-import { fetchGoogleAdsSpend, mapGoogleAdsRow } from "@/lib/integrations/google/insights-client";
+import { syncGoogleAdSpend } from "@/lib/integrations/google/sync-ad-spend";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { uploadConversions } from "@/lib/integrations/google/upload-conversions";
 
@@ -15,11 +17,14 @@ export const dynamic = "force-dynamic";
 
 /**
  * Mirrors `/api/cron/ad-spend-sync/meta`: same CRON_SECRET Bearer auth,
- * same "always yesterday in IST" reasoning, same upsert-by-(date,
- * platform, ad_id) shape into the one shared `ad_spend_daily` table. The
- * one real difference is the extra OAuth hop every Google Ads API call
- * needs — the stored refresh token is exchanged for a short-lived access
- * token first.
+ * same window logic (from wherever the stored data stops up to yesterday,
+ * plus a rolling re-read of the last week — Google restates a day's
+ * figures too), same upsert-by-(date, platform, ad_id) shape into the one
+ * shared `ad_spend_daily` table. The one real difference is the extra
+ * OAuth hop every Google Ads API call needs — the stored refresh token is
+ * exchanged for a short-lived access token first.
+ *
+ * `?days=N` backfills N days ending yesterday, same as Meta's.
  */
 async function run(request: Request) {
   const denied = requireCronSecret(request);
@@ -42,57 +47,46 @@ async function run(request: Request) {
   ]);
 
   if (!clientId || !clientSecret || !refreshToken || !developerToken || !customerId) {
+    /*
+      200, not a failure: an instance with no Google Ads account is not
+      broken, and a nightly run that reports failure every night for a
+      configuration nobody has filled in teaches everyone to ignore the
+      alert. But it must not be silent about it either — which it was,
+      behind an `error` key the nightly runner reads as success. Same fix
+      as the Meta route's.
+    */
     return NextResponse.json(
-      { error: "Google Ads credentials not fully configured" },
+      {
+        skipped: "not-configured",
+        detail:
+          "Google Ads credentials are not fully set (Settings → Integrations → Google). No spend can be fetched until they are.",
+      },
       { status: 200 },
     );
   }
 
   const accessToken = await getGoogleAdsAccessToken(clientId, clientSecret, refreshToken);
-  const date = yesterdayDateStringIST(new Date());
-  const rows = await fetchGoogleAdsSpend(
+  const yesterday = yesterdayDateStringIST(new Date());
+
+  const [stored] = await db
+    .select({ lastDate: max(adSpendDaily.date) })
+    .from(adSpendDaily)
+    .where(eq(adSpendDaily.platform, "google"));
+
+  const requestedDays = Number(new URL(request.url).searchParams.get("days"));
+
+  const window = spendSyncWindow({
+    lastSyncedDate: stored?.lastDate ?? null,
+    yesterday,
+    requestedDays: Number.isFinite(requestedDays) ? requestedDays : null,
+  });
+
+  const result = await syncGoogleAdSpend(
     customerId,
     { developerToken, accessToken, loginCustomerId },
-    date,
+    window.since,
+    window.until,
   );
-
-  let synced = 0;
-  for (const row of rows) {
-    const mapped = mapGoogleAdsRow(row);
-    if (!mapped) continue;
-
-    await db
-      .insert(adSpendDaily)
-      .values({
-        date,
-        platform: "google",
-        accountId: customerId,
-        campaignId: mapped.campaignId,
-        campaignName: mapped.campaignName,
-        adsetId: mapped.adsetId,
-        adsetName: mapped.adsetName,
-        adId: mapped.adId,
-        adName: mapped.adName,
-        spendPaise: mapped.spendPaise,
-        impressions: mapped.impressions,
-        clicks: mapped.clicks,
-        leadsReported: mapped.leadsReported,
-      })
-      .onConflictDoUpdate({
-        target: [adSpendDaily.date, adSpendDaily.platform, adSpendDaily.adId],
-        set: {
-          campaignName: mapped.campaignName,
-          adsetName: mapped.adsetName,
-          adName: mapped.adName,
-          spendPaise: mapped.spendPaise,
-          impressions: mapped.impressions,
-          clicks: mapped.clicks,
-          leadsReported: mapped.leadsReported,
-          updatedAt: new Date(),
-        },
-      });
-    synced++;
-  }
 
   // Reporting admissions back to Google runs in the same job.
   //
@@ -109,7 +103,14 @@ async function run(request: Request) {
     conversions = { error: error instanceof Error ? error.message : String(error) };
   }
 
-  return NextResponse.json({ date, synced, conversions });
+  return NextResponse.json({
+    since: window.since,
+    until: window.until,
+    days: window.days,
+    reason: window.reason,
+    ...result,
+    conversions,
+  });
 }
 
 /**

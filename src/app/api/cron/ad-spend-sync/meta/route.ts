@@ -9,7 +9,7 @@ import { adSpendDaily } from "@/lib/db/schema";
 import { yesterdayDateStringIST } from "@/lib/format/date";
 import { spendSyncWindow } from "@/lib/integrations/ad-spend-window";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
-import { fetchMetaInsights, mapMetaInsightsRow } from "@/lib/integrations/meta/insights-client";
+import { syncMetaAdSpend } from "@/lib/integrations/meta/sync-ad-spend";
 
 export const dynamic = "force-dynamic";
 
@@ -84,69 +84,14 @@ async function run(request: Request) {
     requestedDays: Number.isFinite(requestedDays) ? requestedDays : null,
   });
 
-  const rows = await fetchMetaInsights(adAccountId, accessToken, window.since, window.until);
-
-  let synced = 0;
-  const datesSeen = new Set<string>();
-
-  for (const row of rows) {
-    /*
-      The row's own date, not the window's. `time_increment=1` returns one
-      row per ad per day and `date_start` is the day it belongs to; storing
-      every row under one date would pile a whole backfill onto a single
-      day and make every number on the Ad performance screen wrong in the
-      most convincing way possible.
-
-      A row without one is skipped rather than guessed at: there is no
-      honest date to file it under, and a wrong date is worse than a
-      missing row.
-    */
-    const date = row.date_start;
-    if (!date) continue;
-
-    const mapped = mapMetaInsightsRow(row);
-    await db
-      .insert(adSpendDaily)
-      .values({
-        date,
-        platform: "meta",
-        accountId: adAccountId,
-        campaignId: mapped.campaignId,
-        campaignName: mapped.campaignName,
-        adsetId: mapped.adsetId,
-        adsetName: mapped.adsetName,
-        adId: mapped.adId,
-        adName: mapped.adName,
-        spendPaise: mapped.spendPaise,
-        impressions: mapped.impressions,
-        clicks: mapped.clicks,
-        leadsReported: mapped.leadsReported,
-      })
-      .onConflictDoUpdate({
-        target: [adSpendDaily.date, adSpendDaily.platform, adSpendDaily.adId],
-        set: {
-          campaignName: mapped.campaignName,
-          adsetName: mapped.adsetName,
-          adName: mapped.adName,
-          spendPaise: mapped.spendPaise,
-          impressions: mapped.impressions,
-          clicks: mapped.clicks,
-          leadsReported: mapped.leadsReported,
-          updatedAt: new Date(),
-        },
-      });
-
-    datesSeen.add(date);
-    synced += 1;
-  }
+  const result = await syncMetaAdSpend(adAccountId, accessToken, window.since, window.until);
 
   return NextResponse.json({
     since: window.since,
     until: window.until,
     days: window.days,
     reason: window.reason,
-    synced,
-    daysWithSpend: datesSeen.size,
+    ...result,
   });
 }
 

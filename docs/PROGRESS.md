@@ -6266,3 +6266,39 @@ success. That is the 3 October outage in one sentence, and it is now detected ra
 discovered.
 
 **1401 tests pass**, lint, `db:audit` and the production build clean.
+
+---
+
+## Session 49 — Importing ad spend history, both platforms
+
+"Can you help me pull last 1 years meta ad performance in the CRM" — and then the same for
+Google Ads.
+
+**It is a button, not a command.** `?days=365` already existed on both sync routes, but
+using it means a terminal and the `CRON_SECRET`, and a report is not worth handing somebody
+a secret. **Settings → Integrations → Meta → Ad spend history**, and the same on the Google
+page: it shows the dates already stored, and the button names the exact window the next
+press will fetch.
+
+**Ninety days per press, oldest-first — four presses is a year.** Deliberate, not timid: a
+serverless function killed at its time limit produces no error anybody sees, so a single
+"fetch everything" button would look identical to one that worked and stopped halfway, and
+half-imported spend makes every cost-per-lead figure on the reports confidently wrong. Each
+press says what it found and where the history now starts, and the button goes dead when
+there is nothing older — both platforms keep about three years.
+
+**One sync function per platform, used by both the nightly cron and the button**, so a
+backfill done by hand and one done at night cannot disagree about a day's spend. The extract
+also replaced per-row inserts with batched upserts of 200 rows, which is what makes a
+ninety-day pull finish at all.
+
+**Google needed the fix Meta got yesterday.** Its query asked for `segments.date` only in
+the WHERE, so a range would have come back summed into one row per ad with no honest date
+to file it under — a year of spend recorded as one Tuesday. It is in the SELECT now, each
+row stored under its own date, and the dates are validated as `yyyy-MM-dd` before they are
+interpolated into the query (GAQL has no parameter binding, and the button puts a
+person-typed number at the far end of that path). Google's "not fully configured" branch was
+also still returning 200 with an `error` key the nightly runner reads as success; same fix
+as Meta's.
+
+**1408 tests pass**, lint, `db:audit` and the production build clean.

@@ -80,6 +80,7 @@ describe("GET /api/cron/ad-spend-sync/google", () => {
   it("inserts a real ad_spend_daily row from the (mocked) Ads API response", async () => {
     vi.mocked(searchGoogleAds).mockResolvedValue([
       {
+        segments: { date: "2026-09-30" },
         campaign: { id: "c1", name: "Foundation" },
         adGroup: { id: "ag1", name: "Group A" },
         adGroupAd: { ad: { id: "ad1", name: "Creative A" } },
@@ -99,16 +100,53 @@ describe("GET /api/cron/ad-spend-sync/google", () => {
     expect(row.spendPaise).toBe(500000);
     expect(row.campaignName).toBe("Foundation");
     expect(row.leadsReported).toBe(3);
+    // Stored under the row's OWN `segments.date`, not the date the run
+    // asked for — a range query returns many days at once and filing
+    // them all under one would make every figure on the Ad performance
+    // page wrong in the most convincing way possible.
+    expect(row.date).toBe("2026-09-30");
+  });
+
+  it("stores each day of a multi-day response under its own date", async () => {
+    vi.mocked(searchGoogleAds).mockResolvedValue([
+      { segments: { date: "2026-09-28" }, campaign: { id: "c1" }, adGroupAd: { ad: { id: "ad-multi" } }, metrics: { costMicros: "1000000" } },
+      { segments: { date: "2026-09-29" }, campaign: { id: "c1" }, adGroupAd: { ad: { id: "ad-multi" } }, metrics: { costMicros: "2000000" } },
+    ]);
+
+    const res = await GET(request());
+    const body = await res.json();
+    expect(body.synced).toBe(2);
+    expect(body.daysWithSpend).toBe(2);
+
+    const rows = await db
+      .select()
+      .from(adSpendDaily)
+      .where(and(eq(adSpendDaily.accountId, TEST_CUSTOMER_ID), eq(adSpendDaily.adId, "ad-multi")));
+    expect(rows.map((r) => [r.date, r.spendPaise]).sort()).toEqual([
+      ["2026-09-28", 100],
+      ["2026-09-29", 200],
+    ]);
+  });
+
+  it("asks Google for a date range, segmented by day", async () => {
+    // Without `segments.date` in the SELECT, Google sums the whole window
+    // into one row per ad and there is no honest date to store it under.
+    vi.mocked(searchGoogleAds).mockResolvedValue([]);
+    await GET(request());
+
+    const query = vi.mocked(searchGoogleAds).mock.calls[0][2] as string;
+    expect(query).toContain("segments.date,");
+    expect(query).toMatch(/segments\.date BETWEEN '\d{4}-\d{2}-\d{2}' AND '\d{4}-\d{2}-\d{2}'/);
   });
 
   it("upserts (updates in place) rather than duplicating on a second run for the same day", async () => {
     vi.mocked(searchGoogleAds).mockResolvedValue([
-      { campaign: { id: "c1", name: "Foundation" }, adGroupAd: { ad: { id: "ad1", name: "Creative A" } }, metrics: { costMicros: "5000000000" } },
+      { segments: { date: "2026-09-30" }, campaign: { id: "c1", name: "Foundation" }, adGroupAd: { ad: { id: "ad1", name: "Creative A" } }, metrics: { costMicros: "5000000000" } },
     ]);
     await GET(request());
 
     vi.mocked(searchGoogleAds).mockResolvedValue([
-      { campaign: { id: "c1", name: "Foundation" }, adGroupAd: { ad: { id: "ad1", name: "Creative A" } }, metrics: { costMicros: "5255000000" } },
+      { segments: { date: "2026-09-30" }, campaign: { id: "c1", name: "Foundation" }, adGroupAd: { ad: { id: "ad1", name: "Creative A" } }, metrics: { costMicros: "5255000000" } },
     ]);
     await GET(request());
 

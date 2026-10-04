@@ -1,28 +1,63 @@
 import { searchGoogleAds, type GoogleAdsCredentials } from "./ads-client";
 
-interface GoogleAdsSearchRow {
+export interface GoogleAdsSearchRow {
+  /** Present because every query asks for `segments.date` — this is the day the row is for. */
+  segments?: { date?: string };
   campaign?: { id?: string; name?: string };
   adGroup?: { id?: string; name?: string };
   adGroupAd?: { ad?: { id?: string; name?: string } };
   metrics?: { costMicros?: string; impressions?: string; clicks?: string; conversions?: number };
 }
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
 /**
- * Ad-level daily spend for one customer (account) on one date — the finest
- * grain `ad_spend_daily` is keyed on, same as Meta's `level=ad` Insights
- * call. `segments.date` pins the query to exactly one day; Google Ads
- * doesn't finalise a day's numbers immediately either, so this is always
- * called with "yesterday", same reasoning as the Meta sync.
+ * GAQL has no parameter binding — a query is a string, and these dates go
+ * into it by interpolation. They come from this codebase's own date
+ * helpers today, but a backfill button puts a number a person typed at
+ * the far end of the same path, so the shape is checked here rather than
+ * trusted. A rejected date is a thrown error, not a silently empty
+ * result.
  */
-export async function fetchGoogleAdsSpend(customerId: string, credentials: GoogleAdsCredentials, date: string): Promise<GoogleAdsSearchRow[]> {
+function assertDate(label: string, value: string): void {
+  if (!DATE_ONLY.test(value)) {
+    throw new Error(`Google Ads spend sync: ${label} must be a yyyy-MM-dd date, got "${value}"`);
+  }
+}
+
+/**
+ * Ad-level daily spend for one customer (account) over a range of dates —
+ * the finest grain `ad_spend_daily` is keyed on, same as Meta's
+ * `level=ad` Insights call.
+ *
+ * `segments.date` is in the SELECT as well as the WHERE, and that is what
+ * makes a range safe: segmenting by date gives one row per ad per day,
+ * each carrying the day it belongs to, instead of one summed row for the
+ * whole window. The caller stores each row under its own date, never the
+ * date it asked for.
+ *
+ * `until` defaults to `since`, so the original one-day call is unchanged.
+ * Google Ads doesn't finalise a day's numbers immediately, so the latest
+ * day this is ever called with is yesterday — same reasoning as Meta.
+ */
+export async function fetchGoogleAdsSpend(
+  customerId: string,
+  credentials: GoogleAdsCredentials,
+  since: string,
+  until: string = since,
+): Promise<GoogleAdsSearchRow[]> {
+  assertDate("since", since);
+  assertDate("until", until);
+
   const query = `
     SELECT
+      segments.date,
       campaign.id, campaign.name,
       ad_group.id, ad_group.name,
       ad_group_ad.ad.id, ad_group_ad.ad.name,
       metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions
     FROM ad_group_ad
-    WHERE segments.date = '${date}'
+    WHERE segments.date BETWEEN '${since}' AND '${until}'
   `.trim();
 
   return searchGoogleAds<GoogleAdsSearchRow>(customerId, credentials, query);
