@@ -1,81 +1,262 @@
+import Link from "next/link";
+
 import { AccessDenied } from "@/components/layout/access-denied";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { formatDateIST } from "@/lib/format/date";
+import { hasIntegrationCredential } from "@/lib/integrations/credentials";
+import {
+  conversationTitle,
+  getInstagramConversations,
+  getInstagramThread,
+} from "@/lib/instagram/get-conversations";
+import { isWithinInstagramReplyWindow } from "@/lib/instagram/reply-window";
+import { createClient } from "@/lib/supabase/server";
+import { cn } from "@/lib/utils";
+
+import { ConvertToLead } from "./convert-to-lead";
+import { InstagramThread } from "./instagram-thread";
 
 /**
- * Instagram DMs — not built yet, and unlike personal WhatsApp there is
- * nothing stopping it.
+ * Instagram DMs.
  *
- * Meta publishes the Instagram Messaging API for Professional accounts
- * linked to a Facebook Page, which AFD already has. The work is real
- * (another webhook, another client, another inbox view, another App
- * Review permission) and the shape is the same as the WhatsApp inbox, so
- * this page says what it needs rather than pretending to be empty.
+ * The one deliberate difference from every other inbound channel: a DM
+ * does **not** create a lead (docs/DECISIONS.md, 2026-10-04). Most
+ * Instagram messages are a question, a reply to a story, or nothing, and
+ * a CRM that turns each one into a lead stops being a record of who is
+ * enrolling. So a conversation is a conversation, and **Convert to lead**
+ * is a button a counsellor presses when it becomes an enquiry.
+ *
+ * Who sees what needs no mechanism here: `instagram_conversations`' RLS
+ * (migration 0081) scopes a converted conversation through its lead, and
+ * leaves an unconverted one visible to anybody who works the inbox —
+ * because a DM is addressed to the institute, not to a counsellor, and
+ * somebody has to answer it.
  */
-export default async function InstagramPage() {
+export default async function InstagramPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ thread?: string; q?: string; filter?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.read")) return <AccessDenied />;
 
+  const { thread: selectedId, q, filter } = await searchParams;
+  const search = (q ?? "").trim().toLowerCase();
+  const onlyAwaiting = filter === "awaiting";
+  const onlyUnconverted = filter === "unconverted";
+
+  const supabase = await createClient();
+  const conversations = await getInstagramConversations(supabase);
+
+  // Asked only when there is nothing to show: with conversations on
+  // screen the integration is self-evidently working, and an empty inbox
+  // is the only case where "is this even connected?" is the question.
+  const connected =
+    conversations.length > 0 ||
+    ((await hasIntegrationCredential("meta", "ig_user_id")) &&
+      (await hasIntegrationCredential("meta", "page_access_token")));
+
+  const awaitingCount = conversations.filter((c) => c.awaitingReply).length;
+  const unconvertedCount = conversations.filter((c) => c.leadId === null).length;
+
+  const visible = conversations.filter((conversation) => {
+    if (onlyAwaiting && !conversation.awaitingReply) return false;
+    if (onlyUnconverted && conversation.leadId !== null) return false;
+    if (!search) return true;
+    return (
+      conversationTitle(conversation).toLowerCase().includes(search) ||
+      (conversation.username ?? "").toLowerCase().includes(search) ||
+      conversation.lastMessagePreview.toLowerCase().includes(search)
+    );
+  });
+
+  const selected = selectedId ? (conversations.find((c) => c.id === selectedId) ?? null) : null;
+  const messages = selected ? await getInstagramThread(supabase, selected.id) : [];
+
+  function href(params: Record<string, string | undefined>): string {
+    const next = new URLSearchParams();
+    const thread = params.thread ?? selectedId;
+    const query = params.q ?? q;
+    const nextFilter = params.filter ?? filter;
+    if (thread) next.set("thread", thread);
+    if (query) next.set("q", query);
+    if (nextFilter) next.set("filter", nextFilter);
+    const qs = next.toString();
+    return qs ? `/whatsapp/instagram?${qs}` : "/whatsapp/instagram";
+  }
+
   return (
-    <div className="flex max-w-3xl flex-col gap-5">
-      <div className="rounded-lg border p-4">
-        <p className="text-[0.9375rem]">
-          <strong>Not connected yet — and nothing is in the way.</strong> Meta publishes the
-          Instagram Messaging API for Professional accounts linked to a Facebook Page, which
-          <span> </span>
-          <code>afdindia</code> already is. This is a build, not a blocker.
-        </p>
-      </div>
-
-      <div>
-        <h2 className="font-medium">How it will work</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Decided deliberately, and differently from WhatsApp: a DM does{" "}
-          <strong>not</strong> create a lead. Most Instagram messages are questions, replies
-          to a story, or nothing at all, and a CRM that turns every one of them into a lead
-          stops being a record of who is actually enrolling. So this is a conversation
-          first.
-        </p>
-        <ul className="mt-2 flex list-disc flex-col gap-2 pl-5 text-sm">
-          <li>Every DM arrives here and can be replied to from the CRM.</li>
-          <li>
-            <strong>Convert to lead</strong> is a button on the conversation, pressed by the
-            counsellor when it turns into a real enquiry.
-          </li>
-          <li>
-            Converting goes through the same path as every other source
-            (<code>resolveOrCreateLead</code>), so a person who already exists is linked
-            rather than duplicated, and the assignment rules apply as usual.
-          </li>
-          <li>
-            An Instagram handle is not a phone number, so a conversation stays matched by
-            handle until the counsellor adds one.
-          </li>
-        </ul>
-      </div>
-
-      <div>
-        <h2 className="font-medium">What it needs from Meta</h2>
-        <ol className="mt-2 flex list-decimal flex-col gap-2 pl-5 text-sm">
-          <li>
-            The Instagram account set to <strong>Professional</strong> and linked to the AFD
-            Facebook Page, with <strong>Connected tools → Allow access to messages</strong>{" "}
-            turned on.
-          </li>
-          <li>
-            <code>instagram_manage_messages</code> added to the same Meta app, through the
-            same App Review as the lead-ads permissions.
-          </li>
-          <li>
-            A webhook for the <code>messages</code> field — the same verify-persist-process
-            path the WhatsApp and Meta Lead Ads webhooks already use.
-          </li>
-        </ol>
-      </div>
-
-      <p className="text-sm text-muted-foreground">
-        Worth submitting alongside the lead-ads permissions, since it rides the same review
-        and the same app.
+    <div className="flex flex-col gap-4">
+      <p className="max-w-3xl text-sm text-muted-foreground">
+        Messages sent to the institute&apos;s Instagram account. A DM does not create a lead —
+        most are a question or a reply to a story — so these are conversations until somebody
+        presses <strong>Convert to lead</strong>. Instagram allows a reply only within 24 hours
+        of the person&apos;s last message.
       </p>
+
+      {!connected && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+          <p>
+            <strong>Instagram is not connected yet.</strong> It needs the Instagram account set
+            to Professional and linked to the AFD Facebook Page with{" "}
+            <em>Connected tools → Allow access to messages</em> on,{" "}
+            <code>instagram_manage_messages</code> granted to the Meta app, and the{" "}
+            <code>messages</code> webhook pointed at{" "}
+            <code>/api/webhooks/instagram</code>. See docs/ADS-SETUP.md § Instagram DMs, then
+            enter the Instagram Account ID in{" "}
+            <Link href="/settings/integrations/meta" className="underline">
+              Settings → Integrations → Meta
+            </Link>
+            .
+          </p>
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-[22rem_1fr]">
+        <div className="flex flex-col gap-3">
+          <form action="/whatsapp/instagram" method="get" className="flex flex-col gap-2">
+            {selectedId && <input type="hidden" name="thread" value={selectedId} />}
+            {filter && <input type="hidden" name="filter" value={filter} />}
+            <Input
+              name="q"
+              defaultValue={q ?? ""}
+              placeholder="Search a handle, name or message…"
+              className="h-9"
+            />
+          </form>
+
+          <div className="flex flex-wrap items-center gap-1 text-sm">
+            <FilterLink href={href({ filter: "" })} active={!onlyAwaiting && !onlyUnconverted}>
+              All ({conversations.length})
+            </FilterLink>
+            <FilterLink href={href({ filter: "awaiting" })} active={onlyAwaiting}>
+              Needs a reply ({awaitingCount})
+            </FilterLink>
+            {unconvertedCount > 0 && (
+              <FilterLink href={href({ filter: "unconverted" })} active={onlyUnconverted}>
+                Not a lead ({unconvertedCount})
+              </FilterLink>
+            )}
+          </div>
+
+          <div className="flex max-h-[70vh] flex-col overflow-y-auto rounded-lg border">
+            {visible.length === 0 ? (
+              <p className="p-6 text-center text-sm text-muted-foreground">
+                {conversations.length === 0
+                  ? "No Instagram messages yet."
+                  : "Nothing matches."}
+              </p>
+            ) : (
+              visible.map((conversation) => (
+                <Link
+                  key={conversation.id}
+                  href={href({ thread: conversation.id })}
+                  className={cn(
+                    "flex flex-col gap-0.5 border-b p-3 last:border-b-0 hover:bg-accent/40",
+                    conversation.id === selectedId && "bg-accent",
+                  )}
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-sm font-medium">
+                      {conversationTitle(conversation)}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatDateIST(conversation.lastMessageAt, "d MMM")}
+                    </span>
+                  </div>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {conversation.lastDirection === "outbound" && "You: "}
+                    {conversation.lastMessagePreview}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {conversation.username && conversation.leadName && (
+                      <span className="text-xs text-muted-foreground">@{conversation.username}</span>
+                    )}
+                    {conversation.counsellorName && (
+                      <span className="text-xs text-muted-foreground">
+                        · {conversation.counsellorName}
+                      </span>
+                    )}
+                    {conversation.unreadCount > 0 && (
+                      <Badge className="ml-auto">{conversation.unreadCount} new</Badge>
+                    )}
+                    {conversation.unreadCount === 0 && conversation.leadId === null && (
+                      <Badge variant="outline" className="ml-auto">
+                        Not a lead
+                      </Badge>
+                    )}
+                  </div>
+                </Link>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          {selected ? (
+            <>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <div>
+                  <h2 className="text-lg font-semibold">{conversationTitle(selected)}</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {selected.messageCount} message{selected.messageCount === 1 ? "" : "s"}
+                    {selected.username ? ` · @${selected.username}` : ""}
+                    {selected.counsellorName ? ` · ${selected.counsellorName}` : ""}
+                  </p>
+                </div>
+                {selected.leadId && (
+                  <Link href={`/leads/${selected.leadId}`} className="text-sm font-medium underline">
+                    Open the lead
+                  </Link>
+                )}
+              </div>
+
+              {!selected.leadId && can(user, "lead.create") && (
+                <ConvertToLead
+                  conversationId={selected.id}
+                  suggestedName={selected.name ?? selected.username ?? ""}
+                />
+              )}
+
+              <InstagramThread
+                conversationId={selected.id}
+                messages={messages}
+                canSend={can(user, "whatsapp.send")}
+                withinWindow={isWithinInstagramReplyWindow(selected.lastInboundAt)}
+                lastInboundAt={selected.lastInboundAt}
+              />
+            </>
+          ) : (
+            <div className="flex h-full min-h-64 items-center justify-center rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+              Pick a conversation to read.
+            </div>
+          )}
+        </div>
+      </div>
     </div>
+  );
+}
+
+function FilterLink({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "rounded-md px-3 py-1.5",
+        active ? "bg-accent font-medium" : "text-muted-foreground hover:bg-accent/50",
+      )}
+    >
+      {children}
+    </Link>
   );
 }

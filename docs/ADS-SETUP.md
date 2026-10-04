@@ -329,6 +329,42 @@ not data.
 existing person — the CRM never rejects a duplicate, it links it (CLAUDE.md § Identity).
 Search the phone number rather than scanning the top of the list.
 
+### 1.7b Instagram DMs
+
+Same Meta app, same App Secret, same Verify Token — a second callback URL on the same app,
+for the Instagram object rather than the Page. Once it is on, DMs appear in
+**Chats → Instagram** and can be answered from the CRM.
+
+**A DM does not create a lead.** That is deliberate: most Instagram messages are a
+question, a reply to a story, or nothing, and a CRM that turns each one into a lead stops
+being a record of who is enrolling. Each conversation has a **Convert to lead** button for
+when it becomes a real enquiry — and converting goes through the same path as every other
+source, so somebody already in the CRM is linked rather than duplicated, and your
+assignment rules pick the counsellor. It asks for a phone number, because Instagram never
+gives us one.
+
+Four things to set up, and the first two are the ones people forget:
+
+1. **On Instagram** (the phone app), with the account set to **Professional** and linked
+   to the AFD Facebook Page: **Settings → Messages and story replies → Connected tools →
+   Allow access to messages**. Without this nothing is ever delivered, and nothing errors.
+2. **In the Meta app dashboard → Webhooks**, pick the **Instagram** object (not Page) and
+   subscribe the **`messages`** field, with:
+   - Callback URL: `https://afd-crm-one.vercel.app/api/webhooks/instagram`
+   - Verify Token: the same one you used for leads
+3. **Add `instagram_manage_messages`** to the app and submit it for App Review. Worth
+   putting on the same submission as `leads_retrieval` — same app, same review.
+4. **In the CRM**, Settings → Integrations → Meta → **Instagram Account ID**: the
+   Instagram professional account's own numeric id. Replies are sent with the Page Access
+   Token you already saved.
+
+**The 24-hour rule is Meta's, not ours.** A free-form reply is only allowed within 24
+hours of the person's last message; after that the CRM greys the box out and says so, and
+the only way to answer is the Instagram app. There is no setting that changes this.
+
+A delivery panel for Instagram sits under the one for leads on the same settings screen,
+because "are DMs arriving?" and "are leads arriving?" are different questions.
+
 ### 1.8 Check the connection
 
 CRM → **Settings → Integrations → Meta → Test connection**, and read **Recent deliveries**
@@ -468,6 +504,8 @@ a fault in the CRM, and the list keeps building in the meantime.
 | A form question's answer is missing from the lead | **Recent deliveries** names the questions nothing matched. Add a field in Settings → Fields whose label is that question (see 1.6b) |
 | An answer is there but spelled oddly | It did not match a dropdown value, so it was kept as the lead typed it. Add that value in Settings → Dropdowns |
 | Meta says the retargeting audience is too small | Below ~1,000 matched people Meta will not run it. Nothing to fix; the list keeps building |
+| Instagram DMs never arrive | Almost always the Instagram app's own **Connected tools → Allow access to messages** switch, or the webhook subscribed to the Page object instead of the Instagram one |
+| An Instagram reply is refused | Either the 24-hour window has passed (Meta's rule), or `instagram_manage_messages` has not been granted yet. The error on the message says which |
 | Can't generate a token in the Graph API Explorer | Use the System User route in 1.3 instead — it does not need Facebook Login configured |
 | "No permissions available — assign an app role to the system user" | Three causes, in this order: (1) the app has no product granting those permissions — add **Marketing API** and **Webhooks** to it; (2) the app is not an asset of the system user — **Add assets → Apps → Manage app**; (3) link it from the app side too — **Accounts → Apps → AFD CRM → Assign people** → the system user, Full control |
 | Google API errors | Developer token still pending approval, or it's a test token |

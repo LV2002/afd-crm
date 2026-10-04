@@ -48,3 +48,28 @@ export function journalWhen(tag: string | undefined): number | null {
   const entry = entries.find((e) => e.tag === tag);
   return typeof entry?.when === "number" ? entry.when : null;
 }
+
+/**
+ * Migrations that can never run, because their journal timestamp is not
+ * ahead of what the database has already recorded.
+ *
+ * drizzle applies a migration only when its `when` is strictly GREATER
+ * than `max(created_at)` in its own bookkeeping table. So a journal entry
+ * written with a timestamp at or below that — a hand-edited `when`, a
+ * clock skew, or a file generated after somebody else's entry was given a
+ * date in the future — is inert. It sits in the folder, it is counted as
+ * expected, and nothing will ever execute it. No error, no warning: the
+ * deploy reports success and the column is missing.
+ *
+ * That is this project's 3 October outage in one sentence, so it is worth
+ * being able to detect rather than discover.
+ */
+export function unreachableMigrationTags(applied: number, newestRecorded: number | null): string[] {
+  if (newestRecorded === null) return [];
+  const entries = (journal as { entries?: Array<JournalEntry & { when?: number }> }).entries ?? [];
+  return [...entries]
+    .sort((a, b) => a.idx - b.idx)
+    .slice(Math.max(0, applied))
+    .filter((entry) => typeof entry.when === "number" && entry.when <= newestRecorded)
+    .map((entry) => entry.tag);
+}

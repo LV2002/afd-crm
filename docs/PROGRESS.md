@@ -6217,3 +6217,52 @@ people, which at ~200 leads a month means several months of "audience too small"
 nobody's fault.
 
 **1378 tests pass**, lint, `db:audit` and the production build clean.
+
+---
+
+## Session 48 — Instagram DMs
+
+Built, and it cannot be exercised until Meta approves `instagram_manage_messages` — said
+plainly so nobody tests it tomorrow and concludes it is broken. Everything on this side is
+done and tested; the remaining steps are Leon's and Meta's, and the screen says which.
+
+**A DM does not create a lead.** The deliberate difference from every other inbound
+channel, on Leon's instruction: most Instagram messages are a question, a reply to a story,
+or nothing at all. So the conversation is the object, and **Convert to lead** is a button
+pressed when it becomes a real enquiry — which runs `resolveOrCreateLead()` like every
+other source, so a person already in the CRM is linked rather than duplicated and the
+assignment rules choose the counsellor. It asks for a phone number, because Instagram never
+gives one; prefilling a lead nobody can ring would be worse than asking.
+
+**What shipped**
+
+- `instagram_conversations` + `instagram_messages`, with RLS (migration 0081). A converted
+  conversation inherits its lead's centre scoping. An unconverted one is visible to anybody
+  who works the inbox — deliberately, and written down in the migration: a DM is addressed
+  to the institute, not to a counsellor, and scoping it to `own` would empty the inbox for
+  exactly the people who answer it.
+- `/api/webhooks/instagram` on the same verify → persist → process path as the other two.
+  Read receipts, reactions, deletions and **echoes of our own messages** are recognised and
+  skipped — an echo stored as inbound would put the CRM's words in the lead's mouth — and a
+  callback that carried nothing is still recorded, so an empty delivery list cannot mean
+  both "Meta never called" and "Meta called and we said nothing".
+- The inbox under **Chats → Instagram**: thread list, filters, the reply box, and the
+  24-hour window enforced in three places for three reasons (the box is disabled so nobody
+  types a reply that cannot be sent, the action refuses so a stale page cannot get round it,
+  and Meta refuses, which is the only authoritative one).
+- Instagram Account ID on the Meta credentials form, and a second delivery panel beside the
+  lead one — "are DMs arriving?" and "are leads arriving?" are different questions.
+
+**Known gaps, by choice.** A message sent from the Instagram app on a phone does not appear
+in the CRM (it arrives as an echo, which is skipped). Attachments are recorded by URL, not
+downloaded, and Meta's URLs expire — so the thread says "may have expired" rather than
+rendering a broken image.
+
+**And one thing found on the way out.** `migrate-cli` now fails a build when a pending
+migration's journal timestamp is not ahead of what the database has recorded. drizzle
+applies a migration only when that number is greater, and silently skips it otherwise — a
+hand-edited or future-dated `when` makes a migration inert while the deploy reports
+success. That is the 3 October outage in one sentence, and it is now detected rather than
+discovered.
+
+**1401 tests pass**, lint, `db:audit` and the production build clean.
