@@ -33,27 +33,39 @@ test.describe("a counsellor's day", () => {
 
   test("creates a lead and lands on it", async ({ page }) => {
     /*
-      The slowest thing the suite does, and the only test that has ever
-      failed intermittently — three times across commits whose diffs had
-      nothing to do with leads (be0c8f4, a54eefd, a9d2893), always alone,
-      always by running out of time rather than by getting a wrong answer.
+      The only test in this suite that has ever failed intermittently —
+      be0c8f4, a54eefd, a9d2893 and 66abe77 — always alone among twenty,
+      always by the URL never changing rather than by a wrong answer.
 
-      The mechanism is the connection pool. `lib/db/client.ts` is `max: 1`
-      on purpose — a serverless function gets one connection, and
-      `resolveOrCreateLead()`'s own comment depends on it — so creating a
-      lead opens a transaction that holds the single connection while the
-      assignment engine runs inside it, and every other query the browser
-      has in flight (the App Router prefetches every link it can see)
-      queues behind it. On an unlucky interleaving that queue is long.
+      ## What has been ruled out
 
-      So the budget is raised rather than the pool: twenty seconds was an
-      arbitrary number, and what this test asserts is that the row was
-      written and the assignment engine ran, not that it happened quickly.
-      `test.slow()` triples the per-test timeout to match.
+      **Not the dev server.** CI runs `next build && next start`, so there
+      is no compile-on-first-request.
 
-      If this ever fails at forty-five seconds, that is not this comment's
-      situation any more — something is genuinely wrong with lead
-      creation.
+      **Not an outbound call.** Creating a lead makes none: `startFlows()`
+      only inserts a run row for the nightly cron, and email is skipped
+      with `RESEND_API_KEY` unset.
+
+      **Not the connection pool, and not slowness.** That was the first
+      guess — `lib/db/client.ts` is `max: 1`, so a transaction holds the
+      only connection while everything else queues — and raising the
+      budget from twenty seconds to forty-five disproved it. Forty-five
+      seconds is not a queue. The server action is not finishing.
+
+      ## What this instrumentation is for
+
+      Two very different failures look identical from the outside: the
+      server action never answering, and it answering fine while the
+      browser fails to navigate. Waiting for the POST itself tells them
+      apart, so the next occurrence produces an answer rather than a
+      fourth guess.
+
+      Prime suspect, on the evidence so far: `createLeadManually()` reads
+      the new lead back through Supabase (`leadIsVisibleToCaller`, the
+      scope seatbelt) before redirecting. That is the one network call in
+      the path — to the local Supabase stack, over Kong — and a request
+      that never returns would look exactly like this, including the
+      intermittency and including the row being created anyway.
     */
     test.slow();
 
@@ -63,7 +75,24 @@ test.describe("a counsellor's day", () => {
     await page.goto("/leads/new");
     await page.locator("#studentName").fill(name);
     await page.locator("#primaryPhone").fill(uniquePhone());
+
+    // Armed before the click, or a fast action could answer first.
+    const actionAnswered = page
+      .waitForResponse(
+        (response) =>
+          response.request().method() === "POST" && new URL(response.url()).pathname === "/leads/new",
+        { timeout: 45_000 },
+      )
+      .then((response) => response.status())
+      .catch(() => null);
+
     await page.getByRole("button", { name: /create lead/i }).click();
+
+    const status = await actionAnswered;
+    expect(
+      status,
+      "the server action never answered within 45s — the hang is server-side (see this test's comment), not a slow browser",
+    ).not.toBeNull();
 
     // The lead's own page, which is the only proof the row was written and
     // the assignment engine ran without throwing.

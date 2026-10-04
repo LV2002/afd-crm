@@ -2844,7 +2844,25 @@ an arbitrary number; what the test asserts is that the row was written and the a
 engine ran, not that it happened quickly. Forty-five seconds, with `test.slow()` to match,
 and a comment saying that a failure at forty-five is a real problem rather than this one.
 
-Worth recording the discipline as much as the fix: three runs were spent treating this as a
-possible regression in whatever had just been merged, because "it only ever fails on its
-own" is exactly what a real intermittent bug looks like too. The history is in the commit
-list now so the next person spends ten minutes rather than an hour.
+### It failed at forty-five too, so that was wrong
+
+66abe77 — the commit that raised the budget — failed the same way. Forty-five seconds is
+not a queue waiting its turn. The server action is not finishing, and the pool theory is
+dead.
+
+What survives the elimination: the only network call in `createLeadManually()` is the scope
+seatbelt, `leadIsVisibleToCaller()`, which reads the new lead back through Supabase before
+the redirect. A request to the local stack that never returns would look exactly like this
+— including the intermittency, and including the row being created anyway. That is a
+suspicion, not a finding, and it is written down as one.
+
+Rather than guess a fourth time, the test now waits for the action's own POST and says
+which half failed: the server never answering, or the browser failing to navigate after it
+did. Two very different bugs that are indistinguishable from the outside, and the next
+occurrence will name one.
+
+The discipline is worth more than the fix here. Four runs have now been spent treating this
+as a possible regression in whatever had just merged, because "it only ever fails on its
+own" is exactly what a real intermittent bug looks like too — and the one confident
+explanation offered along the way was wrong, which is why it got a disproving experiment
+rather than a comment.
