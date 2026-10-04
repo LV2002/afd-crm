@@ -1,0 +1,248 @@
+# Chapter 7 — Admissions, fees and payments
+
+This chapter covers the first gate — Sales → Accounts — and everything
+that follows until the money is in.
+
+## 7.1 Confirming an admission (Gate 1)
+
+### Goal
+Record that a family has agreed to join, and hand them to accounts.
+
+### Before you start
+`enrolment.create`. The lead must not already have an admission.
+
+**Understand what this does before you press it.** Confirming an
+admission ends sales work on that lead and hands the family to accounts.
+Only an administrator can walk it back. Do it when the admission is
+actually agreed, not when it looks likely.
+
+### Steps
+1. Open the lead.
+2. Find **Confirm admission** on the right.
+3. **Course** — the course they are *actually joining*. This may differ
+   from what they originally enquired about, and that is exactly why it is
+   asked here rather than copied from the lead.
+4. **Mode** — Online, Offline or Hybrid.
+5. **Academic year** — choose from the list.
+6. **Batch** — optional, and only offered once a course is chosen. The
+   field reads *Pick a course first* until then.
+7. **Discount** — in rupees, if you are giving one. Leave at `0` if not.
+8. **Manual fee override** — leave blank to use the fee structure. Only
+   fill this in when the agreed fee genuinely differs from the standard
+   one.
+9. Press **Confirm admission**.
+10. A confirmation appears: *Confirm this admission?* Read it, then press
+    **Yes, confirm it**.
+
+### What you should see
+The **Confirm admission** form is replaced by an **Admission confirmed**
+summary showing the course, the net fee and the confirmation time. The
+lead now appears in **Admissions** for accounts, and the sidebar badge
+there goes up by one.
+
+### Common mistakes and fixes
+- **"There is no fee for this."** No fee structure matches that course,
+  centre, mode and academic year. Either an administrator adds one
+  (Settings → Fee Structures) or you use **Manual fee override**. Check
+  the academic year first — a mismatch there is the usual cause.
+- **Confirming the wrong course.** Ask an administrator; this is one of
+  the few genuinely awkward things to undo.
+- **Confirming early, "to hold the place".** Do not. It stops the lead
+  being worked and puts it in the accounts queue where it clutters a
+  real list.
+- **The discount is above your limit.** It is not refused. It is recorded
+  as pending and somebody with authority approves or rejects it (7.5).
+
+### Related
+- 7.2 The fee plan · 7.5 Discounts · Chapter 13, Settings → Fee Structures
+
+## 7.2 The fee plan and instalments
+
+Once an admission exists, the lead page gains a **Fees & instalment
+agreement** section.
+
+### What it shows
+- **Course fee** — the standard fee from the fee structure
+- **Discount**
+- **Payable** — what they actually owe
+- **Down payment agreed**
+- **Instalments** — a dated schedule
+- Whether the total scheduled matches the payable amount, and by how much
+  it falls short if not
+
+### Procedure: set up a payment plan
+
+**Goal** — agree how the fee will be paid.
+
+**Before you start** — `enrolment.update`.
+
+**Steps**
+1. Open the lead and scroll to **Fees & instalment agreement**.
+2. **Course fee** — usually pre-filled from the fee structure.
+3. **Discount**, and **Discount name** if it needs one (for example
+   *Early Bird*), or choose a running offer from the offers list.
+4. **Down payment** — what they are paying today.
+5. Under **Instalments**, fill in a due date and an **Amount ₹** for each
+   instalment they need. Leave unused rows blank.
+6. **Additional notes** — anything the agreement should say.
+7. Save.
+
+**What you should see** — the panel totals the instalments and tells you
+whether anything is *not yet scheduled*. Aim for zero.
+
+**Common mistakes**
+- *Instalments that do not add up to the payable amount.* The panel says
+  so explicitly. Fix it before printing an agreement.
+- *Dates in the past.* They will immediately show as overdue and start
+  generating reminders.
+
+### Procedure: print the instalment agreement
+1. Open the lead, scroll to **Fees & instalment agreement**.
+2. Open the agreement.
+3. Print or save as PDF from your browser.
+4. Have the family sign it, then upload the signed copy to
+   **Documents** so the panel shows a **Signed agreement**.
+
+The printed agreement takes the course and the terms **from the
+admission**, not from the lead's enquiry details — so it says what was
+actually agreed.
+
+[Screenshot: The printed instalment agreement]
+
+## 7.3 The Admissions screen
+
+**Admissions** in the sidebar (`payment.read`). Every confirmed
+admission and where its money has got to.
+
+Columns: **Student**, **Course**, **Centre**, **Confirmed**, **Net fee**,
+**Paid**, **Status**. Dropped admissions are marked.
+
+The red badge counts admissions confirmed with **no first payment yet** —
+the queue accounts should be working down.
+
+## 7.4 Recording a payment
+
+### Goal
+Record money received and issue a receipt.
+
+### Before you start
+`payment.record` — Accounts and administrators. Counsellors cannot do
+this, deliberately.
+
+### Steps
+1. Open **Admissions** and click the student.
+2. Find **Record a payment**.
+3. **Amount** — in rupees.
+4. **Mode of payment** — Cash, UPI, Card, NEFT, Cheque or Other.
+5. **Received into** — which bank or cash account the money landed in.
+6. **Reference (optional)** — *UTR / cheque no. / transaction id*. Fill
+   this in for anything that is not cash; it is what reconciliation
+   depends on.
+7. Press **Record payment**.
+8. Confirm at *Record this payment?* with **Yes, record it**.
+
+### What you should see
+- The payment appears in the **Payment ledger** on that page.
+- **Paid** goes up and **Balance** goes down.
+- A receipt number is issued.
+- **If this is the first cleared payment, a student record is created
+  automatically** — the second gate. The page shows **Student created**.
+
+### Common mistakes and fixes
+- **Recording the wrong amount.** You cannot edit or delete it. Payments
+  are append-only: a mistake is corrected with a reversal (7.6). This is
+  not an inconvenience, it is what makes the ledger trustworthy.
+- **Recording into the wrong account.** Same — correct with a transfer or
+  a reversal, do not try to edit.
+- **No account to choose.** None has been set up. See Chapter 9.
+
+### Related
+- 7.6 Refunds and reversals · Chapter 8, students · Chapter 9, finance
+
+## 7.5 Discounts and approval
+
+Each role has a ceiling (Chapter 3.3). A discount within your ceiling is
+simply applied. A discount above it is recorded as **pending approval**
+and shown at the top of the fees panel.
+
+### Procedure: approve or reject a discount
+1. Open the lead (or the admission).
+2. The pending discount is shown above the fee panel.
+3. Optionally write a note — *Note (optional) — why you approved or
+   refused*.
+4. Press **Approve** or **Reject**.
+
+Needs `discount.approve`: centre heads, accounts and administrators.
+
+**Why it works this way.** Nobody is blocked from promising a discount in
+front of a family. The discount is recorded, the fee reflects it as
+pending, and the authority to actually grant it is resolved afterwards —
+rather than a counsellor having to say "I need to ring my manager".
+
+## 7.6 Refunds and reversals
+
+**Nothing financial is ever edited or deleted.** A correction is a new
+entry that points at the original.
+
+- A **reversal** cancels a payment recorded in error.
+- A **refund** returns money to the family.
+
+Both need `payment.refund` (Accounts and administrators). Both leave the
+original payment visible, with the correction beside it, so the history
+of what happened is readable a year later.
+
+## 7.7 Receipts
+
+Every payment gets a receipt with a number from a **gapless sequence** —
+1, 2, 3, with no holes. The numbers come from the database, never from
+the app, so two people recording payments at the same moment cannot get
+the same number.
+
+### Procedure: print a receipt
+1. Open **Admissions** → the student.
+2. In the **Payment ledger**, open the receipt for that payment.
+3. Print or save as PDF.
+
+The receipt carries the institute's letterhead from
+Settings → Organisation — name, address, phone, GSTIN. If those are
+blank, the receipt prints without them.
+
+## 7.8 When a student drops out
+
+### Goal
+Record that somebody who had confirmed is not coming.
+
+### Before you start
+`enrolment.drop` — Accounts, centre heads and administrators.
+
+### Steps
+1. Open **Admissions** → the student.
+2. Find the drop panel.
+3. **Why did they leave?** — for example *Moved city, joined elsewhere,
+   financial reasons…*
+4. Confirm.
+
+### What you should see
+The admission is marked **Dropped out** with the date and reason. It
+shows on the lead page too, in red, so a counsellor wondering where their
+conversion went can see why. The student stops counting as an admission
+in the reports.
+
+### Edge cases
+- **Payments already made stay.** Dropping is not a refund. If money is
+  going back, record a refund as well (7.6).
+- **The student record.** If one was created, it reflects the drop.
+
+## 7.9 Payment reminders
+
+Overdue instalments are chased automatically overnight. An administrator
+configures the rungs — how many days after the due date, by what channel,
+with which message (Settings → Payment Reminders). As shipped there are
+four rungs.
+
+Reminders are recorded, so the same instalment is not chased twice by the
+same rung.
+
+---
+
+[Back to contents](#contents)

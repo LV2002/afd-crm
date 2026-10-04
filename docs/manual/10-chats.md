@@ -1,0 +1,224 @@
+# Chapter 10 — Chats: WhatsApp and Instagram
+
+**Chats** in the sidebar (`whatsapp.read`). The route is still
+`/whatsapp` — only the name changed, so old bookmarks still work.
+
+Across the top are three **channels**:
+
+| Channel | What it is |
+|---|---|
+| **WhatsApp Business** | The institute's one WhatsApp Business API number |
+| **Personal WhatsApp** | An explanation, not an inbox — see 10.6 |
+| **Instagram** | DMs to the institute's Instagram account |
+
+Under the WhatsApp Business channel there is a second row of tabs —
+**Inbox**, **Templates**, **Broadcasts**, **Automations**, **Opted out** —
+which apply only to that channel.
+
+## 10.1 What the WhatsApp number is for
+
+**It is a broadcasting channel, not a way in.** Enquiries reach
+counsellors on their own phones and are typed into the CRM by hand. This
+number sends campaigns and receives the replies to them.
+
+So: **an inbound WhatsApp message never creates a lead.** It is matched to
+a lead that already exists by phone number, or filed with no lead at all.
+A reply from somebody nobody has entered is real and worth seeing, but it
+is not an enquiry.
+
+## 10.2 The inbox
+
+Left: the list of conversations. Right: the selected thread.
+
+**Filters**: **All**, **Needs a reply**, and **Not in the CRM** (replies
+from numbers that match no lead — visible to whoever runs campaigns).
+
+**The counsellor switcher** appears for centre heads, co-admins and
+admins when there is more than one counsellor to choose between:
+**Everyone**, each counsellor by name, and **Unassigned**. It grants no
+extra access — it only sorts conversations you could already see.
+
+A matched thread shows a masked number; an unmatched one shows it in full,
+because the number is the thread's only identity and the thing you would
+copy into a new lead.
+
+### Procedure: reply to a WhatsApp message
+
+**Goal** — answer somebody who has written in.
+
+**Before you start** — `whatsapp.send`, and a thread matched to a lead.
+
+**Steps**
+1. Open **Chats**.
+2. Pick the conversation.
+3. Type your reply and press **Send**.
+
+**What you should see** — your message in the thread, with a delivery
+status.
+
+**The 24-hour rule.** A free-form reply is only allowed within 24 hours of
+their last message — that is Meta's rule, not the CRM's. Outside it you
+can only send an approved **template**. The box tells you which situation
+you are in.
+
+**Common mistakes**
+- *Trying to start a conversation from here.* Outside a 24-hour window
+  you need a template (10.3).
+- *Replying to an unmatched thread.* You cannot — there is no lead to
+  record the message against. Add them as a lead first.
+
+## 10.3 Templates
+
+**Chats** → **Templates** (`whatsapp.campaign`).
+
+Templates are messages **Meta has approved in advance**. They are the
+only thing you can send to somebody outside the 24-hour window.
+
+The screen lists the templates on the account with their language and
+name (for example `fee_reminder`, `en`). **New template** creates one.
+
+**You cannot write a template and send it immediately** — Meta reviews
+them, usually within a day. Plan campaigns around that.
+
+### Procedure: send a template to one person
+1. Open the lead, or the conversation.
+2. Choose **Send template**.
+3. Pick the template and its **Language code**.
+4. Fill in any `{{1}} value (optional)` placeholders.
+5. **Send**.
+
+## 10.4 Broadcasts
+
+**Chats** → **Broadcasts** (`whatsapp.campaign`). A template sent to many
+people at once.
+
+### Procedure: send a broadcast
+
+**Goal** — message a group of leads, for example a batch reminder.
+
+**Before you start** — `whatsapp.campaign`, and an approved template.
+
+**Steps**
+1. **Chats** → **Broadcasts** → **New broadcast**.
+2. **Who it goes to** — build the audience with the filters. The form
+   shows how many people match; check that number before going on.
+3. **What it says** — *Choose an approved template* and fill in any
+   placeholder values.
+4. **When it goes out** — now, or pick a date and time.
+5. Press **Schedule** (the button shows the recipient count).
+
+**What you should see** — the broadcast is listed with its audience size
+and status, and each recipient's delivery is tracked.
+
+**Common mistakes and fixes**
+- *Not checking the count.* "Everybody" is rarely what you meant.
+- *Expecting a scheduled broadcast to go out to the minute.* Scheduled
+  sends are picked up by the nightly run, so something scheduled for 3pm
+  goes out the following morning. If that matters, send it now instead.
+- *Messaging people who opted out.* You cannot — they are excluded
+  automatically (10.5).
+
+## 10.5 Opted out
+
+**Chats** → **Opted out** lists everybody who has asked not to be
+messaged. Somebody replying STOP is added automatically; you can also add
+one by hand with **Record an opt-out** (for example *Asked at the front
+desk*).
+
+An opted-out number is excluded from every broadcast and automation, and
+from retargeting audiences. This is not a preference — treat it as
+absolute.
+
+## 10.6 Personal WhatsApp — why it is not an inbox
+
+This tab explains, rather than showing conversations. The short version:
+
+**There is no legal way to put a counsellor's personal WhatsApp inside
+the CRM.** Every tool that claims to drives WhatsApp Web through a
+reverse-engineered protocol, which breaks WhatsApp's terms. What gets
+banned is **the number** — the line the counsellor answers enquiries on —
+permanently, with no appeal. An iframe of WhatsApp Web does not work
+either: WhatsApp sends a header that forbids it.
+
+The supported answer is **Coexistence**: one number running the WhatsApp
+Business app and the Cloud API at the same time, mirroring messages both
+ways. The counsellor keeps their phone and their number. Group chats do
+not sync; one-to-one business conversations do.
+
+The tab lays out the real options so the institute can choose, rather
+than hiding the trade inside a feature.
+
+## 10.7 Instagram DMs
+
+**Chats** → **Instagram**.
+
+**An Instagram DM does not create a lead.** Most are a question, a reply
+to a story, or nothing, and a CRM that turned each one into a lead would
+stop being a record of who is enrolling.
+
+### Procedure: turn a DM into a lead
+
+**Goal** — promote a real enquiry out of the inbox.
+
+**Before you start** — `lead.create`, and the conversation open.
+
+**Steps**
+1. Open **Chats** → **Instagram** and pick the conversation.
+2. In the **Not a lead yet** panel, check the **Name** (pre-filled from
+   their profile where Instagram gives us one).
+3. Type their **Phone**. You have to ask them for it — Instagram never
+   gives us a number.
+4. Press **Convert to lead**.
+
+**What you should see** — either *Lead created and linked to this
+conversation*, or, if that number is already in the CRM, *This person was
+already in the CRM — the conversation is now linked to their existing
+lead*. Either way you get one record, not two, and your assignment rules
+choose the counsellor.
+
+**Notes**
+- Replies obey the same **24-hour rule** as WhatsApp.
+- Attachments are recorded by link, and Instagram's links expire, so an
+  old one may be dead. Open Instagram itself for those.
+- A message sent from the Instagram app on a phone does not appear in the
+  CRM.
+- Until Instagram is connected (an administrator's job, Chapter 13), the
+  tab explains what is missing instead of showing an empty inbox.
+
+**Who sees which conversations** — once converted, the conversation
+follows its lead's ownership. Before that it is visible to anyone who
+works the inbox, because a DM is addressed to the institute, not to a
+counsellor, and somebody has to answer it.
+
+## 10.8 Automations
+
+**Chats** → **Automations** (`whatsapp.campaign`). A sequence that runs
+by itself when something happens.
+
+**What can start one**: a lead being created, a lead entering a stage, a
+tag being added, an inbound keyword, or starting it by hand.
+
+**What a step can be**: send a template, wait, wait for a reply, add a
+tag, set a stage, notify the owner, or stop.
+
+The editor has **The steps**, **Settings**, and **Who has been through
+it** so you can see what the automation has actually done.
+
+### Procedure: build a simple follow-up automation
+1. **Chats** → **Automations** → **New automation**.
+2. Give it a name, for example *NIFT enquiry follow-up*.
+3. Choose the trigger — *Pick a stage* or *Pick a tag* as appropriate.
+4. Add steps: a template, a wait, a wait-for-reply with answers
+   (*Add an answer*, e.g. *Yes, interested*), and what each answer does.
+5. Use **If unknown, say…** for replies that match nothing.
+6. Save, then activate it.
+
+**Common mistakes**
+- *Leaving it active while testing.* Real leads will receive it.
+- *A wait shorter than a day.* Automations advance on the nightly run, so
+  the smallest meaningful wait is about a day.
+- *No stop condition.* Always give somebody a way out of the sequence.
+
+---
+
+[Back to contents](#contents)

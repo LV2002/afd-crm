@@ -6302,3 +6302,49 @@ also still returning 200 with an `error` key the nightly runner reads as success
 as Meta's.
 
 **1408 tests pass**, lint, `db:audit` and the production build clean.
+
+---
+
+## Session 50 — The staff manual
+
+A knowledge hub written as a book, so a new counsellor can look up how to do
+anything without asking Leon or an AI.
+
+**Nineteen chapters** in `docs/manual/`, one Markdown file each: introduction and
+key concepts, getting started, roles and permissions, the dashboard, leads, working
+a lead, admissions and payments, students and profile forms, finance, chats,
+insights, import/export, the admin guide, troubleshooting, end-to-end workflows,
+FAQ, glossary, appendix (field, stage, status and permission references plus a
+"where do I find X" index), and how to keep it updated.
+
+**Every procedure has the same six parts** — Goal, Before you start, Steps, What
+you should see, Common mistakes and fixes, Related — and quotes the exact words on
+screen. All 57 labels used were grepped back against the source before shipping;
+so were the 14 stages with their types and SLA hours, the 45 permissions, the 6
+roles, the 14 dropdown categories, the 29 lead and 30 student fields, and the
+nightly job order.
+
+**It explains why, not just where to click.** "You cannot edit a payment" is an
+instruction somebody will try to work around; "corrections are reversals so the
+history stays readable" is the sentence that stops them. The same for the one-way
+gates, phone masking, never rejecting a duplicate, and why Ad Performance refuses
+to show a per-centre number.
+
+**`npm run manual`** builds every chapter into one self-contained
+`docs/manual/manual.html` — contents at the top, back-to-contents links, serif,
+black on white, thin-ruled tables, a page break between chapters. No dependency
+was added: the Markdown subset the manual uses is two hundred lines of
+`build.mjs` that will never need updating.
+
+**`/manual`** serves that file to anybody signed in, with a **Manual** entry in
+the sidebar for every role. The route reads the built file at request time, so
+rebuilding and deploying is the whole update; `outputFileTracingIncludes` in
+`next.config.ts` is what makes a dynamically-read file actually ship.
+
+**Seven open questions** are in `docs/manual/_open-questions.md` rather than
+guessed at — what onboarding actually involves at AFD, how an administrator
+reverses a wrongly confirmed admission, what an SLA escalation rung does when it
+fires, whether Knorish is still in use, and four house rules that are policy
+rather than code.
+
+**1408 tests pass**, lint, typecheck and the production build clean.
