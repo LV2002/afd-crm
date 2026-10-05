@@ -1045,11 +1045,12 @@
 <p><strong>Course &amp; batch</strong> appears on three screens, because three different people change it: the lead (the counsellor), the admission (accounts) and the student's own page (academics). All three do the same thing.</p>
 <p><strong>Procedure: change what a student is enrolled on</strong></p>
 <p><strong>Goal</strong> — correct or update the course, batch, mode or academic year of a confirmed admission.</p>
-<p><strong>Before you start</strong> — <code>enrolment.change_plan</code>. Counsellors for their own students; accounts, academics and centre heads for their centre.</p>
+<p><strong>Before you start</strong> — <code>enrolment.change_plan</code> for the batch, mode and academic year. Counsellors for their own students; accounts, academics and centre heads for their centre.</p>
+<p><strong>The course needs <code>enrolment.change_course</code>, which only academics hold</strong> (and admin and co-admin). Everybody else sees the course on this panel but cannot change it: it decides which room and which syllabus a student is in, and that is academics' call. When academics do move it, accounts, the co-admin and the admin are all notified — the fee does not follow a course change, so somebody has to decide whether it should.</p>
 <p><strong>Steps</strong></p>
 <ol>
 <li>Open the lead, the admission or the student, and find <strong>Course &amp; batch</strong>.</li>
-<li>Change <strong>Course</strong>, <strong>Mode</strong>, <strong>Academic year</strong> or <strong>Batch</strong>. The batch list shows only batches running that course at that centre — clear the box to take them out of a batch altogether.</li>
+<li>Change <strong>Mode</strong>, <strong>Academic year</strong> or <strong>Batch</strong> — and <strong>Course</strong>, if you are academics. The batch list shows only batches running that course at that centre — clear the box to take them out of a batch altogether.</li>
 <li><strong>Reason (optional)</strong> — kept on the batch history.</li>
 <li>Press <strong>Save course &amp; batch</strong>, then <strong>Yes, change it</strong>.</li>
 </ol>
@@ -1140,13 +1141,16 @@
 </ul>
 <h2 id="7-7-receipts">7.7 Receipts</h2>
 <p>Every payment gets a receipt with a number from a <strong>gapless sequence</strong> — 1, 2, 3, with no holes. The numbers come from the database, never from the app, so two people recording payments at the same moment cannot get the same number.</p>
-<h3 id="procedure-print-a-receipt">Procedure: print a receipt</h3>
-<ol>
-<li>Open <strong>Admissions</strong> → the student.</li>
-<li>In the <strong>Payment ledger</strong>, open the receipt for that payment.</li>
-<li>Print or save as PDF.</li>
-</ol>
-<p>The receipt carries the institute's letterhead from Settings → Organisation — name, address, phone, GSTIN. If those are blank, the receipt prints without them.</p>
+<h3 id="procedure-get-a-receipt-to-send-to-a-family">Procedure: get a receipt to send to a family</h3>
+<p><strong>Two ways in, whichever screen you are already on:</strong></p>
+<ul>
+<li><strong>Admissions → the student → Payment ledger → Receipt</strong>, next to the payment itself.</li>
+<li><strong>Finance → Transactions → Receipt</strong>, on the row for that payment. This is the quicker one when somebody rings up about a payment and you have the date rather than the name.</li>
+</ul>
+<p>Then press <strong>Print or save as PDF</strong> and choose <em>Save as PDF</em> as the destination. That gives you a file to send on WhatsApp or email.</p>
+<p>The receipt carries the institute's letterhead from Settings → Organisation — name, address, phone, GSTIN — and the centre's own address and phone from Settings → Centres, so a Kannur receipt shows Kannur. If those are blank, the receipt prints without them, which is the one thing worth checking before you send the first one.</p>
+<p>It states the amount received in figures <strong>and in words</strong>, the mode of payment, the total fee, what has been paid to date and the balance outstanding — which is the question that otherwise generates the next phone call.</p>
+<p><strong>Reprinting is not reissuing.</strong> The receipt number, amount and date come from rows that can never be edited, so the tenth print is identical to the first. A correction is a reversal with its own entry, and it prints marked as one rather than quietly disappearing.</p>
 <h2 id="7-8-when-a-student-drops-out">7.8 When a student drops out</h2>
 <h3 id="goal-11">Goal</h3>
 <p>Record that somebody who had confirmed is not coming.</p>
@@ -2339,7 +2343,8 @@
 <tr><td><code>enrolment.read</code></td><td>See admissions</td></tr>
 <tr><td><code>enrolment.create</code></td><td>Confirm an admission</td></tr>
 <tr><td><code>enrolment.update</code></td><td>Change the fee plan</td></tr>
-<tr><td><code>enrolment.change_plan</code></td><td>Change the course, batch, mode or academic year</td></tr>
+<tr><td><code>enrolment.change_plan</code></td><td>Change the batch, mode or academic year</td></tr>
+<tr><td><code>enrolment.change_course</code></td><td>Change the course — academics, admin and co-admin only</td></tr>
 <tr><td><code>enrolment.drop</code></td><td>Mark an admission dropped</td></tr>
 <tr><td><code>payment.read</code></td><td>See payments</td></tr>
 <tr><td><code>payment.record</code></td><td>Record a payment</td></tr>

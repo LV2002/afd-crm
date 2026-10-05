@@ -145,6 +145,28 @@ export async function changeEnrolmentPlan(
     batchName = batch.name;
   }
 
+  /*
+    The course is academics' to move, and only theirs.
+
+    It travelled with the batch in one permission, which meant accounts
+    could change what a student is studying while correcting a fee. A
+    batch move is scheduling; the course decides which room, which
+    syllabus and which exam they are being prepared for. So it is checked
+    separately, here rather than only in the form: the panel hides the
+    field from somebody who may not move it, and a hidden field is a
+    courtesy, not a boundary.
+
+    Refused rather than silently ignored. Quietly keeping the old course
+    while saving the batch would tell somebody their change went through
+    when half of it did.
+  */
+  if (course !== row.course && !can(user, "enrolment.change_course")) {
+    return {
+      error:
+        "Only academics can change a student's course. Change the batch, mode or year here, and ask academics to move the course — accounts are told automatically when they do.",
+    };
+  }
+
   const before: PlanSnapshot = {
     course: row.course,
     batchId: row.batchId,

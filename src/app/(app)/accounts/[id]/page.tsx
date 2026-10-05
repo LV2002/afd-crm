@@ -293,7 +293,7 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
                           for a receipt, and the answer was a row on a
                           screen they cannot see. */}
                       <Link
-                        href={`/accounts/${id}/receipt/${p.id}`}
+                        href={`/receipts/${p.id}`}
                         className="font-medium underline"
                       >
                         {receiptNoByPaymentId.get(p.id)
@@ -356,6 +356,7 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
               modes={planOptions[1]}
               batches={planOptions[2]}
               canEdit
+              canChangeCourse={can(user, "enrolment.change_course")}
             />
           )}
           {feePlan && !isDropped && (

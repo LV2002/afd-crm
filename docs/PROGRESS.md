@@ -7086,3 +7086,66 @@ gained the date it was missing (it was the exact row the new rule forbids), and 
 
 **1528 tests pass** (8 new), lint, typecheck, `db:audit` and the production build clean. Migration
 0087 applied to an already-seeded database.
+
+---
+
+## Session 65 — Receipts where the accountant is, and the course back with academics
+
+Three of Leon's, and the first was mostly already built.
+
+### Receipts
+
+A professional receipt has existed since the finance module shipped: letterhead from
+Settings → Organisation, the centre's own address, a gapless receipt number, the amount in figures
+**and in words**, total fee, paid to date, balance, and reversals printed as reversals rather than
+vanishing. Every incoming payment already writes one.
+
+**What was missing was reach.** It lived at `/accounts/[id]/receipt/[paymentId]` and was linked
+from exactly one place — the admission screen. From **Finance → Transactions**, the screen an
+accountant actually works in, it could not be reached at all, because a ledger row carries
+`payment_id` and no enrolment id.
+
+So the route is now `/receipts/[paymentId]`: the payment names its own enrolment, so one receipt
+has one address, linkable from anywhere a payment appears. Linked from the ledger as well as the
+admission, gated on `payment.read` rather than `finance.manage` — fetching a receipt for a family
+is not the same authority as reversing an entry.
+
+`PrintButton` now reads **"Print or save as PDF"** and takes a hint, which the receipt uses to say
+that choosing *Save as PDF* is how you get a file to send. Not a detail: generating the PDF
+server-side would be a rendering engine and a font stack to maintain for a file the browser
+already makes correctly from the same stylesheet.
+
+**Not done, deliberately:** the receipt does not appear on the academics student page. That page
+carries no fee or payment data at all, by design and with RLS behind it — academics are not shown
+money. Putting receipts there would be the first hole in that.
+
+### The course belongs to academics
+
+`enrolment.change_plan` covered course, batch, mode and year together, so accounts could change
+what a student is studying while correcting a fee. Split: **`enrolment.change_course`** is a new
+primitive (46 now), held by academics, admin and co-admin. Accounts, centre heads and counsellors
+keep the batch and lose the course — they see it on the panel, read-only, with a line saying who
+moves it.
+
+Checked in the action, not only in the form: a hidden field is a courtesy, not a boundary. And
+refused rather than silently ignored, because quietly saving the batch while keeping the old
+course tells somebody their change went through when half of it did.
+
+`ROLE_SEEDS` moved out of `seed.ts` into `role-seeds.ts` to make this testable at all — `seed.ts`
+calls `main()` on import and exits the process, so "assert accounts cannot change a course" was
+unwritable. `tests/role-grants.spec.ts` now states the whole rule, including that a counsellor
+keeps the batch.
+
+### Who hears about it
+
+`enrolment.plan_changed` already notified accounts, academics and centre heads; co-admin and admin
+join them. Accounts matter most of the three: **a course change does not move the fee**, so the
+one department that has to decide whether the money should follow is the one that did not make the
+change.
+
+> Note for Leon: default notify roles only apply where no row exists in
+> Settings → Notifications for that event. If that event has been configured there already, set
+> the roles on that screen.
+
+**1533 tests pass** (5 new), lint, typecheck, `db:audit` and the production build clean. No schema
+change. Seed re-run and the grants verified in the database.

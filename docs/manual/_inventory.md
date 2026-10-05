@@ -5,7 +5,7 @@ every line here must appear somewhere in the manual. The right-hand column
 is the chapter that covers it.
 
 Counts at the time of writing: **103 pages**, **18 API routes**, **66 database
-tables**, **45 permissions**, **6 seeded roles**, **14 pipeline stages**,
+tables**, **46 permissions**, **6 seeded roles**, **14 pipeline stages**,
 **17 dropdown categories**, **30 lead fields**, **34 student fields**,
 **7 dashboard widgets**, **25 settings screens**.
 
@@ -118,13 +118,13 @@ WhatsApp, Website, Custom webhooks). — Chapter 13.
 Admin · Co-Admin · Centre Head · Counsellor · Accounts · Academics.
 Roles are database rows and can be renamed, edited or created. — Chapter 3.
 
-## 9. Permissions (45 primitives)
+## 9. Permissions (46 primitives)
 
 `lead.read` `lead.create` `lead.update` `lead.delete` `lead.assign`
 `lead.merge` `lead.export` `lead.reveal_phone` `lead.import`
 `interaction.read` `interaction.create` `whatsapp.read` `whatsapp.send`
 `whatsapp.campaign` `enrolment.read` `enrolment.create` `enrolment.update`
-`enrolment.change_plan` `enrolment.drop` `payment.read` `payment.record` `payment.refund`
+`enrolment.change_plan` `enrolment.change_course` `enrolment.drop` `payment.read` `payment.record` `payment.refund`
 `discount.approve` `finance.read` `finance.record` `finance.manage`
 `student.read` `student.update` `batch.manage` `file.read` `file.upload`
 `file.delete` `report.read` `report.center` `report.org` `target.manage`
@@ -227,7 +227,7 @@ Checked after writing:
   `Yes, record it`, `Skip this column`, `Onboarding done`, `Assign to…`,
   `Escalation ladder (JSON array)` …) grepped back against the source —
   all 57 found.
-- **Seeded data re-read from `seed.ts`**: 6 roles, 45 permissions, 14
+- **Seeded data re-read from `seed.ts`**: 6 roles, 46 permissions, 14
   stages with their types, probabilities and SLA hours, 17 dropdown
   categories with every option, 30 lead fields, 34 student fields, 7
   dashboard widgets, discount limits per role, finance categories.

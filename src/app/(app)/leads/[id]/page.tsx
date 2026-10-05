@@ -461,6 +461,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               modes={modeOptions}
               batches={batchOptions}
               canEdit={canChangePlan}
+              canChangeCourse={can(user, "enrolment.change_course")}
             />
           )}
         </div>

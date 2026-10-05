@@ -60,9 +60,9 @@ const METHOD_LABELS: Record<string, string> = {
 export default async function ReceiptPage({
   params,
 }: {
-  params: Promise<{ id: string; paymentId: string }>;
+  params: Promise<{ paymentId: string }>;
 }) {
-  const { id, paymentId } = await params;
+  const { paymentId } = await params;
   const user = await getCurrentUser();
   if (!user || !can(user, "payment.read")) return <AccessDenied />;
 
@@ -72,16 +72,24 @@ export default async function ReceiptPage({
   // scoped, so a counsellor at Kannur cannot print a Kochi receipt by
   // guessing a URL. No app-level check is re-implemented here because
   // none is needed — RLS is the boundary.
+  //
+  // The payment names its own enrolment, so this route takes the payment
+  // id alone. It used to live under the enrolment and take both, which
+  // meant anywhere wanting to link a receipt had to be holding the
+  // enrolment id as well — true on the accounts screen and false in the
+  // income ledger, where a row carries `payment_id` and nothing else. One
+  // receipt, one address, linkable from wherever a payment appears.
   const { data: payment } = await supabase
     .from("payments")
     .select(
       "id, enrolment_id, amount_paise, direction, method, reference, received_at, reversal_reason, reverses_payment_id",
     )
     .eq("id", paymentId)
-    .eq("enrolment_id", id)
     .maybeSingle<PaymentRow>();
 
   if (!payment) notFound();
+
+  const id = payment.enrolment_id;
 
   const [{ data: receipt }, { data: enrolment }, brand] = await Promise.all([
     supabase
@@ -131,7 +139,7 @@ export default async function ReceiptPage({
       <style dangerouslySetInnerHTML={{ __html: A4_PORTRAIT_CSS }} />
       <div className="mx-auto max-w-[210mm] bg-white p-8 text-black print:p-0">
         <div className="no-print">
-          <PrintButton />
+          <PrintButton hint="Choose “Save as PDF” as the destination to send it to the student." />
         </div>
 
         <Letterhead

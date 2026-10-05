@@ -147,15 +147,24 @@ the student's own page (academics). All three do the same thing.
 **Goal** — correct or update the course, batch, mode or academic year of
 a confirmed admission.
 
-**Before you start** — `enrolment.change_plan`. Counsellors for their own
-students; accounts, academics and centre heads for their centre.
+**Before you start** — `enrolment.change_plan` for the batch, mode and
+academic year. Counsellors for their own students; accounts, academics and
+centre heads for their centre.
+
+**The course needs `enrolment.change_course`, which only academics hold**
+(and admin and co-admin). Everybody else sees the course on this panel but
+cannot change it: it decides which room and which syllabus a student is
+in, and that is academics' call. When academics do move it, accounts, the
+co-admin and the admin are all notified — the fee does not follow a course
+change, so somebody has to decide whether it should.
 
 **Steps**
 1. Open the lead, the admission or the student, and find **Course &
    batch**.
-2. Change **Course**, **Mode**, **Academic year** or **Batch**. The batch
-   list shows only batches running that course at that centre — clear the
-   box to take them out of a batch altogether.
+2. Change **Mode**, **Academic year** or **Batch** — and **Course**, if
+   you are academics. The batch list shows only batches running that
+   course at that centre — clear the box to take them out of a batch
+   altogether.
 3. **Reason (optional)** — kept on the batch history.
 4. Press **Save course & batch**, then **Yes, change it**.
 
@@ -294,14 +303,34 @@ Every payment gets a receipt with a number from a **gapless sequence** —
 the app, so two people recording payments at the same moment cannot get
 the same number.
 
-### Procedure: print a receipt
-1. Open **Admissions** → the student.
-2. In the **Payment ledger**, open the receipt for that payment.
-3. Print or save as PDF.
+### Procedure: get a receipt to send to a family
+
+**Two ways in, whichever screen you are already on:**
+
+- **Admissions → the student → Payment ledger → Receipt**, next to the
+  payment itself.
+- **Finance → Transactions → Receipt**, on the row for that payment. This
+  is the quicker one when somebody rings up about a payment and you have
+  the date rather than the name.
+
+Then press **Print or save as PDF** and choose *Save as PDF* as the
+destination. That gives you a file to send on WhatsApp or email.
 
 The receipt carries the institute's letterhead from
-Settings → Organisation — name, address, phone, GSTIN. If those are
-blank, the receipt prints without them.
+Settings → Organisation — name, address, phone, GSTIN — and the centre's
+own address and phone from Settings → Centres, so a Kannur receipt shows
+Kannur. If those are blank, the receipt prints without them, which is the
+one thing worth checking before you send the first one.
+
+It states the amount received in figures **and in words**, the mode of
+payment, the total fee, what has been paid to date and the balance
+outstanding — which is the question that otherwise generates the next
+phone call.
+
+**Reprinting is not reissuing.** The receipt number, amount and date come
+from rows that can never be edited, so the tenth print is identical to the
+first. A correction is a reversal with its own entry, and it prints marked
+as one rather than quietly disappearing.
 
 ## 7.8 When a student drops out
 
