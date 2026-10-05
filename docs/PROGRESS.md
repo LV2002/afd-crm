@@ -6863,3 +6863,30 @@ is a count of jobs while `result.ok` is whether the run passed. The later key wo
 by the compiler, which is the only reason it is a footnote rather than a future afternoon.
 
 **1519 tests pass**, lint, typecheck, `db:audit` and the production build clean. No schema change.
+
+---
+
+## Session 61 — Instagram DMs: the leadgen trap, one field along
+
+The cron is running and Meta spend is arriving. Instagram DMs are not, and there was a reason
+sitting in our own code.
+
+**`subscribePageToLeadgen()` posted `subscribed_fields: "leadgen"`.** Instagram messaging is
+delivered on the linked Facebook Page's **`messages`** subscription, so the Page was never
+subscribed to the one field Instagram DMs need. Worse, Meta's `subscribed_apps` POST **replaces**
+the field set rather than adding to it — so a Page that had `messages` set by hand would lose it
+the moment somebody pressed a button labelled *Subscribe Page*.
+
+This is the same failure the button was built to prevent, one field along: the App Dashboard
+switch and the Page switch live in different places, both are required, and with only one Meta
+verifies the webhook, reports success, and delivers nothing.
+
+**Now `subscribePageFields()` sends `leadgen,messages` together**, reads the subscription back,
+and says which took. A Page that accepts `leadgen` but not `messages` gets a sentence naming the
+two likely causes (no `instagram_manage_messages`, or the Instagram account not linked to the
+Page) rather than a green tick and silence.
+
+Both setup docs gain the step, and the Meta settings screen says why pressing the button again
+after linking Instagram is part of the procedure rather than a retry.
+
+**1519 tests pass**, lint, typecheck and the production build clean. No schema change.
