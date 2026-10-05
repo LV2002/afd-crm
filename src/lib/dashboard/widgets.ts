@@ -84,6 +84,11 @@ export const DASHBOARD_WIDGETS: WidgetDefinition[] = [
     name: "Counsellor performance",
     description: "Each counsellor's active leads, new leads, admissions and overdue follow-ups.",
     permission: "report.center",
+    // A seven-column table of people. It had `lg:col-span-2` on its own
+    // Card, which worked while the Card was the grid item and stopped
+    // working the moment widgets were wrapped — the hazard named two
+    // files away and missed here. Declared where the dashboard reads it.
+    width: "full",
   },
   {
     key: "accounts",

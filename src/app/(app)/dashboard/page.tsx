@@ -98,9 +98,20 @@ export default async function DashboardPage() {
             on the Card, one level below the grid item, and do nothing.
             The registry says how wide a widget wants to be and this is
             the one place that honours it.
+
+            `min-w-0` is the same load-bearing class as the one on the
+            main column in the app layout, for the same reason: a grid
+            item's default `min-width: auto` means it refuses to shrink
+            below its content, so the counsellor table inside one widget
+            pushed the whole dashboard 196px past the phone and its own
+            `overflow-x-auto` never engaged. Measured by the phone suite,
+            which is the only thing that can see it.
           */
           return (
-            <div key={widget.key} className={widget.width === "full" ? "lg:col-span-2" : undefined}>
+            <div
+              key={widget.key}
+              className={widget.width === "full" ? "min-w-0 lg:col-span-2" : "min-w-0"}
+            >
               {card}
             </div>
           );

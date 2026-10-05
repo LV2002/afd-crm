@@ -174,15 +174,23 @@ export default async function LeadsPage({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="flex min-w-0 flex-col gap-4">
+      {/*
+        Wraps, because how many buttons sit here depends on the person:
+        a counsellor gets "New lead", an administrator gets that plus
+        Import and Export. The row was `justify-between` with no wrapping,
+        so it fitted on a phone for a counsellor and pushed the page 113px
+        sideways for an admin — which is exactly the sort of thing a suite
+        that tested one role on two screens could not find.
+      */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold">{leadPlural}</h1>
           <p className="text-sm text-muted-foreground">
             {total} {total === 1 ? leadPlural.toLowerCase().replace(/s$/, "") : leadPlural.toLowerCase()}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {can(user, "lead.create") && (
             <Button asChild size="sm">
               <Link href="/leads/new">

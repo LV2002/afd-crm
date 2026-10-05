@@ -6967,3 +6967,23 @@ screen an administrator can reach at phone width and fails on any that scrolls s
 the question a desktop run cannot answer.
 
 **1520 tests pass**, lint, typecheck and the production build clean. No schema change.
+
+### What the phone crawl found on its first run
+
+The new test failed, which is the point of it. Four screens were wider than a 412px phone:
+
+| Screen | Overflow | Cause |
+|---|---|---|
+| `/dashboard` | **196px** | A grid item's default `min-width: auto`. The counsellor table's own `overflow-x-auto` never engaged because the column refused to shrink below it. |
+| `/leads` | **113px** | The header row is `justify-between` and does not wrap. A counsellor has one button there; an administrator has three. |
+| `/manual` | 14px | A wide table in the built book, which has no scroll container of its own. |
+| `/settings/config` | 4px | A `<pre>` with `w-fit` holding a command line longer than the screen. |
+
+`/leads` is the one worth dwelling on: **the old suite tested that exact page and passed**, because
+it ran as a counsellor. One role, two screens, and a layout that breaks only for the person who
+has the most buttons.
+
+The dashboard fix also caught a regression from this session: `TeamWidget` carried its own
+`lg:col-span-2`, which worked while the Card was the grid item and stopped working the moment
+widgets were wrapped — the exact hazard named in the comment two files away, and missed here. Its
+width is declared in the registry now, where the dashboard reads it.
