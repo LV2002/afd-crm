@@ -7029,3 +7029,27 @@ for days as though somebody meant it.
 
 **1520 tests pass**, lint, typecheck and the production build clean. No schema change. Manual 6.1
 rewritten.
+
+### The lead page now divides at the admission
+
+Leon, on the layout: *"the top part is lead details and to log interaction and the bottom part is
+student profile form, fee details and on the right side of that confirming the admission. so
+basically in the top its the conversion part and the bottom is converted part."*
+
+That is a better description of the page than the page had of itself. It was interleaved: the
+**Confirm admission** form sat at the top of the right-hand rail, *above* the interaction log, while
+the profile form and fee panels ran full width underneath with a column of empty space beside them.
+A counsellor reading down the page crossed the before/after boundary three times.
+
+Now:
+
+| | Left (wide) | Right |
+|---|---|---|
+| **Top — winning them** | Lead details | Log an interaction, Tasks, referrals |
+| **Bottom — once they are joining** | Student profile form, Fees & instalment agreement | Confirm admission, then the admission summary and change-plan panel |
+
+Documents and the Timeline stay full width below, and the delete panel stays last.
+
+Nothing moved between permission gates and no query changed: this is the same panels, in the order
+the work happens. `min-w-0` on every grid column, because the phone crawl only passes while the
+panels inside can shrink.

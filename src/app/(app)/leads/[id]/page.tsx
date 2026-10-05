@@ -278,8 +278,13 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         canEdit={can(user, "lead.update")}
       />
 
+      {/*
+        The top half: converting somebody. Their details on the left, and
+        on the right the two things a counsellor does while the call is
+        still happening — log what was said, and set what happens next.
+      */}
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           {can(user, "lead.update") ? (
             <LeadEditForm
               key={String(row.updated_at)}
@@ -297,7 +302,99 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           )}
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
+          {can(user, "interaction.create") && (
+            <InteractionForm leadId={id} types={interactionTypes} outcomes={interactionOutcomes} />
+          )}
+          <TasksPanel leadId={id} tasks={taskRows ?? []} />
+          {referred.length > 0 && (
+            <div className="flex flex-col gap-2 rounded-lg border p-4">
+              <h3 className="text-sm font-semibold">
+                Sent us {referred.length} {referred.length === 1 ? "person" : "people"}
+              </h3>
+              <ul className="flex flex-col gap-1 text-sm">
+                {referred.map((person) => (
+                  <li key={person.id} className="flex items-baseline justify-between gap-3">
+                    <Link href={`/leads/${person.id}`} className="truncate hover:underline">
+                      {person.student_name}
+                    </Link>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatDateIST(person.created_at, "d MMM yyyy")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/*
+        The page divides in two, and the divide is the lifecycle.
+
+        Above: the work of converting somebody — their details, the calls,
+        the follow-ups. Below: what exists once they have converted — the
+        profile form, the fees, the admission itself. They used to be
+        interleaved, with the admission form sitting in the top-right rail
+        above the interaction log while the profile form and fee panels ran
+        full width underneath it, leaving a column of empty space beside
+        them. A counsellor read down the page crossing the same boundary
+        three times.
+      */}
+      <div className="grid gap-6 border-t pt-6 lg:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
+          <div className="flex flex-col gap-3">
+            <h2 className="text-lg font-semibold">Student profile form</h2>
+            <ProfileFormPanel
+              leadId={id}
+              token={row.profile_form_token}
+              submittedAt={row.profile_form_submitted_at}
+              reviewedAt={row.profile_form_reviewed_at}
+              answers={row.profile_form_data}
+              fieldLabels={studentFieldLabels}
+              files={profileFormFiles(attachments)}
+              canManage={can(user, "lead.update")}
+            />
+          </div>
+
+          {canReadFees && feePlan && (
+            <div className="flex flex-col gap-3">
+              <h2 className="text-lg font-semibold">Fees &amp; instalment agreement</h2>
+              {/*
+                Above the form, not inside it: an outstanding discount changes
+                what the numbers underneath mean, and the counsellor who asked
+                needs to see it is still unanswered.
+              */}
+              {feePlan.pendingDiscount && feePlan.enrolmentId && (
+                <PendingDiscount
+                  enrolmentId={feePlan.enrolmentId}
+                  pendingPaise={feePlan.pendingDiscount.paise}
+                  requestedBy={feePlan.pendingDiscount.requestedBy}
+                  requestedAt={feePlan.pendingDiscount.requestedAt}
+                  totalFeePaise={feePlan.totalFeePaise}
+                  canDecide={can(user, "discount.approve")}
+                />
+              )}
+              <FeePlanPanel
+                leadId={id}
+                values={feePlan.values}
+                canEdit={can(user, "enrolment.update")}
+                hasEnrolment={feePlan.hasEnrolment}
+                hasSignedAgreement={hasSignedAgreement}
+                printHref={`/leads/${id}/instalment-agreement`}
+                promos={feePlan.promos}
+              />
+            </div>
+          )}
+        </div>
+
+        {/*
+          The admission itself, beside the paperwork it produces rather
+          than above the call log. Confirming one is the act that turns
+          everything on this half of the page from a form nobody has
+          filled in into a record of a student.
+        */}
+        <div className="flex min-w-0 flex-col gap-4">
           {/*
             An existing admission shows to anyone who may read enrolments,
             not only to whoever could have created it: a counsellor asked
@@ -366,75 +463,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               canEdit={canChangePlan}
             />
           )}
-          {can(user, "interaction.create") && (
-            <InteractionForm leadId={id} types={interactionTypes} outcomes={interactionOutcomes} />
-          )}
-          <TasksPanel leadId={id} tasks={taskRows ?? []} />
-          {referred.length > 0 && (
-            <div className="flex flex-col gap-2 rounded-lg border p-4">
-              <h3 className="text-sm font-semibold">
-                Sent us {referred.length} {referred.length === 1 ? "person" : "people"}
-              </h3>
-              <ul className="flex flex-col gap-1 text-sm">
-                {referred.map((person) => (
-                  <li key={person.id} className="flex items-baseline justify-between gap-3">
-                    <Link href={`/leads/${person.id}`} className="truncate hover:underline">
-                      {person.student_name}
-                    </Link>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {formatDateIST(person.created_at, "d MMM yyyy")}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
       </div>
-
-      <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">Student profile form</h2>
-        <ProfileFormPanel
-          leadId={id}
-          token={row.profile_form_token}
-          submittedAt={row.profile_form_submitted_at}
-          reviewedAt={row.profile_form_reviewed_at}
-          answers={row.profile_form_data}
-          fieldLabels={studentFieldLabels}
-          files={profileFormFiles(attachments)}
-          canManage={can(user, "lead.update")}
-        />
-      </div>
-
-      {canReadFees && feePlan && (
-        <div className="flex flex-col gap-3">
-          <h2 className="text-lg font-semibold">Fees &amp; instalment agreement</h2>
-          {/*
-            Above the form, not inside it: an outstanding discount changes
-            what the numbers underneath mean, and the counsellor who asked
-            needs to see it is still unanswered.
-          */}
-          {feePlan.pendingDiscount && feePlan.enrolmentId && (
-            <PendingDiscount
-              enrolmentId={feePlan.enrolmentId}
-              pendingPaise={feePlan.pendingDiscount.paise}
-              requestedBy={feePlan.pendingDiscount.requestedBy}
-              requestedAt={feePlan.pendingDiscount.requestedAt}
-              totalFeePaise={feePlan.totalFeePaise}
-              canDecide={can(user, "discount.approve")}
-            />
-          )}
-          <FeePlanPanel
-            leadId={id}
-            values={feePlan.values}
-            canEdit={can(user, "enrolment.update")}
-            hasEnrolment={feePlan.hasEnrolment}
-            hasSignedAgreement={hasSignedAgreement}
-            printHref={`/leads/${id}/instalment-agreement`}
-            promos={feePlan.promos}
-          />
-        </div>
-      )}
 
       {canReadFiles && (
         <div className="flex flex-col gap-3">

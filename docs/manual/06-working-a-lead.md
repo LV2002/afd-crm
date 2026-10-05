@@ -34,18 +34,30 @@ reason before it moves, not after.
 > (an admin sets how many). You have just spoken to them; the rules have
 > not.
 
+The rest of the page is in two halves, and the line between them is the
+admission.
+
+### The top half — winning them
+
 **Left (the wide column)**: the lead's details, grouped into sections
 (Personal, Education, Preferences, Tracking…). You edit them here, in
 place.
 
 **Right (the narrow column)**, from top to bottom:
-- **Confirm admission** (or, once confirmed, the admission summary)
-- **Log an interaction**
+- **Log an interaction** — first, because it is the thing you do most
 - **Tasks**
 - **Sent us N people** — who this person referred, if any
 
-**Below, full width**: **Student profile form**, **Fees & instalment
-agreement**, **Documents**, and the **Timeline**.
+### The bottom half — once they are joining
+
+**Left (the wide column)**: **Student profile form**, then **Fees &
+instalment agreement**.
+
+**Right (the narrow column)**: **Confirm admission** — or, once it is
+confirmed, the admission summary and the controls for changing course or
+batch.
+
+**Below, full width**: **Documents** and the **Timeline**.
 
 Panels you do not have permission for simply are not there.
 
