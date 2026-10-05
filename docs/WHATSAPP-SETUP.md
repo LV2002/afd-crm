@@ -383,12 +383,30 @@ Put all of it on **one** submission:
 |---|---|
 | `whatsapp_business_messaging` | Sending any WhatsApp message |
 | `whatsapp_business_management` | Templates — creating and reading them |
-| `instagram_manage_messages` | Instagram DMs, in and out |
+| `instagram_manage_messages` | Instagram DMs, in and out — **not** `instagram_business_manage_messages`, see below |
 | `pages_messaging` | Subscribing the Page to `messages`, without which no DM is delivered |
 | `instagram_basic` | Reading the linked Instagram account at all |
 | `leads_retrieval` | Fetching a submitted lead's answers (already in review for Lead Ads) |
 | `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata` | Page subscription and lead delivery |
 | `ads_read` / `ads_management` | Ad spend sync and retargeting audiences |
+
+> ### Two permissions, one word apart
+>
+> Meta offers Instagram messaging through two different routes, with two
+> near-identical permission names:
+>
+> | Permission | Route | Used here? |
+> |---|---|---|
+> | `instagram_manage_messages` | Instagram API with **Facebook** Login — a Page access token against `graph.facebook.com` | **Yes** |
+> | `instagram_business_manage_messages` | Instagram API with **Instagram** Login — an Instagram user token against `graph.instagram.com` | No |
+>
+> This CRM is on the first: `src/app/api/webhooks/instagram/route.ts` reads
+> `page_access_token`, and `lib/integrations/instagram/graph-client.ts` posts to
+> `graph.facebook.com`. Requesting advanced access on the second one grants a permission
+> nothing here uses, and costs a review cycle — days — to find out.
+>
+> The Permissions and Features page lists both, alphabetically adjacent. Use its search
+> box and read the whole name.
 
 Also required, and worth starting first because it is the slowest: **Business
 verification** in Business Settings → Security Centre. Meta wants documents proving AFD
