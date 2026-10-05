@@ -219,6 +219,23 @@ believe.
 Which events notify which roles, on which channels, and **in what
 words**. The copy is editable.
 
+**Switching email on.** Everything here works on the bell with nothing
+configured. Sending to inboxes as well needs an account with an email
+service, which is the one thing the CRM cannot do by itself:
+
+1. Create an account at **resend.com** — free at this institute's volume —
+   and verify **afdindia.com** as a sending domain, which means adding two
+   DNS records wherever the domain is managed. **This step needs access to
+   the domain**, so nobody else can do it for you.
+2. Put the API key and the from-address into the hosting settings as
+   `RESEND_API_KEY` and `EMAIL_FROM`, then redeploy. Send the key over and
+   this part can be done for you.
+
+Until both exist, the **Also send an email** tick is saved and does
+nothing, and the screen says so. Optional afterwards:
+`NEXT_PUBLIC_APP_URL` set to the CRM's real address — links in emails work
+without it but point at whichever deployment sent the mail.
+
 Nineteen events ship, grouped by what they are about:
 
 | Group | Events |
@@ -337,6 +354,17 @@ spend** button. Full walkthrough in `docs/ADS-SETUP.md`.
 Meta's even when it is the same app — you must enter the App Secret in
 both places.
 
+### WhatsApp numbers and Coexistence
+Each of the institute's numbers is registered here with its **Phone number
+ID** from Meta, a label, whose phone it is, and whether it is API-only or
+on **Coexistence** (the WhatsApp Business app and the Cloud API on one
+number at the same time).
+
+The setting that matters most is **a message from somebody new creates a
+lead**: right for a counsellor's own number, wrong for the broadcast
+number. Chapter 10.6a has the full procedure, including the three extra
+webhook fields that must be subscribed or nothing mirrors.
+
 ### Website forms
 A signing secret and a webhook address for your own site's forms.
 
@@ -406,7 +434,7 @@ names** on the card, one per line, like `phone: mob, contact_no`.
 |---|---|
 | Meta Lead Ads | `/api/webhooks/meta-leads` |
 | Instagram DMs | `/api/webhooks/instagram` |
-| WhatsApp | `/api/webhooks/whatsapp` |
+| WhatsApp (including Coexistence) | `/api/webhooks/whatsapp` |
 | Google lead forms | `/api/webhooks/google-leads` |
 | Your website | `/api/webhooks/website` |
 | A custom webhook | `/api/webhooks/custom/<its own token>` |

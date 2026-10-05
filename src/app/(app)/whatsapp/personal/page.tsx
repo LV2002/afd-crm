@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser } from "@/lib/auth/session";
 
@@ -20,7 +22,11 @@ import { can, getCurrentUser } from "@/lib/auth/session";
  * **Coexistence** is the real answer, and Meta shipped it in May 2025: one
  * number running the WhatsApp Business app AND the Cloud API at the same
  * time. The counsellor keeps their phone and their number; the CRM sees
- * and sends on it officially. That is this feature, supported.
+ * and sends on it officially.
+ *
+ * It is built now. This page used to end by saying Coexistence was the
+ * supported answer and stop there, which read as a recommendation nobody
+ * had acted on — so it points at the screen that does it.
  */
 export default async function PersonalWhatsAppPage() {
   const user = await getCurrentUser();
@@ -40,12 +46,24 @@ export default async function PersonalWhatsAppPage() {
           Meta shipped it in May 2025. No ban risk, no reverse engineering, and nothing for a
           counsellor to change about how they work day to day.
         </p>
+        <p className="mt-3 text-[0.9375rem]">
+          <strong>This CRM supports it.</strong> Set a number up under{" "}
+          <Link href="/settings/integrations/whatsapp" className="underline">
+            Settings → Integrations → WhatsApp
+          </Link>
+          , which lists the four steps — three of them in Meta, one here.
+        </p>
       </div>
 
       <div>
         <h2 className="font-medium">What Coexistence gives you, and what it does not</h2>
         <ul className="mt-2 flex list-disc flex-col gap-2 pl-5 text-sm">
           <li>Messages sent or received on either side mirror to the other in real time.</li>
+          <li>
+            A message from somebody not yet in the CRM <strong>creates a lead</strong> on that
+            number, assigned to whoever owns the phone — which is the opposite of what the
+            institute&apos;s broadcast number does, and deliberately so.
+          </li>
           <li>
             On approval, up to <strong>180 days</strong> of one-to-one history syncs across.
             Anything older stays in the app only.

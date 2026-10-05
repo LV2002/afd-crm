@@ -8,6 +8,7 @@ import { getMigrationStatus } from "@/lib/db/migration-status";
 import { getSchemaDrift } from "@/lib/db/schema-drift";
 import { describeDifference } from "@/lib/db/schema-compare";
 import { errorEvents } from "@/lib/db/schema";
+import { EmailNotConfigured } from "@/components/integrations/email-not-configured";
 import { emailConfigured } from "@/lib/email/send";
 import { resolveAlertRecipients } from "@/lib/errors/alert-recipients";
 import { formatDateIST } from "@/lib/format/date";
@@ -83,19 +84,22 @@ export default async function HealthPage() {
                 .{" "}
               </>
             ) : null}
-            {!configured ? (
-              <>
-                Email sending itself is not switched on: your developer needs{" "}
-                <code className="font-mono">RESEND_API_KEY</code> and{" "}
-                <code className="font-mono">EMAIL_FROM</code> set in the hosting environment. It is
-                the one part of this that cannot live in the database.{" "}
-              </>
-            ) : null}
             Problems are still recorded below, and still appear in the bell for anyone set to
             receive the <em>Something broke</em> notification.
           </p>
         )}
       </div>
+
+      {/*
+        The two halves of "nobody is being emailed" are different
+        problems with different owners: an address is one field on a
+        settings screen, and email sending itself needs an account
+        somewhere else. They used to be one sentence, which made the
+        easy half look as blocked as the hard one.
+      */}
+      {!configured && (
+        <EmailNotConfigured consequence="Failures are recorded below and appear in the bell for administrators, which needs nothing configured. What is not happening is the email — so a fault at 9pm waits until somebody opens this screen." />
+      )}
 
       {/*
         Above the fault list on purpose. When this is wrong, most of what

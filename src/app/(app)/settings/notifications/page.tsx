@@ -1,5 +1,6 @@
 import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { EmailNotConfigured } from "@/components/integrations/email-not-configured";
 import { emailConfigured } from "@/lib/email/send";
 import { NOTIFICATION_EVENTS } from "@/lib/notifications/events";
 import { createClient } from "@/lib/supabase/server";
@@ -65,22 +66,16 @@ export default async function NotificationSettingsPage() {
       </div>
 
       {/*
-        Said once, at the top, rather than on all thirteen cards. Email is
-        configured with two environment variables and nothing in the
-        application can turn it on — so if it is off, ticking the box on an
-        event would do nothing and it would take somebody a while to work
-        out why.
+        Said once, at the top, rather than on all nineteen cards. Nothing
+        in the application can switch email on — it needs credentials for
+        an outside service — so if it is off, ticking the box on an event
+        would do nothing and it would take somebody a while to work out
+        why.
       */}
       {!mailWorks && (
-        <div className="rounded-lg border border-dashed p-4 text-sm">
-          <p className="font-medium">Email is not set up yet.</p>
-          <p className="mt-1 text-muted-foreground">
-            Notifications are working — they appear on the bell. To send them to people&apos;s
-            inboxes as well, your developer needs to set <code className="font-mono">RESEND_API_KEY</code>{" "}
-            and <code className="font-mono">EMAIL_FROM</code> in the hosting environment. Until
-            then the email tick below is remembered but has no effect.
-          </p>
-        </div>
+        <EmailNotConfigured
+          consequence="Notifications themselves are working — everybody sees their own on the bell. Until email is on, the “Also send an email” tick below is saved and has no effect; nothing else about notifications is affected."
+        />
       )}
 
       {categories.map((category) => (

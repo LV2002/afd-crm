@@ -8,7 +8,7 @@ Across the top are three **channels**:
 | Channel | What it is |
 |---|---|
 | **WhatsApp Business** | The institute's one WhatsApp Business API number |
-| **Personal WhatsApp** | An explanation, not an inbox — see 10.6 |
+| **Personal WhatsApp** | An explanation, and how to put a counsellor's own number in the CRM — see 10.6 |
 | **Instagram** | DMs to the institute's Instagram account |
 
 Under the WhatsApp Business channel there is a second row of tabs —
@@ -140,13 +140,75 @@ banned is **the number** — the line the counsellor answers enquiries on —
 permanently, with no appeal. An iframe of WhatsApp Web does not work
 either: WhatsApp sends a header that forbids it.
 
-The supported answer is **Coexistence**: one number running the WhatsApp
-Business app and the Cloud API at the same time, mirroring messages both
-ways. The counsellor keeps their phone and their number. Group chats do
-not sync; one-to-one business conversations do.
+The supported answer is **Coexistence**, and the CRM now does it: one
+number running the WhatsApp Business app and the Cloud API at the same
+time, mirroring messages both ways. The counsellor keeps their phone,
+their number and their chats.
 
-The tab lays out the real options so the institute can choose, rather
-than hiding the trade inside a feature.
+## 10.6a Coexistence — a counsellor's own number in the CRM
+
+This is the one that stops the typing. A counsellor's number joins the
+institute's WhatsApp account, keeps working exactly as it does today on
+their phone, and every one-to-one conversation on it appears in the CRM
+against the right lead.
+
+### What it does
+
+- **Messages they send from the phone** appear in the lead's thread,
+  marked as theirs.
+- **Messages a student sends them** arrive the same way — and on this kind
+  of number a message from somebody not yet in the CRM **creates a lead**,
+  assigned to them. On the institute's broadcast number it does not,
+  because a reply there is somebody who pressed a button on a campaign.
+- **Up to 180 days of past chats** sync across in the minutes after
+  setup, attached to the leads the CRM already holds, keeping their own
+  dates so a March conversation reads as March.
+
+### What it does not do
+
+- **Group chats never sync.** Nor do disappearing messages or live
+  location, and broadcast lists in the app become read-only.
+- **The phone's address book is not imported.** Meta sends it; the CRM
+  records that it arrived and creates nothing from it. A counsellor's
+  contacts are their dentist and their landlord as much as any
+  prospective student.
+- **Messages they send to somebody who is not a lead** are not stored.
+  Only conversations with people the CRM holds.
+- **It is the WhatsApp Business app**, not ordinary WhatsApp. A counsellor
+  on the consumer app moves to the free Business one — same number, same
+  chats.
+
+### Setting one up
+
+Steps 1–3 happen in Meta and need an administrator with access to the
+business account; step 4 is in the CRM. **Settings → Integrations →
+WhatsApp** lists all four on screen.
+
+1. The counsellor installs the **WhatsApp Business app** on that number.
+2. Onboard the number through Meta's **Embedded Signup**, choosing the
+   WhatsApp Business app flow. The counsellor scans a QR code and consents
+   to syncing history.
+3. Subscribe three extra webhook fields on the WhatsApp Business Account:
+   `smb_message_echoes`, `history` and `smb_app_state_sync`. **Without
+   these the number connects and nothing mirrors** — which looks exactly
+   like the feature not working.
+4. In the CRM, register the number under **Settings → Integrations →
+   WhatsApp → Numbers**: its **Phone number ID** from Meta, a label, whose
+   phone it is, and *Coexistence*.
+
+**What you should see** — the number's card says whether history has
+finished arriving and how many past messages it attached. A delivery for a
+number nobody registered shows up on **Recent deliveries** saying so, with
+what to do about it.
+
+### Tell the counsellors
+
+Admissions conversations on that number become visible to their centre
+head, the same way a shared inbox is. That is reasonable for work on a
+business number and it is not a surprise anybody should get afterwards.
+
+Group chats and anything on a different number stay private — the sync is
+one-to-one business conversations only.
 
 ## 10.7 Instagram DMs
 

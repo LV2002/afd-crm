@@ -182,6 +182,7 @@ whatsapp_optout_keyword · task_type. — Chapter 13, Appendix.
 | Meta custom question mapping | `mapMetaCustomAnswers()` | 13 |
 | Instagram DM webhook | `/api/webhooks/instagram` | 10, 13 |
 | WhatsApp Cloud API webhook | `/api/webhooks/whatsapp` | 10, 13 |
+| WhatsApp Coexistence (`smb_message_echoes`, `history`, `smb_app_state_sync`) | same endpoint | 10, 13 |
 | Google Lead Form webhook | `/api/webhooks/google-leads` | 13 |
 | Website form webhook | `/api/webhooks/website` | 13 |
 | Custom webhooks (admin-created endpoints) | `/api/webhooks/custom/[slug]` | 13 |

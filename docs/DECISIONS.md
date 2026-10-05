@@ -3138,3 +3138,82 @@ the secret.
 **`custom_webhooks` is configuration, not data,** so a data reset leaves it alone. Clearing it
 would 404 every sender already posting to an endpoint, and the repair would be re-creating each
 one and updating every external service with a new URL.
+
+## 2026-10-05 — WhatsApp Coexistence, and the rule that inverts
+
+Leon asked for Coexistence. `/whatsapp/personal` has argued for two months that it is the
+only supported way to put a counsellor's own WhatsApp in the CRM, and ended by saying so and
+stopping — a recommendation nobody had acted on. This builds it.
+
+Coexistence is the WhatsApp Business app on somebody's phone AND the Cloud API on the same
+number at the same time. It matters here more than anywhere else in this project, because
+`whatsapp_messages` has carried this comment since Phase 5: *"AFD's enquiries arrive on the
+counsellors' own WhatsApp Business apps and are typed into the CRM by hand."* That typing is
+what this removes.
+
+### The rule that inverts, and why it has to be a column
+
+The inbound handler never created a lead, with a comment explaining exactly why: the API
+number is a broadcast channel, a reply to it is somebody who pressed a button on a campaign,
+and manufacturing a lead from one fills the pipeline with people who never enquired — and puts
+"whatsapp" on the first-touch source of somebody who actually came from Meta.
+
+On a counsellor's own number every word of that is false. A stranger messaging a counsellor to
+ask about NIFT coaching is the highest-intent enquiry this institute gets.
+
+So it is `whatsapp_numbers.creates_leads`, per number, and not a constant in the handler. A
+lead created that way is **assigned to the number's owner directly** rather than routed through
+the rules engine: the person already holding the conversation is the right owner, and sending it
+to somebody else would be actively wrong.
+
+### Three new webhook fields, two of which deliberately create nothing
+
+`smb_message_echoes` carries what the counsellor just sent from the phone. `history` carries up
+to 180 days of past conversations, in chunks, over the minutes after onboarding.
+`smb_app_state_sync` carries the phone's address book.
+
+**Echoes never create a lead.** A counsellor's phone also messages their colleagues, their
+suppliers and their mother. A CRM that invents a lead every time its owner sends a WhatsApp
+message is unusable within a week. Echoes attach to leads that already exist; the *inbound*
+direction is what signals an enquiry.
+
+**The history backfill never creates a lead either**, for a different reason: it is six months
+of everything, arriving in one burst. Turning it into leads would create hundreds at once, each
+landing on somebody's follow-up queue, most of them not students. What it does is attach to the
+leads that already exist, which is the part worth having — the conversation a counsellor had in
+March now sits on the lead they created in March, with its own date, so the thread reads in
+order.
+
+**The address book creates nothing at all.** `describeContactSync()` exists only to make that
+decision explicit and record that the payload arrived, rather than leaving an unhandled field
+that looks like an oversight. Importing a counsellor's contacts would fill the pipeline with
+people who never enquired while quietly moving personal contacts into a system the whole centre
+can read.
+
+### Direction is decided by the business number, on digits
+
+An echo and an inbound message are the same shape, and a history chunk carries both directions
+in one array. The only reliable discriminator is which end matches the number Meta names in
+`metadata` — compared on digits, because Meta writes the display number with a `+` in some
+places and without one in others. Comparing the strings would make every echo look inbound,
+which puts the counsellor's own words in the student's mouth. `normaliseMessage()` returns null
+rather than guessing when it is not told which number is the business.
+
+### Small decisions worth writing down
+
+**History is "complete" only when phase 2 reports 100.** Meta sends three phases — day 0–1,
+day 1–90, day 90–180 — and phase 0 at 100% is one day of history. Calling that done is how
+somebody concludes the backfill lost their chats.
+
+**A delivery for an unregistered number is recorded, not dropped.** It passed the account's own
+signature check, so it is genuinely ours; the fix is registering the number, and the payload is
+the evidence that it is already sending. One row per number rather than one per delivery, so a
+chatty unregistered phone does not bury the deliveries panel.
+
+**A history chunk that fails answers non-2xx.** The backfill is sent once, minutes after
+onboarding, and there is no endpoint to ask for it again — so a retry is the only recovery
+there is.
+
+**The messages are stored through the same mapper as ordinary inbound ones.** A thread where a
+photo reads one way if it came from the phone and another if it came through the API is worse
+than one that is merely incomplete.

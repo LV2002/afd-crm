@@ -1,5 +1,15 @@
 import { sql } from "drizzle-orm";
-import { index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 import { idColumn, softDelete, timestamps } from "./_helpers";
 import { interactionDirectionEnum } from "./activity";
@@ -146,4 +156,83 @@ export const whatsappSuppressions = pgTable(
       .where(sql`released_at is null`),
     index("whatsapp_suppressions_phone_idx").on(t.phone),
   ],
+);
+
+/**
+ * Which WhatsApp numbers this institute has, and what each one is for.
+ *
+ * There was one number, named by a single `phone_number_id` in the
+ * integration credentials, and that was enough while the only number was
+ * the institute's broadcast channel. Coexistence changes the shape of the
+ * problem: a counsellor's own number joins the account, keeps its
+ * WhatsApp Business app, and starts mirroring to the CRM — so there are
+ * several numbers, each belonging to a different person, and the rules
+ * for one are wrong for another.
+ *
+ * The rule that differs most is whether an inbound message may create a
+ * lead. On the broadcast number it must not: a reply there is somebody
+ * who pressed a button on a campaign, and manufacturing a lead from it
+ * fills the pipeline with people who never enquired. On a counsellor's
+ * own number the opposite is true — a stranger messaging a counsellor to
+ * ask about NIFT coaching is the highest-intent enquiry the institute
+ * gets, and it was being typed in by hand or lost.
+ *
+ * So the policy is a column, per number, rather than a constant in the
+ * webhook handler.
+ */
+export const whatsappNumberModeEnum = pgEnum("whatsapp_number_mode", [
+  /** Cloud API only. The institute's own number: it sends, and receives replies. */
+  "api",
+  /**
+   * Coexistence: the WhatsApp Business app on somebody's phone AND the
+   * Cloud API on the same number, at the same time. Messages sent from
+   * the phone arrive as `smb_message_echoes`; up to 180 days of past
+   * chats arrive as `history`.
+   */
+  "coexistence",
+]);
+
+export const whatsappNumbers = pgTable(
+  "whatsapp_numbers",
+  {
+    id: idColumn(),
+    /** Meta's id for the number, which is what every webhook identifies it by. */
+    phoneNumberId: text("phone_number_id").notNull(),
+    /** As Meta shows it. Display only — never used for matching. */
+    displayPhoneNumber: text("display_phone_number"),
+    /** What an admin calls it: "Kochi front desk", "Athira's phone". */
+    label: text("label").notNull(),
+    mode: whatsappNumberModeEnum("mode").notNull().default("api"),
+    /**
+     * Whose phone this is, for a coexistence number.
+     *
+     * Does two things: messages echoed from the phone are attributed to
+     * them rather than appearing to come from nobody, and a lead created
+     * from an inbound message on this number is assigned to them — the
+     * person already holding the conversation is the right owner, and
+     * sending it through the rules engine to land on somebody else would
+     * be actively wrong.
+     */
+    counsellorId: uuid("counsellor_id").references(() => profiles.id, { onDelete: "set null" }),
+    /**
+     * Whether an inbound message from a number nobody has entered yet
+     * creates a lead. False for the broadcast number, true for a
+     * counsellor's own — see this table's own comment.
+     */
+    createsLeads: boolean("creates_leads").notNull().default(false),
+    /**
+     * When Meta finished sending the 180-day history backfill.
+     *
+     * Null means it has not arrived (or was never consented to). Worth
+     * storing because the backfill comes in chunks over several minutes
+     * after onboarding and somebody will ask whether it is done.
+     */
+    historyCompletedAt: timestamp("history_completed_at", { withTimezone: true }),
+    /** How many past messages the backfill brought in. */
+    historyMessageCount: integer("history_message_count").notNull().default(0),
+    isActive: boolean("is_active").notNull().default(true),
+    ...timestamps(),
+    ...softDelete(),
+  },
+  (t) => [uniqueIndex("whatsapp_numbers_phone_number_id_uq").on(t.phoneNumberId)],
 );
