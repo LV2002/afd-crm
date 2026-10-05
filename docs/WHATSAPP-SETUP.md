@@ -259,9 +259,13 @@ The scheduled run needs a password called `CRON_SECRET` set on the hosting envir
 broadcasts, no automations, no ad spend, no fee reminders, no response-time sweep. Being
 turned away is not an error, so nothing is recorded as failing.
 
-Check **Settings → Platform health → Last nightly run**. If it says no run has ever been
+Check **Settings → Platform health → The nightly run**. If it says no run has ever been
 recorded, this is why, and it is the first thing to fix — before any of the above is worth
 configuring.
+
+Under that panel is **Run tonight's jobs now**. Use it after pasting in any credential on this
+page: it runs the same ten jobs immediately and tells you what each one did, so a wrong token is
+found in a minute instead of tomorrow. It is the real run, so it asks first.
 
 ---
 

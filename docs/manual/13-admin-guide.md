@@ -323,6 +323,19 @@ expects, the CRM refuses, and nothing runs with no failure recorded
 anywhere, because being turned away is not an error. Check Vercel →
 Project → Cron Jobs; a run listed with status 401 is this.
 
+**Run tonight's jobs now** sits under the panel. It runs the same ten jobs
+immediately, so a credential you have just pasted in can be tested in a
+minute rather than tomorrow morning. It asks first, because it is the real
+run: queued broadcasts go out and fee reminders are sent. If the deployment
+has no `CRON_SECRET` the button says so in one sentence, which is the
+quickest way to confirm the cause above.
+
+**Send a test email** sits in the alerts box at the top, and is the only
+honest check that email works. "Alerts are on" means two settings are
+filled in; the button sends a real message and shows what the mail service
+said, which is a different sentence for a wrong key, an unverified sending
+domain, and a free account that will only deliver to its own address.
+
 **Platform health** lists anything that has broken — a failed webhook, a
 failed nightly job, an unhandled error — with what it was and how often,
 plus **Recently marked fixed**.

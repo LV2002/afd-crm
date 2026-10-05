@@ -6821,3 +6821,45 @@ and that is what it does. The same comment block said the cron was "set to Sunda
 has had it daily for some time.
 
 **1519 tests pass**, lint, typecheck, `db:audit` and the production build clean. No schema change.
+
+---
+
+## Session 60 — The cron was firing all along
+
+Leon set the email variables, pressed **Send a test email**, and it arrived. The same deploy's
+Platform health panel then answered the other question: *no nightly run has ever been recorded.*
+
+Vercel's own observability agreed and went one better. `/api/cron/daily`: **one invocation, 4XX,
+error rate 0%.** The schedule has been firing on time all along. `requireCronSecret` returns 401
+when `CRON_SECRET` is unset, Vercel only attaches the `Authorization: Bearer …` header when that
+same variable exists, and a 401 is not an error by any metric that counts 5xx. So the job ran
+daily, was turned away daily, and every dashboard reported it as healthy.
+
+**The fix is one environment variable**, and it was always one environment variable. What took a
+week was that nothing could say so.
+
+### Run tonight's jobs now
+
+Everything downstream of a credential — ad spend, retargeting, WhatsApp automations — had a
+debugging loop of **one attempt per day**. Paste a token, wait until 10:00 tomorrow, find out it
+was the wrong kind of token. Nobody debugs anything that way, which is the real reason the Meta
+spend sat broken.
+
+`runNightlyNow()` on Settings → Platform health runs the same ten jobs on demand. It mints a
+request carrying `CRON_SECRET` and hands it to the sub-routes exactly as the schedule does, so
+pressing it is also a direct test of the one cause above: with no secret set it says so in a
+sentence rather than pointing at a hosting dashboard.
+
+It confirms first. This is not a rehearsal — queued broadcasts go out and fee reminders are sent.
+
+`nightlyJobs()`, `budgetMs()` and the `cron_runs` write moved to `lib/cron/run-daily.ts`, because
+Next type-checks route modules and rejects exports it does not recognise, so the route could not
+share them. The route is now a wrapper around `runDailyAndRecord()`.
+
+### Also
+
+The audit row for a manual run spread `result.summary` over `{ ok: result.ok }`, and `summary.ok`
+is a count of jobs while `result.ok` is whether the run passed. The later key won silently. Caught
+by the compiler, which is the only reason it is a footnote rather than a future afternoon.
+
+**1519 tests pass**, lint, typecheck, `db:audit` and the production build clean. No schema change.

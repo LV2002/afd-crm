@@ -2,10 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 
+import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { runDailyAndRecord } from "@/lib/cron/run-daily";
 import { composeEmail, emailConfigured, sendEmail } from "@/lib/email/send";
 import { resolveAlertRecipients } from "@/lib/errors/alert-recipients";
 import { resolveError } from "@/lib/errors/capture";
+import { createClient } from "@/lib/supabase/server";
 
 export interface HealthState {
   error?: string;
@@ -111,4 +114,79 @@ export async function sendTestEmail(): Promise<HealthState> {
   return {
     success: `Sent to ${recipients.join(", ")}. If it hasn't arrived in a minute, check the spam folder — that is the other half of why a sending domain gets verified.`,
   };
+}
+
+/**
+ * Runs the nightly jobs now, from the screen that reports on them.
+ *
+ * ## Why an admin can do this at all
+ *
+ * The nightly run happens once a day at 10:00 IST. Everything that depends
+ * on a credential — ad spend, retargeting, WhatsApp automations — therefore
+ * had a debugging loop of twenty-four hours per attempt: paste a token,
+ * wait a day, find out it was the wrong kind of token, paste another.
+ * Nobody debugs anything that way, which is why the Meta spend sat broken
+ * for a week without anyone being able to say which of three causes it was.
+ *
+ * ## The secret, and why pressing this proves something either way
+ *
+ * The sub-routes each check `CRON_SECRET` from the `authorization` header,
+ * so this mints a request carrying it. That makes the button a direct test
+ * of the single most common cause of "nothing ran": if the deployment has
+ * no `CRON_SECRET`, the schedule's calls are turned away with a 401 and
+ * nothing is recorded anywhere, and pressing this says so in one sentence
+ * instead of pointing at a hosting dashboard.
+ *
+ * ## What it is not
+ *
+ * Not a dry run. These are the real jobs: queued broadcasts go out, fee
+ * reminders are sent, audiences are updated. The button confirms before
+ * running for that reason.
+ */
+export async function runNightlyNow(): Promise<HealthState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "settings.manage")) {
+    return { error: "You don't have permission to do that." };
+  }
+
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    return {
+      error:
+        "CRON_SECRET is not set on this deployment — which is also why nothing runs overnight. Set it in the hosting environment and redeploy; the schedule and this button both start working at once.",
+    };
+  }
+
+  const result = await runDailyAndRecord(
+    new Request("https://cron.local/api/cron/daily", {
+      headers: { authorization: `Bearer ${secret}` },
+    }),
+  );
+
+  await writeAuditLog(await createClient(), {
+    actorId: user.id,
+    action: "cron.manual_run",
+    entityType: "cron_runs",
+    // `summary.ok` is a count of jobs, `result.ok` is whether the run
+    // passed. Spreading one over the other silently kept the wrong one.
+    after: {
+      runPassed: result.ok,
+      okCount: result.summary.ok,
+      failedCount: result.summary.failed,
+      skippedCount: result.summary.skipped,
+    },
+  });
+
+  revalidatePath("/settings/health");
+
+  const { ok: ran, failed, skipped } = result.summary;
+  const parts = [`${ran} ran`];
+  if (failed > 0) parts.push(`${failed} failed`);
+  if (skipped > 0) parts.push(`${skipped} skipped for want of time`);
+
+  return result.ok
+    ? { success: `Done in ${Math.round(result.durationMs / 1000)}s — ${parts.join(", ")}. The panel below now shows what each job did.` }
+    : {
+        error: `${parts.join(", ")}. The panel below names which, and why.`,
+      };
 }
