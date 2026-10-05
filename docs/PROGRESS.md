@@ -6987,3 +6987,45 @@ The dashboard fix also caught a regression from this session: `TeamWidget` carri
 `lg:col-span-2`, which worked while the Card was the grid item and stopped working the moment
 widgets were wrapped — the exact hazard named in the comment two files away, and missed here. Its
 width is declared in the registry now, where the dashboard reads it.
+
+---
+
+## Session 63 — Stage and temperature, where the work happens
+
+Leon: *"put temperature and stage in the top of each lead so that my counsellor can easily toggle
+between them as they interact with a lead."*
+
+They were already at the top, as two read-only badges. Changing either meant leaving: the kanban
+board for the stage, or the edit form and one dropdown among thirty for the temperature. So during
+a call — the one moment when both are actually known — neither got updated, and the temperature
+column slowly stopped meaning anything.
+
+**`LeadStatusBar`** replaces the badges. A select for the stage, a row of buttons for the
+temperature, each saving the moment it is chosen. The write looks optimistic and is not: the
+control shows the new value while the action runs and puts the old one back if the server refuses,
+because a control still showing a value the server rejected is worse than one that never moved.
+
+**Two controls, never one.** CLAUDE.md non-negotiable #1 is the shape of the component: stage is
+funnel position, temperature is a separate dimension, neither derived from the other. A single
+"status" picker would be tidier and would be the exact mistake v1 made. Temperature is buttons and
+stage is a select only because there are four of one and fourteen of the other.
+
+### Things reused rather than rebuilt
+
+- **`LostReasonDialog`** moved out of `kanban-board.tsx` into `components/leads/`. Moving to Lost
+  from the new bar has to ask the same question the board asks, and the server would otherwise
+  reject the move after the counsellor had watched the select change and change back.
+- **`moveLeadStage()`** is the same action the board calls — audit row, `stage_entered`
+  automations, lost-reason check, all already there. It now revalidates the lead's page too.
+- **`temperatureOverrideFor()`** is extracted from `updateLead()` and shared. A judgement made in
+  the bar must survive the nightly recompute exactly as one made in the form; a version that
+  stamped the override in one place and not the other would look like the cron randomly discarding
+  half of a counsellor's work.
+
+`setLeadTemperature()` is the one new action. Re-pressing the temperature you are already on is
+not a write, so it cannot keep pushing the override window forward; pressing it to clear the value
+also clears the override, handing the lead back to the rules rather than pinning "no temperature"
+for days as though somebody meant it.
+
+**1520 tests pass**, lint, typecheck and the production build clean. No schema change. Manual 6.1
+rewritten.

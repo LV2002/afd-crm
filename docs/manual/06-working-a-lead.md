@@ -6,9 +6,33 @@ a name anywhere in the system.
 ## 6.1 What is on the page
 
 **At the top**: the student's name, their lead number (`Lead #124`), and
-badges for their stage, temperature, assigned counsellor and centre.
+badges for the assigned counsellor and centre.
 
-**Under that**: the tag strip.
+**Under that**: the **status bar** — stage on the left, temperature on the
+right — and the tag strip.
+
+### Changing stage and temperature
+
+Both are changed here, on the lead's own page, while you are still looking
+at it. Pick a stage from the dropdown; tap a temperature. Each saves on its
+own the moment you choose it, with no Save button, and a small *Saved*
+appears beside them.
+
+**They are two separate things and neither follows the other.** The stage
+is where the student is in the funnel; the temperature is how likely you
+think they are to join. A lead can be **Hot** at *Demo Scheduled* and
+**Cold** at *Payment Pending*, and both are perfectly normal. That is the
+whole point of having two.
+
+Tapping the temperature you are already on clears it, which hands the lead
+back to the automatic rules.
+
+Moving to a stage that needs a reason — **Lost**, normally — asks for the
+reason before it moves, not after.
+
+> **Temperature you set beats the overnight recalculation**, for a few days
+> (an admin sets how many). You have just spoken to them; the rules have
+> not.
 
 **Left (the wide column)**: the lead's details, grouped into sections
 (Personal, Education, Preferences, Tracking…). You edit them here, in

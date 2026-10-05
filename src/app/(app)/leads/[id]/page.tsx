@@ -29,6 +29,7 @@ import { getLeadFeePlan } from "@/lib/enrolment/get-fee-plan";
 import { getStudentFieldLabels } from "@/lib/profile-form/field-labels";
 
 import { ChangePlanPanel } from "@/components/enrolment/change-plan-panel";
+import { LeadStatusBar } from "@/components/leads/lead-status-bar";
 
 import { ConfirmAdmissionForm } from "./confirm-admission-form";
 import { InteractionForm } from "./interaction-form";
@@ -67,7 +68,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const detail = await getLeadDetail(supabase, id);
   if (!detail) notFound();
 
-  const { row, stageName, centerName, assignedToName } = detail;
+  // `stageName` is no longer read here: the status bar resolves the name
+  // from the stage list it already needs, so that it can also offer the
+  // others.
+  const { row, centerName, assignedToName } = detail;
   const canRevealPhone = can(user, "lead.reveal_phone");
 
   const fields = await getFieldSchema(supabase, "lead", user);
@@ -85,6 +89,33 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   for (const field of fields) {
     values[field.key] = field.isCore ? row[field.key] : (row.custom ?? {})[field.key];
   }
+
+  /*
+    Stage and temperature, for the bar at the top.
+
+    Fetched here rather than inside the bar because this page is already a
+    server component with the client at hand, and because the three lists
+    are small, cached config rows — the alternative is a client component
+    that opens with three empty controls and fills them in.
+  */
+  const [{ data: stageRows }, { data: temperatureRows }, lostReasonOptions] = await Promise.all([
+    supabase
+      .from("pipeline_stages")
+      .select("id, name, color, requires_reason")
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .order("sort_order")
+      .returns<Array<{ id: string; name: string; color: string | null; requires_reason: boolean }>>(),
+    supabase
+      .from("dropdown_options")
+      .select("value, label, color")
+      .eq("category", "temperature")
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .order("sort_order")
+      .returns<Array<{ value: string; label: string; color: string | null }>>(),
+    getDropdownOptions(supabase, "lost_reason"),
+  ]);
 
   const canCreateEnrolment = can(user, "enrolment.create");
   // The same three lists feed both the confirmation form and the
@@ -213,12 +244,32 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           <p className="text-sm text-muted-foreground">Lead #{row.lead_number}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {stageName && <Badge variant="secondary">{stageName}</Badge>}
-          {Boolean(row.temperature) && <Badge variant="outline">{String(row.temperature)}</Badge>}
           {assignedToName && <Badge variant="outline">{assignedToName}</Badge>}
           {centerName && <Badge variant="outline">{centerName}</Badge>}
         </div>
       </div>
+
+      {/*
+        Stage and temperature are no longer badges here. They were the two
+        things a counsellor learns during a call and the two they had to
+        leave the page to change — the board for one, thirty fields of
+        edit form for the other. Now they are the controls themselves,
+        above everything else on the page.
+      */}
+      <LeadStatusBar
+        leadId={id}
+        stages={(stageRows ?? []).map((stage) => ({
+          id: stage.id,
+          name: stage.name,
+          color: stage.color,
+          requiresReason: stage.requires_reason,
+        }))}
+        temperatures={temperatureRows ?? []}
+        currentStageId={row.stage_id ? String(row.stage_id) : null}
+        currentTemperature={row.temperature ? String(row.temperature) : null}
+        lostReasonOptions={lostReasonOptions}
+        canEdit={can(user, "lead.update")}
+      />
 
       <LeadTagsPanel
         leadId={id}
