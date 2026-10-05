@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { ConditionField } from "@/lib/assignment/evaluate-conditions";
+import type { LabelLookup } from "@/lib/rules/describe-rule";
 import { getDropdownOptions } from "@/lib/fields/resolve-field-options";
 import { INDIAN_STATES_DISTRICTS } from "@/lib/geo/indian-states-districts";
 import { CONDITION_FIELDS, CONDITION_FIELD_KEYS } from "@/lib/rules/condition-fields";
@@ -71,4 +72,27 @@ export async function loadRuleOptions(supabase: SupabaseClient): Promise<RuleOpt
     optionsByField,
     fields: CONDITION_FIELD_KEYS,
   };
+}
+
+/**
+ * Ids back into words, for any screen that prints a stored rule.
+ *
+ * `describeConditions` takes a lookup because a condition stores
+ * `value: "7f3a…"` and a person needs to read "Kannur". Three screens
+ * now print rules — assignment, temperature and SLA — and each one was
+ * building this map itself, which is three places for "and users too"
+ * to be forgotten in two of them.
+ *
+ * The kind argument is ignored on purpose: ids are uuids and do not
+ * collide across centres, people and dropdown options, so one flat map
+ * is enough and a caller cannot pass the wrong kind.
+ */
+export function ruleLabelLookup(options: RuleOptions): LabelLookup {
+  const names = new Map<string, string>();
+  for (const center of options.centers) names.set(center.value, center.label);
+  for (const person of options.users) names.set(person.value, person.label);
+  for (const list of Object.values(options.optionsByField)) {
+    for (const option of list) if (!names.has(option.value)) names.set(option.value, option.label);
+  }
+  return (_kind, value) => names.get(value) ?? value;
 }

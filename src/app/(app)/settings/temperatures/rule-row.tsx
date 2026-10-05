@@ -14,7 +14,8 @@ export interface TemperatureRuleData {
   id: string;
   temperature_value: string;
   priority: number;
-  conditions: unknown;
+  /** Already turned into English on the server — see lib/rules/describe-rule.ts. */
+  conditions: string;
   is_active: boolean;
 }
 
@@ -56,9 +57,7 @@ export function RuleRow({ rule }: { rule: TemperatureRuleData }) {
           </Button>
         </div>
       </div>
-      <pre className="overflow-x-auto rounded bg-muted p-2 text-xs">
-        {JSON.stringify(rule.conditions, null, 2)}
-      </pre>
+      <p className="text-sm text-muted-foreground">{rule.conditions}</p>
     </div>
   );
 }

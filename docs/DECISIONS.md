@@ -3397,3 +3397,59 @@ outcomes are there — admin-editable `dropdown_options` rows. What is keyed on 
 while the stage's name stays editable. Renaming "Converted" to "Joined" changes nothing; deleting
 the row turns the exemption off, and then every interaction needs a follow-up, which is the safe
 direction to fail in.
+
+## 2026-10-05 — Strict where it is written, tolerant where it is read
+
+`parseEscalationStep()` tolerates anything: a mistyped key yields null and the rung is skipped.
+That is correct for its caller, the hourly SLA sweep, where throwing partway through would abandon
+every lead after the bad one.
+
+It is wrong for the *writer*. A rung the sweep silently skips is a promise an administrator
+believes they made and nobody kept — and this was not hypothetical: the old form's placeholder
+taught `flag_breach`, a key nothing has ever read, so the example everybody copied produced an
+inert rung.
+
+So the two paths get different strictness. `createSlaPolicy` validates with a `.strict()` schema
+that refuses an unknown key and names it; the sweep keeps reading tolerantly. The rule, stated
+generally: **validate strictly at the point a human asserts something, tolerate liberally at the
+point a job acts on it.** Mixing them up gives you either a cron that dies on bad config or a
+screen that accepts promises it cannot keep. We had the second.
+
+Same family as the three entries above it — a tool discarding what the platform already said, and
+a degraded path that is only acceptable when the degradation is visible.
+
+## 2026-10-05 — A preset is a filled form, not a seeded row
+
+The SLA screen now offers three starting points. They are **not** inserted into `sla_policies` at
+seed time, and that was a deliberate choice against the easier implementation.
+
+A seeded SLA policy is live the moment the instance exists. It starts marking leads breached, and
+dropping them into an **At risk** bucket, for an institute that has not yet decided it wants to be
+measured — and the first thing anybody would do is go looking for how to switch off the thing
+accusing their counsellors of being late. An empty list with three buttons is a worse demo and a
+better product.
+
+It also keeps CLAUDE.md § "Configuration is data" honest in the other direction: config an admin
+never chose is still config they have to maintain.
+
+## 2026-10-05 — Tags and stages are not substitutes
+
+Recorded because Leon asked whether tags could be dropped in favour of lead stages, having kept
+them only for WhatsApp retargeting.
+
+A lead has exactly **one** stage and **many** tags, and the two behave differently over time: a
+stage change *replaces* (the funnel is a position), while a tag *accumulates and survives* (the
+history is the point). Using a stage to record an attribute — *wants a hostel*, *came to the Kochi
+open day*, *parent is an architect* — therefore costs the funnel position it overwrites, and
+conversion-by-stage starts counting attributes as pipeline states.
+
+This is the v1 mistake in a new costume. v1 merged stage and temperature, which is why CLAUDE.md
+non-negotiable 1 exists; merging stage and tag would corrupt the same numbers for the same reason.
+
+Tags are used in seven places today beyond retargeting: the lead detail tag strip, Settings →
+Tags, the leads-list filter, the `tag_added` flow trigger, the `add_tag` flow step, broadcast
+audience narrowing (`spec.tagId`), the AI's `person-history` tool, and the config export bundle.
+Kept.
+
+Noted while looking: tags are **not** available as a condition in assignment or temperature rules,
+which is the one place an admin would reasonably expect them. Logged in BACKLOG.md.

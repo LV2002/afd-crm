@@ -1750,8 +1750,8 @@
 <p>Add, rename, reorder, recolour. Each stage has a <strong>type</strong> (fixed list: new, normal, scheduled, enrolment_form, payment, won, lost, parked), a <strong>probability</strong> used by the forecast, an optional <strong>SLA hours</strong>, and whether it <strong>requires a reason</strong>.</p>
 <p><strong>Choose the type carefully</strong> — it drives behaviour, not just colour. A <code>lost</code> stage demands a reason; a <code>won</code> stage counts as an admission.</p>
 <h3 id="settings-temperatures">Settings → Temperatures</h3>
-<p>The temperature values themselves, their colours and order, and the rules that assign them. A rule has <strong>Sets temperature to</strong>, a <strong>Priority</strong>, and <strong>Conditions (JSON)</strong>.</p>
-<blockquote><strong>Conditions are entered as JSON.</strong> This is the one genuinely technical screen. If you are not comfortable with it, leave the shipped rules alone — they work.</blockquote>
+<p>The temperature values themselves, their colours and order, and the rules that assign them. A rule has <strong>Sets temperature to</strong>, a <strong>Priority</strong>, and <strong>Which leads</strong> — the same point-and-click condition builder as the assignment rules, so there is no JSON on this screen.</p>
+<p>A lead gets the temperature of the <strong>first</strong> rule it matches, highest priority first. A rule with no conditions matches every lead, which is what you want for the catch-all at the bottom and a mistake anywhere else — the screen says so when you leave the conditions empty.</p>
 <p>Remember the override window: a manual temperature beats the rules for a few days (Settings → Organisation sets how many), then the rules resume.</p>
 <h3 id="settings-assignment-rules">Settings → Assignment Rules</h3>
 <p>Who gets a new lead. <strong>This is the screen that stops leads going unassigned.</strong></p>
@@ -1772,8 +1772,27 @@
 </ol>
 <p><strong>What you should see</strong> — matching new leads are assigned on arrival, whatever route they came in by. Watch the <strong>Unassigned</strong> badge: if it keeps filling, no rule matches those leads and you need a catch-all at the lowest priority.</p>
 <h3 id="settings-sla-policies">Settings → SLA Policies</h3>
-<p>Response-time targets and what happens when they are missed: <strong>Name</strong>, <strong>Priority</strong>, <strong>Measure</strong>, <strong>Target hours</strong>, <strong>Applies to (JSON, empty = everyone)</strong> and an <strong>Escalation ladder (JSON array)</strong>. Business hours and holidays (for example <em>Onam</em>, marked <strong>Closed</strong>) are set here too, so a target does not expire overnight on a day the office is shut.</p>
-<p>Two of these fields are JSON. Same caution as temperatures.</p>
+<p>How quickly a lead has to be answered, and what happens when it is not.</p>
+<p><strong>Start from one of the three suggestions at the top of the form.</strong> Each one fills in the whole policy — the thing it measures, the target, and who gets told when it is missed — and every field stays yours to change before you press <strong>Create policy</strong>. Nothing is saved until you do.</p>
+<table><thead>
+<tr><th>Suggestion</th><th>What it catches</th></tr>
+</thead><tbody>
+<tr><td>Answer a new enquiry the same day</td><td>A form filled in this morning, still unanswered this afternoon. The one worth having if you only have one.</td></tr>
+<tr><td>Keep the follow-up date you promised</td><td>A counsellor said Thursday; Thursday has passed and nothing is logged.</td></tr>
+<tr><td>Nobody sits in one stage for a fortnight</td><td>The lead moved to <em>Counselling Done</em> in March that has not moved since.</td></tr>
+</tbody></table>
+<p>The fields, if you are filling it in yourself:</p>
+<ul>
+<li><strong>Name</strong> — what you would call it out loud. It appears on the policy list and nowhere else.</li>
+<li><strong>What it measures</strong> — <em>First response</em> (from the lead arriving until somebody logs their first interaction), <em>Follow-up kept</em> (from the date a counsellor promised), or <em>Time in one stage</em>.</li>
+<li><strong>Target</strong> — in hours. The screen says it back in days or weeks, so <code>336</code> reads as <em>2 weeks</em>.</li>
+<li><strong>Priority</strong> — a lead gets <strong>one</strong> policy: the highest-priority one whose conditions it matches. Give a catch-all a low number and your specific policies higher ones.</li>
+<li><strong>Count working hours only</strong> — the clock pauses overnight, on weekly offs and on holidays. Leave this on, or a Saturday-evening enquiry is four hours late by Sunday morning with nobody in the building.</li>
+<li><strong>Which leads</strong> — the same point-and-click condition builder the assignment rules use. Leave it empty and the policy covers everybody, which is what you want for your first one.</li>
+<li><strong>When it is missed</strong> — rows, each saying how many hours <em>past the target</em> it fires, and whether to tell the counsellor or take the lead off them. Use <em>take it off them</em> sparingly: a counsellor who loses leads for being late learns to stop logging calls, not to make them.</li>
+</ul>
+<p>Business hours and holidays (for example <em>Onam</em>, marked <strong>Closed</strong>) are set on the same screen, so a target does not expire overnight on a day the office is shut.</p>
+<p>No JSON anywhere on this screen any more.</p>
 <h3 id="settings-tags">Settings → Tags</h3>
 <p>Labels a lead can carry: <strong>Name</strong> and <strong>Colour</strong>.</p>
 <h3 id="settings-dropdowns">Settings → Dropdowns</h3>

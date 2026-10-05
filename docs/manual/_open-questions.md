@@ -48,15 +48,19 @@ will do it by accident.
 
 ---
 
-## 4. Does the escalation ladder notify anybody today?
+## 4. Does the escalation ladder notify anybody today? — ANSWERED
 
-**Chapter 13.3.** SLA policies have an **Escalation ladder (JSON array)**
-and the nightly sweep flags breaches. What I could not establish is what
-an escalation rung actually *does* when it fires — whether anybody is
-messaged, or whether the breach only surfaces on screen.
+**Chapter 13.3.** Yes. Read out of `src/app/api/cron/sla-sweep/route.ts`
+rather than asked: a rung that comes due raises an **SLA escalation**
+notification to the roles configured for that event, additionally to the
+lead's own counsellor when the rung says to, and unassigns the lead when
+it says that. The breach itself also sets `sla_breached`, which is what
+puts the lead under **At risk** on the dashboard.
 
-**What I need:** one sentence on what a staff member experiences when a
-rung fires.
+Only the highest rung that has come due fires, and a rung fires once —
+so a lead untouched over a weekend produces one message, not one an hour.
+`requeue` appears in an old schema comment and does nothing; the SLA
+screen no longer offers it.
 
 ---
 

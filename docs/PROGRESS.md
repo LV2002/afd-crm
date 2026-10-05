@@ -7149,3 +7149,73 @@ change.
 
 **1533 tests pass** (5 new), lint, typecheck, `db:audit` and the production build clean. No schema
 change. Seed re-run and the grants verified in the database.
+
+## Session 66 — SLA policies without JSON, and the last JSON screen
+
+Leon: *"the SLAs seem complicated, can you simplify them so i can create them easily."*
+
+He was right, and the reason was specific: the form had **two raw JSON textareas** —
+*Applies to (JSON, empty = everyone)* and *Escalation ladder (JSON array)*. Both asked an
+administrator to hand-write a structure whose keys are documented in a schema comment they will
+never read. The feature existed and nobody had made a policy.
+
+### Three things, in order of how much they matter
+
+**Presets.** The hard part was never the typing, it was knowing what a reasonable target is.
+Nobody setting up a CRM for the first time knows whether first response should be 4 hours or 24.
+Three policies a coaching institute would recognise now fill the whole form in — *answer a new
+enquiry the same day*, *keep the follow-up date you promised*, *nobody sits in one stage for a
+fortnight* — and every field stays editable. A preset is a filled form, never a saved row.
+
+Deliberately **not** seeded into the database: a seeded SLA starts breaching leads on day one for
+an institute that has not decided it wants to be measured yet.
+
+**The condition builder** the assignment rules already use, in place of the first textarea. It was
+one import away the whole time.
+
+**A ladder editor** in place of the second: rows saying *how many hours past the target*, *tell
+the counsellor*, *take it off them*. Nothing about the stored shape changed, so existing policies
+and the hourly sweep are untouched.
+
+### The dead key
+
+The old placeholder taught `flag_breach`. `parseEscalationStep()` has never read it — it reads
+`at_hours`, `notify_roles`, `notify_owner`, `unassign`. So the example anybody copied produced a
+rung that silently did nothing, which is the house failure mode written up three times already in
+DECISIONS.md: *a degraded path is only acceptable when the degradation is visible.*
+
+The write path is now strict and names the key. The reader stays tolerant on purpose — it runs
+inside an hourly cron sweep where throwing on a mistyped key would abandon every lead after the
+bad one. **Strict where it is written, tolerant where it is read.**
+
+### Two real defects found on the way
+
+`createSlaPolicy` only `JSON.parse`d the conditions. Now that the form posts real rule conditions,
+a condition naming a field the evaluator does not know would reach `evaluateConditions` once per
+lead *inside the sweep*, where nobody watches it throw. It now validates with `parseConditions` —
+the same function the assignment rules have always used, for the same stated reason.
+
+The policy list printed `first_response · 4h` and said **nothing at all** about which leads a
+policy covers or what happens when it is missed — so a policy with an empty ladder looked
+identical to one that pages a centre head. Both are now sentences, built by reading the stored
+JSON back through the sweep's own parser, so the summary cannot claim a rung the sweep will skip.
+
+### The last JSON screen
+
+Settings → Temperatures still had `Conditions (JSON)` with a textarea, and the manual had grown a
+paragraph calling it *"the one genuinely technical screen — if you are not comfortable with it,
+leave the shipped rules alone"*. That is a documented admission that a configurable thing was not
+configurable. Same builder, dropped in; the server action already validated with
+`parseConditions`, so nothing behind the form changed. Its rule list showed a `<pre>` of raw JSON
+and now reads as English.
+
+The id→name map three screens were each building is now `ruleLabelLookup()` in one place.
+
+### Manual
+
+Chapter 13.3's SLA section is rewritten around the three suggestions, with a table of what each
+one catches. **Open question 4 is answered** — not by asking Leon but by reading
+`sla-sweep/route.ts`: the ladder is fully live, only the highest due rung fires, and it fires once.
+
+**1547 tests pass** (14 new, `tests/sla-presets.spec.ts`), lint, typecheck, `db:audit` and the
+production build clean. No schema change, no migration.

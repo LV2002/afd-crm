@@ -225,8 +225,9 @@ Checked after writing:
   the chapters — all 79 present.
 - **57 on-screen labels** quoted in procedures (`Confirm admission`,
   `Yes, record it`, `Skip this column`, `Onboarding done`, `Assign to…`,
-  `Escalation ladder (JSON array)` …) grepped back against the source —
-  all 57 found.
+  `Add a step` …) grepped back against the source — all 57 found.
+  (`Escalation ladder (JSON array)` was one of them until the SLA screen
+  stopped asking for JSON; Chapter 13.3 was rewritten with it.)
 - **Seeded data re-read from `seed.ts`**: 6 roles, 46 permissions, 14
   stages with their types, probabilities and SLA hours, 17 dropdown
   categories with every option, 30 lead fields, 34 student fields, 7
