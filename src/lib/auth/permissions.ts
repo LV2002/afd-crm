@@ -139,9 +139,23 @@ export const PERMISSIONS = [
   },
   {
     code: "enrolment.update",
-    label: "Edit enrolments",
+    label: "Edit the fee plan",
     category: "Enrolment",
-    description: "Edit an enrolment's course, batch or fee plan.",
+    description: "Set or correct an enrolment's fee, discount and instalment schedule.",
+  },
+  // Split out of enrolment.update, because the two authorities are not the
+  // same one. Moving a student from Foundation to DWO, or from the Tuesday
+  // batch to the Thursday one, is ordinary work for the counsellor who
+  // sold it, the accounts clerk taking the money and the academics team
+  // teaching them. Changing what the family owes is not: that is a
+  // discount by another name, and it belongs with the people who already
+  // hold the fee plan and the approval limits.
+  {
+    code: "enrolment.change_plan",
+    label: "Change course, batch or mode",
+    category: "Enrolment",
+    description:
+      "Move a confirmed admission to a different course, batch, mode or academic year. Does not include changing the fee.",
   },
   // Deliberately separate from enrolment.update. Marking an admission
   // dropped removes it from the conversion numbers and stops the fee

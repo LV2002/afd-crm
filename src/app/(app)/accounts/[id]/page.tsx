@@ -12,6 +12,11 @@ import { createClient } from "@/lib/supabase/server";
 
 import { RevealPhoneButton } from "../../leads/reveal-phone-button";
 import { AgreedPlan } from "@/components/enrolment/agreed-plan";
+import { ChangePlanPanel } from "@/components/enrolment/change-plan-panel";
+import { FeePlanPanel } from "@/components/enrolment/fee-plan-panel";
+import { getBatchOptionsForCentre } from "@/lib/enrolment/batch-options";
+import { getLeadFeePlan } from "@/lib/enrolment/get-fee-plan";
+import { getDropdownOptions } from "@/lib/fields/resolve-field-options";
 import { PendingDiscount } from "@/components/enrolment/pending-discount";
 import { getAccounts } from "@/lib/finance/get-finance";
 
@@ -20,11 +25,14 @@ import { getSignedAgreement } from "@/lib/storage/attachments";
 
 import { DropAdmissionForm } from "./drop-admission-form";
 import { RecordPaymentForm } from "./record-payment-form";
+import { ReversePaymentForm } from "./reverse-payment-form";
 
 interface EnrolmentDetail {
   id: string;
   lead_id: string;
   course: string;
+  batch_id: string | null;
+  center_id: string;
   mode: string;
   academic_year: string;
   total_fee_paise: number;
@@ -54,6 +62,7 @@ interface PaymentRow {
   reference: string | null;
   received_at: string;
   reversal_reason: string | null;
+  reverses_payment_id: string | null;
 }
 
 export default async function EnrolmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -66,7 +75,7 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
   const { data: enrolment } = await supabase
     .from("enrolments")
     .select(
-      "id, lead_id, course, mode, academic_year, total_fee_paise, discount_paise, discount_name, down_payment_paise, fee_notes, net_fee_paise, status, dropped_at, drop_reason, pending_discount_paise, pending_discount_at, enrolled_at, sales_to_accounts_at, accounts_to_academics_at, student_id, leads(student_name, primary_phone), centers(name)",
+      "id, lead_id, course, batch_id, center_id, mode, academic_year, total_fee_paise, discount_paise, discount_name, down_payment_paise, fee_notes, net_fee_paise, status, dropped_at, drop_reason, pending_discount_paise, pending_discount_at, enrolled_at, sales_to_accounts_at, accounts_to_academics_at, student_id, leads(student_name, primary_phone), centers(name)",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -93,7 +102,9 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
   const [{ data: paymentRows }, { data: receiptRows }] = await Promise.all([
     supabase
       .from("payments")
-      .select("id, amount_paise, direction, method, reference, received_at, reversal_reason")
+      .select(
+        "id, amount_paise, direction, method, reference, received_at, reversal_reason, reverses_payment_id",
+      )
       .eq("enrolment_id", id)
       .order("received_at", { ascending: false })
       .returns<PaymentRow[]>(),
@@ -106,6 +117,21 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
 
   const receiptNoByPaymentId = new Map((receiptRows ?? []).map((r) => [r.payment_id, r.receipt_no]));
   const payments = paymentRows ?? [];
+
+  // Credits that nothing has been posted against yet. A payment can be
+  // undone once; offering an already-reversed one in the picker would
+  // only produce an error the person could have been spared.
+  const reversedIds = new Set(
+    payments.map((p) => p.reverses_payment_id).filter((id): id is string => id !== null),
+  );
+  const reversiblePayments = payments
+    .filter((p) => p.direction === "credit" && !reversedIds.has(p.id))
+    .map((p) => ({
+      id: p.id,
+      amountPaise: p.amount_paise,
+      receivedOn: formatDateIST(p.received_at, "d MMM yyyy"),
+      receiptNo: receiptNoByPaymentId.get(p.id) ?? null,
+    }));
   const paidPaise = payments.reduce(
     (sum, p) => sum + (p.direction === "credit" ? p.amount_paise : -p.amount_paise),
     0,
@@ -124,7 +150,25 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
   const canRecordPayment = can(user, "payment.record");
   const canRevealPhone = can(user, "lead.reveal_phone");
   const canDrop = can(user, "enrolment.drop");
+  const canRefund = can(user, "payment.refund");
+  const canChangePlan = can(user, "enrolment.change_plan");
+  // Accounts hold this now, so the fee panel is on their own screen
+  // rather than only on the lead — see docs/DECISIONS.md. The read-only
+  // `AgreedPlan` above still shows what was agreed and what has arrived;
+  // this is the form that changes it.
+  const canEditFee = can(user, "enrolment.update");
   const isDropped = enrolment.dropped_at !== null;
+
+  const [planOptions, feePlan] = await Promise.all([
+    canChangePlan
+      ? Promise.all([
+          getDropdownOptions(supabase, "course"),
+          getDropdownOptions(supabase, "preferred_mode"),
+          getBatchOptionsForCentre(supabase, enrolment.center_id),
+        ])
+      : Promise.resolve(null),
+    canEditFee ? getLeadFeePlan(enrolment.lead_id) : Promise.resolve(null),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -299,6 +343,39 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
             </div>
           )}
           {canRecordPayment && <RecordPaymentForm enrolmentId={id} accounts={financeAccounts} />}
+          {planOptions && !isDropped && (
+            <ChangePlanPanel
+              enrolmentId={id}
+              current={{
+                course: enrolment.course,
+                batchId: enrolment.batch_id,
+                mode: enrolment.mode,
+                academicYear: enrolment.academic_year,
+              }}
+              courses={planOptions[0]}
+              modes={planOptions[1]}
+              batches={planOptions[2]}
+              canEdit
+            />
+          )}
+          {feePlan && !isDropped && (
+            <FeePlanPanel
+              leadId={enrolment.lead_id}
+              values={feePlan.values}
+              canEdit
+              hasEnrolment={feePlan.hasEnrolment}
+              hasSignedAgreement={signedAgreement !== null}
+              printHref={`/leads/${enrolment.lead_id}/instalment-agreement`}
+              promos={feePlan.promos}
+            />
+          )}
+          {canRefund && (
+            <ReversePaymentForm
+              enrolmentId={id}
+              payments={reversiblePayments}
+              accounts={financeAccounts}
+            />
+          )}
           {canDrop && <DropAdmissionForm enrolmentId={id} isDropped={isDropped} />}
         </div>
       </div>

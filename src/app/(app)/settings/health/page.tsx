@@ -8,7 +8,8 @@ import { getMigrationStatus } from "@/lib/db/migration-status";
 import { getSchemaDrift } from "@/lib/db/schema-drift";
 import { describeDifference } from "@/lib/db/schema-compare";
 import { errorEvents } from "@/lib/db/schema";
-import { alertRecipients, emailConfigured } from "@/lib/email/send";
+import { emailConfigured } from "@/lib/email/send";
+import { resolveAlertRecipients } from "@/lib/errors/alert-recipients";
 import { formatDateIST } from "@/lib/format/date";
 
 import { ResolveButton } from "./resolve-button";
@@ -47,7 +48,7 @@ export default async function HealthPage() {
   const driftSummary = drift.error ? null : describeDifference(drift);
 
   const configured = emailConfigured();
-  const recipients = alertRecipients();
+  const recipients = await resolveAlertRecipients();
 
   return (
     <div className="flex flex-col gap-6">
@@ -76,10 +77,22 @@ export default async function HealthPage() {
         ) : (
           <p className="text-[0.9375rem]">
             <strong>Nobody is being emailed.</strong>{" "}
-            {configured
-              ? "Set ALERT_EMAIL_TO to the addresses that should hear about failures."
-              : "Set RESEND_API_KEY and EMAIL_FROM to turn email on, then ALERT_EMAIL_TO for who hears about failures."}{" "}
-            Problems are still recorded below.
+            {recipients.length === 0 ? (
+              <>
+                Put an address in <strong>Settings → Organisation → Send platform alerts to</strong>
+                .{" "}
+              </>
+            ) : null}
+            {!configured ? (
+              <>
+                Email sending itself is not switched on: your developer needs{" "}
+                <code className="font-mono">RESEND_API_KEY</code> and{" "}
+                <code className="font-mono">EMAIL_FROM</code> set in the hosting environment. It is
+                the one part of this that cannot live in the database.{" "}
+              </>
+            ) : null}
+            Problems are still recorded below, and still appear in the bell for anyone set to
+            receive the <em>Something broke</em> notification.
           </p>
         )}
       </div>

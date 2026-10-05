@@ -24,7 +24,11 @@
     "e2e:report": "playwright show-report",
     "e2e:install": "playwright install --with-deps chromium",
     "db:reset-data": "tsx src/lib/db/reset-data-cli.ts",
-    "db:audit": "tsx src/lib/db/audit-cli.ts"
+    "db:audit": "tsx src/lib/db/audit-cli.ts",
+    "manual": "node docs/manual/build.mjs",
+    "video": "node docs/video/render.mjs",
+    "video:stills": "node docs/video/render.mjs --preview",
+    "video:script": "node docs/video/script.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",

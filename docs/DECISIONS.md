@@ -2866,3 +2866,275 @@ as a possible regression in whatever had just merged, because "it only ever fail
 own" is exactly what a real intermittent bug looks like too — and the one confident
 explanation offered along the way was wrong, which is why it got a disproving experiment
 rather than a comment.
+
+## 2026-10-05 — Changing a course does not change the fee
+
+Leon asked for two things that sound like one: let counsellors, accounts and academics
+change the course and batch a student registered for, and let accounts change the fee.
+
+They are not one thing, and building them as one would have been the mistake. A different
+course almost always has a different fee structure, so the obvious implementation looks up
+the new course's fee and applies it. That is a fee change nobody agreed, arriving through
+a form labelled "course", and bypassing the discount authority limits — the whole
+machinery that exists to stop a fee moving without someone who may move it saying so.
+
+So `changeEnrolmentPlan` writes the course, batch, mode and academic year, and does not
+touch a single fee column. Accounts are notified that the course moved, with what it moved
+from and to, and they change the figure deliberately if it should change. One extra step
+for the one case where the fee really should follow, and no silent re-pricing in the many
+cases where it should not.
+
+### Two permissions, not one
+
+`enrolment.update` was described as "edit an enrolment's course, batch or fee plan" and
+held only by centre heads and the two admin roles. Granting it to counsellors, accounts and
+academics so they could move a batch would have handed all three the fee as well.
+
+It is split. `enrolment.change_plan` is the course, batch, mode and year — counsellors at
+`own`, accounts, academics and centre heads at `center`. `enrolment.update` now means the
+fee plan and nothing else, and gains accounts at `center`, which is the part of Leon's ask
+that really was a straight grant.
+
+RLS cannot express the split, because it is a column-level distinction and a policy sees
+rows. `enrolments_update` therefore accepts either permission — the row-level question is
+"may you touch this admission at all", and the answer is the same for both — and the two
+server actions enforce which columns each may move. That is written into the migration
+rather than left implicit, because CLAUDE.md's non-negotiable #3 is about rows, and this
+still satisfies it: no counsellor can reach another counsellor's enrolment through either
+route.
+
+### A fee has a floor, not a freeze
+
+Accounts can now change a fee after payments have arrived — that is the point, since a
+figure typed wrong on day one should not need a centre head and a week. What they cannot
+do is set it below what has already been collected. That would leave a balance of minus
+three thousand rupees, and there is no such student: if the institute is holding more than
+is owed, the institute owes *them*, and that is a refund entry against the original
+payment. The error says how much has been received, so the next step is obvious.
+
+Nothing in the ledger is touched by a fee change either way. `payments` and `receipts`
+remain append-only; what moves is the agreed amount, which was always a column on
+`enrolments`.
+
+### One fact, one path
+
+`students.current_course` and `students.current_batch_id` are a copy of what the enrolment
+says, kept so the roster reads without a join. The generic student edit form could write
+them directly, which left the admission record, the printed agreement and the accounts
+screens still saying the old course — three screens disagreeing about what somebody is
+studying, with no way to tell which was right.
+
+Both columns are now read-only on that form (and skipped by `updateStudent`, so the guard
+is not only in the UI), and `changeEnrolmentPlan` writes the enrolment, the two copies and
+the `student_batches` history together in one transaction. Settings → Batches, which had
+the same gap in the other direction, now writes `enrolments.batch_id` too and fires the
+same notification in the same words.
+
+## 2026-10-05 — A new lead that nobody was given is now announced
+
+`lead.assigned` returned early when a lead arrived unassigned, with a comment arguing that
+the orphan queue surfaces those and that telling a role about every unmatched lead would
+drown the people who work it.
+
+Half right. The queue does surface them — to somebody who thinks to open it. A lead
+arriving at 9pm from a source no rule covers was announced to nobody at all, and the
+highest-value enquiry of the week is exactly the one most likely to come from a source the
+rules have never seen.
+
+So there are two events. `lead.created` fires for every new lead from every source and
+goes to centre heads, saying who it went to or *"Assigned to nobody yet"*. `lead.assigned`
+fires only when there is somebody to tell, and goes to them. Different audiences, different
+news, no duplicate message about the same lead — and the volume concern is answered by the
+fact that an admin can turn the event off in Settings → Notifications, which is where that
+decision belongs.
+
+Manual assignment from the Unassigned queue now fires `lead.assigned` too. It never did:
+a lead a rule assigned told its new owner, and a lead a centre head handed over by hand
+told nobody, which is the worse case of the two — somebody had already decided that lead
+was worth chasing.
+
+### notify() now means what its comment said
+
+The fallback for an event with no `notification_settings` row claimed "a newly added event
+should work on deploy, not after somebody remembers to re-seed". The wording and the
+notify-the-owner switch did fall back to the definition; the roles fell back to `[]`. So a
+new event whose whole point was telling accounts something told only the owner — and told
+nobody at all when `defaultNotifyOwner` was false. It resolves the definition's role codes
+now, so the comment is true.
+
+And `tests/notification-emit-sites.spec.ts` asserts that every key in the catalogue has a
+real `notify()` call behind it. The header of `events.ts` has always stated that rule;
+nothing checked it, which is how the SLA escalation ladder stayed configurable and inert
+for months.
+
+## 2026-10-05 — The refund that was specified, permissioned, printable and unbuildable
+
+Leon asked what other notifications were missing. The honest way to answer was to list
+every audited mutation — eighty-six of them — and ask which changes a fact another
+department depends on. That sweep found something bigger than a missing notification.
+
+**`payment.refund` was granted to accounts and administrators, and there was no screen.**
+`payments` has had `direction: 'debit'`, `reverses_payment_id` and `reversal_reason` since
+Phase 4. The receipt page has rendered a "Refund / Reversal Note" for a debit payment for
+just as long. The manual's §7.6 told staff how reversals and refunds work. Nothing in the
+codebase could write the row. The one correction an append-only ledger explicitly allows
+was the one thing nobody could do — and the fee-floor error added an hour earlier
+("record a refund first") pointed at a screen that did not exist.
+
+### Reversal and refund are different on the cash side
+
+A **reversal** says the payment never happened: wrong student, wrong amount, entered
+twice. The money never arrived, so the cash entry it created was wrong too, and is
+reversed at its original date — the institute's balance for that day goes back to what it
+really was.
+
+A **refund** says the payment did happen and the money is going back. The original entry
+stands, because it was true. A new outgoing entry is posted *today*, because that is when
+the cash left.
+
+Both insert the same debit against the enrolment, so the student's balance is right either
+way. Collapsing them would misstate the bank reconciliation on two separate days, in
+opposite directions — which is why the form makes you choose rather than guessing from
+context.
+
+### What it deliberately does not do
+
+**It does not undo Gate 2.** Reversing a first payment does not delete the `students` row
+or clear `accounts_to_academics_at`. They were handed to academics, who may well have
+taught them by now; a gate is a thing that happened, not a thing that is currently true. A
+student actually leaving is marked dropped, which is its own action with its own reason.
+
+**It does not issue a receipt number.** The reversal is numbered on the ledger side
+(`txn_no`) and the note prints without one. Putting refunds into the same gapless sequence
+as fee receipts would make "receipt #412" sometimes mean money in and sometimes money out.
+
+**One reversal per payment**, enforced in the writer rather than the form. Two people on
+the same screen both pressing the button would otherwise take the balance twice as far
+down as it should go, and the ledger would have no way to say which was wrong.
+
+## 2026-10-05 — An import is one notification, not two hundred
+
+Adding `lead.created` an hour earlier introduced a bug worth recording rather than quietly
+fixing: the CSV import calls `resolveOrCreateLead()` per row, so a two-hundred-row
+spreadsheet would have fired two hundred arrival notices at the centre head.
+
+That is not visibility. It is the one person meant to be watching intake losing the next
+real lead underneath a wall of their own import.
+
+So `ResolveLeadInput` gained `suppressArrivalNotice`, set by the import and nothing else,
+and the import fires one `lead.imported` summary with the counts after the run.
+`lead.assigned` is NOT suppressed: that goes to the counsellor who now owns a specific
+person and has to ring them, which is worth knowing however the lead arrived.
+
+The general shape is worth keeping in mind for every future event: **ask what happens when
+the action is performed two hundred times in a loop.** Every one of these events has a
+bulk path somewhere.
+
+## 2026-10-05 — Who hears about a failure is a setting, not an environment variable
+
+Leon asked for platform failure emails to go to his address. The obvious answer was "set
+`ALERT_EMAIL_TO` in Vercel", which I cannot do for him and which fails CLAUDE.md §10 on
+the one setting whose entire purpose is making sure a person finds out: changing who is
+told that leads have stopped arriving should not need a hosting dashboard.
+
+So `org_settings.alert_email_to` exists, editable at **Settings → Organisation → Send
+platform alerts to**. The environment variable still works and is *added* to whatever is
+configured rather than overridden — somebody who set it months ago and then types a second
+address into Settings means "also tell this person", and a silently dropped alert
+recipient is exactly the failure the feature exists to prevent.
+
+`alertRecipients()` carried a comment arguing a table is "one more thing that has to be
+readable at the moment the database is the problem". True in general; not true of this
+caller. `captureError()` has already inserted the error row by the time it asks who to
+tell, so the database has just proved it works. A failure that cannot be read through
+produced no error row to alert about either. The env var stays as the path needing no
+database at all.
+
+### And the bell, because email needs three things to be set
+
+Email needs an API key, a from-address and a recipient. Until all three exist, a webhook
+that has stopped accepting Meta leads tells **nobody** — the most expensive silent failure
+in this system, because the symptom is "it has been quiet this week" and the cause is
+three weeks old by the time anybody checks.
+
+`system.failure` puts it in the bell, where it needs nothing configured beyond existing.
+It fires on the same damping decision as the email (first occurrence, then at ten times
+the count), and when no email recipient is configured the damping counter is still
+advanced — otherwise the bell would fire on every single occurrence of a fault that is
+firing every few seconds.
+
+## 2026-10-05 — Custom webhooks: one handler, many endpoints
+
+Leon asked for a webhook feature where he can add several endpoints — one for Knorish, one
+for an online form — each with its own source name.
+
+The shape that falls out of the existing code is better than it sounds. Every new lead
+source used to mean a route handler, a signature scheme and a deploy, so a course platform
+or somebody else's landing page either waited for developer time or kept its leads in a
+spreadsheet. Meanwhile `webhook_source` carried a `knorish` value for a handler nobody ever
+wrote — a dead switch, exactly what the comment above that enum warns against, and exactly
+the failure mode this project keeps finding in itself.
+
+So the handler is generic and the endpoints are rows. `custom_webhooks` holds a name, a
+URL token, a signing secret, the `source` to stamp, an optional sub-source and centre, and
+optional extra field aliases. `/api/webhooks/custom/[slug]` looks the endpoint up, verifies,
+persists, maps and calls `resolveOrCreateLead()`. Adding a source became configuration.
+
+**It is not a second ingestion path.** Non-negotiable #8 still holds — every lead goes
+through `resolveOrCreateLead()`, which runs the assignment rules and never rejects a
+duplicate — and #9 still holds, in order: verify the signature against the raw body,
+persist the payload whether or not it passed, then process.
+
+### The mapper was already generic; it was just in the wrong place
+
+`mapWebsiteForm` solved this problem first and solved it properly: match by alias, case- and
+punctuation-insensitively, keep every field whether or not it was recognised, require only a
+name and a phone. That is precisely what an unknown sender needs, so the generic half moved
+to `integrations/form-payload/map-fields.ts` and the website module kept only what is
+genuinely about a website — which page the form was on and the UTM parameters that have to be
+dug out of a page URL. The 31 existing website tests passed unchanged, which is the point of
+moving code rather than copying it.
+
+Two additions. An admin can add **extra aliases per endpoint** (`phone: mob, contact_no`),
+because the next platform will name a field something nobody predicted and the fix for that
+should be a text box. And a mapping failure now **names the fields that did arrive**: the
+person reading that error is setting up a new feed and needs to know what the sender
+actually called things, not that "no phone field" was found.
+
+### Signatures, and the one place it is honest to turn them off
+
+The same HMAC scheme as Meta's and the website form's, reusing `verifyMetaSignature` rather
+than inventing a third. But some course platforms and form builders only offer "POST this
+JSON to a URL" and cannot sign anything, and an integration that refuses them is an
+integration nobody can use.
+
+So `require_signature` can be turned off, per endpoint, beside a sentence saying what it
+costs: the random token in the URL becomes the only credential, so anyone who ever sees that
+URL can post leads into the CRM. The token is 32 random bytes and never derived from the
+name, which is what makes that trade survivable. The card shows an **Unsigned** badge
+afterwards, so the choice stays visible rather than becoming a setting somebody forgot.
+
+### Small decisions worth writing down
+
+**An unknown token writes nothing** — a 404 and no `webhook_events` row. Recording unknown
+tokens would let anybody with the URL shape fill a table that holds raw payloads and is read
+by admins, and a request to an endpoint that does not exist is not a delivery that failed.
+
+**One source value, many endpoints.** `webhook_events.source` is `custom` for all of them
+with a `custom_webhook_id` beside it, and the idempotency key stays `(source, external_id)` —
+the handler prefixes the sender's own id with the endpoint's uuid, so two feeds that both
+number their submissions from 1 cannot collide. A partial index would have been a second rule
+to keep in step with the first.
+
+**The source name is upserted into `dropdown_options`.** Without that the sources report would
+show a value nobody configured: present in the data, absent from every filter. The whole point
+of giving each feed its own source name is being able to group by it.
+
+**A GET on the endpoint answers.** Several form builders verify a URL before they will save it,
+and some only give you a browser to test with. It says the endpoint's name and whether a
+signature is expected, and nothing else — not the token (the caller already has it) and never
+the secret.
+
+**`custom_webhooks` is configuration, not data,** so a data reset leaves it alone. Clearing it
+would 404 every sender already posting to an endpoint, and the repair would be re-creating each
+one and updating every external service with a new URL.

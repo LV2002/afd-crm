@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { enrolmentPromos, enrolmentInstalments, enrolments, leads, promos } from "@/lib/db/schema";
+import { enrolmentPromos, enrolmentInstalments, enrolments, leads, payments, promos } from "@/lib/db/schema";
 import { formatINR } from "@/lib/format/currency";
 import { notify } from "@/lib/notifications/notify";
 import { createClient } from "@/lib/supabase/server";
@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/server";
 import { discountPercent, resolveDiscount } from "./discount-authority";
 import { getDiscountLimit } from "./get-discount-limit";
 import { promoDiscountPaise, promoUsable, type Promo } from "./promos";
+import { checkFeeFloor } from "./plan-change";
 import {
   INSTALMENT_SLOTS,
   rupeesToPaise,
@@ -74,6 +75,7 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
     .select({
       id: enrolments.id,
       discountPaise: enrolments.discountPaise,
+      netFeePaise: enrolments.netFeePaise,
       course: enrolments.course,
       centerId: enrolments.centerId,
     })
@@ -192,6 +194,33 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
     alreadyApprovedPaise: Math.max(enrolment.discountPaise, promoDiscount),
   });
 
+  const newNetFeePaise = totalFeePaise - outcome.appliedDiscountPaise;
+
+  // A fee cannot be set below what the student has already handed over.
+  //
+  // Accounts can now edit a fee after money has started arriving, which
+  // is the point of the change — a figure typed wrong on day one should
+  // not need a centre head and a week. What it must not do is leave a
+  // balance of minus three thousand rupees: if the institute is holding
+  // more than the student owes, the institute owes them, and that is a
+  // refund entry against the original payment, not a smaller fee.
+  const [received] = await db
+    .select({
+      netPaidPaise: sql<number>`coalesce(sum(
+        case when ${payments.direction} = 'credit' then ${payments.amountPaise}
+             else -${payments.amountPaise} end
+      ), 0)::bigint`,
+    })
+    .from(payments)
+    .where(eq(payments.enrolmentId, enrolment.id));
+
+  const netPaidPaise = Number(received?.netPaidPaise ?? 0);
+  if (!checkFeeFloor({ netFeePaise: newNetFeePaise, netPaidPaise }).allowed) {
+    return {
+      error: `${formatINR(netPaidPaise)} has already been received against this admission, so the fee cannot be set below that. Record a refund first if money is going back to the family.`,
+    };
+  }
+
   // The instalments were validated against the figure the counsellor
   // typed. If it is not being applied, they add up to less than the
   // student now owes, so say so rather than writing a schedule that is
@@ -213,7 +242,7 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
         discountPaise: outcome.appliedDiscountPaise,
         discountName,
         downPaymentPaise,
-        netFeePaise: totalFeePaise - outcome.appliedDiscountPaise,
+        netFeePaise: newNetFeePaise,
         pendingDiscountPaise: outcome.pendingDiscountPaise,
         pendingDiscountName: outcome.pendingDiscountPaise === null ? null : discountName,
         pendingDiscountBy: outcome.pendingDiscountPaise === null ? null : user.id,
@@ -289,6 +318,28 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
     },
   });
 
+  // Accounts chase this figure every week; when it moves under them,
+  // they find out from the student otherwise. Only fires when the net
+  // fee actually moved — re-saving the same plan, which happens whenever
+  // somebody edits an instalment date, is not a fee change.
+  if (newNetFeePaise !== enrolment.netFeePaise) {
+    await notify({
+      eventKey: "enrolment.fee_changed",
+      context: {
+        student_name: lead.studentName,
+        old_fee: formatINR(enrolment.netFeePaise),
+        new_fee: formatINR(newNetFeePaise),
+        changed_by: user.fullName,
+      },
+      href: `/leads/${leadId}`,
+      entityType: "enrolments",
+      entityId: enrolment.id,
+      centerId: lead.centerId,
+      ownerId: lead.assignedTo,
+      actorId: user.id,
+    });
+  }
+
   if (outcome.needsApproval) {
     // Somebody has to answer this, and nobody would find it otherwise —
     // an unapproved discount is invisible unless you open the lead.
@@ -310,6 +361,8 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
   }
 
   revalidatePath(`/leads/${leadId}`);
+  revalidatePath(`/accounts/${enrolment.id}`);
+  revalidatePath("/accounts");
   return outcome.needsApproval
     ? {
         success: `Fee plan saved. ${outcome.reason} The student owes the full fee until it is approved.`,

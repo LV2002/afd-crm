@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  BookOpen,
   ClipboardList,
   GraduationCap,
   Inbox,
@@ -37,5 +38,6 @@ export const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   insights: BarChart3,
   marketing: TrendingUp,
   ask: Sparkles,
+  manual: BookOpen,
   settings: Settings,
 };

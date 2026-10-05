@@ -28,6 +28,8 @@ import { getBatchOptionsForCentre } from "@/lib/enrolment/batch-options";
 import { getLeadFeePlan } from "@/lib/enrolment/get-fee-plan";
 import { getStudentFieldLabels } from "@/lib/profile-form/field-labels";
 
+import { ChangePlanPanel } from "@/components/enrolment/change-plan-panel";
+
 import { ConfirmAdmissionForm } from "./confirm-admission-form";
 import { InteractionForm } from "./interaction-form";
 import { describeLead } from "@/lib/leads/search-leads";
@@ -39,6 +41,9 @@ import { TasksPanel, type TaskRow } from "./tasks-panel";
 interface EnrolmentRow {
   id: string;
   course: string;
+  batch_id: string | null;
+  mode: string;
+  academic_year: string;
   net_fee_paise: number;
   status: string;
   dropped_at: string | null;
@@ -82,6 +87,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   }
 
   const canCreateEnrolment = can(user, "enrolment.create");
+  // The same three lists feed both the confirmation form and the
+  // course-and-batch panel, so either permission is reason to load them.
+  const canChangePlan = can(user, "enrolment.change_plan");
+  const needsAdmissionOptions = canCreateEnrolment || canChangePlan;
 
   const [
     interactionTypes,
@@ -93,14 +102,16 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   ] = await Promise.all([
       getDropdownOptions(supabase, "interaction_type"),
       getDropdownOptions(supabase, "interaction_outcome"),
-      canCreateEnrolment ? getDropdownOptions(supabase, "course") : Promise.resolve([]),
-      canCreateEnrolment ? getDropdownOptions(supabase, "preferred_mode") : Promise.resolve([]),
-      canCreateEnrolment
+      needsAdmissionOptions ? getDropdownOptions(supabase, "course") : Promise.resolve([]),
+      needsAdmissionOptions ? getDropdownOptions(supabase, "preferred_mode") : Promise.resolve([]),
+      needsAdmissionOptions
         ? getBatchOptionsForCentre(supabase, row.center_id as string | null)
         : Promise.resolve([]),
       supabase
         .from("enrolments")
-        .select("id, course, net_fee_paise, status, dropped_at, drop_reason, sales_to_accounts_at")
+        .select(
+          "id, course, batch_id, mode, academic_year, net_fee_paise, status, dropped_at, drop_reason, sales_to_accounts_at",
+        )
         .eq("lead_id", id)
         .is("deleted_at", null)
         .maybeSingle<EnrolmentRow>(),
@@ -283,6 +294,27 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                   batches={batchOptions}
                 />
               )}
+
+          {/*
+            Only once the admission exists, and never for somebody who has
+            dropped — a student who left should keep saying which course
+            they left, not acquire a new one.
+          */}
+          {enrolment && !enrolment.dropped_at && (
+            <ChangePlanPanel
+              enrolmentId={enrolment.id}
+              current={{
+                course: enrolment.course,
+                batchId: enrolment.batch_id,
+                mode: enrolment.mode,
+                academicYear: enrolment.academic_year,
+              }}
+              courses={courseOptions}
+              modes={modeOptions}
+              batches={batchOptions}
+              canEdit={canChangePlan}
+            />
+          )}
           {can(user, "interaction.create") && (
             <InteractionForm leadId={id} types={interactionTypes} outcomes={interactionOutcomes} />
           )}

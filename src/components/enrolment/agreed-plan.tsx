@@ -20,10 +20,17 @@ import { formatINR } from "@/lib/format/currency";
  * the down payment, what the discount was called: all of it sat on the
  * lead's page, which accounts has no reason to be looking at.
  *
- * Read-only. Accounts records payments against this plan; they do not
- * renegotiate it. Changing the terms is the counsellor's job, on the
- * lead, and keeping that one-way stops two people editing the same
- * agreement from different screens.
+ * Read-only, and no longer the whole story: accounts hold
+ * `enrolment.update` now, so the editable fee panel sits directly below
+ * this on the same screen. This stays as the summary — what was agreed
+ * and how much of it has arrived — because that is the question accounts
+ * open this page to answer, and a form is a worse way to read an answer
+ * than a table is.
+ *
+ * The original note here said accounts "do not renegotiate it" and that
+ * changing the terms was the counsellor's job on the lead. That was the
+ * design until Leon pointed out the obvious consequence: the people
+ * being told a figure is wrong were the one group who could not fix it.
  */
 
 export interface AgreedInstalment {

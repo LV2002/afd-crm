@@ -16,6 +16,7 @@ import {
   SCOPE_VIOLATION_MESSAGE,
 } from "@/lib/identity/assert-lead-visible";
 import { resolveOrCreateLead, type ResolveLeadInput } from "@/lib/identity/resolve-or-create-lead";
+import { notify } from "@/lib/notifications/notify";
 import { createClient } from "@/lib/supabase/server";
 
 /** A soft cap, not a hard platform limit: keeps one import to a size a human can actually review the results of, and comfortably inside a Server Action's default request-body budget. Split a bigger file into batches. */
@@ -168,6 +169,9 @@ export async function importLeads(
       source: (values.lead_source as string) ?? "CSV Import",
       subSource: (values.sub_source as string) ?? null,
       ingestBatchId: batchId,
+      // One summary at the end instead of one notice per row — see
+      // `suppressArrivalNotice` in resolve-or-create-lead.ts.
+      suppressArrivalNotice: true,
     };
 
     let outcome;
@@ -220,6 +224,26 @@ export async function importLeads(
     entityType: "leads",
     entityId: batchId,
     after: { batchId, total: rows.length, created, matched, skipped },
+  });
+
+  await notify({
+    eventKey: "lead.imported",
+    context: {
+      total: rows.length,
+      created,
+      matched,
+      skipped,
+      imported_by: user.fullName,
+    },
+    href: "/leads",
+    entityType: "leads",
+    entityId: batchId,
+    // Deliberately not scoped to a centre: an import can carry rows for
+    // several, and the per-row centre is not the import's centre. Every
+    // centre head hears about an import, which is the right answer for
+    // something this blunt.
+    centerId: null,
+    actorId: user.id,
   });
 
   revalidatePath("/leads");

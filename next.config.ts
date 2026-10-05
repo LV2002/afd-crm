@@ -1,6 +1,17 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  /**
+   * `/manual` reads `docs/manual/manual.html` at request time, and a
+   * dynamic read is invisible to Next's dependency tracing — so without
+   * this the route works locally and 404s in production. Listed here
+   * rather than imported, so rebuilding the manual and deploying is the
+   * whole update.
+   */
+  outputFileTracingIncludes: {
+    "/manual": ["./docs/manual/manual.html"],
+  },
+
   async headers() {
     return [
       {

@@ -6302,3 +6302,333 @@ also still returning 200 with an `error` key the nightly runner reads as success
 as Meta's.
 
 **1408 tests pass**, lint, `db:audit` and the production build clean.
+
+---
+
+## Session 50 — The staff manual
+
+A knowledge hub written as a book, so a new counsellor can look up how to do
+anything without asking Leon or an AI.
+
+**Nineteen chapters** in `docs/manual/`, one Markdown file each: introduction and
+key concepts, getting started, roles and permissions, the dashboard, leads, working
+a lead, admissions and payments, students and profile forms, finance, chats,
+insights, import/export, the admin guide, troubleshooting, end-to-end workflows,
+FAQ, glossary, appendix (field, stage, status and permission references plus a
+"where do I find X" index), and how to keep it updated.
+
+**Every procedure has the same six parts** — Goal, Before you start, Steps, What
+you should see, Common mistakes and fixes, Related — and quotes the exact words on
+screen. All 57 labels used were grepped back against the source before shipping;
+so were the 14 stages with their types and SLA hours, the 45 permissions, the 6
+roles, the 14 dropdown categories, the 29 lead and 30 student fields, and the
+nightly job order.
+
+**It explains why, not just where to click.** "You cannot edit a payment" is an
+instruction somebody will try to work around; "corrections are reversals so the
+history stays readable" is the sentence that stops them. The same for the one-way
+gates, phone masking, never rejecting a duplicate, and why Ad Performance refuses
+to show a per-centre number.
+
+**`npm run manual`** builds every chapter into one self-contained
+`docs/manual/manual.html` — contents at the top, back-to-contents links, serif,
+black on white, thin-ruled tables, a page break between chapters. No dependency
+was added: the Markdown subset the manual uses is two hundred lines of
+`build.mjs` that will never need updating.
+
+**`/manual`** serves that file to anybody signed in, with a **Manual** entry in
+the sidebar for every role. The route reads the built file at request time, so
+rebuilding and deploying is the whole update; `outputFileTracingIncludes` in
+`next.config.ts` is what makes a dynamically-read file actually ship.
+
+**Seven open questions** are in `docs/manual/_open-questions.md` rather than
+guessed at — what onboarding actually involves at AFD, how an administrator
+reverses a wrongly confirmed admission, what an SLA escalation rung does when it
+fires, whether Knorish is still in use, and four house rules that are policy
+rather than code.
+
+**1408 tests pass**, lint, typecheck and the production build clean.
+
+---
+
+## Session 51 — The launch film, and five things the manual had wrong
+
+**A 7m26s walkthrough video**, built the same way as the manual: from text
+files, by a program, with nothing in it that is not true of the system.
+
+`docs/video/scenes.mjs` is **56 scenes** — a title, a type and the words on
+screen. `render.mjs` turns them into one self-playing HTML page and records it
+with a real browser at 1920×1080; `script.mjs` turns the same file into
+`script.md`, the timed shot list and the word-for-word text if a voiceover is
+ever recorded. `npm run video`, `npm run video:stills`, `npm run video:script`.
+
+**It is motion graphics, not a screencast.** No app footage, no mocked-up
+interface, no invented student names — the only real data in this system is
+children's names and their parents' fee records, and a faked interface in a
+training film teaches a product that does not exist. Every stage name, role,
+queue bucket and button label in it was read out of the code.
+
+**It is silent.** The video encoder shipped with the browser here is built with
+VP8 and nothing else — no audio codecs at all — so the film is written to be
+read rather than narrated. `--enable-encoder=libvpx_vp8` is the whole of it.
+
+**Timing is computed, not guessed.** Each scene declares a `hold` in seconds
+and the renderer raises it when the words cannot be read that fast: 215 words a
+minute for prose, 330 for a list that is scanned rather than read. Adding a
+sentence lengthens the film instead of making it unreadable, which is the right
+way round for a training video nobody can pause in a meeting.
+
+`docs/video/out/` is gitignored. The film is 26 MB and one command rebuilds it,
+so the repository carries the script rather than the print.
+
+### Five corrections to the manual
+
+Re-reading the chapters against the code — the same accuracy rule, applied
+once more rather than assumed — found five claims that were wrong:
+
+| Said | Actually |
+|---|---|
+| **Mode of payment** on the payment form | **Method**. "Mode of payment" is a row label on the printed receipt, not on the form |
+| Insights has nine tabs | Eight, and the chapter's own table listed eight |
+| Settings has twenty-nine screens | Twenty-five entries on the Settings page |
+| 45 permission primitives | 44 — and the list in `_inventory.md` had 44 names under a heading that said 45 |
+| 14 dropdown categories | 17: `finance_expense_category` and the two WhatsApp keyword lists were missing |
+
+`103 pages`, `18 API routes`, `66 tables`, `6 roles`, `14 stages`, `30 lead
+fields`, `34 student fields` and `7 dashboard widgets` re-counted and correct.
+The wrong figures were in the inventory's own verification note, which is worth
+saying plainly: a verification pass that writes down a number without counting
+it is not a verification pass.
+
+### The intermittent e2e failure, with evidence this time
+
+Run 37225884874 produced the first real signal, and it contradicted the
+suspect list. The submission was recorded as `POST /leads/new —
+net::ERR_ABORTED`: the browser cancelled it. On the retry the same abort
+appeared **and the journey finished correctly** — right URL, right heading —
+which is a redirect cancelling its own request, and is the framework working.
+
+So two things changed. `e2e/page-health.ts` no longer counts an aborted POST as
+a problem: a submission that truly went nowhere already fails the assertion
+about what it produced, with a far better message. And the test now waits for
+React to hydrate before clicking, via `e2e/hydration.ts` — a click on an
+unhydrated form submits it natively, which is the one thing in that path that
+can drop a submission. If it fails again after this, that race is ruled out too
+and the read-back in `createLeadManually()` is what is left.
+
+**1408 tests pass**, lint and typecheck clean.
+
+---
+
+## Session 52 — Telling people, and letting them change their minds
+
+Two requests from Leon: notify the right people when something happens to a lead or a
+student, and let counsellors, accounts and academics change the course and batch a student
+registered for — with accounts able to change the fee.
+
+### Notifications
+
+The machinery was already there and well built; what was missing was events and emit
+sites. **Three new events**, taking the catalogue from thirteen to sixteen:
+
+| Event | Goes to, by default |
+|---|---|
+| **New lead arrived** | Centre heads, for every lead from every source — including the ones no rule could assign, which it says out loud |
+| **Course or batch changed** | Accounts, academics, centre head and the counsellor who sold it |
+| **Fee changed after admission** | Accounts, centre head and the counsellor |
+
+**Three gaps closed in what already existed.** A lead assigned by hand from the Unassigned
+queue now tells its new owner — it never did, and that is the lead somebody has already
+decided is worth chasing. A batch move made from Settings → Batches now fires the same
+event, in the same words, as one made from a student's own page. And `notify()` now
+resolves an event's default roles when no settings row exists, which its own comment had
+promised since the feature shipped and which quietly did not happen.
+
+`tests/notification-emit-sites.spec.ts` now asserts that **every one of the sixteen keys
+has a real `notify()` call behind it**. `events.ts` has stated that rule in its header
+since it was written; nothing checked it, which is exactly how the SLA escalation ladder
+stayed configurable and completely inert for months.
+
+### Changing a course, a batch, or a fee
+
+**`enrolment.change_plan`** is a new permission primitive, split out of `enrolment.update`:
+the course, batch, mode and academic year, for counsellors at `own` scope and accounts,
+academics and centre heads at `center`. `enrolment.update` now means the fee plan and
+nothing else, and **accounts hold it**, which is the part of Leon's ask that was a straight
+grant. Forty-five primitives now.
+
+**Course & batch** is one panel on three screens — the lead, the admission and the student
+— because three different people change this and a single screen would mean two of them
+asking somebody else. All three submit the same action, which writes the enrolment, the
+student's two copy columns and the `student_batches` history in one transaction, and
+reports exactly what moved: *Course: Foundation → DWO · Batch: Kochi A → Kochi B*.
+
+**Changing the course does not change the fee.** The obvious implementation looks up the
+new course's fee structure and applies it — which is a fee change nobody agreed, arriving
+through a form labelled "course" and going round the discount approval limits. Accounts
+are told the course moved and change the figure deliberately if it should change.
+
+**A fee has a floor, not a freeze.** Accounts can correct a fee after money has arrived;
+they cannot set it below what has been collected, because that is a negative balance, and
+a negative balance is a refund nobody recorded. The error says how much has come in.
+
+**One fact, one path.** `students.current_course` and `current_batch_id` are a copy of
+what the enrolment says. The generic student form could write them directly, leaving the
+admission record, the printed agreement and the accounts screens on the old course — three
+screens disagreeing with no way to tell which was right. Both are read-only on that form
+now, and skipped by `updateStudent` so the guard is not only in the UI.
+
+### Verified
+
+Migration 0082 applied to **an already-seeded database** (the grants and the three
+notification rows land) and to **a clean one** (83 migrations then the seed, where the
+migration's inserts correctly no-op and the seed does the work) — the 0081 lesson applied
+rather than remembered.
+
+**1436 tests pass**, lint, typecheck and `db:audit` clean.
+
+---
+
+## Session 53 — The gap audit, and the refund nobody could record
+
+Leon asked what other notifications were missing. Answering it properly meant listing
+every audited mutation — **eighty-six** of them — and asking which changes a fact another
+department depends on and cannot see for itself. That sweep found something bigger than a
+missing notification.
+
+### The refund that was never built
+
+**`payment.refund` was granted to accounts and administrators, and there was no screen.**
+`payments` has had `direction: 'debit'`, `reverses_payment_id` and `reversal_reason` since
+Phase 4. The receipt page has printed a **Refund / Reversal Note** for just as long. The
+manual's §7.6 described reversals and refunds to staff. Nothing could write the row.
+
+Worse: the fee-floor guard added in Session 52 says *"record a refund first"*, pointing at
+a screen that did not exist.
+
+**`reversePayment()`** writes it now, and insists on the distinction the accounting
+depends on. A **reversal** says the money never arrived, so the cash entry it created is
+undone at its original date. A **refund** says it did arrive and has gone back, so the
+original stands and a new outgoing entry is posted today. Both take the same amount off
+the student's balance; collapsing them would misstate the bank reconciliation on two
+separate days in opposite directions.
+
+It does not undo Gate 2 — a student handed to academics may have sat in a class, and a
+gate is a thing that happened, not a thing that is currently true. It does not issue a
+receipt number, because "receipt #412" must not sometimes mean money out. And a payment
+can be undone exactly once, enforced in the writer.
+
+**Eleven integration tests**, including both ledger shapes, a legacy payment with no cash
+entry, and the double-reversal refusal.
+
+### A bug introduced yesterday, caught by the same sweep
+
+`lead.created` fires per lead, and the CSV import calls `resolveOrCreateLead()` per row —
+so a two-hundred-row spreadsheet would have fired two hundred notices at a centre head.
+`suppressArrivalNotice` turns the per-row notice off for imports, and one
+**`lead.imported`** summary with the counts goes out after the run. `lead.assigned` is
+not suppressed: that reaches the counsellor who now owns a specific person.
+
+Worth keeping as a rule: **ask what every new event does when its action runs two hundred
+times in a loop.** All of them have a bulk path somewhere.
+
+### Two more events
+
+**Payment reversed or refunded** — accounts, the centre head and the counsellor who told
+the family their fee was settled. Money going back out was the one financial movement
+nobody outside accounts could see coming.
+
+**Leads imported from a file** — one line, with how many were created, matched and
+skipped.
+
+Eighteen events now.
+
+### Still unnotified, deliberately or pending a decision
+
+Sixty-odd audited mutations remain silent, nearly all of them configuration an
+administrator makes and reviews in the audit log. The handful that are judgement calls —
+a lead merged, a lead deleted, a lead exported, a lead marked Lost, a fee structure
+changed, a target set, and a platform failure reaching the bell rather than only email —
+are listed for Leon rather than guessed at, because each one trades noise against
+oversight and that is his call.
+
+**1449 tests pass**, lint, typecheck and the production build clean.
+
+---
+
+## Session 54 — Alerts that do not depend on a deploy
+
+Leon asked for platform failure emails to reach him. Two changes, because the obvious one
+was not enough on its own.
+
+**`org_settings.alert_email_to`**, edited at **Settings → Organisation → Send platform
+alerts to**. `ALERT_EMAIL_TO` still works and is added to whatever is configured rather
+than replaced. Changing who finds out that leads have stopped arriving no longer needs
+somebody with access to the hosting dashboard — which is CLAUDE.md §10 applied to the one
+setting where it matters most.
+
+**`system.failure`**, the nineteenth notification event, puts failures in the bell.
+Email needs an API key, a from-address and a recipient; until all three exist a webhook
+that has stopped accepting Meta leads tells nobody at all. The bell version needs nothing
+configured. Same damping as the email — first occurrence, then at ten times the count —
+and the counter advances even when no email goes out, so a fault firing every few seconds
+cannot fill the bell either.
+
+Platform Health now says which of the two halves is missing, in those words, instead of
+naming an environment variable at somebody who does not have a terminal.
+
+**1450 tests pass**, lint, typecheck and the production build clean.
+
+---
+
+## Session 55 — Custom webhooks
+
+Leon asked for a webhook feature with several endpoints — one for Knorish, one for an
+online form — each with its own source name.
+
+**One generic handler, many rows.** `custom_webhooks` holds a name, a URL token, a signing
+secret, the `source` to stamp, an optional sub-source and centre, and optional extra field
+aliases. `/api/webhooks/custom/[slug]` looks the endpoint up, verifies, persists, maps and
+calls `resolveOrCreateLead()`. Adding a lead source stopped being a deploy.
+
+This also retires a dead switch. `webhook_source` has carried a `knorish` value since Phase
+4 for a handler nobody ever wrote — precisely what the comment above that enum warns
+against. A Knorish feed set up today is two fields on a settings screen.
+
+**Not a second ingestion path.** Non-negotiable #8 holds: every lead goes through
+`resolveOrCreateLead()`, so the assignment rules run and a duplicate attaches rather than
+being rejected. #9 holds in order: verify against the raw body, persist whether or not it
+passed, then process.
+
+### The mapper was already generic, just in the wrong place
+
+`mapWebsiteForm` had solved this: match by alias, case- and punctuation-insensitively, keep
+every field recognised or not, require only a name and a phone. The generic half moved to
+`integrations/form-payload/map-fields.ts`; the website module kept only what is really about
+a website. **The 31 existing website tests passed unchanged**, which is the point of moving
+code rather than copying it.
+
+Two additions: **extra aliases per endpoint** (`phone: mob, contact_no`), because the next
+platform will name a field something nobody predicted; and a mapping failure that **names
+the fields that did arrive**, because the person reading it is setting up a feed and needs to
+know what the sender actually called things.
+
+### Signatures, and where it is honest to turn them off
+
+Same HMAC scheme as Meta and the website form, reusing `verifyMetaSignature`. But some
+platforms only offer "POST this JSON to a URL", so `require_signature` can be turned off per
+endpoint — beside a sentence saying the URL token then becomes the only credential, and with
+an **Unsigned** badge on the card afterwards so the choice stays visible.
+
+### Verified
+
+**29 new tests.** Sixteen on the mapper, thirteen end to end against Postgres: an unknown
+token is a 404 that writes nothing, a switched-off endpoint is a 404, an unsigned request to a
+signed endpoint is a 401 whose payload is kept as evidence, a retried delivery does not create
+a second lead, extra aliases map a payload the built-in list cannot, the endpoint's centre is
+stamped when the payload carries none, an unusable payload is recorded as failed and answered
+200, and the GET probe leaks neither the token nor the secret.
+
+Migration 0084 applied to an already-seeded database and to a clean one.
+
+**1480 tests pass**, lint, typecheck, `db:audit` and the production build clean.

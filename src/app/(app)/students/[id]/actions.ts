@@ -13,6 +13,9 @@ export interface FormState {
   success?: string;
 }
 
+/** Student columns whose truth lives on the enrolment. See the loop below. */
+const ENROLMENT_OWNED_FIELDS = new Set(["current_course", "current_batch_id"]);
+
 /**
  * Same one-path-through-the-field-schema write as `updateLead()` — a core
  * field to its real column, a custom one merged into `students.custom`.
@@ -49,6 +52,15 @@ export async function updateStudent(studentId: string, _prevState: FormState, fo
 
   for (const field of fields) {
     if (!field.isEditable) continue;
+    // Course and batch look like two ordinary columns here and are not.
+    // They are a copy of what the ENROLMENT says, kept so the roster can
+    // be read without a join, and writing them from this form left the
+    // admission record, the printed agreement and the accounts screens
+    // saying the old course. Both now move only through
+    // `changeEnrolmentPlan`, which writes the enrolment, these columns
+    // and the batch history together — so this form skips them rather
+    // than quietly producing a second answer.
+    if (ENROLMENT_OWNED_FIELDS.has(field.key)) continue;
 
     let value: unknown;
     if (field.type === "boolean") {

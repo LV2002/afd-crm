@@ -8,6 +8,8 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { checkAssignment, liveMemberCount } from "@/lib/batches/roster";
 import { db } from "@/lib/db/client";
 import { batches, studentBatches, students } from "@/lib/db/schema";
+import { notify } from "@/lib/notifications/notify";
+import { syncEnrolmentBatch, type SyncedEnrolment } from "@/lib/enrolment/sync-batch";
 import { createClient } from "@/lib/supabase/server";
 
 export interface BatchFormState {
@@ -177,12 +179,16 @@ export async function assignStudentToBatch(
   });
   if (!check.allowed) return { error: check.error ?? "That student cannot join this batch." };
 
-  await db.transaction(async (tx) => {
+  const moved = await db.transaction(async (tx) => {
     await tx.insert(studentBatches).values({ studentId, batchId, joinedAt: new Date() });
     await tx
       .update(students)
       .set({ currentBatchId: batchId, updatedAt: new Date() })
       .where(eq(students.id, studentId));
+    // Third write, and the one that was missing: the admission record
+    // reads its own batch column, so leaving it behind gave the same
+    // student two different batches depending on which screen you opened.
+    return syncEnrolmentBatch(tx, studentId, batchId);
   });
 
   const supabase = await createClient();
@@ -193,6 +199,8 @@ export async function assignStudentToBatch(
     entityId: batchId,
     after: { studentId, studentName: student.fullName, batchName: batch.name },
   });
+
+  await notifyBatchMove(moved, batch.name, user.id, user.fullName);
 
   revalidatePath(`/settings/batches/${batchId}`);
   revalidatePath("/settings/batches");
@@ -243,6 +251,7 @@ export async function removeStudentFromBatch(
   }
 
   const now = new Date();
+  let moved: SyncedEnrolment[] = [];
   const closed = await db.transaction(async (tx) => {
     const updated = await tx
       .update(studentBatches)
@@ -261,6 +270,7 @@ export async function removeStudentFromBatch(
         .update(students)
         .set({ currentBatchId: null, updatedAt: now })
         .where(and(eq(students.id, studentId), eq(students.currentBatchId, batchId)));
+      moved = await syncEnrolmentBatch(tx, studentId, null);
     }
     return updated.length;
   });
@@ -276,9 +286,44 @@ export async function removeStudentFromBatch(
     after: { studentId, reason, batchName: batch.name },
   });
 
+  await notifyBatchMove(moved, "No batch", user.id, user.fullName);
+
   revalidatePath(`/settings/batches/${batchId}`);
   revalidatePath("/settings/batches");
   revalidatePath(`/students/${studentId}`);
   revalidatePath("/students");
   return { success: "Removed from the batch." };
+}
+
+/**
+ * Tells the people who need to know that somebody changed room.
+ *
+ * The same event the course-and-batch panel fires, so a move made here
+ * and a move made from a student's own page read identically in the bell
+ * — one wording to maintain, and nobody has to learn that two differently
+ * worded messages mean the same thing.
+ */
+async function notifyBatchMove(
+  moved: SyncedEnrolment[],
+  toBatchName: string,
+  actorId: string,
+  actorName: string,
+): Promise<void> {
+  for (const row of moved) {
+    await notify({
+      eventKey: "enrolment.plan_changed",
+      context: {
+        student_name: row.studentName,
+        changes: `Batch: ${row.previousBatchName ?? "No batch"} → ${toBatchName}`,
+        changed_by: actorName,
+        course: row.course,
+      },
+      href: `/leads/${row.leadId}`,
+      entityType: "enrolments",
+      entityId: row.enrolmentId,
+      centerId: row.centerId,
+      ownerId: row.assignedTo,
+      actorId,
+    });
+  }
 }

@@ -4,7 +4,10 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
 import { errorEvents } from "@/lib/db/schema";
-import { alertRecipients, composeEmail, sendEmail } from "@/lib/email/send";
+import { composeEmail, sendEmail } from "@/lib/email/send";
+import { notify } from "@/lib/notifications/notify";
+
+import { resolveAlertRecipients } from "./alert-recipients";
 
 import { alertSubject, fingerprintError, shouldAlert } from "./fingerprint";
 
@@ -96,8 +99,34 @@ export async function captureError(input: CaptureInput): Promise<void> {
     if (!row) return;
     if (!shouldAlert(row.count, row.notifiedAtCount)) return;
 
-    const recipients = alertRecipients();
-    if (recipients.length === 0) return;
+    // The bell first, because it needs nothing configured. `notify()`
+    // never throws and swallows its own failures, so a notification
+    // problem cannot stop the email that follows.
+    await notify({
+      eventKey: "system.failure",
+      context: {
+        source: input.source,
+        message: message.slice(0, 300),
+        count: row.count,
+      },
+      href: "/settings/health",
+      entityType: "error_events",
+      entityId: row.id,
+      centerId: null,
+    });
+
+    const recipients = await resolveAlertRecipients();
+    // No email configured is no longer the same as nobody being told:
+    // the notification above has already gone out. Recorded as notified
+    // anyway, so the damping counts from here rather than firing the
+    // bell again on every single occurrence.
+    if (recipients.length === 0) {
+      await db
+        .update(errorEvents)
+        .set({ notifiedAtCount: row.count })
+        .where(eq(errorEvents.id, row.id));
+      return;
+    }
 
     const { text, html } = composeEmail({
       heading: row.count === 1 ? "Something broke in the CRM" : `Still breaking — ${row.count} times now`,
