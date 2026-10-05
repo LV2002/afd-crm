@@ -5,6 +5,7 @@ Grouped by what you were trying to do. If your problem is not here, check
 or a failed nightly job shows up there before anybody notices the
 symptom.
 
+
 ## 14.1 Signing in and seeing things
 
 **"Invalid login credentials"**
@@ -168,6 +169,25 @@ Work through this in order:
    answer with placeholder text, so there is no real phone number. That
    is the whole chain working with nothing real at the end of it. Use
    **Preview form** and fill it in yourself.
+
+## 14.6a Ad spend, or any overnight figure, has not updated
+
+**Check the nightly run first.** Settings → Platform Health, at the top.
+Everything that happens overnight happens in one run at 10:00 IST, and
+that panel says whether it happened and what each job did.
+
+Three different answers, three different fixes:
+
+| What the panel says | What it means |
+|---|---|
+| *No nightly run has ever been recorded* | Nothing overnight is running. Usually `CRON_SECRET` is missing from the hosting environment — see Chapter 13, Platform Health. |
+| *Last run* is more than a day ago | The schedule has stopped firing. Check Vercel → Project → Cron Jobs. |
+| The job ran, *nothing to do: not-configured* | The credentials for that integration are not saved. For Meta ad spend that is the **Ads access token** and **Ad Account ID** in Settings → Integrations → Meta — the Page token that brings in leads is a different token and does not cover spend. |
+| The job *failed* with a message | That message is the answer. A 401 from Meta means the token expired or lacks a permission. |
+
+Once the credentials are in, the nightly run picks spend up the same
+night, and **Import history** on the integration screen pulls the days
+that were missed rather than leaving a gap.
 
 ## 14.7 Form answers not reaching the CRM
 

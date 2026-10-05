@@ -144,6 +144,13 @@ export const DATA_TABLES = [
   "student_batches",
   "students",
   "tasks",
+  /**
+   * What the nightly job did, run by run. A record of something that
+   * happened, so a data reset clears it — and the Platform Health panel
+   * then correctly says no run has been recorded, because for a freshly
+   * reset instance none has.
+   */
+  "cron_runs",
   "webhook_events",
   "whatsapp_broadcast_recipients",
   // A broadcast is a send that happened, not a template. The templates and

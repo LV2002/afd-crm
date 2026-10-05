@@ -6723,3 +6723,48 @@ whichever deployment sent the mail rather than at a stable address. The launch c
 overstated this as required.
 
 **1510 tests pass**, lint, typecheck and the production build clean.
+
+---
+
+## Session 58 — Why yesterday's ad spend never arrived, and the gap that hid it
+
+Leon said yesterday's Meta spend had not appeared in Ad Performance. The CRM could not tell
+him why, and that turned out to be the more interesting bug.
+
+**Nothing recorded that the nightly job had run.** `runNightly()` handed its result back as
+JSON to whoever invoked the route, and that was the end of it. Failures reached
+`error_events` — but three of the four ways this goes wrong leave no trace there:
+
+- A deployment with no `CRON_SECRET` answers **every** cron call with a 401 before the handler
+  runs, and being turned away is not an exception. Nothing overnight happens, and nothing says so.
+- A job that reports `{ skipped: "not-configured" }` is a 200 and correct on a fresh instance.
+- A job skipped for want of time in the run's budget is not a failure.
+
+In all three the symptom is identical: a number that does not appear on a screen.
+
+### What now exists
+
+**`cron_runs`** — one row per run, with each job's status, duration and reason. **A panel at the
+top of Settings → Platform Health** reads it, and the empty state is the important half: *"No
+nightly run has ever been recorded"* names the `CRON_SECRET` cause and where to confirm it.
+A last run more than 36 hours old says the schedule has stopped firing.
+
+**`expectOk()` keeps the reason.** It treated a 200 as success and discarded the body, so a job
+that ran and did nothing was indistinguishable from one that worked — both "ok". *"Meta ad
+spend — ok"* and *"Meta ad spend — ok, nothing to do: not-configured"* are the difference
+between reading the code and pasting in a token.
+
+Two assertions in `tests/nightly-runner.spec.ts` pinned the old contract (`resolves.toBeUndefined()`)
+and were updated rather than worked around — one of them, "treats a 200 carrying an error field
+as success", keeps its intent exactly: it still must not throw, and now also reports what the
+route said.
+
+### Also
+
+`sendEmail()` reported a bare `HTTP 403` for anything without a provider message, which made
+this container's egress proxy refusing the connection look identical to Resend refusing the key
+— an hour spent on the wrong thing. It now says when a status arrived with no message from the
+provider, which means the request may never have reached it.
+
+**1519 tests pass** (10 new), lint, typecheck, `db:audit` and the production build clean.
+Migration 0086 applied to an already-seeded database and to a clean one.

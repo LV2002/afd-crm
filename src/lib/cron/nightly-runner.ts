@@ -42,7 +42,8 @@ export interface NightlyJob {
   key: string;
   /** What it is, in words a person reading an alert email would recognise. */
   label: string;
-  run: () => Promise<unknown>;
+  /** Resolves to a note worth showing — "nothing to do: not-configured" — or null. */
+  run: () => Promise<string | null | void>;
   /**
    * Roughly how long this job takes at AFD's volume, in milliseconds. Used
    * only to decide whether there is time to start it — never to cut it off
@@ -122,12 +123,13 @@ export async function runNightly(options: RunNightlyOptions): Promise<NightlyRes
 
     const jobStart = clock();
     try {
-      await job.run();
+      const note = (await job.run()) ?? null;
       results.push({
         key: job.key,
         label: job.label,
         status: "ok",
         durationMs: clock() - jobStart,
+        ...(note ? { reason: note } : {}),
       });
     } catch (error) {
       results.push({
@@ -166,8 +168,26 @@ export async function runNightly(options: RunNightlyOptions): Promise<NightlyRes
  * use that shape for "this integration is not configured", which is a normal
  * state on a fresh instance and not something to alert anybody about.
  */
-export async function expectOk(label: string, response: Response): Promise<void> {
-  if (response.ok) return;
+export async function expectOk(label: string, response: Response): Promise<string | null> {
+  if (response.ok) {
+    // A 200 is not always "it did something". The ad-spend and retargeting
+    // routes answer `{ skipped: "not-configured" }` when their credentials
+    // are absent, which is correct and is also the single likeliest reason
+    // a number never appears on a screen. Kept and shown rather than
+    // flattened into "ok", because the two look identical from outside and
+    // only one of them needs somebody to go and paste a token in.
+    try {
+      const body: unknown = await response.clone().json();
+      if (body && typeof body === "object") {
+        const record = body as Record<string, unknown>;
+        if (typeof record.skipped === "string") return `nothing to do: ${record.skipped}`;
+        if (typeof record.error === "string") return `reported: ${record.error}`;
+      }
+    } catch {
+      // Not JSON, or no body. Nothing to add.
+    }
+    return null;
+  }
   let detail = "";
   try {
     detail = (await response.clone().text()).slice(0, 300);

@@ -306,6 +306,23 @@ Not available to Co-Admin or Centre Head — it cannot be scoped to a
 centre, so a centre-scoped grant would expose the whole institute's log.
 
 ### Settings → Platform Health
+**The nightly run** is the first thing on this screen, and the first thing
+to check when a number has not appeared: when it last ran, how long it
+took, and what each of the ten jobs did — including the ones that ran and
+did nothing because an integration has no credentials yet.
+
+> *"Meta ad spend — ok"* and *"Meta ad spend — ok, nothing to do: not
+> configured"* are the difference between a bug and a token nobody has
+> pasted in.
+
+**If it says no run has ever been recorded**, nothing overnight is
+happening at all — not the response-time sweep, not fee reminders, not ad
+spend. The usual cause is `CRON_SECRET` missing from the hosting
+environment: the schedule then calls the CRM without the password it
+expects, the CRM refuses, and nothing runs with no failure recorded
+anywhere, because being turned away is not an error. Check Vercel →
+Project → Cron Jobs; a run listed with status 401 is this.
+
 **Platform health** lists anything that has broken — a failed webhook, a
 failed nightly job, an unhandled error — with what it was and how often,
 plus **Recently marked fixed**.

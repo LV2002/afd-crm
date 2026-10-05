@@ -101,10 +101,21 @@ export async function sendEmail(message: EmailMessage): Promise<EmailResult> {
     const body: unknown = await response.json().catch(() => null);
 
     if (!response.ok) {
-      const detail =
+      const providerMessage =
         body && typeof body === "object" && "message" in body
           ? String((body as { message: unknown }).message)
-          : `HTTP ${response.status}`;
+          : null;
+
+      // A status with no provider message did not come from the provider.
+      // Resend answers a refusal with JSON saying why — a wrong key, an
+      // unverified domain, a recipient the sandbox will not deliver to.
+      // A bare status is something in between: a corporate proxy, a
+      // firewall, a gateway. Saying so is the difference between "your
+      // key is wrong" and "this machine cannot reach the mail provider",
+      // which cost an hour of looking at the wrong thing once.
+      const detail =
+        providerMessage ??
+        `HTTP ${response.status} with no message from the mail provider — the request may not have reached it.`;
       return { ok: false, reason: detail, configured: true };
     }
 

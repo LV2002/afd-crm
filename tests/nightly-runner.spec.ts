@@ -203,7 +203,9 @@ describe("runNightly", () => {
 
 describe("expectOk", () => {
   it("passes a 200 through", async () => {
-    await expect(expectOk("Job", new Response("{}", { status: 200 }))).resolves.toBeUndefined();
+    // Resolves to null rather than undefined since it started returning a
+    // note: a 200 with nothing to report has nothing to say.
+    await expect(expectOk("Job", new Response("{}", { status: 200 }))).resolves.toBeNull();
   });
 
   it("turns a non-2xx into a throw naming the job and the status", async () => {
@@ -225,12 +227,18 @@ describe("expectOk", () => {
     expect(message.length).toBeLessThan(400);
   });
 
-  it("treats a 200 carrying an error field as success", async () => {
+  it("treats a 200 carrying an error field as success, but repeats what it said", async () => {
     // The routes use `{ error: "not configured" }` with a 200 for an
     // integration nobody has set up yet. That is a normal state on a fresh
-    // instance, not something to wake anybody for.
+    // instance, not something to wake anybody for — so it still does not
+    // throw.
+    //
+    // It is now also returned rather than swallowed. "Meta ad spend — ok"
+    // and "Meta ad spend — ok, reported: not configured" are the difference
+    // between reading the code and pasting in a token, and the first was
+    // all the nightly-run panel could show.
     await expect(
       expectOk("Meta retargeting", new Response(JSON.stringify({ error: "not configured" }), { status: 200 })),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe("reported: not configured");
   });
 });
