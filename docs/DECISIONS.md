@@ -3451,5 +3451,11 @@ Tags, the leads-list filter, the `tag_added` flow trigger, the `add_tag` flow st
 audience narrowing (`spec.tagId`), the AI's `person-history` tool, and the config export bundle.
 Kept.
 
+Worth saying plainly, because it shapes the decision: **no tags ship seeded.** The table and all
+seven call sites exist, and the list an institute sees is empty until somebody creates one. So
+this was never "remove something in use" — it was "remove a capability nobody has reached for
+yet", which is the cheaper question and also the easier one to get wrong, since the cost of
+keeping an empty list is nearly zero and the cost of needing it back is a migration.
+
 Noted while looking: tags are **not** available as a condition in assignment or temperature rules,
 which is the one place an admin would reasonably expect them. Logged in BACKLOG.md.
