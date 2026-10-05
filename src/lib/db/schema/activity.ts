@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 import { idColumn, softDelete, timestamps } from "./_helpers";
 import { profiles } from "./auth";
@@ -78,3 +78,50 @@ export const tasks = pgTable("tasks", {
   ...timestamps(),
   ...softDelete(),
 });
+
+/**
+ * That the nightly job ran, and what each part of it did.
+ *
+ * Leon asked why yesterday's Meta ad spend had not appeared, and the CRM
+ * could not answer. Nothing recorded a run at all: `runNightly()` returned
+ * its result as JSON to whoever invoked the route, and that was the end of
+ * it. Failures reached `error_events`, but three of the four ways this can
+ * go wrong leave no trace there —
+ *
+ *  - the invocation is rejected before the handler runs (no `CRON_SECRET`
+ *    on the deployment means every cron call gets a 401, and a 401 is not
+ *    an exception),
+ *  - a job runs and reports "not configured", which is a 200 and correct
+ *    on a fresh instance,
+ *  - a job is skipped for want of time in the run's budget.
+ *
+ * In all three the symptom is identical: a number that does not appear on
+ * a screen. So the run writes itself down, and Platform Health reads it.
+ * An empty table is itself the diagnosis — it means no run has ever
+ * reached the handler.
+ */
+export const cronRuns = pgTable(
+  "cron_runs",
+  {
+    id: idColumn(),
+    /** `daily` today; a column rather than a constant so a second schedule can be told apart. */
+    jobKey: text("job_key").notNull().default("daily"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }).notNull().defaultNow(),
+    durationMs: integer("duration_ms").notNull(),
+    /** False when any job failed. Drives the colour of the panel. */
+    ok: boolean("ok").notNull(),
+    okCount: integer("ok_count").notNull().default(0),
+    failedCount: integer("failed_count").notNull().default(0),
+    skippedCount: integer("skipped_count").notNull().default(0),
+    /**
+     * Every job, with its status, duration, and the reason it was skipped
+     * or the note it returned. The shape is `runNightly()`'s own result,
+     * stored rather than reshaped: a column per job would need a migration
+     * every time the list changes.
+     */
+    jobs: jsonb("jobs").notNull().$type<Array<Record<string, unknown>>>(),
+    ...timestamps(),
+  },
+  (t) => [index("cron_runs_started_at_idx").on(t.startedAt.desc())],
+);

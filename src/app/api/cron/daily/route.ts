@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { requireCronSecret } from "@/lib/cron/require-secret";
+import { db } from "@/lib/db/client";
+import { cronRuns } from "@/lib/db/schema";
 import { expectOk, runNightly, type NightlyJob } from "@/lib/cron/nightly-runner";
 import { reportingFailures } from "@/lib/errors/capture";
 
@@ -95,9 +97,7 @@ function nightlyJobs(request: Request): NightlyJob[] {
     key,
     label,
     estimateMs,
-    run: async () => {
-      await expectOk(label, await handler(request));
-    },
+    run: async () => expectOk(label, await handler(request)),
   });
 
   return [
@@ -119,6 +119,32 @@ async function run(request: Request) {
   if (denied) return denied;
 
   const result = await runNightly({ jobs: nightlyJobs(request), budgetMs: budgetMs() });
+
+  // Written down before answering, and never allowed to fail the run.
+  //
+  // Until this existed the only record of a nightly run was the JSON body
+  // handed back to whoever invoked the route, which nobody reads. So "did
+  // last night's ad spend sync happen?" had no answer inside the CRM —
+  // and the three likeliest reasons it had not (no CRON_SECRET so the
+  // call never reached here, a job reporting "not configured", a job
+  // skipped for want of time) all look identical from a screen with a
+  // missing number on it.
+  try {
+    await db.insert(cronRuns).values({
+      jobKey: "daily",
+      startedAt: new Date(result.startedAt),
+      durationMs: result.durationMs,
+      ok: result.ok,
+      okCount: result.summary.ok,
+      failedCount: result.summary.failed,
+      skippedCount: result.summary.skipped,
+      jobs: result.jobs as unknown as Array<Record<string, unknown>>,
+    });
+  } catch (error) {
+    // The run happened whether or not it could be recorded. Losing the
+    // record is worth a line in the log; losing the run is not.
+    console.error("cron:daily could not record its run", error);
+  }
 
   // A failed job means a non-2xx, so the platform retries and the alert
   // email fires. Skipped jobs are not failures — they are incremental and

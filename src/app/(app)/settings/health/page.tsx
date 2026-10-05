@@ -1,4 +1,4 @@
-import { desc, isNull } from "drizzle-orm";
+import { desc, eq, isNull } from "drizzle-orm";
 
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
@@ -7,13 +7,19 @@ import { db } from "@/lib/db/client";
 import { getMigrationStatus } from "@/lib/db/migration-status";
 import { getSchemaDrift } from "@/lib/db/schema-drift";
 import { describeDifference } from "@/lib/db/schema-compare";
-import { errorEvents } from "@/lib/db/schema";
+import { cronRuns, errorEvents } from "@/lib/db/schema";
 import { EmailNotConfigured } from "@/components/integrations/email-not-configured";
+import {
+  NightlyRunPanel,
+  type NightlyJobRow,
+  type NightlyRun,
+} from "./nightly-run";
 import { emailConfigured } from "@/lib/email/send";
 import { resolveAlertRecipients } from "@/lib/errors/alert-recipients";
 import { formatDateIST } from "@/lib/format/date";
 
 import { ResolveButton } from "./resolve-button";
+import { TestEmailButton } from "./test-email-button";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +56,28 @@ export default async function HealthPage() {
 
   const configured = emailConfigured();
   const recipients = await resolveAlertRecipients();
+
+  // Through the direct client, like everything else on this page: it is
+  // read by an admin whose scope the RLS policy would allow anyway, and
+  // the rest of the panel's data comes the same way.
+  const [lastRun] = await db
+    .select()
+    .from(cronRuns)
+    .where(eq(cronRuns.jobKey, "daily"))
+    .orderBy(desc(cronRuns.startedAt))
+    .limit(1);
+
+  const nightlyRun: NightlyRun | null = lastRun
+    ? {
+        startedAt: lastRun.startedAt.toISOString(),
+        durationMs: lastRun.durationMs,
+        ok: lastRun.ok,
+        okCount: lastRun.okCount,
+        failedCount: lastRun.failedCount,
+        skippedCount: lastRun.skippedCount,
+        jobs: (lastRun.jobs ?? []) as NightlyJobRow[],
+      }
+    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -88,6 +116,16 @@ export default async function HealthPage() {
             receive the <em>Something broke</em> notification.
           </p>
         )}
+
+        {/*
+          Always offered, including when the box above is green. "Alerts
+          are on" only means two settings are non-empty — a revoked key, a
+          typo in the address, an unverified sending domain and a sandbox
+          that will only deliver to one inbox all read as "on" from here.
+          One real send is the only honest check, and the provider's
+          refusal names which of those it is.
+        */}
+        <TestEmailButton />
       </div>
 
       {/*
@@ -97,6 +135,16 @@ export default async function HealthPage() {
         somewhere else. They used to be one sentence, which made the
         easy half look as blocked as the hard one.
       */}
+      {/*
+        Above the fault list and above everything else that is a symptom.
+        "Did it run?" is the first question when a number is missing, and
+        the answer used to be unavailable from any screen.
+      */}
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">The nightly run</h2>
+        <NightlyRunPanel run={nightlyRun} />
+      </section>
+
       {!configured && (
         <EmailNotConfigured consequence="Failures are recorded below and appear in the bell for administrators, which needs nothing configured. What is not happening is the email — so a fault at 9pm waits until somebody opens this screen." />
       )}

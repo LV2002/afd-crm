@@ -4,6 +4,9 @@ Written for Leon. No code, no terminal — every step is a page in a browser.
 
 Everything here is already built. These are the credentials that switch it on.
 
+**WhatsApp and Instagram are in `docs/WHATSAPP-SETUP.md`** — same Meta app, two more
+callback URLs, one shared App Review submission. Do this one first; that one builds on it.
+
 ---
 
 ## What you get, and what each piece needs
@@ -371,6 +374,10 @@ the only way to answer is the Instagram app. There is no setting that changes th
 
 A delivery panel for Instagram sits under the one for leads on the same settings screen,
 because "are DMs arriving?" and "are leads arriving?" are different questions.
+
+`docs/WHATSAPP-SETUP.md` Part 5 is the same four steps in the order you would actually do
+them, alongside WhatsApp's — and Part 6 is the single App Review submission that should
+carry `instagram_manage_messages` and `leads_retrieval` together rather than separately.
 
 ### 1.8 Check the connection
 

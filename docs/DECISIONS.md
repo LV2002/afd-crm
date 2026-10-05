@@ -3217,3 +3217,58 @@ there is.
 **The messages are stored through the same mapper as ordinary inbound ones.** A thread where a
 photo reads one way if it came from the phone and another if it came through the API is worse
 than one that is merely incomplete.
+
+---
+
+## 2026-10-05 — "Configured" is not "working", and a button is the only honest check
+
+Email notifications had one state visible to an administrator: `emailConfigured()`, which is
+`Boolean(RESEND_API_KEY && EMAIL_FROM)`. Two non-empty strings. The Platform health panel turned
+that into **"Alerts are on."**
+
+Everything that actually goes wrong passes that check:
+
+- the key was revoked, or belongs to a different Resend account
+- the address in *Send platform alerts to* has a typo
+- the sending domain is not verified, so mail is refused or spam-binned
+- the account is on Resend's sandbox, where only the signup address is deliverable
+
+Four different fixes, all presented as working. So **Settings → Platform health → Send a test
+email** sends a real one and shows what came back.
+
+**The provider's refusal is passed through verbatim.** "You can only send testing emails to your
+own email address" is a complete instruction; "Could not send email" is not. This is the same
+failure this project keeps finding in itself — a tool discarding what the platform already said —
+and the right fix each time is to stop paraphrasing.
+
+**The button is shown even when the panel is green.** The case where the screen claims email
+works and nothing arrives is the one worth testing, so hiding the test behind "configured" would
+remove it exactly where it is needed. It also names *which* of the two variables is missing when
+neither has been set, because they are two fields in one form and one of them is easy to skip.
+
+## 2026-10-05 — The Meta integrations were built and undocumented, which is the same as unbuilt
+
+Lead Ads had `docs/ADS-SETUP.md` and went live. WhatsApp — a bigger integration by far: one
+institute number, templates, broadcasts, automations, Coexistence, and Instagram DMs on the same
+app — had nothing, and was not switched on. The steps existed, in component comments and in a
+conversation. `docs/WHATSAPP-SETUP.md` now holds them.
+
+Writing it surfaced three things worth deciding in the open rather than discovering:
+
+**The 100-per-run broadcast ceiling is a published fact now, not an implementation detail.**
+Scheduled broadcasts and automations are swept by the 10:00 IST nightly run, 100 sends at a time,
+because the hosting plan allows one scheduled run a day. A 400-person campaign therefore takes
+four mornings. That belongs where a campaign is planned, not in a route handler's comment —
+somebody who learns it on day three of a four-day send has already told the institute it went out.
+
+**Registering a number to the Cloud API is a one-way door, and the warning goes before the
+step.** The number leaves the WhatsApp Business app and its chats do not follow. The temptation
+is to document the happy path and let the Coexistence section imply the alternative; the doc
+instead refuses to let somebody pick a number without being told, because the number they would
+pick is a counsellor's.
+
+**One App Review submission, not three.** `whatsapp_business_messaging`,
+`whatsapp_business_management`, `instagram_manage_messages`, `leads_retrieval` and the Page and
+ads permissions are one app's review. Three submissions is three queues of several days each,
+sequentially, for no benefit — and business verification gates all of them, so it is listed first
+in the order of work.

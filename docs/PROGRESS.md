@@ -6723,3 +6723,101 @@ whichever deployment sent the mail rather than at a stable address. The launch c
 overstated this as required.
 
 **1510 tests pass**, lint, typecheck and the production build clean.
+
+---
+
+## Session 58 — Why yesterday's ad spend never arrived, and the gap that hid it
+
+Leon said yesterday's Meta spend had not appeared in Ad Performance. The CRM could not tell
+him why, and that turned out to be the more interesting bug.
+
+**Nothing recorded that the nightly job had run.** `runNightly()` handed its result back as
+JSON to whoever invoked the route, and that was the end of it. Failures reached
+`error_events` — but three of the four ways this goes wrong leave no trace there:
+
+- A deployment with no `CRON_SECRET` answers **every** cron call with a 401 before the handler
+  runs, and being turned away is not an exception. Nothing overnight happens, and nothing says so.
+- A job that reports `{ skipped: "not-configured" }` is a 200 and correct on a fresh instance.
+- A job skipped for want of time in the run's budget is not a failure.
+
+In all three the symptom is identical: a number that does not appear on a screen.
+
+### What now exists
+
+**`cron_runs`** — one row per run, with each job's status, duration and reason. **A panel at the
+top of Settings → Platform Health** reads it, and the empty state is the important half: *"No
+nightly run has ever been recorded"* names the `CRON_SECRET` cause and where to confirm it.
+A last run more than 36 hours old says the schedule has stopped firing.
+
+**`expectOk()` keeps the reason.** It treated a 200 as success and discarded the body, so a job
+that ran and did nothing was indistinguishable from one that worked — both "ok". *"Meta ad
+spend — ok"* and *"Meta ad spend — ok, nothing to do: not-configured"* are the difference
+between reading the code and pasting in a token.
+
+Two assertions in `tests/nightly-runner.spec.ts` pinned the old contract (`resolves.toBeUndefined()`)
+and were updated rather than worked around — one of them, "treats a 200 carrying an error field
+as success", keeps its intent exactly: it still must not throw, and now also reports what the
+route said.
+
+### Also
+
+`sendEmail()` reported a bare `HTTP 403` for anything without a provider message, which made
+this container's egress proxy refusing the connection look identical to Resend refusing the key
+— an hour spent on the wrong thing. It now says when a status arrived with no message from the
+provider, which means the request may never have reached it.
+
+**1519 tests pass** (10 new), lint, typecheck, `db:audit` and the production build clean.
+Migration 0086 applied to an already-seeded database and to a clean one.
+
+---
+
+## Session 59 — The Meta setup that was built but never written down, and a way to prove email works
+
+Two things Leon asked for: a step-by-step for getting WhatsApp and Instagram live, and a fix for
+email notifications.
+
+### `docs/WHATSAPP-SETUP.md`
+
+Lead Ads and ad spend had a setup document (`ADS-SETUP.md`); WhatsApp had none, and WhatsApp is
+the larger integration — one institute number, templates, broadcasts, automations, Coexistence
+for counsellors' own phones, plus Instagram DMs riding the same app. All of it was built and
+none of it was switched on, because the Meta-side steps existed only inside component comments
+and this transcript.
+
+The doc is written for Leon, no terminal, and leads with the thing that confuses everyone:
+**one Meta app, three objects, three callback URLs, one App Review submission.** Subscribing the
+Page does nothing for WhatsApp or Instagram, which is exactly why leads arrive today and nothing
+else does.
+
+Three facts in it are the ones that would otherwise be found the expensive way:
+
+- **Registering a number to the Cloud API ends its use in the WhatsApp app, and the chats do not
+  come with it.** A one-way door, named before the step that walks through it. Coexistence is the
+  path that keeps the phone, and it is a different procedure.
+- **Scheduled broadcasts and automations send 100 per daily run, at 10:00 IST.** A 400-person
+  campaign takes four mornings. This is a hosting-plan consequence, and somebody planning a
+  campaign needs it before they plan, not after.
+- **No `CRON_SECRET` means none of that runs at all** — so Part 7 orders the work with that
+  check first. Configuring broadcasts before it is configuring nothing.
+
+### A test-email button
+
+Leon asked how to fix email notifications. The honest answer is two values pasted into the
+hosting dashboard — and then no way to know whether it worked. `emailConfigured()` only means
+both variables are non-empty strings: a revoked key, a typo in the address, an unverified sending
+domain and Resend's sandbox refusing every recipient but one all read as **"Alerts are on."**
+
+**Settings → Platform health → Send a test email** sends one to the resolved alert addresses and
+reports the provider's refusal **verbatim** — "You can only send testing emails to your own email
+address", "domain is not verified", "API key is invalid" each have a different fix, and each is
+unrecoverable from our own wording. The button is offered even when the panel is green, because
+that is the case most worth testing.
+
+### Two stale comments corrected
+
+`whatsapp-broadcast-sweep` claimed it sends each recipient from their own counsellor's number —
+true of a model that was dropped; the code eight lines further down says "One institute number"
+and that is what it does. The same comment block said the cron was "set to Sunday"; `vercel.json`
+has had it daily for some time.
+
+**1519 tests pass**, lint, typecheck, `db:audit` and the production build clean. No schema change.

@@ -221,17 +221,35 @@ words**. The copy is editable.
 
 **Switching email on.** Everything here works on the bell with nothing
 configured. Sending to inboxes as well needs an account with an email
-service, which is the one thing the CRM cannot do by itself:
+service, which is the one thing the CRM cannot do by itself. Two ways,
+and the first takes five minutes.
 
-1. Create an account at **resend.com** — free at this institute's volume —
-   and verify **afdindia.com** as a sending domain, which means adding two
-   DNS records wherever the domain is managed. **This step needs access to
-   the domain**, so nobody else can do it for you.
-2. Put the API key and the from-address into the hosting settings as
-   `RESEND_API_KEY` and `EMAIL_FROM`, then redeploy. Send the key over and
-   this part can be done for you.
+**Just to your own inbox — no DNS.** Sign up at **resend.com** *with the
+address you want the mail to arrive at*, copy the API key, and set
+`RESEND_API_KEY` and `EMAIL_FROM` = `onboarding@resend.dev` in the hosting
+settings. Until a domain is verified the service only delivers to the
+address the account was created with — so this covers **platform alerts to
+you** and nothing else. Put that same address in Settings → Organisation →
+Send platform alerts to.
 
-Until both exist, the **Also send an email** tick is saved and does
+**To staff and families — verify the domain.** In the same account add
+**afdindia.com** and put the two records it shows you wherever the domain
+is managed, then change `EMAIL_FROM` to something like
+`AFD India <crm@afdindia.com>`.
+
+### Why the domain matters at all
+
+Domain verification is about the address mail comes **from**, not where it
+goes. Gmail will not accept mail claiming to be from afdindia.com unless
+afdindia.com has published a record saying who may send on its behalf —
+otherwise anybody could send as your institute. Those records are what
+SPF and DKIM are, and without them the mail is rejected or lands in spam.
+
+None of that applies when the mail comes from the email service's own
+address, which is why the five-minute route works: the mail is honestly
+from `resend.dev`, and `resend.dev` vouches for itself.
+
+Until email is on, the **Also send an email** tick is saved and does
 nothing, and the screen says so. Optional afterwards:
 `NEXT_PUBLIC_APP_URL` set to the CRM's real address — links in emails work
 without it but point at whichever deployment sent the mail.
@@ -288,6 +306,23 @@ Not available to Co-Admin or Centre Head — it cannot be scoped to a
 centre, so a centre-scoped grant would expose the whole institute's log.
 
 ### Settings → Platform Health
+**The nightly run** is the first thing on this screen, and the first thing
+to check when a number has not appeared: when it last ran, how long it
+took, and what each of the ten jobs did — including the ones that ran and
+did nothing because an integration has no credentials yet.
+
+> *"Meta ad spend — ok"* and *"Meta ad spend — ok, nothing to do: not
+> configured"* are the difference between a bug and a token nobody has
+> pasted in.
+
+**If it says no run has ever been recorded**, nothing overnight is
+happening at all — not the response-time sweep, not fee reminders, not ad
+spend. The usual cause is `CRON_SECRET` missing from the hosting
+environment: the schedule then calls the CRM without the password it
+expects, the CRM refuses, and nothing runs with no failure recorded
+anywhere, because being turned away is not an error. Check Vercel →
+Project → Cron Jobs; a run listed with status 401 is this.
+
 **Platform health** lists anything that has broken — a failed webhook, a
 failed nightly job, an unhandled error — with what it was and how often,
 plus **Recently marked fixed**.
@@ -354,6 +389,9 @@ spend** button. Full walkthrough in `docs/ADS-SETUP.md`.
 Meta's even when it is the same app — you must enter the App Secret in
 both places.
 
+Full walkthrough, from adding WhatsApp to the Meta app through templates,
+broadcasts and Coexistence, in `docs/WHATSAPP-SETUP.md`.
+
 ### WhatsApp numbers and Coexistence
 Each of the institute's numbers is registered here with its **Phone number
 ID** from Meta, a label, whose phone it is, and whether it is API-only or
@@ -363,7 +401,8 @@ number at the same time).
 The setting that matters most is **a message from somebody new creates a
 lead**: right for a counsellor's own number, wrong for the broadcast
 number. Chapter 10.6a has the full procedure, including the three extra
-webhook fields that must be subscribed or nothing mirrors.
+webhook fields that must be subscribed or nothing mirrors; the Meta side
+of it is `docs/WHATSAPP-SETUP.md` Part 4.
 
 ### Website forms
 A signing secret and a webhook address for your own site's forms.

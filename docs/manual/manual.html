@@ -238,6 +238,7 @@
 <li><a href="#14-4-chats">14.4 Chats</a></li>
 <li><a href="#14-5-reports-and-advertising">14.5 Reports and advertising</a></li>
 <li><a href="#14-6-leads-not-arriving-from-ads">14.6 Leads not arriving from ads</a></li>
+<li><a href="#14-6a-ad-spend-or-any-overnight-figure-has-not-updated">14.6a Ad spend, or any overnight figure, has not updated</a></li>
 <li><a href="#14-7-form-answers-not-reaching-the-crm">14.7 Form answers not reaching the CRM</a></li>
 <li><a href="#14-8-imports">14.8 Imports</a></li>
 <li><a href="#14-9-something-is-just-broken">14.9 Something is just broken</a></li>
@@ -1773,12 +1774,13 @@
 <p>Which widgets each role sees and in what order. You can <strong>remove</strong> a widget from a role but never <strong>add</strong> one the role has no permission for — it would draw a card of zeroes, and a zero is a number somebody will believe.</p>
 <h3 id="settings-notifications">Settings → Notifications</h3>
 <p>Which events notify which roles, on which channels, and <strong>in what words</strong>. The copy is editable.</p>
-<p><strong>Switching email on.</strong> Everything here works on the bell with nothing configured. Sending to inboxes as well needs an account with an email service, which is the one thing the CRM cannot do by itself:</p>
-<ol>
-<li>Create an account at <strong>resend.com</strong> — free at this institute's volume — and verify <strong>afdindia.com</strong> as a sending domain, which means adding two DNS records wherever the domain is managed. <strong>This step needs access to the domain</strong>, so nobody else can do it for you.</li>
-<li>Put the API key and the from-address into the hosting settings as <code>RESEND_API_KEY</code> and <code>EMAIL_FROM</code>, then redeploy. Send the key over and this part can be done for you.</li>
-</ol>
-<p>Until both exist, the <strong>Also send an email</strong> tick is saved and does nothing, and the screen says so. Optional afterwards: <code>NEXT_PUBLIC_APP_URL</code> set to the CRM's real address — links in emails work without it but point at whichever deployment sent the mail.</p>
+<p><strong>Switching email on.</strong> Everything here works on the bell with nothing configured. Sending to inboxes as well needs an account with an email service, which is the one thing the CRM cannot do by itself. Two ways, and the first takes five minutes.</p>
+<p><strong>Just to your own inbox — no DNS.</strong> Sign up at <strong>resend.com</strong> <em>with the address you want the mail to arrive at</em>, copy the API key, and set <code>RESEND_API_KEY</code> and <code>EMAIL_FROM</code> = <code>onboarding@resend.dev</code> in the hosting settings. Until a domain is verified the service only delivers to the address the account was created with — so this covers <strong>platform alerts to you</strong> and nothing else. Put that same address in Settings → Organisation → Send platform alerts to.</p>
+<p><strong>To staff and families — verify the domain.</strong> In the same account add <strong>afdindia.com</strong> and put the two records it shows you wherever the domain is managed, then change <code>EMAIL_FROM</code> to something like <code>AFD India &lt;crm@afdindia.com&gt;</code>.</p>
+<h3 id="why-the-domain-matters-at-all">Why the domain matters at all</h3>
+<p>Domain verification is about the address mail comes <strong>from</strong>, not where it goes. Gmail will not accept mail claiming to be from afdindia.com unless afdindia.com has published a record saying who may send on its behalf — otherwise anybody could send as your institute. Those records are what SPF and DKIM are, and without them the mail is rejected or lands in spam.</p>
+<p>None of that applies when the mail comes from the email service's own address, which is why the five-minute route works: the mail is honestly from <code>resend.dev</code>, and <code>resend.dev</code> vouches for itself.</p>
+<p>Until email is on, the <strong>Also send an email</strong> tick is saved and does nothing, and the screen says so. Optional afterwards: <code>NEXT_PUBLIC_APP_URL</code> set to the CRM's real address — links in emails work without it but point at whichever deployment sent the mail.</p>
 <p>Nineteen events ship, grouped by what they are about:</p>
 <table><thead>
 <tr><th>Group</th><th>Events</th></tr>
@@ -1800,6 +1802,9 @@
 <p><strong>Admin only</strong> (<code>audit.read</code>). Every change and every export: <strong>Who</strong>, <strong>What they touched</strong>, the <strong>Table</strong>, and <strong>Before</strong> / <strong>After</strong>, with filters for <strong>Anybody</strong>, <strong>Any table</strong>, <strong>Anything</strong>, <strong>From</strong>, <strong>To</strong> and <strong>Clear filters</strong>.</p>
 <p>Not available to Co-Admin or Centre Head — it cannot be scoped to a centre, so a centre-scoped grant would expose the whole institute's log.</p>
 <h3 id="settings-platform-health">Settings → Platform Health</h3>
+<p><strong>The nightly run</strong> is the first thing on this screen, and the first thing to check when a number has not appeared: when it last ran, how long it took, and what each of the ten jobs did — including the ones that ran and did nothing because an integration has no credentials yet.</p>
+<blockquote><em>"Meta ad spend — ok"</em> and <em>"Meta ad spend — ok, nothing to do: not configured"</em> are the difference between a bug and a token nobody has pasted in.</blockquote>
+<p><strong>If it says no run has ever been recorded</strong>, nothing overnight is happening at all — not the response-time sweep, not fee reminders, not ad spend. The usual cause is <code>CRON_SECRET</code> missing from the hosting environment: the schedule then calls the CRM without the password it expects, the CRM refuses, and nothing runs with no failure recorded anywhere, because being turned away is not an error. Check Vercel → Project → Cron Jobs; a run listed with status 401 is this.</p>
 <p><strong>Platform health</strong> lists anything that has broken — a failed webhook, a failed nightly job, an unhandled error — with what it was and how often, plus <strong>Recently marked fixed</strong>.</p>
 <p><strong>Check this weekly.</strong> It is where a quietly broken integration shows up before anybody notices leads have stopped arriving.</p>
 <h3 id="settings-config-export-import">Settings → Config Export/Import</h3>
@@ -1945,6 +1950,18 @@
 <li><strong>Did a delivery fail?</strong> The row says why, in Meta's own words.</li>
 <li><strong>Did a test lead "fail"?</strong> Meta's <strong>Create lead</strong> button fills every answer with placeholder text, so there is no real phone number. That is the whole chain working with nothing real at the end of it. Use <strong>Preview form</strong> and fill it in yourself.</li>
 </ol>
+<h2 id="14-6a-ad-spend-or-any-overnight-figure-has-not-updated">14.6a Ad spend, or any overnight figure, has not updated</h2>
+<p><strong>Check the nightly run first.</strong> Settings → Platform Health, at the top. Everything that happens overnight happens in one run at 10:00 IST, and that panel says whether it happened and what each job did.</p>
+<p>Three different answers, three different fixes:</p>
+<table><thead>
+<tr><th>What the panel says</th><th>What it means</th></tr>
+</thead><tbody>
+<tr><td><em>No nightly run has ever been recorded</em></td><td>Nothing overnight is running. Usually <code>CRON_SECRET</code> is missing from the hosting environment — see Chapter 13, Platform Health.</td></tr>
+<tr><td><em>Last run</em> is more than a day ago</td><td>The schedule has stopped firing. Check Vercel → Project → Cron Jobs.</td></tr>
+<tr><td>The job ran, <em>nothing to do: not-configured</em></td><td>The credentials for that integration are not saved. For Meta ad spend that is the <strong>Ads access token</strong> and <strong>Ad Account ID</strong> in Settings → Integrations → Meta — the Page token that brings in leads is a different token and does not cover spend.</td></tr>
+<tr><td>The job <em>failed</em> with a message</td><td>That message is the answer. A 401 from Meta means the token expired or lacks a permission.</td></tr>
+</tbody></table>
+<p>Once the credentials are in, the nightly run picks spend up the same night, and <strong>Import history</strong> on the integration screen pulls the days that were missed rather than leaving a gap.</p>
 <h2 id="14-7-form-answers-not-reaching-the-crm">14.7 Form answers not reaching the CRM</h2>
 <p><strong>A question's answer is missing from the lead</strong> Open <strong>Recent deliveries</strong>. The row names the questions nothing matched, with the fix: add a field in Settings → Custom Fields whose <strong>Label</strong> is that question.</p>
 <p><strong>An answer is there but spelled oddly</strong> It did not match any dropdown option, so it was kept exactly as the lead typed it rather than thrown away. Add that value in Settings → Dropdowns and it will group properly from then on.</p>

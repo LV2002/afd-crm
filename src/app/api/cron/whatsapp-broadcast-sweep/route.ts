@@ -19,14 +19,16 @@ export const maxDuration = 60;
 // One run's worth of sends.
 //
 // Sized against the cron cadence, not against AFD's volume. The hosting
-// plan allows one cron a day at most and this one is set to Sunday, so a
-// batch of 50 would take a 400-person campaign eight WEEKS to deliver.
-// One hundred sequential sends fit inside the 60s budget above with room
-// to spare — Meta's send call is fast — and anything larger should be
-// answered by running the sweep more often rather than by making one run
-// longer. Raising the cron in vercel.json is the single change that makes
-// both the delivery rate and scheduling accurate; nothing here needs to
-// change with it.
+// plan allows one scheduled run a day, and this is swept by the 10:00 IST
+// nightly job, so a batch of 50 would take a 400-person campaign eight
+// WEEKS to deliver. One hundred sequential sends fit inside the 60s
+// budget above with room to spare — Meta's send call is fast — and
+// anything larger should be answered by running the sweep more often
+// rather than by making one run longer. Raising the cron in vercel.json
+// is the single change that makes both the delivery rate and scheduling
+// accurate; nothing here needs to change with it. 100 a day is the real
+// delivery ceiling until then, and docs/WHATSAPP-SETUP.md Part 3 says so
+// in the place somebody plans a campaign from.
 const BATCH_SIZE = 100;
 
 /**
@@ -35,14 +37,14 @@ const BATCH_SIZE = 100;
  * comment). Runs on the direct db client, same trust boundary as every
  * other cron in this codebase.
  *
- * Sends each recipient from THEIR OWN LEAD'S assigned counsellor's
- * WhatsApp number, not a separate "marketing" number — keeps the
- * broadcast inside the customer's existing thread with the person they
- * actually know, consistent with the "one number per counsellor" model
- * (no separate marketing-number credential exists, by design). A lead
- * with no assigned counsellor, or whose counsellor has no number
- * configured, fails that one recipient with a clear reason rather than
- * silently skipping it forever.
+ * Sends from the institute's one configured WhatsApp number — the
+ * `phone_number_id` credential — not from the lead's counsellor's number.
+ * An earlier version of this comment described the per-counsellor
+ * behaviour it was built with; that model was dropped (one institute
+ * number, so a lead with no counsellor is not a reason a broadcast cannot
+ * reach them) and the comment outlived it. Coexistence numbers registered
+ * in `whatsapp_numbers` mirror a counsellor's own conversations in and
+ * out; they are not used as broadcast senders.
  */
 /**
  * The kind column is plain text (Meta's own vocabulary, not ours), so it
