@@ -78,5 +78,9 @@ export async function moveLeadStage(
   await startFlows("stage_entered", { leadId, stageId });
 
   revalidatePath("/pipeline");
+  // The board is no longer the only place a stage changes: the status bar
+  // at the top of a lead calls this too, and without this that page would
+  // keep showing the stage it had a moment ago.
+  revalidatePath(`/leads/${leadId}`);
   return {};
 }

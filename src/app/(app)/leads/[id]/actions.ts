@@ -17,6 +17,7 @@ import { NOT_PROVIDED, parseFieldValue } from "@/lib/fields/parse-field-value";
 import { captureError } from "@/lib/errors/capture";
 import { isFrameworkControlFlow } from "@/lib/errors/request-error";
 import { parseRupeesToPaise } from "@/lib/format/currency";
+import { temperatureOverrideFor } from "@/lib/leads/temperature-override";
 import { notify } from "@/lib/notifications/notify";
 import { startFlows } from "@/lib/whatsapp/flow-runner";
 import { createClient } from "@/lib/supabase/server";
@@ -100,15 +101,7 @@ export async function updateLead(leadId: string, _prevState: FormState, formData
   // genuine change (not a same-value re-submit of the whole form) so an
   // unrelated field edit doesn't keep resetting the override window.
   if ("temperature" in coreUpdates && coreUpdates.temperature !== existing?.temperature) {
-    const { data: org } = await supabase
-      .from("org_settings")
-      .select("temperature_override_days")
-      .maybeSingle<{ temperature_override_days: number }>();
-    const overrideDays = org?.temperature_override_days ?? 3;
-    coreUpdates.temperature_override_until = new Date(
-      Date.now() + overrideDays * 24 * 60 * 60 * 1000,
-    ).toISOString();
-    coreUpdates.temperature_set_by = user.id;
+    Object.assign(coreUpdates, await temperatureOverrideFor(supabase, user.id));
   }
 
   const payload = touchedCustom ? { ...coreUpdates, custom: customUpdates } : coreUpdates;
@@ -752,4 +745,69 @@ export async function restoreLead(_prev: FormState, formData: FormData): Promise
   revalidatePath("/leads/deleted");
   revalidatePath(`/leads/${leadId}`);
   return { success: `${lead.studentName} is back in the pipeline.` };
+}
+
+/**
+ * Sets a lead's temperature from the bar at the top of their page.
+ *
+ * Temperature is a column of its own, never derived from the stage
+ * (CLAUDE.md non-negotiable #1), and this is the whole reason that
+ * matters in practice: a counsellor who has just got off the phone knows
+ * the lead is Hot while the stage is still Demo Scheduled. Before this
+ * they had to open the edit form, change one dropdown among thirty and
+ * press Save — so mostly they did not, and the temperature column slowly
+ * stopped meaning anything.
+ *
+ * It stamps the same override window as the edit form does, through the
+ * same helper: a judgement made here must survive the nightly recompute
+ * exactly as one made there.
+ */
+export async function setLeadTemperature(
+  leadId: string,
+  temperature: string | null,
+): Promise<FormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "lead.update")) {
+    return { error: "You don't have permission to do that." };
+  }
+
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("leads")
+    .select("temperature")
+    .eq("id", leadId)
+    .maybeSingle<{ temperature: string | null }>();
+  if (!existing) return { error: "That lead no longer exists." };
+
+  const next = temperature?.trim() || null;
+  // Not an error, and not a write either: re-pressing the button you are
+  // already on must not keep pushing the override window forward.
+  if (next === existing.temperature) return {};
+
+  const payload = {
+    temperature: next,
+    ...(next === null
+      ? // Clearing it hands the lead back to the rules, which means
+        // clearing the override too — otherwise "no temperature" would be
+        // pinned for days as if somebody meant it.
+        { temperature_override_until: null, temperature_set_by: null }
+      : await temperatureOverrideFor(supabase, user.id)),
+  };
+
+  const { error } = await supabase.from("leads").update(payload).eq("id", leadId);
+  if (error) return { error: error.message };
+
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "lead.update",
+    entityType: "leads",
+    entityId: leadId,
+    before: { temperature: existing.temperature },
+    after: payload,
+  });
+
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/pipeline");
+  return { success: "Saved." };
 }

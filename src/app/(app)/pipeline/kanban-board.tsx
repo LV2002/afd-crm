@@ -3,17 +3,10 @@
 import { useEffect, useState, useTransition } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Combobox } from "@/components/ui/combobox";
-import { Textarea } from "@/components/ui/textarea";
+  LostReasonDialog,
+  type LostReasonOption,
+} from "@/components/leads/lost-reason-dialog";
 import { maskPhone } from "@/lib/leads/mask-phone";
 
 import { moveLeadStage } from "./actions";
@@ -44,11 +37,6 @@ export interface KanbanLead {
    * would quietly change. Marked instead.
    */
   isDropped: boolean;
-}
-
-interface LostReasonOption {
-  value: string;
-  label: string;
 }
 
 /** A synthetic column id for leads with no stage_id — never hide a lead just because it fell outside the pipeline configuration. */
@@ -256,68 +244,5 @@ function LeadCard({
         <span className="text-xs text-muted-foreground">{lead.assignedToName}</span>
       )}
     </a>
-  );
-}
-
-function LostReasonDialog({
-  open,
-  options,
-  onCancel,
-  onConfirm,
-}: {
-  open: boolean;
-  options: LostReasonOption[];
-  onCancel: () => void;
-  onConfirm: (reason: { lostReason: string; lostReasonDetail: string }) => void;
-}) {
-  const [lostReason, setLostReason] = useState("");
-  const [lostReasonDetail, setLostReasonDetail] = useState("");
-
-  useEffect(() => {
-    if (!open) {
-      setLostReason("");
-      setLostReasonDetail("");
-    }
-  }, [open]);
-
-  return (
-    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Why is this lead lost?</DialogTitle>
-          <DialogDescription>
-            A reason is required before this lead can move to this stage.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex flex-col gap-3">
-          <Combobox
-            value={lostReason}
-            onChange={setLostReason}
-            options={options}
-            placeholder="Select a reason"
-            searchPlaceholder="Type a reason…"
-          />
-          <Textarea
-            placeholder="Additional detail (optional)"
-            value={lostReasonDetail}
-            onChange={(e) => setLostReasonDetail(e.target.value)}
-            rows={3}
-          />
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button
-            disabled={!lostReason}
-            onClick={() => onConfirm({ lostReason, lostReasonDetail })}
-          >
-            Move to Lost
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
