@@ -7596,3 +7596,32 @@ and a test asserts the secret appears in none of the four messages.
 responses in job history** so it can be read.
 
 **1588 tests pass** (5 new), lint, typecheck and the build clean.
+
+## Session 75 — Reading Meta's permissions out of the CRM
+
+Leon's app is Live (I misread the toggle and said otherwise — corrected), the Instagram `messages`
+webhook field is subscribed, and DMs still arrive only from people who manage the Page. With
+Meta's Permissions and Features page rendering empty, there was nowhere he could look to find out
+whether the app actually holds `instagram_manage_messages`.
+
+`debug_token` returns exactly that, the Test connection button has been calling it all along, and
+`checkToken` was discarding the `scopes` field.
+
+**Settings → Integrations → Meta → Test connection** now names what is missing, in consequences
+first: *"Receiving Instagram DMs and Messenger messages (pages_messaging)"*. The Page token and
+the Ads token are held to different lists, because a Page token never carries `ads_read` and
+checking both against one list would report a fault on every correct instance.
+
+Two limits are built in rather than papered over: an empty `scopes` list reports nothing (a System
+User token can omit it, and seven false alarms is worse than silence), and a granted permission
+still does not say whether it has Standard or Advanced access — which is the whole difference
+between staff DMs and student DMs.
+
+Also answered: **no, switching to "Instagram API with Instagram login" does not help.** Both routes
+require Advanced Access on their messaging permission for messages from people without a role on
+the app. It is a rewrite of the integration that lands in the same place.
+
+`docs/WHATSAPP-SETUP.md` § 6a gained the two-switches explanation in the previous session; this
+adds the ways Meta's own page fails to load.
+
+**1594 tests pass** (6 new), lint, typecheck and the build clean.

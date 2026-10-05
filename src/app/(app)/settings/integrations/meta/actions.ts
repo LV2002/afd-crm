@@ -13,6 +13,12 @@ import {
   setIntegrationCredential,
 } from "@/lib/integrations/credentials";
 import {
+  ADS_TOKEN_SCOPES,
+  PAGE_TOKEN_SCOPES,
+  compareScopes,
+  describeMissingScopes,
+} from "@/lib/integrations/meta/required-scopes";
+import {
   debugMetaToken,
   fetchMetaPageIdentity,
   fetchMetaPagesForUser,
@@ -155,7 +161,19 @@ async function checkToken(
   }
 
   const expiry = info.expiresAt ? (info.expiresAt === 0 ? "never expires" : `expires ${new Date(info.expiresAt * 1000).toLocaleDateString()}`) : "expiry unknown";
-  return `${label}: valid, ${expiry}.`;
+
+  // The permissions the token actually holds. `debug_token` has been
+  // returning these all along and this function was discarding them —
+  // which is why "Instagram DMs only arrive from staff" was diagnosable
+  // only through Meta's own dashboard, a page that is slow, sometimes
+  // renders empty, and is gated behind business verification.
+  const report = compareScopes(
+    info.scopes,
+    expectedType === "PAGE" ? PAGE_TOKEN_SCOPES : ADS_TOKEN_SCOPES,
+  );
+  const missing = describeMissingScopes(report);
+
+  return [`${label}: valid, ${expiry}.`, missing].filter(Boolean).join(" ");
 }
 
 /**

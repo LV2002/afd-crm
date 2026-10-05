@@ -3907,3 +3907,38 @@ giving them nothing there buys no security at all.
 Fourth entry on this theme now: the cron that was turned away silently, the webhook deliveries
 recorded but shown on no screen, the escalation rung that did nothing, and this. The shape is
 always the same — **the system knows why, and does not say.**
+
+## 2026-10-05 — Meta told us the permissions all along
+
+Leon's Instagram DMs arrive from staff and nobody else, his app is Live, and Meta's own Permissions
+and Features page renders empty. So there was no way, from anywhere he could reach, to find out
+whether the app actually holds `instagram_manage_messages`.
+
+Except there was. `debug_token` returns the token's exact permission list, the Test connection
+button has been calling it since it was built, and `checkToken` read `is_valid`, `app_id`, `type`
+and `expires_at` and **dropped `scopes` on the floor**.
+
+The answer to the most expensive question on this integration was arriving in an API response the
+CRM already made, on a screen the administrator was already looking at.
+
+It now compares the token's permissions against what each feature needs and names what is missing
+in consequences first — *"Receiving Instagram DMs and Messenger messages (pages_messaging)"* —
+because a permission name means nothing to somebody running a coaching institute, while the name
+is still what gets typed into Meta's request form.
+
+Two honesty constraints in the implementation:
+
+**An empty list is unknown, not empty.** A System User token can come back without `scopes`.
+Reporting seven missing permissions for a token that demonstrably works would send somebody to fix
+what is not broken, so that case reports nothing at all.
+
+**A granted permission is not a working one.** `debug_token` says the app *holds* a permission; it
+does not say whether that permission has Standard or Advanced access — which is the entire
+difference between DMs from staff and DMs from students. So a *missing* permission here is
+definitive and a *present* one is not, and the copy says so rather than letting a clean result
+imply everything works.
+
+Fifth entry on this theme. The cron refused silently, the webhook deliveries recorded and shown
+nowhere, the escalation rung that did nothing, the bare "Unauthorized", and now this: **the
+platform said, and the tool did not pass it on.** The recurring fix is never clever — it is
+printing something that was already in hand.
