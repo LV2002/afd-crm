@@ -47,11 +47,17 @@ export interface CronRun {
  *
  * ## Staleness
  *
- * Generous on purpose, and different per tier. A free scheduler skipping
- * a slot under load is ordinary; GitHub's in particular queues scheduled
- * runs at low priority, so a ten-minute schedule genuinely does go
- * twenty-five minutes between runs sometimes. A panel that cries wolf
- * every afternoon is ignored by the time it matters.
+ * Set per tier at roughly three missed runs, which is late enough that a
+ * single skipped slot or a network blip says nothing and early enough to
+ * be useful. A panel that cries wolf every afternoon is ignored by the
+ * time it matters, and one that waits a day is no better than noticing
+ * the broadcast never arrived.
+ *
+ * These numbers assume a punctual scheduler (cron-job.org, per
+ * docs/CRON-SETUP.md). They were briefly looser to accommodate GitHub
+ * Actions, which queues scheduled workflows at low priority — if anybody
+ * moves back to a scheduler like that, loosen them again rather than
+ * living with a warning that is usually wrong.
  */
 interface TierCopy {
   title: string;
@@ -68,7 +74,7 @@ const COPY: Record<CronTier, TierCopy> = {
   frequent: {
     title: "Every ten minutes",
     what: "WhatsApp automations, scheduled broadcasts, and the response-time sweep.",
-    staleAfterMinutes: 45,
+    staleAfterMinutes: 30,
     missingIsFault: false,
     missing: (
       <>

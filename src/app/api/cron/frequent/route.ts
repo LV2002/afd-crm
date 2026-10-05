@@ -18,8 +18,8 @@ export const dynamic = "force-dynamic";
  * *external* caller — a scheduler hitting the URL with the same
  * `Authorization: Bearer $CRON_SECRET` header Vercel's own cron sends.
  * Anything that can make an HTTP request works, and nothing about the
- * hosting plan limits how often a URL may be requested. The repository's
- * own `.github/workflows/cron-frequent.yml` is one such caller.
+ * hosting plan limits how often a URL may be requested. See
+ * `docs/CRON-SETUP.md` for the scheduler this instance uses.
  *
  * On a plan with minute-level cron, adding a `crons` entry pointing here
  * is the better answer and nothing in this file changes.

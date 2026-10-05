@@ -3672,7 +3672,36 @@ tier on the health screen — which is the one screen somebody opens when things
 making it the worst possible place for a query to throw. Covered by a test that also proves it
 returns the *newest* row per group rather than an arbitrary one.
 
-## 2026-10-05 — The schedules ship as workflow files, not as instructions
+## 2026-10-05 — cron-job.org, not GitHub Actions (supersedes the entry below it)
+
+Leon, after reading the entry below: *"no dont use github. use cron-job.org"*. The workflow files
+are deleted and `docs/CRON-SETUP.md` is now step-by-step for cron-job.org.
+
+He is right, and the entry below talked itself out of the correct answer. Its argument was about
+*where the configuration lives* — version-controlled next to the code, in a system this repo
+already uses. Real, but it bought tidiness and paid in the one property the ten-minute tier exists
+for. GitHub queues scheduled workflows at low priority, so `*/10` means every ten to twenty-five
+minutes, and it disables scheduled workflows on a repository with no commits for 60 days. A
+schedule whose entire purpose is promptness should not be run by the least punctual available
+scheduler because the config file looks nicer in git.
+
+The general form, worth keeping: **when a mechanism's whole value is one property, do not trade
+that property for convenience elsewhere.** The frequent tier exists so a broadcast goes out in ten
+minutes instead of eighteen hours. Anything that makes it "ten to twenty-five, usually, unless the
+repo goes quiet" is not that feature.
+
+One concrete improvement fell out of the switch: the health panel's staleness threshold for the
+frequent tier was 45 minutes, loosened specifically to tolerate GitHub's unpunctuality. With a
+punctual scheduler it is 30 — three missed runs — so a stopped schedule is reported sooner. The
+comment says why, so that anybody moving to a sloppier scheduler loosens it again rather than
+living with a warning that is usually wrong.
+
+What survives from the entry below: the **401 check** belongs wherever the call is made from.
+cron-job.org treats any non-2xx as a failure and will email about it, which covers the same
+ground, and the setup guide says to turn that on. It is the one setting on that site that matters,
+because a scheduler which stops silently is the whole failure mode this work exists to prevent.
+
+## 2026-10-05 — The schedules ship as workflow files — SUPERSEDED, see above
 
 The previous entry left Leon with a document telling him to go and configure a scheduler. That is
 a worse deliverable than it looks: the steps are on someone else's website, they change, and the

@@ -7427,3 +7427,31 @@ fault) from "nothing is running at all" (a fault).
 
 **1560 tests pass** (8 new), lint, typecheck, `db:audit` and the build clean. No migration —
 `cron_runs.job_key` was already free text.
+
+## Session 70 — cron-job.org instead of GitHub Actions
+
+*"no dont use github. use cron-job.org"*
+
+The two workflow files are deleted and `docs/CRON-SETUP.md` is now a step-by-step for
+cron-job.org: two jobs to create, the exact `Authorization: Bearer …` header, what each failure
+code means, and the two settings on that site worth turning on (failure emails, and treating a
+non-2xx as a failure).
+
+He is right, and my previous reasoning had argued itself out of the correct answer. The case for
+workflow files was about where the configuration lives — version-controlled, in the CI system this
+repo already uses. True, and it traded away the one property the ten-minute tier exists for:
+GitHub queues scheduled workflows at low priority, so `*/10` really means every ten to twenty-five
+minutes, and it switches them off after 60 days without commits. A schedule whose entire purpose
+is promptness should not run on the least punctual scheduler available because the config looks
+tidier in git.
+
+**Nothing about the three tiers changed** — the endpoints, the job lists, the superset property
+and its tests are all as they were. This was the calling mechanism only.
+
+One improvement came out of it: the frequent tier's staleness threshold on Platform health was 45
+minutes, loosened purely to tolerate GitHub's queueing. It is 30 now — three missed runs — so a
+stopped schedule surfaces sooner. The comment records why, so a future move to a sloppier
+scheduler loosens it again rather than leaving a warning that is usually wrong.
+
+Still Leon's to do, and now the only step: create the two jobs on cron-job.org. No merge needed
+first, unlike the GitHub route.
