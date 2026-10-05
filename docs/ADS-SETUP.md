@@ -369,8 +369,13 @@ Four things to set up, and the first two are the ones people forget:
    Token you already saved.
 5. **Press Subscribe Page again**, on the same screen. The Instagram account hangs off the
    Facebook Page, and the Page itself must be subscribed to the `messages` field or nothing
-   is delivered. This is the `leadgen` trap one field along, and the button now subscribes
-   both fields together and tells you whether `messages` took.
+   is delivered. This is the `leadgen` trap one field along.
+
+   Subscribing to `messages` needs **`pages_messaging`** on the Page Access Token, which a
+   token generated for leads alone will not have. Meta's refusal names it outright. Generate
+   a new Page token with `pages_messaging`, `instagram_basic` and `instagram_manage_messages`
+   added, save it, and press the button again. Leads keep working throughout: if Meta refuses
+   the messages field, the CRM subscribes `leadgen` on its own rather than losing both.
 
 **The 24-hour rule is Meta's, not ours.** A free-form reply is only allowed within 24
 hours of the person's last message; after that the CRM greys the box out and says so, and

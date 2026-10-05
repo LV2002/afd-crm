@@ -356,8 +356,10 @@ are the ones everybody forgets:
 4. **Settings → Integrations → Meta → Instagram Account ID**. Replies are sent with the
    Page Access Token you already saved.
 5. **Press Subscribe Page again** on that screen. The Instagram account hangs off the Facebook
-   Page, and the Page has to be subscribed to the `messages` field or nothing arrives. The
-   button subscribes `leadgen` and `messages` together and says whether the second one took.
+   Page, and the Page has to be subscribed to the `messages` field or nothing arrives. That
+   subscription needs **`pages_messaging`** on the Page Access Token — a token made for leads
+   alone does not have it, and Meta's refusal says so by name. Generate a Page token carrying
+   `pages_messaging`, `instagram_basic` and `instagram_manage_messages`, save it, press again.
 
 DMs then appear under **WhatsApp → Instagram** and can be answered from the CRM.
 
@@ -382,6 +384,8 @@ Put all of it on **one** submission:
 | `whatsapp_business_messaging` | Sending any WhatsApp message |
 | `whatsapp_business_management` | Templates — creating and reading them |
 | `instagram_manage_messages` | Instagram DMs, in and out |
+| `pages_messaging` | Subscribing the Page to `messages`, without which no DM is delivered |
+| `instagram_basic` | Reading the linked Instagram account at all |
 | `leads_retrieval` | Fetching a submitted lead's answers (already in review for Lead Ads) |
 | `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata` | Page subscription and lead delivery |
 | `ads_read` / `ads_management` | Ad spend sync and retargeting audiences |
