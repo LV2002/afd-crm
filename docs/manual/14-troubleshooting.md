@@ -107,9 +107,34 @@ Either more than 24 hours have passed since their last message — Meta's
 rule, not ours; use an approved template — or the thread is not matched
 to a lead, so there is nothing to record the message against.
 
-**A broadcast scheduled for this afternoon has not gone**
-Scheduled sends are picked up by the nightly run, so it goes out the
-next morning. Send now if the timing matters.
+**A broadcast has not gone out — scheduled, or sent now**
+Both wait for the same sweep, so "send now" is not immediate either.
+Check **Settings → Platform health → The frequent run**: if it shows no
+run, or one much older than ten minutes, the sweep is not running often
+enough and that is the whole explanation. Press **Send anything that is
+waiting** on the same screen to send it this minute, and see
+`docs/CRON-SETUP.md` for the five-minute, no-cost fix.
+
+**Nothing an automation sends ever arrives**
+Same cause, same screen. An automation's steps — including the first —
+only move when the sweep runs. Also check the automation is switched
+**On**, and read the **Only:** line under its trigger on the automations
+list: conditions narrowed too far mean it matches nobody.
+
+**No inbound WhatsApp message reaches the inbox**
+**Settings → Platform health → Inbound deliveries** answers this in one
+look, and it has three different answers:
+- **Nothing received.** Meta is not calling. The callback URL or the
+  subscribed fields are wrong, on Meta's side — `docs/WHATSAPP-SETUP.md`.
+- **Received, with some rejected.** Meta is calling and being refused
+  because the signature does not match. The **App secret** stored on
+  **Settings → Integrations → WhatsApp** is not the one belonging to the
+  Meta app that is sending. **WhatsApp keeps its own copy, separate from
+  Meta Lead Ads and Instagram** — setting one does not set the other, and
+  this is the usual way it happens.
+- **Received, none rejected.** The messages are in. Look at the inbox
+  filter, and at whether the number they arrived on is registered under
+  **Settings → Integrations → WhatsApp numbers**.
 
 **My new template cannot be used yet**
 Meta reviews templates, usually within a day.
@@ -123,6 +148,24 @@ It is probably not connected. The tab says exactly what is missing. The
 two things people forget: the **Allow access to messages** switch in the
 Instagram app itself, and subscribing the webhook to the **Instagram**
 object rather than the Page.
+
+**Instagram only shows messages from people who run the page**
+This is not a fault and not fixable in the CRM. A Meta app starts in
+**Development mode**, and in that state Meta delivers messages only from
+people who hold a role on the app — which is why your own test DMs and
+your colleagues' arrive and a student's does not. Exactly the same rule
+as ad leads (14.6).
+
+Two things, both on Meta's side:
+1. **App Review** for `instagram_manage_messages`, moving it from
+   Standard to **Advanced Access**.
+2. The app switched to **Live** mode.
+
+Until then, a member of the public's DM is **not queued anywhere** — it
+is simply never delivered, so there is nothing to recover afterwards.
+Review usually wants Business Verification done first.
+`docs/WHATSAPP-SETUP.md` Part 6 is the single submission that covers this
+along with everything else.
 
 **A message I sent from my phone is not in the CRM**
 Known and expected for Instagram. The CRM records what it sends itself.

@@ -7291,3 +7291,72 @@ and chapter 19.4 now says so.
 
 **1548 tests pass** (6 new on flow conditions, the SLA copy tests rewritten), lint, typecheck,
 `db:audit` and the production build clean. One migration, 0088, additive and nullable.
+
+## Session 68 — Why nothing goes out until the cron runs, and why nothing comes in
+
+Four questions from Leon, with four different answers.
+
+### "Do my WhatsApp messages only go out once a day?"
+
+For two features, yes — and the honest answer is worse than he guessed, because **"send now" on a
+broadcast was never now**. Pressing Send queues the recipients and marks the broadcast `sending`;
+a sweep does the sending. An automation is worse still: its *first* step waits for the sweep too,
+so a lead enquiring at 11am hears nothing until 10:00 next morning.
+
+What is **not** affected, and never was: a counsellor replying in the inbox, sending one template,
+sending a file. Those go out on the button press. Inbound messages arrive by webhook in seconds.
+
+The manual claimed "If that matters, send it now instead", which was wrong. Fixed.
+
+**`/api/cron/frequent`** now carries the three jobs that are a queue being drained — automations,
+scheduled broadcasts, the SLA sweep — and nothing else. Not in `vercel.json`: it is for an outside
+scheduler, because the plan allows one scheduled job a day and an HTTP request has no such limit.
+`docs/CRON-SETUP.md` has two free options with exact steps, and the rejected ones with reasons.
+
+Deliberately **not** the whole daily job on a ten-minute loop: four of those ten talk to Meta and
+Google, and 144 runs a day spends quota on data that does not move and re-uploads conversions
+already sent. The split is by what a job *is*, not what it costs — see DECISIONS.md.
+
+All three stay in the daily run too, so a frequent schedule that is never set up or quietly dies
+costs only the delay that exists today.
+
+### "Why is inbound WhatsApp not in my inbox?"
+
+Three causes, indistinguishable from an empty inbox, and the likely one is invisible by design.
+
+**WhatsApp keeps its own `app_secret` under `provider = 'whatsapp'`; Instagram and Lead Ads share
+the one under `provider = 'meta'`.** Setting the Meta one does not set the WhatsApp one — and the
+tell is Leon's own report: Instagram verifies fine, WhatsApp does not. Every rejected delivery was
+written to `webhook_events` before the 401, exactly as non-negotiable #9 requires, and **no screen
+read that table**, so the evidence sat there unreachable.
+
+Settings → Platform health now has **Inbound deliveries**: per source, received / rejected /
+failed, last delivery, last error, rejections' reasons preferred over downstream ones.
+`tests/webhook-deliveries.spec.ts` runs the hand-written SQL and pins that ordering.
+
+### "Why does Instagram only show messages from page admins?"
+
+Development mode. Meta delivers DMs only from people holding a role on the app — the same rule
+already documented for ad leads. Needs App Review for `instagram_manage_messages` plus the app
+switched to Live, both on Meta's side, both already in BACKLOG.md as Leon's. **A student's DM in
+the meantime is not queued anywhere**, which is the part worth saying out loud.
+
+### "What free scheduler would you suggest?"
+
+`docs/CRON-SETUP.md`: **cron-job.org** first (a web form, one-minute granularity, sends custom
+headers, emails on failure), GitHub Actions second (no new account, but queued at low priority and
+disabled after 60 days of repo inactivity). The secret stays header-only — a query-string
+fallback would put it in three logs we cannot rotate it out of.
+
+Also noted there, once: Hobby is a non-commercial plan and this is a business, and Pro's
+minute-level cron makes the whole document unnecessary.
+
+### Also
+
+Two panels and two buttons on Platform health — the frequent run alongside the nightly one, and
+**Send anything that is waiting**, which is both the fix for "this broadcast needs to go now" and
+the way to tell a dead scheduler from a broken job. Manual chapters 10.4, 10.8, 13.8 and 14.4
+rewritten around all of it.
+
+**1552 tests pass** (4 new), lint, typecheck, `db:audit` and the build clean. No migration —
+`cron_runs.job_key` was already free text.

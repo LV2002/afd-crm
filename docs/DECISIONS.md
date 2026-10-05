@@ -3556,3 +3556,79 @@ word that describes the mechanism rather than the job.
 Now open by default and headed **"Who gets it"**, with the four he asked about named in the hint.
 No new capability — the capability was there. **Discoverability is a feature, and a collapsed
 container is a good place to hide one by accident.**
+## 2026-10-05 — Split the schedule by what a job is, not by what it costs
+
+Leon asked whether a once-daily cron means his WhatsApp messages only go out once a day. For two
+of the ten jobs, yes — and he spotted something the nightly-run design had quietly accepted.
+
+**A broadcast and an automation are a queue being drained, not nightly work.** Pressing Send on a
+broadcast queues recipients and marks it `sending`; a sweep does the sending. So "send now" was
+never now, and the manual said it was — a documentation error, now fixed. An automation is worse:
+its *first* step waits for the sweep too, so a lead enquiring at 11am hears nothing until 10:00
+the next morning.
+
+The obvious fix is to run the daily job more often, and it is wrong. Four of the ten talk to Meta
+and Google — ad spend, two retargeting pushes, offline conversions — and 144 runs a day spends
+quota on data that does not move that fast and re-presents conversions already uploaded. Two more
+are cheap but pointless: a fee reminder is a *date*, and sending it at 03:10 because that is when
+a sweep fired is worse than sending it at ten in the morning.
+
+So `/api/cron/frequent` carries three jobs, chosen by what they are:
+
+> **frequent** — draining a queue, or flagging something whose value decays in minutes
+> **daily** — pushing to an external platform, or anything a human reads at a civilised hour
+
+All three are *also* in the daily run. If the frequent schedule is never set up or silently stops,
+the worst case is the delay that exists today — which is the right failure mode for a schedule
+that lives outside the deployment and cannot be guaranteed.
+
+**The secret stays header-only.** The cheapest free schedulers cannot send headers, and the
+temptation was to accept `?secret=` as a fallback. Refused: a secret in a query string lands in
+the hosting access log, the scheduler's own history and any referrer, and a credential you cannot
+rotate out of six logs is worse than a slow broadcast. `docs/CRON-SETUP.md` recommends two
+providers that do send headers, and records this as a rejected option so the next person does not
+re-propose it.
+
+## 2026-10-05 — Three identical symptoms, three different systems
+
+"My inbound WhatsApp is not showing up" has three causes, and from an empty inbox they are
+indistinguishable:
+
+1. **Meta never called** — callback URL or field subscription wrong, on Meta's side.
+2. **Meta called and we refused it** — the stored app secret does not match the sending app, so
+   every delivery 401s.
+3. **Meta called and we stored it** — the problem is the inbox filter or an unregistered number.
+
+The second is the invisible one, *by design*: a rejected delivery is this CRM working correctly,
+so nothing raises an alert. And it is the likely one here, because **WhatsApp keeps its own
+`app_secret` under `provider = 'whatsapp'` while Instagram and Lead Ads share the one under
+`provider = 'meta'`**. Setting the Meta one does not set the WhatsApp one — and the tell is that
+Instagram DMs verify fine while WhatsApp does not, which is exactly what Leon described.
+
+Every one of those deliveries was already written to `webhook_events` before being refused —
+non-negotiable #9 did its job — and **no screen read the table**. So the evidence existed for
+months and was unreachable.
+
+Settings → Platform health now has an **Inbound deliveries** panel: per source, received /
+rejected / failed, last delivery time, last error, with a rejection's reason preferred over a
+downstream one. `tests/webhook-deliveries.spec.ts` pins that preference and runs the hand-written
+SQL, which the type checker cannot see.
+
+This is the fourth entry in this file on the same theme, and the sharpest version of it yet: it is
+not enough to record a degradation — **something has to read the record**. Persisting evidence
+nobody surfaces is the same failure as not persisting it, one step later.
+
+## 2026-10-05 — Instagram showing only staff DMs is Development mode, not a bug
+
+Recorded because it will be asked again and the answer is unsatisfying. Leon sees Instagram DMs
+only from people who run the page. That is Meta delivering messages only from users holding a role
+on the app, which is what Development mode does — identical to the rule already written up for ad
+leads in `docs/ADS-SETUP.md` Part 1.
+
+Nothing in this codebase can change it: `instagram_manage_messages` needs App Review for Advanced
+Access, and the app needs to be Live. **A member of the public's DM in the meantime is not queued
+anywhere** — it is never delivered, so there is nothing to backfill afterwards. Worth saying
+plainly, because "it will catch up once we go live" is the natural assumption and it is false.
+
+Added to the manual's troubleshooting as its own entry rather than left in the setup guide, since
+the person hitting it is looking at an inbox, not at a setup document.

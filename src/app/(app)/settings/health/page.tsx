@@ -18,9 +18,13 @@ import { emailConfigured } from "@/lib/email/send";
 import { resolveAlertRecipients } from "@/lib/errors/alert-recipients";
 import { formatDateIST } from "@/lib/format/date";
 
+import { FrequentRunPanel } from "./frequent-run";
 import { ResolveButton } from "./resolve-button";
+import { RunFrequentButton } from "./run-frequent-button";
 import { RunNightlyButton } from "./run-nightly-button";
 import { TestEmailButton } from "./test-email-button";
+import { recentWebhookDeliveries } from "./webhook-deliveries";
+import { WebhookDeliveriesPanel } from "./webhook-deliveries-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -61,24 +65,37 @@ export default async function HealthPage() {
   // Through the direct client, like everything else on this page: it is
   // read by an admin whose scope the RLS policy would allow anyway, and
   // the rest of the panel's data comes the same way.
-  const [lastRun] = await db
-    .select()
-    .from(cronRuns)
-    .where(eq(cronRuns.jobKey, "daily"))
-    .orderBy(desc(cronRuns.startedAt))
-    .limit(1);
+  const toRun = (row: typeof cronRuns.$inferSelect | undefined): NightlyRun | null =>
+    row
+      ? {
+          startedAt: row.startedAt.toISOString(),
+          durationMs: row.durationMs,
+          ok: row.ok,
+          okCount: row.okCount,
+          failedCount: row.failedCount,
+          skippedCount: row.skippedCount,
+          jobs: (row.jobs ?? []) as NightlyJobRow[],
+        }
+      : null;
 
-  const nightlyRun: NightlyRun | null = lastRun
-    ? {
-        startedAt: lastRun.startedAt.toISOString(),
-        durationMs: lastRun.durationMs,
-        ok: lastRun.ok,
-        okCount: lastRun.okCount,
-        failedCount: lastRun.failedCount,
-        skippedCount: lastRun.skippedCount,
-        jobs: (lastRun.jobs ?? []) as NightlyJobRow[],
-      }
-    : null;
+  const [[lastRun], [lastFrequentRun], webhookDeliveries] = await Promise.all([
+    db
+      .select()
+      .from(cronRuns)
+      .where(eq(cronRuns.jobKey, "daily"))
+      .orderBy(desc(cronRuns.startedAt))
+      .limit(1),
+    db
+      .select()
+      .from(cronRuns)
+      .where(eq(cronRuns.jobKey, "frequent"))
+      .orderBy(desc(cronRuns.startedAt))
+      .limit(1),
+    recentWebhookDeliveries(),
+  ]);
+
+  const nightlyRun = toRun(lastRun);
+  const frequentRun = toRun(lastFrequentRun);
 
   return (
     <div className="flex flex-col gap-6">
@@ -152,6 +169,39 @@ export default async function HealthPage() {
           otherwise has a debugging loop of one attempt per day.
         */}
         <RunNightlyButton />
+      </section>
+
+      {/*
+        Its own section, because the two schedules fail differently and
+        the fix for each is somewhere else: the nightly one is Vercel's
+        and is either set up or not, while this one is an outside
+        scheduler that can be absent, misconfigured, or calling with the
+        wrong secret. A broadcast that has not gone out looks the same in
+        all three cases.
+      */}
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">The frequent run</h2>
+        <p className="-mt-2 text-sm text-muted-foreground">
+          WhatsApp automations, scheduled broadcasts and the response-time sweep. Nothing an
+          automation or a broadcast sends leaves the building until this runs, so how often it
+          runs is how quickly those go out. The nightly run does these too — this is the schedule
+          that makes them prompt rather than next-morning.
+        </p>
+        <FrequentRunPanel run={frequentRun} />
+        <RunFrequentButton />
+      </section>
+
+      {/*
+        Recorded all along in `webhook_events`, including the deliveries
+        that were turned away, and shown on no screen until now. So
+        "inbound WhatsApp is not reaching the inbox" had no in-CRM
+        diagnosis, and the three causes — Meta never called, Meta called
+        and the signature did not match, Meta called and we stored it
+        fine — were indistinguishable from an empty inbox.
+      */}
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">Inbound deliveries</h2>
+        <WebhookDeliveriesPanel sources={webhookDeliveries} />
       </section>
 
       {!configured && (

@@ -522,9 +522,11 @@ names** on the card, one per line, like `phone: mob, contact_no`.
 Every delivery is written down **before** it is processed, so a failure
 is visible rather than silent.
 
-## 13.8 What happens overnight
+## 13.8 What happens on a schedule
 
-One scheduled run, at **10:00 IST**, does all of this in order:
+### The nightly run — 10:00 IST
+
+One scheduled run does all of this, in order:
 
 1. Response-time (SLA) sweep
 2. Temperature recalculation
@@ -538,9 +540,42 @@ One scheduled run, at **10:00 IST**, does all of this in order:
 10. Google offline conversions
 
 Ordered by how fast the value decays. If the run is short of time the
-last jobs are skipped, not failed — tomorrow picks them up. That is why
-a scheduled broadcast set for 3pm goes out the next morning, and why a
-one-day gap in ad spend is normal.
+last jobs are skipped, not failed — tomorrow picks them up. A one-day gap
+in ad spend is normal.
+
+### The frequent run — every ten minutes, if you set it up
+
+Three of those ten are not really overnight work; they are a **queue
+being drained**, and nothing they send leaves the building until a sweep
+picks it up:
+
+- **WhatsApp automations** — every step, the first one included
+- **Scheduled broadcasts** — including the ones sent *now*
+- **Response-time sweep** — a breach found tomorrow is a lead already
+  lost
+
+On the nightly run alone, a broadcast created at 2pm goes out at 10:00
+the next morning, and a new-enquiry automation can take a day to say
+hello. `/api/cron/frequent` runs just those three, and
+**`docs/CRON-SETUP.md`** sets up a free scheduler to call it every ten
+minutes. Five minutes of work, no cost.
+
+It is not part of the deployment, so until somebody sets it up the panel
+on **Settings → Platform health** says so and explains the consequence.
+The nightly run still includes all three, so the worst case is the delay
+you have today.
+
+**What is *not* on a schedule at all:** a counsellor replying in the
+inbox, sending one template to one person, or sending a file. Those go
+out when the button is pressed. Inbound messages are the same — they
+arrive by webhook within seconds, and no cron is involved.
+
+### When it has not run
+
+**Settings → Platform health** has a panel per schedule showing the last
+run, what each job did, and why anything failed. Two buttons there do the
+work immediately: **Run tonight's jobs now** for the full set, and **Send
+anything that is waiting** for the three above.
 
 ---
 

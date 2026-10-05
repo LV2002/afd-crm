@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { runDailyAndRecord } from "@/lib/cron/run-daily";
+import { runFrequentAndRecord } from "@/lib/cron/run-frequent";
 import { composeEmail, emailConfigured, sendEmail } from "@/lib/email/send";
 import { resolveAlertRecipients } from "@/lib/errors/alert-recipients";
 import { resolveError } from "@/lib/errors/capture";
@@ -189,4 +190,57 @@ export async function runNightlyNow(): Promise<HealthState> {
     : {
         error: `${parts.join(", ")}. The panel below names which, and why.`,
       };
+}
+
+
+/**
+ * The frequent run, on demand.
+ *
+ * Separate from the nightly button because the two answer different
+ * questions. This one is what somebody presses when a broadcast has not
+ * gone out and they want it gone out *now* — and because it is the
+ * fastest way to prove an external scheduler would work before setting
+ * one up.
+ */
+export async function runFrequentNow(): Promise<HealthState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "settings.manage")) {
+    return { error: "You don't have permission to do that." };
+  }
+
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    return {
+      error:
+        "CRON_SECRET is not set on this deployment, so nothing scheduled can run at all — an outside scheduler calling the URL would be turned away the same way. Set it in the hosting environment and redeploy.",
+    };
+  }
+
+  const result = await runFrequentAndRecord(
+    new Request("https://cron.local/api/cron/frequent", {
+      headers: { authorization: `Bearer ${secret}` },
+    }),
+  );
+
+  await writeAuditLog(await createClient(), {
+    actorId: user.id,
+    action: "cron.manual_run",
+    entityType: "cron_runs",
+    after: {
+      jobKey: "frequent",
+      runPassed: result.ok,
+      okCount: result.summary.ok,
+      failedCount: result.summary.failed,
+      skippedCount: result.summary.skipped,
+    },
+  });
+
+  revalidatePath("/settings/health");
+
+  const { ok: ran, failed } = result.summary;
+  return result.ok
+    ? {
+        success: `Done in ${Math.round(result.durationMs / 1000)}s — ${ran} ran. Any automation step or broadcast that was due has gone out.`,
+      }
+    : { error: `${ran} ran, ${failed} failed. The panel below names which, and why.` };
 }
