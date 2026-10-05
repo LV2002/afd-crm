@@ -19,6 +19,7 @@ import { resolveAlertRecipients } from "@/lib/errors/alert-recipients";
 import { formatDateIST } from "@/lib/format/date";
 
 import { ResolveButton } from "./resolve-button";
+import { TestEmailButton } from "./test-email-button";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +116,16 @@ export default async function HealthPage() {
             receive the <em>Something broke</em> notification.
           </p>
         )}
+
+        {/*
+          Always offered, including when the box above is green. "Alerts
+          are on" only means two settings are non-empty — a revoked key, a
+          typo in the address, an unverified sending domain and a sandbox
+          that will only deliver to one inbox all read as "on" from here.
+          One real send is the only honest check, and the provider's
+          refusal names which of those it is.
+        */}
+        <TestEmailButton />
       </div>
 
       {/*

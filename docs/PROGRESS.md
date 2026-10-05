@@ -6768,3 +6768,56 @@ provider, which means the request may never have reached it.
 
 **1519 tests pass** (10 new), lint, typecheck, `db:audit` and the production build clean.
 Migration 0086 applied to an already-seeded database and to a clean one.
+
+---
+
+## Session 59 — The Meta setup that was built but never written down, and a way to prove email works
+
+Two things Leon asked for: a step-by-step for getting WhatsApp and Instagram live, and a fix for
+email notifications.
+
+### `docs/WHATSAPP-SETUP.md`
+
+Lead Ads and ad spend had a setup document (`ADS-SETUP.md`); WhatsApp had none, and WhatsApp is
+the larger integration — one institute number, templates, broadcasts, automations, Coexistence
+for counsellors' own phones, plus Instagram DMs riding the same app. All of it was built and
+none of it was switched on, because the Meta-side steps existed only inside component comments
+and this transcript.
+
+The doc is written for Leon, no terminal, and leads with the thing that confuses everyone:
+**one Meta app, three objects, three callback URLs, one App Review submission.** Subscribing the
+Page does nothing for WhatsApp or Instagram, which is exactly why leads arrive today and nothing
+else does.
+
+Three facts in it are the ones that would otherwise be found the expensive way:
+
+- **Registering a number to the Cloud API ends its use in the WhatsApp app, and the chats do not
+  come with it.** A one-way door, named before the step that walks through it. Coexistence is the
+  path that keeps the phone, and it is a different procedure.
+- **Scheduled broadcasts and automations send 100 per daily run, at 10:00 IST.** A 400-person
+  campaign takes four mornings. This is a hosting-plan consequence, and somebody planning a
+  campaign needs it before they plan, not after.
+- **No `CRON_SECRET` means none of that runs at all** — so Part 7 orders the work with that
+  check first. Configuring broadcasts before it is configuring nothing.
+
+### A test-email button
+
+Leon asked how to fix email notifications. The honest answer is two values pasted into the
+hosting dashboard — and then no way to know whether it worked. `emailConfigured()` only means
+both variables are non-empty strings: a revoked key, a typo in the address, an unverified sending
+domain and Resend's sandbox refusing every recipient but one all read as **"Alerts are on."**
+
+**Settings → Platform health → Send a test email** sends one to the resolved alert addresses and
+reports the provider's refusal **verbatim** — "You can only send testing emails to your own email
+address", "domain is not verified", "API key is invalid" each have a different fix, and each is
+unrecoverable from our own wording. The button is offered even when the panel is green, because
+that is the case most worth testing.
+
+### Two stale comments corrected
+
+`whatsapp-broadcast-sweep` claimed it sends each recipient from their own counsellor's number —
+true of a model that was dropped; the code eight lines further down says "One institute number"
+and that is what it does. The same comment block said the cron was "set to Sunday"; `vercel.json`
+has had it daily for some time.
+
+**1519 tests pass**, lint, typecheck, `db:audit` and the production build clean. No schema change.

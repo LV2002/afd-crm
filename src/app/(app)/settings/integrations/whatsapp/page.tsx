@@ -102,6 +102,11 @@ export default async function WhatsAppIntegrationPage() {
         <p className="text-xs text-muted-foreground">
           Prefix with this CRM&apos;s domain — e.g. <code>https://your-domain.com/api/webhooks/whatsapp</code>.
         </p>
+        <p className="text-xs text-muted-foreground">
+          Every step on the Meta side, in order, is in docs/WHATSAPP-SETUP.md — including which
+          webhook fields to subscribe and the one App Review submission that should carry
+          WhatsApp, Instagram and Lead Ads together.
+        </p>
       </section>
 
       <section className="flex flex-col gap-3">
