@@ -21,16 +21,50 @@ import { NextResponse } from "next/server";
  */
 export function requireCronSecret(request: Request): NextResponse | null {
   const secret = process.env.CRON_SECRET;
-  if (!secret) return unauthorized();
+  if (!secret) {
+    return unauthorized(
+      "This deployment has no CRON_SECRET set, so nothing scheduled can run. Set it in the hosting environment and redeploy — environment variables only reach a new build.",
+    );
+  }
 
   const provided = request.headers.get("authorization");
-  if (!provided) return unauthorized();
+  if (!provided) {
+    return unauthorized(
+      "No Authorization header was sent. The scheduler must send `Authorization: Bearer <CRON_SECRET>` — on cron-job.org that is the Advanced tab, under Headers.",
+    );
+  }
 
-  return matches(provided, `Bearer ${secret}`) ? null : unauthorized();
+  if (!provided.startsWith("Bearer ")) {
+    return unauthorized(
+      'The Authorization header is not a bearer token. It must read exactly `Bearer <CRON_SECRET>` — the word Bearer, one space, then the secret.',
+    );
+  }
+
+  return matches(provided, `Bearer ${secret}`)
+    ? null
+    : unauthorized(
+        "The secret sent does not match this deployment's CRON_SECRET. Check for a stale value after a rotation, and for a trailing space or newline from pasting.",
+      );
 }
 
-function unauthorized(): NextResponse {
-  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+/**
+ * Says which of the four it was.
+ *
+ * It used to answer a bare "Unauthorized", and that cost a debugging
+ * round trip the first time a schedule was turned away: "no header at
+ * all" and "header with the wrong secret" are different mistakes in
+ * different places — one is the scheduler's Advanced tab, the other is a
+ * value that went stale after a rotation — and from outside they look
+ * identical.
+ *
+ * This leaks nothing. A caller already knows whether it sent a header and
+ * what it put in it; the one thing never said is the expected value, and
+ * the comparison above stays constant-time. The audience for these
+ * sentences is an administrator reading a failed run in a scheduler's
+ * history, which is exactly where the fix has to be made.
+ */
+function unauthorized(reason: string): NextResponse {
+  return NextResponse.json({ error: "Unauthorized", reason }, { status: 401 });
 }
 
 /**

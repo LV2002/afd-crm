@@ -7576,3 +7576,23 @@ CRM by the payment, so a June click paying in August lands in different months o
 
 **1583 tests pass** (7 new), lint, typecheck, `db:audit` and the build clean. No migration — both
 columns already existed and were simply never populated from a form.
+
+## Session 74 — The 401 now says which 401
+
+Leon's hourly schedule failed every hour with 401 while the ten-minute one ran fine. Both routes
+are identical in their auth and both are deployed, so the cause was that job's configuration — the
+`Authorization` header missing from the second cron-job.org job, which is the Advanced tab rather
+than the one he was last editing.
+
+The diagnosis took a round trip it should not have. `requireCronSecret` returned a bare
+`{"error":"Unauthorized"}` for all four of its refusals, and "no header was sent" versus "the
+secret is stale after a rotation" are different mistakes in different places.
+
+Each refusal now carries a `reason` naming which, and where to fix it. Nothing leaks — the caller
+already knows what it sent, the expected value is never named, the comparison stays constant-time,
+and a test asserts the secret appears in none of the four messages.
+
+`docs/CRON-SETUP.md`'s troubleshooting table now points at that `reason`, and at turning on **Save
+responses in job history** so it can be read.
+
+**1588 tests pass** (5 new), lint, typecheck and the build clean.

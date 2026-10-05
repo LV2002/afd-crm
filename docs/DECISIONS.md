@@ -3879,3 +3879,31 @@ Ads so they cannot double-count, with the admission primary and the form fill ob
 Also recorded there, because it will otherwise be read as a bug: Google counts a conversion on the
 **click's** date, the CRM on the **day it was paid**. A June click that pays in August appears in
 June on one side and August on the other. Compare trends between them, never totals.
+
+## 2026-10-05 — "Unauthorized" is not a diagnosis
+
+The hourly schedule failed 401 every hour while the ten-minute one succeeded. The cause turned out
+to be an `Authorization` header never added to the second job — but from outside, that is
+indistinguishable from a secret gone stale after a rotation, which is a different fix in a
+different place.
+
+`requireCronSecret` answered a bare `{"error":"Unauthorized"}` to all four of its refusals:
+
+- no `CRON_SECRET` on the deployment → set it in the hosting environment **and redeploy**
+- no `Authorization` header at all → the scheduler's Advanced tab
+- a header that is not a bearer token → the `Bearer ` prefix
+- a secret that does not match → repaste it, and check for a trailing newline
+
+Each now says which, in a `reason` field. It leaks nothing: a caller already knows whether it sent
+a header and what was in it, the expected value is never named, and the comparison stays
+constant-time. A test asserts the secret never appears in any of the four.
+
+Worth recording because the instinct that produced the bare message is a good one — say as little
+as possible at a security boundary — and it was applied one step too far. The thing to protect is
+the *secret*, not the *shape of the mistake*. The audience for these sentences is an administrator
+reading a failed run in a scheduler's history, which is exactly where the fix has to be made, and
+giving them nothing there buys no security at all.
+
+Fourth entry on this theme now: the cron that was turned away silently, the webhook deliveries
+recorded but shown on no screen, the escalation rung that did nothing, and this. The shape is
+always the same — **the system knows why, and does not say.**
