@@ -7455,3 +7455,26 @@ scheduler loosens it again rather than leaving a warning that is usually wrong.
 
 Still Leon's to do, and now the only step: create the two jobs on cron-job.org. No merge needed
 first, unlike the GitHub route.
+
+## Session 71 — Explaining the two failures that look like bugs
+
+The cron tiers are live and running on cron-job.org. Two inbound problems remain, and neither is
+fixable in this codebase — so the work was making the CRM say so, where it happens.
+
+**Instagram, Development mode.** Meta delivers DMs only from people holding a role on the app, so
+Leon sees his own and not a student's. The Graph API does not report an app's mode, so the CRM
+cannot detect this and show the banner conditionally. A permanent note on the Instagram tab,
+phrased as a question, was the honest option — including the counter-intuitive part: a public DM
+during Development mode is **not queued anywhere** and nothing catches up when the app goes Live.
+
+**WhatsApp inbound.** The App Secret field's help text now says the thing that matters: it is a
+**separate copy** from the Meta integration's, setting one does not set the other, it is usually
+the same value, and when it is wrong every delivery is refused with a 401 while the inbox stays
+empty. Settings → Platform health → Inbound deliveries — shipped in #70 — is what distinguishes
+that from Meta never calling.
+
+Both are instances of the same rule, now in DECISIONS.md: when a platform hides the state that
+explains a symptom, write the explanation into the screen where the symptom appears.
+
+**1560 tests pass**, lint, typecheck and the build clean. (A full-suite run mid-session showed 38
+files failing; the container's Postgres had stopped, not the change.)

@@ -3728,3 +3728,31 @@ than 15, because a panel that cries wolf every afternoon is ignored by the time 
 
 cron-job.org stays documented as the upgrade for anybody who wants the ten-minute tier to be
 genuinely ten minutes. It cannot be committed to a repository, which is exactly why it is second.
+
+## 2026-10-05 — Say the thing the Graph API will not tell you
+
+Leon, with the cron work done: Instagram still shows only his own DMs, because he is an admin of
+the Page. He had already been told why — Development mode — and still ended up back here, which
+makes it a product problem rather than a support problem.
+
+The CRM cannot detect it. Meta's Graph API does not report an app's mode or its review status in
+any form this code can read, so there is no honest way to show the banner only when it applies.
+The options were a standing note or nothing, and "nothing" has now cost two rounds of
+conversation and an afternoon of doubting an integration that was working correctly.
+
+So the Instagram tab carries a permanent note, phrased as a question — *"Only seeing messages
+from people who manage the Page?"* — which reads as useful when it applies and as ignorable
+context when it does not. It also states the part that is counter-intuitive and expensive to
+assume wrong: a member of the public's DM during Development mode is **not queued**. Nothing
+catches up when the app goes Live.
+
+The general rule, which has come up twice now: **when a platform hides the state that explains a
+symptom, write the explanation into the screen where the symptom appears.** The alternative is a
+setup document nobody rereads at the moment they are confused.
+
+Same move on the WhatsApp credentials form. Its App Secret field said the secret was "the same
+mechanism as the Meta Lead Ads integration", which is true and useless — the thing worth saying
+is that it is a **separate copy**, that filling in the Meta one does not fill in this one, that
+it is usually the same value, and that when it is wrong every inbound message is refused with a
+401 while the inbox simply stays empty. That is the live suspicion for this instance: Instagram
+verifies, WhatsApp does not, and the two read their secret from different places.
