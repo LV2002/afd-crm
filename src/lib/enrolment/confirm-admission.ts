@@ -31,6 +31,19 @@ export interface ConfirmAdmissionResult {
   enrolmentId: string;
   totalFeePaise: number;
   netFeePaise: number;
+  /**
+   * The stage the lead was moved into, or null when there was none to
+   * move it to.
+   *
+   * Reported rather than assumed. This move has always been part of
+   * confirming an admission, and it has always been conditional on an
+   * active `stage_type = 'won'` stage existing — so an institute that
+   * renamed its stages, or built its pipeline from scratch and left every
+   * stage as "normal", got an admission recorded and a lead still sitting
+   * at Demo Scheduled, with nothing anywhere saying why. The caller needs
+   * to know which happened in order to say so.
+   */
+  wonStageId: string | null;
 }
 
 /**
@@ -132,5 +145,10 @@ export async function confirmAdmission(
     await tx.update(leads).set({ stageId: wonStage.id }).where(eq(leads.id, input.leadId));
   }
 
-  return { enrolmentId: enrolment.id, totalFeePaise, netFeePaise };
+  return {
+    enrolmentId: enrolment.id,
+    totalFeePaise,
+    netFeePaise,
+    wonStageId: wonStage?.id ?? null,
+  };
 }

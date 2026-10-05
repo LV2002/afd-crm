@@ -36,6 +36,18 @@ export default async function PipelineStagesSettingsPage() {
 
   const rows = stages ?? [];
 
+  /*
+    Which stage means "they enrolled", and is there exactly one?
+
+    Confirming an admission moves the lead into the active stage typed
+    `won`, and does nothing at all when there isn't one — which is how an
+    institute ends up with enrolled students still sitting at Demo
+    Scheduled on the board. The type was a word in a dropdown with no
+    stated consequence, so this says the consequence on the screen where
+    the word is chosen.
+  */
+  const wonStages = rows.filter((stage) => stage.stage_type === "won" && stage.is_active);
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -51,6 +63,29 @@ export default async function PipelineStagesSettingsPage() {
           </Link>
         </Button>
       </div>
+      {wonStages.length === 1 ? (
+        <p className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+          Confirming an admission moves the lead to <strong>{wonStages[0].name}</strong>{" "}
+          automatically, because that stage is typed <Badge variant="outline">won</Badge>.
+        </p>
+      ) : wonStages.length === 0 ? (
+        <p className="rounded-lg border border-warning/40 bg-warning-subtle px-4 py-3 text-sm">
+          <strong>No stage is marked as the admission stage.</strong> When a counsellor confirms
+          an admission the lead keeps whatever stage it had, so the board shows enrolled students
+          still sitting in the funnel. Open the stage that means they have enrolled and set its
+          type to <Badge variant="outline">won</Badge>.
+        </p>
+      ) : (
+        <p className="rounded-lg border border-warning/40 bg-warning-subtle px-4 py-3 text-sm">
+          <strong>
+            {wonStages.length} stages are typed <Badge variant="outline">won</Badge>
+          </strong>{" "}
+          ({wonStages.map((stage) => stage.name).join(", ")}). A confirmed admission moves the
+          lead to the first of them in this order, which is unlikely to be what anybody intends.
+          Leave one as won and give the others another type.
+        </p>
+      )}
+
       <Table>
         <TableHeader>
           <TableRow>

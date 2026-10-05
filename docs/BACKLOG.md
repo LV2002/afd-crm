@@ -30,38 +30,39 @@ missing message, not a delayed one.
 
 ---
 
-## Asked for, not yet started — Leon, 2026-10-05
+## Meta, WhatsApp and Instagram — Leon's, in Meta's dashboard
 
-Three requests, parked while the Meta and WhatsApp integrations are finished. He will say
-"come back" when he wants them picked up.
+Not code. Every one of these is a step only Leon can take, and the CRM side of each is
+already built and waiting. Full walkthroughs in `docs/WHATSAPP-SETUP.md` and
+`docs/ADS-SETUP.md`.
 
-### A. Marking an admission should move the lead's stage
+**Done so far:** Lead Ads, Meta ad spend, the nightly run, email alerts, and Instagram DM
+delivery (the Page is subscribed to `messages` with a token carrying `pages_messaging`).
 
-When a counsellor marks an admission, the lead's stage should move to **Admission taken**
-automatically. Today the stage is left wherever it was, so the counsellor has to remember a
-second action and the pipeline shows leads sitting at Demo-Scheduled who have already enrolled.
+### i. Business verification — start first, it gates the rest
+Business Settings → Security Centre. Meta wants documents proving AFD India is a real
+registered business, with the name and address matching exactly. Days to weeks, and every
+permission below waits on it.
 
-Notes for whoever picks this up: the first gate is `sales_to_accounts_at` (CLAUDE.md, the
-lifecycle chain), and the stage must be looked up rather than hardcoded — stages are
-`pipeline_stages` rows an admin can rename, so match on stage **type** or an explicit
-"this is the won stage" marker, never on the label "Admission taken". Check whether
-`pipeline_stages` already carries a type that means won; if it does not, that is part of the
-work. Writes an `audit_log` row and fires the existing `lead.stage_changed` notification like
-any other stage move.
+### ii. App Review — one submission, not three
+`whatsapp_business_messaging`, `whatsapp_business_management`, `instagram_manage_messages`,
+`leads_retrieval`, the three `pages_` permissions, `pages_messaging` and `ads_read` all go on
+the same submission. Until it clears, Instagram DMs arrive only from people with a role on the
+Meta app — enough to test with, not enough to run on. A twenty-second screen recording of the
+CRM using the permission is the single most effective thing to attach.
 
-### B. The CRM is not usable on a phone
+### iii. WhatsApp — the whole of Part 1, nothing started
+Add WhatsApp to the existing Meta app, pick a number that is not a counsellor's (registering
+one to the Cloud API ends its use in the WhatsApp app and the chats do not follow), generate a
+System User token, paste five values into Settings → Integrations → WhatsApp, subscribe the
+`messages` field, register the number, send a test. Coexistence for counsellors' own phones is
+Part 4 and comes after one number is proven.
 
-It must be responsive at every screen size. **Navigation is the worst of it and does not work
-on mobile at all** — that is the first thing to fix, before any individual screen.
-
-Everything else follows: lead lists, the detail page, pipeline, Insights, Settings. Tables are
-the obvious problem and the kanban is the hard one. Counsellors work from phones, so this is
-closer to a correctness bug than a polish task.
-
-### C. The pipeline widget on the dashboard is half-width
-
-It should run the full width of the dashboard. At half width it is out of proportion with
-everything around it and the funnel is squashed.
+### iv. Message templates
+Submit the three or four the institute actually uses, from WhatsApp → Templates. Template
+approval and App Review are separate queues and both take days, so start them together.
+Categories matter: a fee reminder is Utility, a discount offer is Marketing, and marketing
+dressed as utility is the most common rejection.
 
 ---
 

@@ -504,8 +504,46 @@ async function runConfirmAdmission(
     actorId: user.id,
   });
 
+  /*
+    The stage move is part of confirming an admission, and until now it
+    was the only part that left no trace.
+
+    `confirmAdmission()` moves the lead into the stage marked Won, inside
+    the same transaction. But it wrote no audit row, so the lead's own
+    history showed an enrolment appearing and the stage changing by
+    itself; and it started no automations, so a sequence set up to fire on
+    "entered Admission Confirmed" never fired for the one event that
+    actually puts a lead there. Both are done here, after the commit, for
+    the same reason the notification is: they must describe an admission
+    that really happened.
+  */
+  if (result.wonStageId) {
+    await writeAuditLog(supabase, {
+      actorId: user.id,
+      action: "lead.stage_change",
+      entityType: "leads",
+      entityId: leadId,
+      before: { stage_id: lead.stageId },
+      after: { stage_id: result.wonStageId, reason: "admission confirmed" },
+    });
+
+    await startFlows("stage_entered", { leadId, stageId: result.wonStageId });
+  }
+
   revalidatePath(`/leads/${leadId}`);
-  return { success: "Admission confirmed." };
+  revalidatePath("/pipeline");
+
+  // Said plainly when it could not happen. An admission is recorded
+  // either way — refusing it over a pipeline setting would be absurd —
+  // but a counsellor who is not told will keep moving the lead by hand
+  // forever, and an administrator will never learn that one stage needs
+  // its type set.
+  return result.wonStageId
+    ? { success: "Admission confirmed, and the lead moved to the admission stage." }
+    : {
+        success:
+          "Admission confirmed. The lead's stage was left as it was: no pipeline stage is marked as the admission stage, so there was nowhere to move it to. An admin can set one under Settings → Pipeline Stages by giving that stage the type \"Won\".",
+      };
 }
 
 /**

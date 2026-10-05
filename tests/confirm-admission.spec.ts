@@ -102,6 +102,44 @@ describe("confirmAdmission", () => {
 
     const [leadRow] = await db.select().from(leads).where(eq(leads.id, leadId));
     expect(leadRow.stageId).toBe(wonStageId);
+    // Reported, not just done. The caller writes the audit row, starts the
+    // automations and tells the counsellor on the strength of this.
+    expect(result.wonStageId).toBe(wonStageId);
+  });
+
+  it("reports no won stage rather than silently leaving the lead where it was", async () => {
+    // The real failure this reporting exists for: an institute whose
+    // stages were built by hand, with none of them typed `won`. The
+    // admission must still be recorded — refusing one over a pipeline
+    // setting would be absurd — but the caller has to be able to say the
+    // stage did not move, which it could not when this returned nothing.
+    const leadId = await makeLead("nowon", "+919847200199");
+
+    const [leadBefore] = await db.select().from(leads).where(eq(leads.id, leadId));
+    const stageBefore = leadBefore.stageId;
+
+    await db.update(pipelineStages).set({ isActive: false }).where(eq(pipelineStages.stageType, "won"));
+    try {
+      const result = await db.transaction((tx) =>
+        confirmAdmission(tx, {
+          leadId,
+          course: testName("nowon"),
+          centerId,
+          mode: "offline",
+          academicYear: "2026-27",
+          totalFeePaiseOverride: 1000000,
+          confirmedBy: null,
+        }),
+      );
+
+      expect(result.enrolmentId).toBeTruthy();
+      expect(result.wonStageId).toBeNull();
+
+      const [leadRow] = await db.select().from(leads).where(eq(leads.id, leadId));
+      expect(leadRow.stageId).toBe(stageBefore);
+    } finally {
+      await db.update(pipelineStages).set({ isActive: true }).where(eq(pipelineStages.stageType, "won"));
+    }
   });
 
   it("uses totalFeePaiseOverride when no fee structure matches", async () => {

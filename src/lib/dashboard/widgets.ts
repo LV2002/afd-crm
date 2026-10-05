@@ -29,6 +29,21 @@ export interface WidgetDefinition {
    * because nothing is ever assigned to an admin directly.
    */
   requireScope?: "own";
+  /**
+   * How much of the dashboard's width this widget wants.
+   *
+   * The grid is two columns from `lg` up and every widget took one of
+   * them, which is right for a card of four numbers and wrong for a card
+   * of eight: the pipeline widget's two rows of four tiles were squeezed
+   * into half a page while the funnel they describe is the widest thing
+   * on the screen. A widget says what it needs here rather than setting
+   * its own column span, so the dashboard keeps deciding the layout and
+   * one place lists which widgets are wide.
+   *
+   * Nothing changes below `lg`, where the grid is a single column
+   * regardless.
+   */
+  width?: "half" | "full";
 }
 
 export const DASHBOARD_WIDGETS: WidgetDefinition[] = [
@@ -56,6 +71,10 @@ export const DASHBOARD_WIDGETS: WidgetDefinition[] = [
     name: "Centre pipeline",
     description: "New leads this month, what is in the funnel, SLA breaches, admissions.",
     permission: "lead.assign",
+    // Eight figures in two rows of four. At half width the tiles wrap to
+    // two columns and the card becomes a tall narrow ladder of numbers
+    // next to a short one, which is what "disproportionate" meant.
+    width: "full",
   },
   {
     // `report.center` rather than `lead.assign`: this card is one person's
