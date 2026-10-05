@@ -6486,3 +6486,70 @@ migration's inserts correctly no-op and the seed does the work) — the 0081 les
 rather than remembered.
 
 **1436 tests pass**, lint, typecheck and `db:audit` clean.
+
+---
+
+## Session 53 — The gap audit, and the refund nobody could record
+
+Leon asked what other notifications were missing. Answering it properly meant listing
+every audited mutation — **eighty-six** of them — and asking which changes a fact another
+department depends on and cannot see for itself. That sweep found something bigger than a
+missing notification.
+
+### The refund that was never built
+
+**`payment.refund` was granted to accounts and administrators, and there was no screen.**
+`payments` has had `direction: 'debit'`, `reverses_payment_id` and `reversal_reason` since
+Phase 4. The receipt page has printed a **Refund / Reversal Note** for just as long. The
+manual's §7.6 described reversals and refunds to staff. Nothing could write the row.
+
+Worse: the fee-floor guard added in Session 52 says *"record a refund first"*, pointing at
+a screen that did not exist.
+
+**`reversePayment()`** writes it now, and insists on the distinction the accounting
+depends on. A **reversal** says the money never arrived, so the cash entry it created is
+undone at its original date. A **refund** says it did arrive and has gone back, so the
+original stands and a new outgoing entry is posted today. Both take the same amount off
+the student's balance; collapsing them would misstate the bank reconciliation on two
+separate days in opposite directions.
+
+It does not undo Gate 2 — a student handed to academics may have sat in a class, and a
+gate is a thing that happened, not a thing that is currently true. It does not issue a
+receipt number, because "receipt #412" must not sometimes mean money out. And a payment
+can be undone exactly once, enforced in the writer.
+
+**Eleven integration tests**, including both ledger shapes, a legacy payment with no cash
+entry, and the double-reversal refusal.
+
+### A bug introduced yesterday, caught by the same sweep
+
+`lead.created` fires per lead, and the CSV import calls `resolveOrCreateLead()` per row —
+so a two-hundred-row spreadsheet would have fired two hundred notices at a centre head.
+`suppressArrivalNotice` turns the per-row notice off for imports, and one
+**`lead.imported`** summary with the counts goes out after the run. `lead.assigned` is
+not suppressed: that reaches the counsellor who now owns a specific person.
+
+Worth keeping as a rule: **ask what every new event does when its action runs two hundred
+times in a loop.** All of them have a bulk path somewhere.
+
+### Two more events
+
+**Payment reversed or refunded** — accounts, the centre head and the counsellor who told
+the family their fee was settled. Money going back out was the one financial movement
+nobody outside accounts could see coming.
+
+**Leads imported from a file** — one line, with how many were created, matched and
+skipped.
+
+Eighteen events now.
+
+### Still unnotified, deliberately or pending a decision
+
+Sixty-odd audited mutations remain silent, nearly all of them configuration an
+administrator makes and reviews in the audit log. The handful that are judgement calls —
+a lead merged, a lead deleted, a lead exported, a lead marked Lost, a fee structure
+changed, a target set, and a platform failure reaching the bell rather than only email —
+are listed for Leon rather than guessed at, because each one trades noise against
+oversight and that is his call.
+
+**1449 tests pass**, lint, typecheck and the production build clean.

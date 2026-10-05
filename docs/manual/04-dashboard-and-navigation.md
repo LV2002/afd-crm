@@ -73,15 +73,15 @@ Some events also send an email, if email is configured and your role is
 set to receive that event.
 
 ### What you get told about
-Sixteen things can notify somebody, and which of them reach *you*
+Eighteen things can notify somebody, and which of them reach *you*
 depends on your role and on what an administrator has configured
 (Chapter 13). The ones most people see:
 
 | You are | You hear about |
 |---|---|
-| A counsellor | A lead assigned to you · a WhatsApp reply from one of your leads · an SLA breach on one of your leads · a discount you asked for being approved or rejected · a payment on an admission you sold · the course, batch or fee of one of your students changing |
+| A counsellor | A lead assigned to you · a WhatsApp reply from one of your leads · an SLA breach on one of your leads · a discount you asked for being approved or rejected · a payment on an admission you sold, or one being reversed · the course, batch or fee of one of your students changing |
 | A centre head | Everything above for your centre, plus every new lead arriving — including ones no rule could assign · SLA escalations · admissions confirmed and dropped · discounts waiting on you |
-| Accounts | Admissions confirmed and waiting for a fee · payments recorded · instalments overdue · a fee or a course changing |
+| Accounts | Admissions confirmed and waiting for a fee · payments recorded · payments reversed or refunded · instalments overdue · a fee or a course changing |
 | Academics | A student joining, ready to onboard · a student moving course or batch · an admission dropped |
 
 Two rules hold everywhere. **You are never told about your own action** —

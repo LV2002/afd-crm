@@ -108,6 +108,30 @@ quiet: accounts, the centre head and the counsellor who sold the
 admission are all told the old figure and the new one. Nothing in the
 payments ledger is touched — what was received was received.
 
+### Procedure: print the instalment agreement
+1. Open the lead, scroll to **Fees & instalment agreement**.
+2. Open the agreement.
+3. Print or save as PDF from your browser.
+4. Have the family sign it, then upload the signed copy to
+   **Documents** so the panel shows a **Signed agreement**.
+
+The printed agreement takes the course and the terms **from the
+admission**, not from the lead's enquiry details — so it says what was
+actually agreed.
+
+[Screenshot: The printed instalment agreement]
+
+## 7.3 The Admissions screen
+
+**Admissions** in the sidebar (`payment.read`). Every confirmed
+admission and where its money has got to.
+
+Columns: **Student**, **Course**, **Centre**, **Confirmed**, **Net fee**,
+**Paid**, **Status**. Dropped admissions are marked.
+
+The red badge counts admissions confirmed with **no first payment yet** —
+the queue accounts should be working down.
+
 ## 7.3a Changing the course or batch
 
 A student who enquired about Foundation and joined DWO, or who moved from
@@ -149,30 +173,6 @@ agreed. Accounts are notified so they can adjust it deliberately.
 - *Looking for the course on the student edit form.* It is shown there
   but not editable, because editing it in one place used to leave the
   admission record saying something else.
-
-### Procedure: print the instalment agreement
-1. Open the lead, scroll to **Fees & instalment agreement**.
-2. Open the agreement.
-3. Print or save as PDF from your browser.
-4. Have the family sign it, then upload the signed copy to
-   **Documents** so the panel shows a **Signed agreement**.
-
-The printed agreement takes the course and the terms **from the
-admission**, not from the lead's enquiry details — so it says what was
-actually agreed.
-
-[Screenshot: The printed instalment agreement]
-
-## 7.3 The Admissions screen
-
-**Admissions** in the sidebar (`payment.read`). Every confirmed
-admission and where its money has got to.
-
-Columns: **Student**, **Course**, **Centre**, **Confirmed**, **Net fee**,
-**Paid**, **Status**. Dropped admissions are marked.
-
-The red badge counts admissions confirmed with **no first payment yet** —
-the queue accounts should be working down.
 
 ## 7.4 Recording a payment
 
@@ -238,12 +238,54 @@ rather than a counsellor having to say "I need to ring my manager".
 **Nothing financial is ever edited or deleted.** A correction is a new
 entry that points at the original.
 
-- A **reversal** cancels a payment recorded in error.
-- A **refund** returns money to the family.
+- A **reversal** cancels a payment recorded in error. The money never
+  arrived, so the institute's cash for that day is put back to what it
+  really was.
+- A **refund** returns money the institute did receive. The original
+  payment stands, because it was true; the money leaving is recorded as
+  going out **today**, because that is when it left.
+
+The difference matters to one person — whoever reconciles the bank
+statement — and the form makes you choose, because nobody volunteers it.
 
 Both need `payment.refund` (Accounts and administrators). Both leave the
 original payment visible, with the correction beside it, so the history
 of what happened is readable a year later.
+
+**Procedure: reverse or refund a payment**
+
+**Goal** — undo a payment, correctly.
+
+**Before you start** — `payment.refund`. You need the reason in words:
+it prints on the note the family gets.
+
+**Steps**
+1. Open **Admissions** → the student → **Reverse or refund a payment**.
+2. **Payment** — pick it from the list. Payments already undone are not
+   offered.
+3. **What happened** — *Reversal* or *Refund*, as above.
+4. For a refund: **Paid back by** (cash, UPI, NEFT…) and **Paid from**
+   (which account the money leaves).
+5. **Reason** — written for the family, not for the file.
+6. **Reverse payment** / **Record refund**, then confirm.
+
+**What you should see**
+- A new line in the **Payment ledger**, in the opposite direction.
+- **Paid** goes down and **Balance** goes back up by the same amount.
+- Accounts, the centre head and the student's counsellor are notified.
+- Opening that line's note prints a **Refund / Reversal Note**.
+
+**Common mistakes**
+- *Reversing when you mean refund.* A reversal says the money never
+  arrived. If it arrived and went back, it is a refund, and recording it
+  as a reversal misstates the bank balance on two different days.
+- *Trying to undo the same payment twice.* Refused. A payment can be
+  undone once; if the amount was wrong, reverse it and record the right
+  one.
+- *Expecting the student record to disappear.* It does not. Reversing a
+  first payment does not un-enrol anybody — they were handed to academics
+  and may have sat in a class. A student actually leaving is **dropped**
+  (7.8), which is a separate thing with its own reason.
 
 ## 7.7 Receipts
 

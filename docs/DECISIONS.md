@@ -2966,3 +2966,66 @@ And `tests/notification-emit-sites.spec.ts` asserts that every key in the catalo
 real `notify()` call behind it. The header of `events.ts` has always stated that rule;
 nothing checked it, which is how the SLA escalation ladder stayed configurable and inert
 for months.
+
+## 2026-10-05 — The refund that was specified, permissioned, printable and unbuildable
+
+Leon asked what other notifications were missing. The honest way to answer was to list
+every audited mutation — eighty-six of them — and ask which changes a fact another
+department depends on. That sweep found something bigger than a missing notification.
+
+**`payment.refund` was granted to accounts and administrators, and there was no screen.**
+`payments` has had `direction: 'debit'`, `reverses_payment_id` and `reversal_reason` since
+Phase 4. The receipt page has rendered a "Refund / Reversal Note" for a debit payment for
+just as long. The manual's §7.6 told staff how reversals and refunds work. Nothing in the
+codebase could write the row. The one correction an append-only ledger explicitly allows
+was the one thing nobody could do — and the fee-floor error added an hour earlier
+("record a refund first") pointed at a screen that did not exist.
+
+### Reversal and refund are different on the cash side
+
+A **reversal** says the payment never happened: wrong student, wrong amount, entered
+twice. The money never arrived, so the cash entry it created was wrong too, and is
+reversed at its original date — the institute's balance for that day goes back to what it
+really was.
+
+A **refund** says the payment did happen and the money is going back. The original entry
+stands, because it was true. A new outgoing entry is posted *today*, because that is when
+the cash left.
+
+Both insert the same debit against the enrolment, so the student's balance is right either
+way. Collapsing them would misstate the bank reconciliation on two separate days, in
+opposite directions — which is why the form makes you choose rather than guessing from
+context.
+
+### What it deliberately does not do
+
+**It does not undo Gate 2.** Reversing a first payment does not delete the `students` row
+or clear `accounts_to_academics_at`. They were handed to academics, who may well have
+taught them by now; a gate is a thing that happened, not a thing that is currently true. A
+student actually leaving is marked dropped, which is its own action with its own reason.
+
+**It does not issue a receipt number.** The reversal is numbered on the ledger side
+(`txn_no`) and the note prints without one. Putting refunds into the same gapless sequence
+as fee receipts would make "receipt #412" sometimes mean money in and sometimes money out.
+
+**One reversal per payment**, enforced in the writer rather than the form. Two people on
+the same screen both pressing the button would otherwise take the balance twice as far
+down as it should go, and the ledger would have no way to say which was wrong.
+
+## 2026-10-05 — An import is one notification, not two hundred
+
+Adding `lead.created` an hour earlier introduced a bug worth recording rather than quietly
+fixing: the CSV import calls `resolveOrCreateLead()` per row, so a two-hundred-row
+spreadsheet would have fired two hundred arrival notices at the centre head.
+
+That is not visibility. It is the one person meant to be watching intake losing the next
+real lead underneath a wall of their own import.
+
+So `ResolveLeadInput` gained `suppressArrivalNotice`, set by the import and nothing else,
+and the import fires one `lead.imported` summary with the counts after the run.
+`lead.assigned` is NOT suppressed: that goes to the counsellor who now owns a specific
+person and has to ring them, which is worth knowing however the lead arrived.
+
+The general shape is worth keeping in mind for every future event: **ask what happens when
+the action is performed two hundred times in a loop.** Every one of these events has a
+bulk path somewhere.

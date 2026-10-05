@@ -25,6 +25,7 @@ import { getSignedAgreement } from "@/lib/storage/attachments";
 
 import { DropAdmissionForm } from "./drop-admission-form";
 import { RecordPaymentForm } from "./record-payment-form";
+import { ReversePaymentForm } from "./reverse-payment-form";
 
 interface EnrolmentDetail {
   id: string;
@@ -61,6 +62,7 @@ interface PaymentRow {
   reference: string | null;
   received_at: string;
   reversal_reason: string | null;
+  reverses_payment_id: string | null;
 }
 
 export default async function EnrolmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -100,7 +102,9 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
   const [{ data: paymentRows }, { data: receiptRows }] = await Promise.all([
     supabase
       .from("payments")
-      .select("id, amount_paise, direction, method, reference, received_at, reversal_reason")
+      .select(
+        "id, amount_paise, direction, method, reference, received_at, reversal_reason, reverses_payment_id",
+      )
       .eq("enrolment_id", id)
       .order("received_at", { ascending: false })
       .returns<PaymentRow[]>(),
@@ -113,6 +117,21 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
 
   const receiptNoByPaymentId = new Map((receiptRows ?? []).map((r) => [r.payment_id, r.receipt_no]));
   const payments = paymentRows ?? [];
+
+  // Credits that nothing has been posted against yet. A payment can be
+  // undone once; offering an already-reversed one in the picker would
+  // only produce an error the person could have been spared.
+  const reversedIds = new Set(
+    payments.map((p) => p.reverses_payment_id).filter((id): id is string => id !== null),
+  );
+  const reversiblePayments = payments
+    .filter((p) => p.direction === "credit" && !reversedIds.has(p.id))
+    .map((p) => ({
+      id: p.id,
+      amountPaise: p.amount_paise,
+      receivedOn: formatDateIST(p.received_at, "d MMM yyyy"),
+      receiptNo: receiptNoByPaymentId.get(p.id) ?? null,
+    }));
   const paidPaise = payments.reduce(
     (sum, p) => sum + (p.direction === "credit" ? p.amount_paise : -p.amount_paise),
     0,
@@ -131,6 +150,7 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
   const canRecordPayment = can(user, "payment.record");
   const canRevealPhone = can(user, "lead.reveal_phone");
   const canDrop = can(user, "enrolment.drop");
+  const canRefund = can(user, "payment.refund");
   const canChangePlan = can(user, "enrolment.change_plan");
   // Accounts hold this now, so the fee panel is on their own screen
   // rather than only on the lead — see docs/DECISIONS.md. The read-only
@@ -347,6 +367,13 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
               hasSignedAgreement={signedAgreement !== null}
               printHref={`/leads/${enrolment.lead_id}/instalment-agreement`}
               promos={feePlan.promos}
+            />
+          )}
+          {canRefund && (
+            <ReversePaymentForm
+              enrolmentId={id}
+              payments={reversiblePayments}
+              accounts={financeAccounts}
             />
           )}
           {canDrop && <DropAdmissionForm enrolmentId={id} isDropped={isDropped} />}

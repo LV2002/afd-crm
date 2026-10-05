@@ -163,8 +163,8 @@
 <ol>
 <li><a href="#7-1-confirming-an-admission-gate-1">7.1 Confirming an admission (Gate 1)</a></li>
 <li><a href="#7-2-the-fee-plan-and-instalments">7.2 The fee plan and instalments</a></li>
-<li><a href="#7-3a-changing-the-course-or-batch">7.3a Changing the course or batch</a></li>
 <li><a href="#7-3-the-admissions-screen">7.3 The Admissions screen</a></li>
+<li><a href="#7-3a-changing-the-course-or-batch">7.3a Changing the course or batch</a></li>
 <li><a href="#7-4-recording-a-payment">7.4 Recording a payment</a></li>
 <li><a href="#7-5-discounts-and-approval">7.5 Discounts and approval</a></li>
 <li><a href="#7-6-refunds-and-reversals">7.6 Refunds and reversals</a></li>
@@ -582,13 +582,13 @@
 <h3 id="where-they-appear">Where they appear</h3>
 <p>In the bell at the top of the screen, and in full at <strong>Notifications</strong>. Some events also send an email, if email is configured and your role is set to receive that event.</p>
 <h3 id="what-you-get-told-about">What you get told about</h3>
-<p>Sixteen things can notify somebody, and which of them reach <em>you</em> depends on your role and on what an administrator has configured (Chapter 13). The ones most people see:</p>
+<p>Eighteen things can notify somebody, and which of them reach <em>you</em> depends on your role and on what an administrator has configured (Chapter 13). The ones most people see:</p>
 <table><thead>
 <tr><th>You are</th><th>You hear about</th></tr>
 </thead><tbody>
-<tr><td>A counsellor</td><td>A lead assigned to you · a WhatsApp reply from one of your leads · an SLA breach on one of your leads · a discount you asked for being approved or rejected · a payment on an admission you sold · the course, batch or fee of one of your students changing</td></tr>
+<tr><td>A counsellor</td><td>A lead assigned to you · a WhatsApp reply from one of your leads · an SLA breach on one of your leads · a discount you asked for being approved or rejected · a payment on an admission you sold, or one being reversed · the course, batch or fee of one of your students changing</td></tr>
 <tr><td>A centre head</td><td>Everything above for your centre, plus every new lead arriving — including ones no rule could assign · SLA escalations · admissions confirmed and dropped · discounts waiting on you</td></tr>
-<tr><td>Accounts</td><td>Admissions confirmed and waiting for a fee · payments recorded · instalments overdue · a fee or a course changing</td></tr>
+<tr><td>Accounts</td><td>Admissions confirmed and waiting for a fee · payments recorded · payments reversed or refunded · instalments overdue · a fee or a course changing</td></tr>
 <tr><td>Academics</td><td>A student joining, ready to onboard · a student moving course or batch · an admission dropped</td></tr>
 </tbody></table>
 <p>Two rules hold everywhere. <strong>You are never told about your own action</strong> — confirming an admission does not notify you that it was confirmed. And <strong>you are never told about a lead you could not open</strong>: a Kannur centre head hears nothing about Kochi.</p>
@@ -1002,6 +1002,19 @@
 <li><em>Setting the fee below what has already been paid.</em> Refused, and the message says how much has been received. The institute is holding more than the student owes, which is a refund — record that first.</li>
 </ul>
 <p><strong>Changing a fee later.</strong> The same panel does it, and the change is not quiet: accounts, the centre head and the counsellor who sold the admission are all told the old figure and the new one. Nothing in the payments ledger is touched — what was received was received.</p>
+<h3 id="procedure-print-the-instalment-agreement">Procedure: print the instalment agreement</h3>
+<ol>
+<li>Open the lead, scroll to <strong>Fees &amp; instalment agreement</strong>.</li>
+<li>Open the agreement.</li>
+<li>Print or save as PDF from your browser.</li>
+<li>Have the family sign it, then upload the signed copy to <strong>Documents</strong> so the panel shows a <strong>Signed agreement</strong>.</li>
+</ol>
+<p>The printed agreement takes the course and the terms <strong>from the admission</strong>, not from the lead's enquiry details — so it says what was actually agreed.</p>
+<p>[Screenshot: The printed instalment agreement]</p>
+<h2 id="7-3-the-admissions-screen">7.3 The Admissions screen</h2>
+<p><strong>Admissions</strong> in the sidebar (<code>payment.read</code>). Every confirmed admission and where its money has got to.</p>
+<p>Columns: <strong>Student</strong>, <strong>Course</strong>, <strong>Centre</strong>, <strong>Confirmed</strong>, <strong>Net fee</strong>, <strong>Paid</strong>, <strong>Status</strong>. Dropped admissions are marked.</p>
+<p>The red badge counts admissions confirmed with <strong>no first payment yet</strong> — the queue accounts should be working down.</p>
 <h2 id="7-3a-changing-the-course-or-batch">7.3a Changing the course or batch</h2>
 <p>A student who enquired about Foundation and joined DWO, or who moved from the Tuesday batch to the Thursday one, is ordinary — and until recently the admission record could not say so.</p>
 <p><strong>Course &amp; batch</strong> appears on three screens, because three different people change it: the lead (the counsellor), the admission (accounts) and the student's own page (academics). All three do the same thing.</p>
@@ -1023,19 +1036,6 @@
 <li><em>Trying to change the course of a student who has dropped.</em> Refused — restore the admission first.</li>
 <li><em>Looking for the course on the student edit form.</em> It is shown there but not editable, because editing it in one place used to leave the admission record saying something else.</li>
 </ul>
-<h3 id="procedure-print-the-instalment-agreement">Procedure: print the instalment agreement</h3>
-<ol>
-<li>Open the lead, scroll to <strong>Fees &amp; instalment agreement</strong>.</li>
-<li>Open the agreement.</li>
-<li>Print or save as PDF from your browser.</li>
-<li>Have the family sign it, then upload the signed copy to <strong>Documents</strong> so the panel shows a <strong>Signed agreement</strong>.</li>
-</ol>
-<p>The printed agreement takes the course and the terms <strong>from the admission</strong>, not from the lead's enquiry details — so it says what was actually agreed.</p>
-<p>[Screenshot: The printed instalment agreement]</p>
-<h2 id="7-3-the-admissions-screen">7.3 The Admissions screen</h2>
-<p><strong>Admissions</strong> in the sidebar (<code>payment.read</code>). Every confirmed admission and where its money has got to.</p>
-<p>Columns: <strong>Student</strong>, <strong>Course</strong>, <strong>Centre</strong>, <strong>Confirmed</strong>, <strong>Net fee</strong>, <strong>Paid</strong>, <strong>Status</strong>. Dropped admissions are marked.</p>
-<p>The red badge counts admissions confirmed with <strong>no first payment yet</strong> — the queue accounts should be working down.</p>
 <h2 id="7-4-recording-a-payment">7.4 Recording a payment</h2>
 <h3 id="goal-10">Goal</h3>
 <p>Record money received and issue a receipt.</p>
@@ -1083,10 +1083,36 @@
 <h2 id="7-6-refunds-and-reversals">7.6 Refunds and reversals</h2>
 <p><strong>Nothing financial is ever edited or deleted.</strong> A correction is a new entry that points at the original.</p>
 <ul>
-<li>A <strong>reversal</strong> cancels a payment recorded in error.</li>
-<li>A <strong>refund</strong> returns money to the family.</li>
+<li>A <strong>reversal</strong> cancels a payment recorded in error. The money never arrived, so the institute's cash for that day is put back to what it really was.</li>
+<li>A <strong>refund</strong> returns money the institute did receive. The original payment stands, because it was true; the money leaving is recorded as going out <strong>today</strong>, because that is when it left.</li>
 </ul>
+<p>The difference matters to one person — whoever reconciles the bank statement — and the form makes you choose, because nobody volunteers it.</p>
 <p>Both need <code>payment.refund</code> (Accounts and administrators). Both leave the original payment visible, with the correction beside it, so the history of what happened is readable a year later.</p>
+<p><strong>Procedure: reverse or refund a payment</strong></p>
+<p><strong>Goal</strong> — undo a payment, correctly.</p>
+<p><strong>Before you start</strong> — <code>payment.refund</code>. You need the reason in words: it prints on the note the family gets.</p>
+<p><strong>Steps</strong></p>
+<ol>
+<li>Open <strong>Admissions</strong> → the student → <strong>Reverse or refund a payment</strong>.</li>
+<li><strong>Payment</strong> — pick it from the list. Payments already undone are not offered.</li>
+<li><strong>What happened</strong> — <em>Reversal</em> or <em>Refund</em>, as above.</li>
+<li>For a refund: <strong>Paid back by</strong> (cash, UPI, NEFT…) and <strong>Paid from</strong> (which account the money leaves).</li>
+<li><strong>Reason</strong> — written for the family, not for the file.</li>
+<li><strong>Reverse payment</strong> / <strong>Record refund</strong>, then confirm.</li>
+</ol>
+<p><strong>What you should see</strong></p>
+<ul>
+<li>A new line in the <strong>Payment ledger</strong>, in the opposite direction.</li>
+<li><strong>Paid</strong> goes down and <strong>Balance</strong> goes back up by the same amount.</li>
+<li>Accounts, the centre head and the student's counsellor are notified.</li>
+<li>Opening that line's note prints a <strong>Refund / Reversal Note</strong>.</li>
+</ul>
+<p><strong>Common mistakes</strong></p>
+<ul>
+<li><em>Reversing when you mean refund.</em> A reversal says the money never arrived. If it arrived and went back, it is a refund, and recording it as a reversal misstates the bank balance on two different days.</li>
+<li><em>Trying to undo the same payment twice.</em> Refused. A payment can be undone once; if the amount was wrong, reverse it and record the right one.</li>
+<li><em>Expecting the student record to disappear.</em> It does not. Reversing a first payment does not un-enrol anybody — they were handed to academics and may have sat in a class. A student actually leaving is <strong>dropped</strong> (7.8), which is a separate thing with its own reason.</li>
+</ul>
 <h2 id="7-7-receipts">7.7 Receipts</h2>
 <p>Every payment gets a receipt with a number from a <strong>gapless sequence</strong> — 1, 2, 3, with no holes. The numbers come from the database, never from the app, so two people recording payments at the same moment cannot get the same number.</p>
 <h3 id="procedure-print-a-receipt">Procedure: print a receipt</h3>
@@ -1720,17 +1746,18 @@
 <p>Which widgets each role sees and in what order. You can <strong>remove</strong> a widget from a role but never <strong>add</strong> one the role has no permission for — it would draw a card of zeroes, and a zero is a number somebody will believe.</p>
 <h3 id="settings-notifications">Settings → Notifications</h3>
 <p>Which events notify which roles, on which channels, and <strong>in what words</strong>. The copy is editable.</p>
-<p>Sixteen events ship, grouped by what they are about:</p>
+<p>Eighteen events ship, grouped by what they are about:</p>
 <table><thead>
 <tr><th>Group</th><th>Events</th></tr>
 </thead><tbody>
-<tr><td><strong>Leads</strong></td><td>New lead arrived · Lead assigned · WhatsApp reply · Automation needs a person</td></tr>
+<tr><td><strong>Leads</strong></td><td>New lead arrived · Lead assigned · Leads imported from a file · WhatsApp reply · Automation needs a person</td></tr>
 <tr><td><strong>SLA</strong></td><td>SLA breached · SLA escalation step</td></tr>
 <tr><td><strong>Admissions</strong></td><td>Admission confirmed · Admission dropped · Student profile form submitted</td></tr>
-<tr><td><strong>Money</strong></td><td>Payment recorded · Fee instalment overdue · Fee changed after admission · Discount needs approval · Discount approved or rejected</td></tr>
+<tr><td><strong>Money</strong></td><td>Payment recorded · Payment reversed or refunded · Fee instalment overdue · Fee changed after admission · Discount needs approval · Discount approved or rejected</td></tr>
 <tr><td><strong>Academics</strong></td><td>Student joined (accounts → academics) · Course or batch changed</td></tr>
 </tbody></table>
 <p>Each has three switches: whether it fires at all, which <strong>roles</strong> hear it, and whether the lead's <strong>own counsellor</strong> hears it regardless of role. Nobody is ever told about a lead they could not open anyway — a Kannur centre head is not notified about a Kochi lead — and nobody is told about their own action.</p>
+<p><strong>Leads imported from a file</strong> is one message for a whole import, not one per row. A two-hundred-row spreadsheet would otherwise bury the next real lead under two hundred of its own notices, which is why the per-lead notice is deliberately suppressed during an import.</p>
 <p><strong>New lead arrived</strong> fires for every lead from every source, including ones the assignment rules could not place; it says <em>Assigned to nobody yet</em> when that happens. It goes to centre heads by default and not to the counsellor, who hears about the same lead through <strong>Lead assigned</strong> a moment later. If a centre head finds two hundred a month too many, turn the event off here rather than living with it.</p>
 <h3 id="settings-student-profile-form">Settings → Student Profile Form</h3>
 <p>Which questions students answer on their own form. Keep internal fields (batch, status, centre) off it.</p>

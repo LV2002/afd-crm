@@ -56,6 +56,21 @@ export interface ResolveLeadInput {
    * ingestion from a webhook or a cron has no actor and passes nothing.
    */
   actorId?: string | null;
+
+  /**
+   * Suppresses the per-lead "New lead arrived" notification.
+   *
+   * Set by the CSV import and nothing else. A two-hundred-row import
+   * firing two hundred notifications at a centre head is not visibility,
+   * it is a denial-of-service on the one person meant to be watching
+   * intake — and the next real lead arrives underneath them. The import
+   * sends one `lead.imported` summary instead, after the run.
+   *
+   * `lead.assigned` is NOT suppressed: that one goes to the counsellor
+   * who now owns a specific person and has to ring them, which is worth
+   * knowing however the lead got there.
+   */
+  suppressArrivalNotice?: boolean;
 }
 
 export interface ResolveLeadResult {
@@ -89,7 +104,12 @@ export async function resolveOrCreateLead(input: ResolveLeadInput): Promise<Reso
   // transaction still holds the first would deadlock — and a notification
   // about a lead that then fails to commit would be a lie besides.
   if (result.isNewLead) {
-    await notifyLeadArrived(result.leadId, input.source, input.actorId ?? null);
+    await notifyLeadArrived(
+      result.leadId,
+      input.source,
+      input.actorId ?? null,
+      input.suppressArrivalNotice === true,
+    );
     await startFlows("lead_created", { leadId: result.leadId });
   }
 
@@ -117,6 +137,7 @@ async function notifyLeadArrived(
   leadId: string,
   source: string,
   actorId: string | null,
+  suppressArrivalNotice: boolean,
 ): Promise<void> {
   const [row] = await db
     .select({
@@ -134,24 +155,26 @@ async function notifyLeadArrived(
 
   if (!row) return;
 
-  await notify({
-    eventKey: "lead.created",
-    context: {
-      lead_name: row.studentName,
-      lead_number: row.leadNumber,
-      source,
-      // Said out loud rather than left blank. "Assigned to nobody yet" is
-      // the whole reason a centre head would act on this one.
-      owner_name: row.ownerName ?? "nobody yet",
-      center_name: row.centerName,
-    },
-    href: `/leads/${leadId}`,
-    entityType: "leads",
-    entityId: leadId,
-    centerId: row.centerId,
-    ownerId: row.assignedTo,
-    actorId,
-  });
+  if (!suppressArrivalNotice) {
+    await notify({
+      eventKey: "lead.created",
+      context: {
+        lead_name: row.studentName,
+        lead_number: row.leadNumber,
+        source,
+        // Said out loud rather than left blank. "Assigned to nobody yet"
+        // is the whole reason a centre head would act on this one.
+        owner_name: row.ownerName ?? "nobody yet",
+        center_name: row.centerName,
+      },
+      href: `/leads/${leadId}`,
+      entityType: "leads",
+      entityId: leadId,
+      centerId: row.centerId,
+      ownerId: row.assignedTo,
+      actorId,
+    });
+  }
 
   if (!row.assignedTo) return;
 

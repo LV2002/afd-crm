@@ -76,6 +76,25 @@ export const NOTIFICATION_EVENTS = [
     defaultNotifyRoleCodes: ["center_head"],
   },
   {
+    // The import's answer to `lead.created`, which it suppresses.
+    //
+    // A two-hundred-row spreadsheet firing two hundred arrival notices
+    // at a centre head is not visibility — it is the one person meant to
+    // be watching intake losing the next real lead underneath a wall of
+    // their own import. One line, after the run, with the numbers.
+    key: "lead.imported",
+    label: "Leads imported from a file",
+    description:
+      "Somebody finished a CSV import. Says how many were created, how many attached to people already in the system, and how many were skipped.",
+    category: "Leads",
+    variables: ["total", "created", "matched", "skipped", "imported_by", "center_name"],
+    defaultTitle: "{{created}} leads imported",
+    defaultBody:
+      "{{imported_by}} imported {{total}} rows: {{created}} new, {{matched}} matched to existing people, {{skipped}} skipped.",
+    defaultNotifyOwner: false,
+    defaultNotifyRoleCodes: ["center_head"],
+  },
+  {
     key: "lead.sla_breached",
     label: "SLA breached",
     description: "A lead passed its response or follow-up target without being worked.",
@@ -258,6 +277,24 @@ export const NOTIFICATION_EVENTS = [
     defaultBody: "{{amount}} received by {{method}}. Receipt {{receipt_number}}.",
     defaultNotifyOwner: true,
     defaultNotifyRoleCodes: ["accounts"],
+  },
+  {
+    // Money going back out is the one financial movement nobody else can
+    // see coming. A payment arriving is visible on the lead, in the
+    // balance, on the receipt; a payment being undone changes all three
+    // in the other direction, silently, days later. The counsellor who
+    // told a family their fee was settled is the person most likely to be
+    // asked about it and the least likely to know.
+    key: "payment.reversed",
+    label: "Payment reversed or refunded",
+    description:
+      "Accounts undid a payment — either a reversal (it was recorded in error) or a refund (the money went back to the family). The student's balance goes up again.",
+    category: "Money",
+    variables: ["student_name", "amount", "kind", "reason", "reversed_by", "center_name"],
+    defaultTitle: "Payment {{kind}}: {{student_name}}",
+    defaultBody: "{{amount}} — {{reason}} ({{reversed_by}}). Their balance has gone back up.",
+    defaultNotifyOwner: true,
+    defaultNotifyRoleCodes: ["accounts", "center_head"],
   },
   {
     // The answer to "how does academics find out?". The gate itself was
