@@ -18,7 +18,7 @@ import {
   fetchMetaPagesForUser,
   fetchPageSubscribedFields,
   MetaGraphApiError,
-  subscribePageToLeadgen,
+  subscribePageFields,
 } from "@/lib/integrations/meta/graph-client";
 import { createClient } from "@/lib/supabase/server";
 
@@ -277,7 +277,7 @@ export async function subscribeMetaPage(): Promise<TestConnectionResult> {
     }
 
     const page = await fetchMetaPageIdentity(pageToken);
-    await subscribePageToLeadgen(page.id, pageToken);
+    await subscribePageFields(page.id, pageToken);
     const fields = await fetchPageSubscribedFields(page.id, pageToken);
 
     if (!fields.includes("leadgen")) {
@@ -286,6 +286,14 @@ export async function subscribeMetaPage(): Promise<TestConnectionResult> {
         message: `Meta accepted the request for "${page.name}" but still does not list leadgen as subscribed. Check the app is subscribed to the leadgen field in the App Dashboard.`,
       };
     }
+
+    // Not a failure: leads are the job here and they are working. But
+    // Instagram DMs are delivered on the Page's `messages` subscription,
+    // so a Page that did not take it is the whole reason DMs are silent —
+    // and silence is the one symptom this screen exists to explain.
+    const messagesNote = fields.includes("messages")
+      ? " Instagram DMs linked to this Page will arrive too."
+      : " Instagram DMs will not arrive yet: Meta did not list `messages` as subscribed, which usually means the app has no `instagram_manage_messages` permission or the Instagram account is not linked to this Page.";
 
     const supabase = await createClient();
     await writeAuditLog(supabase, {
@@ -300,7 +308,10 @@ export async function subscribeMetaPage(): Promise<TestConnectionResult> {
       ? ` The token you had saved was a User token, so the Page token for "${swappedFrom}" was fetched and saved in its place.`
       : "";
 
-    return { ok: true, message: `"${page.name}" is subscribed and will send leads here.${swapNote}` };
+    return {
+      ok: true,
+      message: `"${page.name}" is subscribed and will send leads here.${messagesNote}${swapNote}`,
+    };
   } catch (err) {
     if (err instanceof MetaGraphApiError) {
       return { ok: false, message: `Meta rejected the request. ${err.message}` };

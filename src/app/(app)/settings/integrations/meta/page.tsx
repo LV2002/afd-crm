@@ -85,6 +85,12 @@ export default async function MetaIntegrationPage() {
           Meta verifies the webhook, reports it as subscribed, and delivers nothing — no
           error anywhere. Press this once the Page Access Token is saved.
         </p>
+        <p className="max-w-lg text-sm text-muted-foreground">
+          It subscribes the Page to <code>leadgen</code> and <code>messages</code> together,
+          because Instagram DMs are delivered on the second one and Meta&apos;s call replaces the
+          set rather than adding to it. Press it again after linking the Instagram account, and
+          it will say whether <code>messages</code> took.
+        </p>
         <SubscribePageButton />
       </section>
 
@@ -121,6 +127,12 @@ export default async function MetaIntegrationPage() {
           to Professional and linked to the Page, and{" "}
           <em>Connected tools → Allow access to messages</em> turned on in the Instagram app.
           Replies are sent with the Page Access Token and the Instagram Account ID above.
+        </p>
+        <p className="max-w-lg text-sm text-muted-foreground">
+          Then press <strong>Subscribe Page</strong> above once more. The Instagram account hangs
+          off the Facebook Page, and the Page has to be subscribed to <code>messages</code> for
+          anything to be delivered — the exact shape of the <code>leadgen</code> trap, one field
+          along.
         </p>
         <RecentDeliveries
           deliveries={instagramDeliveries}

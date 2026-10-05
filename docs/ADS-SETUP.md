@@ -367,6 +367,10 @@ Four things to set up, and the first two are the ones people forget:
 4. **In the CRM**, Settings → Integrations → Meta → **Instagram Account ID**: the
    Instagram professional account's own numeric id. Replies are sent with the Page Access
    Token you already saved.
+5. **Press Subscribe Page again**, on the same screen. The Instagram account hangs off the
+   Facebook Page, and the Page itself must be subscribed to the `messages` field or nothing
+   is delivered. This is the `leadgen` trap one field along, and the button now subscribes
+   both fields together and tells you whether `messages` took.
 
 **The 24-hour rule is Meta's, not ours.** A free-form reply is only allowed within 24
 hours of the person's last message; after that the CRM greys the box out and says so, and

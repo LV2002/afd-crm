@@ -157,7 +157,24 @@ export async function fetchMetaPageIdentity(pageAccessToken: string): Promise<Me
  * Doing it from here rather than in Meta's UI because the CRM already
  * holds the Page token, which is the only thing the call needs.
  */
-export async function subscribePageToLeadgen(
+/**
+ * The fields a Page sends to this app.
+ *
+ * `leadgen` is Lead Ads. `messages` is what Instagram DMs ride on: the
+ * Instagram account is linked to this Page, and Meta delivers its
+ * messaging events only to an app the Page is subscribed to for that
+ * field. Ticking the `instagram` object's `messages` field in the App
+ * Dashboard is the other half and is not enough on its own, exactly as
+ * `leadgen` was not.
+ *
+ * **This POST replaces the set, it does not add to it.** So they are sent
+ * together, always. Subscribing for leads alone used to silently
+ * unsubscribe a Page from messages, which made "Instagram DMs stopped
+ * arriving" a consequence of pressing a button labelled Subscribe Page.
+ */
+export const PAGE_SUBSCRIBED_FIELDS = ["leadgen", "messages"] as const;
+
+export async function subscribePageFields(
   pageId: string,
   pageAccessToken: string,
 ): Promise<void> {
@@ -167,7 +184,7 @@ export async function subscribePageToLeadgen(
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      subscribed_fields: "leadgen",
+      subscribed_fields: PAGE_SUBSCRIBED_FIELDS.join(","),
       access_token: pageAccessToken,
     }),
   });

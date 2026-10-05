@@ -355,6 +355,9 @@ are the ones everybody forgets:
    (Part 6).
 4. **Settings → Integrations → Meta → Instagram Account ID**. Replies are sent with the
    Page Access Token you already saved.
+5. **Press Subscribe Page again** on that screen. The Instagram account hangs off the Facebook
+   Page, and the Page has to be subscribed to the `messages` field or nothing arrives. The
+   button subscribes `leadgen` and `messages` together and says whether the second one took.
 
 DMs then appear under **WhatsApp → Instagram** and can be answered from the CRM.
 

@@ -3305,3 +3305,26 @@ error to anything that counts 5xx. Three dashboards all showed health, and the o
 mattered was a yellow dot nobody had reason to look at. The same lesson as `expectOk` discarding a
 200's body and `sendEmail` keeping only a status: the system knew, and no tool carried it to a
 person.
+
+---
+
+## 2026-10-05 — A write that replaces a set must send the whole set
+
+`subscribePageToLeadgen()` did exactly what it was named: `POST /{page}/subscribed_apps` with
+`subscribed_fields=leadgen`. Correct for leads, and quietly wrong for everything else, because
+that endpoint **replaces** the field set rather than adding to it.
+
+Instagram messaging is delivered on the linked Page's `messages` subscription. So the CRM's one
+helpful button — the one built because an unsubscribed Page is invisible — was itself capable of
+unsubscribing the Page from Instagram DMs, with no error and no record.
+
+The fix is not to add a second call. It is to stop pretending the call is additive:
+`PAGE_SUBSCRIBED_FIELDS` is a single constant naming every field this application needs, and the
+subscribe call always sends all of it. Adding a field later means adding it there, and the next
+button press carries it.
+
+**Reading it back matters more than the write.** The action already re-read the subscription
+rather than trusting Meta's acknowledgement, and that is now the only reason the screen can say
+*"leads will arrive, Instagram DMs will not, and here is why"* instead of a green tick over a
+silent channel. Writing and verifying are different operations, and only the second one is
+evidence.
