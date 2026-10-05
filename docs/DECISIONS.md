@@ -3833,3 +3833,49 @@ So it requires both, and the restore requires both `config.import` and `lead.imp
 primitive, no seed change, and each existing primitive goes on meaning exactly what its name says
 — which is the entire reason CLAUDE.md fixes the primitive list in code while leaving roles as
 editable rows.
+
+## 2026-10-05 — A campaign name is not a campaign id
+
+Leon's Google Ads leads arrive through a landing-page form, and he wanted them to line up with
+what Google charged. Almost all of that was already built — GCLID capture, campaign-level spend
+sync, offline conversion upload on paid admissions — and one field was missing.
+
+`ad_spend_daily` records spend against the platforms' **numeric** campaign ids, and the Ad
+Performance report joins leads to it on `enquiries.campaign_id`. Meta Lead Ads supply that id
+themselves, so Meta has always reported correctly. The website and custom webhooks recorded the
+UTM blob and the GCLID and **never set `campaign_id` at all**, so every lead a Google search
+campaign produced was invisible against its spend. Cost per lead for Google was unanswerable, with
+nothing on screen saying why.
+
+The obvious fix is to put `utm_campaign` into `campaign_id`, and it is wrong. A landing page URL
+usually carries a human name — `brand-search-oct` — which matches no row in `ad_spend_daily`. The
+report would then show a campaign with leads and zero spend beside a campaign with spend and zero
+leads: the same money and the same leads, counted as two things.
+
+**A blank is obviously missing. A wrong row looks like an answer.** So an id is accepted only when
+it is plausibly one — an explicit `campaign_id` field, or a `utm_campaign` of three or more
+digits, which is what Google's ValueTrack `{campaignid}` and Meta's `{{campaign.id}}` substitute.
+A campaign name stays visible on the lead's `utm` and in the sources report; it simply does not
+pretend to be a join key.
+
+Same family as the SLA ladder's dead `flag_breach` key and the webhook deliveries nobody could
+see: the system should not quietly produce a plausible-looking number it cannot stand behind.
+
+## 2026-10-05 — Three different things called "conversion"
+
+Written down because the conversation kept sliding between them, and they have different owners.
+
+1. **The conversion tag** on the landing page, firing on form submit. Google's, client-side, fast.
+2. **Attribution** — the lead reaching the CRM knowing its campaign and click. The form POST.
+3. **The offline conversion** — the CRM telling Google which of those leads became a *paying
+   student*, and for how much. Already built, nightly, keyed on the first-touch GCLID.
+
+The third is the one that changes where the money goes, and the one institutes usually never
+reach. Smart Bidding optimises toward whatever you report: with only the form tag, Google chases
+form fillers; with paid admissions reported back at their real fee value, it chases students.
+`docs/GOOGLE-ADS-SETUP.md` says to keep all three, as two distinct conversion actions in Google
+Ads so they cannot double-count, with the admission primary and the form fill observed-only.
+
+Also recorded there, because it will otherwise be read as a bug: Google counts a conversion on the
+**click's** date, the CRM on the **day it was paid**. A June click that pays in August appears in
+June on one side and August on the other. Compare trends between them, never totals.

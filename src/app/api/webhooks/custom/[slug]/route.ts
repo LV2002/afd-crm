@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db/client";
 import { customWebhooks, webhookEvents } from "@/lib/db/schema";
+import { adIdentifiersFrom } from "@/lib/integrations/form-payload/ad-identifiers";
 import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
 import {
   mapFormPayload,
@@ -167,6 +168,9 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
       utm: mapped.lead.utm,
       gclid: mapped.lead.utm?.gclid ?? null,
       fbclid: mapped.lead.utm?.fbclid ?? null,
+      // Same reason as the website webhook: without a campaign id the
+      // leads an ad produced cannot be shown against what it cost.
+      ...adIdentifiersFrom(mapped.lead.utm),
       raw: mapped.lead.raw,
       dedupeKey: externalId,
     });

@@ -7543,3 +7543,36 @@ Permissions: both `config.export` + `lead.export` to take one, both `config.impo
 neither primitive should widen into the other.
 
 **1576 tests pass** (16 new), lint, typecheck, `db:audit` and the build clean. No migration.
+
+## Session 73 — Google Ads form submissions, joined to spend
+
+Leon's Google Ads traffic goes to a landing page with its own custom form; submissions are marked
+as a conversion in Google Ads. He wanted them in the CRM and lined up with ad spend in reports.
+
+**Nearly all of it was already built** — GCLID capture on enquiries, per-campaign spend sync,
+cost-per-lead and cost-per-admission on Ad Performance, and offline conversion upload of paid
+admissions keyed on the first-touch GCLID.
+
+**One field was missing, and it was the join key.** The report matches leads to spend on
+`enquiries.campaign_id`. Meta Lead Ads supply it; the website and custom webhooks never set it, so
+every Google search lead was invisible against its own campaign's spend.
+
+`lib/integrations/form-payload/ad-identifiers.ts` now derives `campaign_id` and `ad_id` from the
+form payload, wired into both webhook routes. The subtle part is what it **refuses**: a campaign
+*name* in `utm_campaign` is not accepted as an id, because it matches no spend row and would put a
+leads-without-spend campaign next to a spend-without-leads one — the same money counted twice. A
+blank is obviously missing; a wrong row looks like an answer. Only an explicit `campaign_id` or a
+numeric `utm_campaign` (Google's `{campaignid}`, Meta's `{{campaign.id}}`) is taken.
+
+**`docs/GOOGLE-ADS-SETUP.md`** covers the half that is not in this codebase: auto-tagging on, the
+Final URL suffix with ValueTrack parameters, the hidden fields and the `sessionStorage` script
+that survives somebody browsing away and back, and — the part worth the most — setting the CRM's
+paid-admission upload as a **separate, primary** conversion action with the form fill observed
+only. Smart Bidding optimises toward whatever you report, so that one setting decides whether
+Google chases form fillers or students.
+
+It also names the discrepancy people read as a bug: Google dates a conversion by the click, the
+CRM by the payment, so a June click paying in August lands in different months on each side.
+
+**1583 tests pass** (7 new), lint, typecheck, `db:audit` and the build clean. No migration — both
+columns already existed and were simply never populated from a form.
