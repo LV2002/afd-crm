@@ -73,7 +73,7 @@ Some events also send an email, if email is configured and your role is
 set to receive that event.
 
 ### What you get told about
-Eighteen things can notify somebody, and which of them reach *you*
+Nineteen things can notify somebody, and which of them reach *you*
 depends on your role and on what an administrator has configured
 (Chapter 13). The ones most people see:
 

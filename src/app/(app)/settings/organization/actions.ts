@@ -40,6 +40,23 @@ const schema = z.object({
   website: optionalText,
   gstin: optionalText,
   documentFooter: z.string().trim().max(500).optional().or(z.literal("")),
+  // Several addresses, comma-separated. Validated one by one so a single
+  // typo names itself rather than failing the whole field.
+  alertEmailTo: z
+    .string()
+    .trim()
+    .optional()
+    .or(z.literal(""))
+    .refine(
+      (value) =>
+        !value ||
+        value
+          .split(",")
+          .map((address) => address.trim())
+          .filter(Boolean)
+          .every((address) => z.string().email().safeParse(address).success),
+      { message: "One of those isn't an email address. Separate several with commas." },
+    ),
   timezone: z.string().trim().min(1),
   currency: z.string().trim().length(3, "Use a 3-letter currency code").toUpperCase(),
   locale: z.string().trim().min(1),
@@ -102,6 +119,7 @@ export async function updateOrgSettings(
     email: formData.get("email"),
     website: formData.get("website"),
     gstin: formData.get("gstin"),
+    alertEmailTo: formData.get("alertEmailTo"),
     documentFooter: formData.get("documentFooter"),
     timezone: formData.get("timezone"),
     currency: formData.get("currency"),
@@ -140,6 +158,7 @@ export async function updateOrgSettings(
     email: parsed.data.email || null,
     website: parsed.data.website || null,
     gstin: parsed.data.gstin || null,
+    alert_email_to: parsed.data.alertEmailTo || null,
     document_footer: parsed.data.documentFooter || null,
     timezone: parsed.data.timezone,
     currency: parsed.data.currency,

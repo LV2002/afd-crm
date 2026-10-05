@@ -6553,3 +6553,28 @@ are listed for Leon rather than guessed at, because each one trades noise agains
 oversight and that is his call.
 
 **1449 tests pass**, lint, typecheck and the production build clean.
+
+---
+
+## Session 54 — Alerts that do not depend on a deploy
+
+Leon asked for platform failure emails to reach him. Two changes, because the obvious one
+was not enough on its own.
+
+**`org_settings.alert_email_to`**, edited at **Settings → Organisation → Send platform
+alerts to**. `ALERT_EMAIL_TO` still works and is added to whatever is configured rather
+than replaced. Changing who finds out that leads have stopped arriving no longer needs
+somebody with access to the hosting dashboard — which is CLAUDE.md §10 applied to the one
+setting where it matters most.
+
+**`system.failure`**, the nineteenth notification event, puts failures in the bell.
+Email needs an API key, a from-address and a recipient; until all three exist a webhook
+that has stopped accepting Meta leads tells nobody at all. The bell version needs nothing
+configured. Same damping as the email — first occurrence, then at ten times the count —
+and the counter advances even when no email goes out, so a fault firing every few seconds
+cannot fill the bell either.
+
+Platform Health now says which of the two halves is missing, in those words, instead of
+naming an environment variable at somebody who does not have a terminal.
+
+**1450 tests pass**, lint, typecheck and the production build clean.

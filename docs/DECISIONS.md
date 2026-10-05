@@ -3029,3 +3029,36 @@ person and has to ring them, which is worth knowing however the lead arrived.
 The general shape is worth keeping in mind for every future event: **ask what happens when
 the action is performed two hundred times in a loop.** Every one of these events has a
 bulk path somewhere.
+
+## 2026-10-05 — Who hears about a failure is a setting, not an environment variable
+
+Leon asked for platform failure emails to go to his address. The obvious answer was "set
+`ALERT_EMAIL_TO` in Vercel", which I cannot do for him and which fails CLAUDE.md §10 on
+the one setting whose entire purpose is making sure a person finds out: changing who is
+told that leads have stopped arriving should not need a hosting dashboard.
+
+So `org_settings.alert_email_to` exists, editable at **Settings → Organisation → Send
+platform alerts to**. The environment variable still works and is *added* to whatever is
+configured rather than overridden — somebody who set it months ago and then types a second
+address into Settings means "also tell this person", and a silently dropped alert
+recipient is exactly the failure the feature exists to prevent.
+
+`alertRecipients()` carried a comment arguing a table is "one more thing that has to be
+readable at the moment the database is the problem". True in general; not true of this
+caller. `captureError()` has already inserted the error row by the time it asks who to
+tell, so the database has just proved it works. A failure that cannot be read through
+produced no error row to alert about either. The env var stays as the path needing no
+database at all.
+
+### And the bell, because email needs three things to be set
+
+Email needs an API key, a from-address and a recipient. Until all three exist, a webhook
+that has stopped accepting Meta leads tells **nobody** — the most expensive silent failure
+in this system, because the symptom is "it has been quiet this week" and the cause is
+three weeks old by the time anybody checks.
+
+`system.failure` puts it in the bell, where it needs nothing configured beyond existing.
+It fires on the same damping decision as the email (first occurrence, then at ten times
+the count), and when no email recipient is configured the damping counter is still
+advanced — otherwise the bell would fire on every single occurrence of a fault that is
+firing every few seconds.

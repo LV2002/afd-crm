@@ -28,7 +28,7 @@ export default async function OrganizationSettingsPage() {
     supabase
       .from("org_settings")
       .select(
-        "name, legal_name, tagline, logo_url, primary_color, address_line, city, state, pincode, phone, email, website, gstin, document_footer, timezone, currency, locale",
+        "name, legal_name, tagline, logo_url, primary_color, address_line, city, state, pincode, phone, email, website, gstin, document_footer, alert_email_to, timezone, currency, locale",
       )
       .limit(1)
       .maybeSingle(),
@@ -89,6 +89,7 @@ export default async function OrganizationSettingsPage() {
           website: data?.website ?? "",
           gstin: data?.gstin ?? "",
           documentFooter: data?.document_footer ?? "",
+          alertEmailTo: data?.alert_email_to ?? "",
           timezone: data?.timezone ?? "Asia/Kolkata",
           currency: data?.currency ?? "INR",
           locale: data?.locale ?? "en-IN",

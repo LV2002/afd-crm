@@ -27,6 +27,7 @@ export interface OrgSettingsValues {
   website: string;
   gstin: string;
   documentFooter: string;
+  alertEmailTo: string;
   timezone: string;
   currency: string;
   locale: string;
@@ -211,6 +212,25 @@ export function OrganizationForm({ values }: { values: OrgSettingsValues }) {
             rows={2}
             defaultValue={values.documentFooter}
             placeholder="Fees once paid are non-refundable. Full terms at afdindia.com/terms"
+          />
+        </Field>
+
+        {/*
+          Here rather than in a developer's environment variables,
+          because the person who needs to know that leads have stopped
+          arriving should be able to change who gets told without asking
+          anybody. Settings → Platform Health says whether it is working.
+        */}
+        <Field
+          label="Send platform alerts to"
+          htmlFor="alertEmailTo"
+          hint="Who hears when something breaks — a webhook that stopped working, a nightly job that failed. Several addresses, separated by commas."
+        >
+          <Input
+            id="alertEmailTo"
+            name="alertEmailTo"
+            defaultValue={values.alertEmailTo}
+            placeholder="you@example.com"
           />
         </Field>
       </section>

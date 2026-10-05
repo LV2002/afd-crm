@@ -582,7 +582,7 @@
 <h3 id="where-they-appear">Where they appear</h3>
 <p>In the bell at the top of the screen, and in full at <strong>Notifications</strong>. Some events also send an email, if email is configured and your role is set to receive that event.</p>
 <h3 id="what-you-get-told-about">What you get told about</h3>
-<p>Eighteen things can notify somebody, and which of them reach <em>you</em> depends on your role and on what an administrator has configured (Chapter 13). The ones most people see:</p>
+<p>Nineteen things can notify somebody, and which of them reach <em>you</em> depends on your role and on what an administrator has configured (Chapter 13). The ones most people see:</p>
 <table><thead>
 <tr><th>You are</th><th>You hear about</th></tr>
 </thead><tbody>
@@ -1746,17 +1746,18 @@
 <p>Which widgets each role sees and in what order. You can <strong>remove</strong> a widget from a role but never <strong>add</strong> one the role has no permission for — it would draw a card of zeroes, and a zero is a number somebody will believe.</p>
 <h3 id="settings-notifications">Settings → Notifications</h3>
 <p>Which events notify which roles, on which channels, and <strong>in what words</strong>. The copy is editable.</p>
-<p>Eighteen events ship, grouped by what they are about:</p>
+<p>Nineteen events ship, grouped by what they are about:</p>
 <table><thead>
 <tr><th>Group</th><th>Events</th></tr>
 </thead><tbody>
 <tr><td><strong>Leads</strong></td><td>New lead arrived · Lead assigned · Leads imported from a file · WhatsApp reply · Automation needs a person</td></tr>
-<tr><td><strong>SLA</strong></td><td>SLA breached · SLA escalation step</td></tr>
+<tr><td><strong>SLA</strong></td><td>SLA breached · SLA escalation step · Something broke</td></tr>
 <tr><td><strong>Admissions</strong></td><td>Admission confirmed · Admission dropped · Student profile form submitted</td></tr>
 <tr><td><strong>Money</strong></td><td>Payment recorded · Payment reversed or refunded · Fee instalment overdue · Fee changed after admission · Discount needs approval · Discount approved or rejected</td></tr>
 <tr><td><strong>Academics</strong></td><td>Student joined (accounts → academics) · Course or batch changed</td></tr>
 </tbody></table>
 <p>Each has three switches: whether it fires at all, which <strong>roles</strong> hear it, and whether the lead's <strong>own counsellor</strong> hears it regardless of role. Nobody is ever told about a lead they could not open anyway — a Kannur centre head is not notified about a Kochi lead — and nobody is told about their own action.</p>
+<p><strong>Something broke</strong> is the one notification that is about the CRM rather than about a person, and the one you least want switched off. It also goes out by email, to whoever is in <strong>Settings → Organisation → Send platform alerts to</strong> — but the bell version needs nothing configured, which matters because email needs an API key the database cannot hold. Either way it is damped: once when a fault first appears, then only when it has happened ten times as often.</p>
 <p><strong>Leads imported from a file</strong> is one message for a whole import, not one per row. A two-hundred-row spreadsheet would otherwise bury the next real lead under two hundred of its own notices, which is why the per-lead notice is deliberately suppressed during an import.</p>
 <p><strong>New lead arrived</strong> fires for every lead from every source, including ones the assignment rules could not place; it says <em>Assigned to nobody yet</em> when that happens. It goes to centre heads by default and not to the counsellor, who hears about the same lead through <strong>Lead assigned</strong> a moment later. If a centre head finds two hundred a month too many, turn the event off here rather than living with it.</p>
 <h3 id="settings-student-profile-form">Settings → Student Profile Form</h3>

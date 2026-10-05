@@ -267,6 +267,32 @@ export const NOTIFICATION_EVENTS = [
     defaultNotifyRoleCodes: [],
   },
   {
+    // The one notification that is about the CRM rather than about a
+    // person, and the one whose absence costs the most.
+    //
+    // Platform failures went out by email alone, to `ALERT_EMAIL_TO`.
+    // Email needs an API key, a from-address and a recipient, and until
+    // all three are set a webhook that has stopped accepting Meta leads
+    // tells nobody at all — which is the single most expensive silent
+    // failure this system has, because the symptom is "it has been quiet
+    // this week" and the cause is three weeks old by the time anyone
+    // checks.
+    //
+    // In the bell it needs no configuration beyond existing. The email
+    // still goes out as well, with the same ten-times-as-often damping,
+    // so this is not a second firehose.
+    key: "system.failure",
+    label: "Something broke",
+    description:
+      "A webhook, a nightly job or a screen failed. Sent on the first occurrence and then only when it has happened ten times as often, so a fault firing every few seconds cannot fill the bell.",
+    category: "SLA",
+    variables: ["source", "message", "count"],
+    defaultTitle: "Something broke: {{source}}",
+    defaultBody: "{{message}} — seen {{count}} time(s). Open Platform Health for the detail.",
+    defaultNotifyOwner: false,
+    defaultNotifyRoleCodes: ["admin", "co_admin"],
+  },
+  {
     key: "payment.recorded",
     label: "Payment recorded",
     description:

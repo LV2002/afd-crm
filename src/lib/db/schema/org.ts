@@ -37,6 +37,16 @@ export const orgSettings = pgTable("org_settings", {
   gstin: text("gstin"),
   /** A last line for documents — terms reference, refund policy pointer, anything. */
   documentFooter: text("document_footer"),
+  /**
+   * Comma-separated addresses that receive platform failure alerts —
+   * a webhook that stopped working, a nightly job that threw.
+   *
+   * A setting rather than an environment variable, because changing who
+   * finds out that leads have stopped arriving should not need a deploy.
+   * `ALERT_EMAIL_TO` still works and is added to whatever is here; see
+   * `resolveAlertRecipients()`.
+   */
+  alertEmailTo: text("alert_email_to"),
   timezone: text("timezone").notNull().default("Asia/Kolkata"),
   currency: text("currency").notNull().default("INR"),
   locale: text("locale").notNull().default("en-IN"),

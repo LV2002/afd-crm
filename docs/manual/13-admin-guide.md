@@ -219,12 +219,12 @@ believe.
 Which events notify which roles, on which channels, and **in what
 words**. The copy is editable.
 
-Eighteen events ship, grouped by what they are about:
+Nineteen events ship, grouped by what they are about:
 
 | Group | Events |
 |---|---|
 | **Leads** | New lead arrived · Lead assigned · Leads imported from a file · WhatsApp reply · Automation needs a person |
-| **SLA** | SLA breached · SLA escalation step |
+| **SLA** | SLA breached · SLA escalation step · Something broke |
 | **Admissions** | Admission confirmed · Admission dropped · Student profile form submitted |
 | **Money** | Payment recorded · Payment reversed or refunded · Fee instalment overdue · Fee changed after admission · Discount needs approval · Discount approved or rejected |
 | **Academics** | Student joined (accounts → academics) · Course or batch changed |
@@ -234,6 +234,14 @@ it, and whether the lead's **own counsellor** hears it regardless of
 role. Nobody is ever told about a lead they could not open anyway — a
 Kannur centre head is not notified about a Kochi lead — and nobody is
 told about their own action.
+
+**Something broke** is the one notification that is about the CRM
+rather than about a person, and the one you least want switched off. It
+also goes out by email, to whoever is in **Settings → Organisation →
+Send platform alerts to** — but the bell version needs nothing
+configured, which matters because email needs an API key the database
+cannot hold. Either way it is damped: once when a fault first appears,
+then only when it has happened ten times as often.
 
 **Leads imported from a file** is one message for a whole import, not
 one per row. A two-hundred-row spreadsheet would otherwise bury the next
