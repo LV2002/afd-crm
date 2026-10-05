@@ -30,6 +30,41 @@ missing message, not a delayed one.
 
 ---
 
+## Asked for, not yet started — Leon, 2026-10-05
+
+Three requests, parked while the Meta and WhatsApp integrations are finished. He will say
+"come back" when he wants them picked up.
+
+### A. Marking an admission should move the lead's stage
+
+When a counsellor marks an admission, the lead's stage should move to **Admission taken**
+automatically. Today the stage is left wherever it was, so the counsellor has to remember a
+second action and the pipeline shows leads sitting at Demo-Scheduled who have already enrolled.
+
+Notes for whoever picks this up: the first gate is `sales_to_accounts_at` (CLAUDE.md, the
+lifecycle chain), and the stage must be looked up rather than hardcoded — stages are
+`pipeline_stages` rows an admin can rename, so match on stage **type** or an explicit
+"this is the won stage" marker, never on the label "Admission taken". Check whether
+`pipeline_stages` already carries a type that means won; if it does not, that is part of the
+work. Writes an `audit_log` row and fires the existing `lead.stage_changed` notification like
+any other stage move.
+
+### B. The CRM is not usable on a phone
+
+It must be responsive at every screen size. **Navigation is the worst of it and does not work
+on mobile at all** — that is the first thing to fix, before any individual screen.
+
+Everything else follows: lead lists, the detail page, pipeline, Insights, Settings. Tables are
+the obvious problem and the kanban is the hard one. Counsellors work from phones, so this is
+closer to a correctness bug than a polish task.
+
+### C. The pipeline widget on the dashboard is half-width
+
+It should run the full width of the dashboard. At half width it is out of proportion with
+everything around it and the funnel is squashed.
+
+---
+
 ## Backlog proper
 
 ### 2. Telephony — **blocked**
@@ -55,9 +90,14 @@ Malayalam transcription, call scoring, QA dashboard. All of Phase 6 sits behind 
   probability under Settings → Pipeline Stages. Without the first, Insights → Targets counts
   what happened but has nothing to judge it against; without the second, the forecast counts
   those leads as worth nothing (and says so on the page).
-- **Set the alerting environment variables** in Vercel — `RESEND_API_KEY`, `EMAIL_FROM`,
-  `ALERT_EMAIL_TO`, `NEXT_PUBLIC_APP_URL`. Failures are recorded and visible on
-  Settings → Platform Health either way; without these, nobody is emailed about them.
+- ~~**Set the alerting environment variables** in Vercel~~ — **done, 2026-10-05.**
+  `RESEND_API_KEY` and `EMAIL_FROM` are set and a test email arrived. Alerts go to
+  `leonvinny2002@gmail.com`, which is now a setting (Settings → Organisation) rather than
+  `ALERT_EMAIL_TO`. `NEXT_PUBLIC_APP_URL` is still unset: links inside emails work, but point
+  at whichever deployment sent the mail rather than at a stable address.
+- ~~**`CRON_SECRET`**~~ — **done, 2026-10-05.** It was never set, so every scheduled call was
+  turned away with a 401 and nothing overnight had run since launch. Set now; the nightly run
+  is recorded on Settings → Platform Health, which also has a button to run the jobs on demand.
 - **Fill in Settings → Organisation.** Address, phone, email, GSTIN and the logo.
   Every printed document — receipts, the fee agreement, profile sheets, and any
   report somebody prints — reads from there, and until it is filled in they carry
