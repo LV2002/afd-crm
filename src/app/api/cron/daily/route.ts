@@ -1,21 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { requireCronSecret } from "@/lib/cron/require-secret";
-import { db } from "@/lib/db/client";
-import { cronRuns } from "@/lib/db/schema";
-import { expectOk, runNightly, type NightlyJob } from "@/lib/cron/nightly-runner";
+import { runDailyAndRecord } from "@/lib/cron/run-daily";
 import { reportingFailures } from "@/lib/errors/capture";
-
-import { GET as adSpendGoogle } from "../ad-spend-sync/google/route";
-import { GET as adSpendMeta } from "../ad-spend-sync/meta/route";
-import { GET as googleConversions } from "../google-conversions/route";
-import { GET as paymentReminders } from "../payment-reminders/route";
-import { GET as recomputeTemperature } from "../recompute-temperature/route";
-import { GET as retargetingGoogle } from "../retargeting-sync/google/route";
-import { GET as retargetingMeta } from "../retargeting-sync/meta/route";
-import { GET as slaSweep } from "../sla-sweep/route";
-import { GET as whatsappBroadcastSweep } from "../whatsapp-broadcast-sweep/route";
-import { GET as whatsappFlows } from "../whatsapp-flows/route";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +27,10 @@ export const dynamic = "force-dynamic";
  * `/api/cron/retargeting-sync/meta` by hand with the secret still works,
  * which is how you test one in isolation without waiting for the night.
  *
+ * The jobs themselves live in `lib/cron/run-daily.ts`, because the schedule
+ * is no longer the only caller: an admin can run them from Settings →
+ * Platform health.
+ *
  * ## Why 10:00 IST, and what a single daily run costs
  *
  * `vercel.json` runs this at 04:30 UTC — 10:00 in Kerala. The retargeting
@@ -57,94 +48,11 @@ export const dynamic = "force-dynamic";
  */
 export const maxDuration = 300;
 
-/**
- * How long the run may take.
- *
- * Deliberately low by default. Vercel caps a function at 60 seconds on the
- * Hobby plan whatever `maxDuration` says, and being killed mid-run means no
- * report and no alert — the worst outcome, because the job looks fine. So the
- * default fits inside the smaller cap, and an instance on a plan with room
- * raises it with `CRON_BUDGET_SECONDS`.
- */
-function budgetMs(): number {
-  const raw = Number(process.env.CRON_BUDGET_SECONDS);
-  const seconds = Number.isFinite(raw) && raw > 0 ? raw : 50;
-  return seconds * 1000;
-}
-
-/**
- * Ordered by how fast the value decays, not by what is cheapest.
- *
- * The first three are local table scans that finish in a second or two and
- * are time-critical: an SLA breach flagged tomorrow is a lead already lost,
- * and a payment reminder is a date.
- *
- * Retargeting comes next, ahead of everything that talks to an external API
- * for reporting purposes, because this is the job whose whole point is
- * same-day freshness — a lead who arrives today should see an ad tomorrow.
- *
- * Spend reporting and offline conversion upload come last. Those feed
- * dashboards and platform bidding models where a day's lag changes nothing,
- * and they are the ones that get skipped when the budget runs short.
- */
-function nightlyJobs(request: Request): NightlyJob[] {
-  const job = (
-    key: string,
-    label: string,
-    handler: (request: Request) => Promise<Response>,
-    estimateMs: number,
-  ): NightlyJob => ({
-    key,
-    label,
-    estimateMs,
-    run: async () => expectOk(label, await handler(request)),
-  });
-
-  return [
-    job("sla-sweep", "Response-time sweep", slaSweep, 4000),
-    job("recompute-temperature", "Temperature recalculation", recomputeTemperature, 4000),
-    job("payment-reminders", "Fee reminders", paymentReminders, 4000),
-    job("retargeting-sync/meta", "Meta retargeting audience", retargetingMeta, 8000),
-    job("retargeting-sync/google", "Google retargeting audience", retargetingGoogle, 8000),
-    job("whatsapp-flows", "WhatsApp automations", whatsappFlows, 8000),
-    job("whatsapp-broadcast-sweep", "Scheduled broadcasts", whatsappBroadcastSweep, 8000),
-    job("ad-spend-sync/meta", "Meta ad spend", adSpendMeta, 6000),
-    job("ad-spend-sync/google", "Google ad spend", adSpendGoogle, 6000),
-    job("google-conversions", "Google offline conversions", googleConversions, 6000),
-  ];
-}
-
 async function run(request: Request) {
   const denied = requireCronSecret(request);
   if (denied) return denied;
 
-  const result = await runNightly({ jobs: nightlyJobs(request), budgetMs: budgetMs() });
-
-  // Written down before answering, and never allowed to fail the run.
-  //
-  // Until this existed the only record of a nightly run was the JSON body
-  // handed back to whoever invoked the route, which nobody reads. So "did
-  // last night's ad spend sync happen?" had no answer inside the CRM —
-  // and the three likeliest reasons it had not (no CRON_SECRET so the
-  // call never reached here, a job reporting "not configured", a job
-  // skipped for want of time) all look identical from a screen with a
-  // missing number on it.
-  try {
-    await db.insert(cronRuns).values({
-      jobKey: "daily",
-      startedAt: new Date(result.startedAt),
-      durationMs: result.durationMs,
-      ok: result.ok,
-      okCount: result.summary.ok,
-      failedCount: result.summary.failed,
-      skippedCount: result.summary.skipped,
-      jobs: result.jobs as unknown as Array<Record<string, unknown>>,
-    });
-  } catch (error) {
-    // The run happened whether or not it could be recorded. Losing the
-    // record is worth a line in the log; losing the run is not.
-    console.error("cron:daily could not record its run", error);
-  }
+  const result = await runDailyAndRecord(request);
 
   // A failed job means a non-2xx, so the platform retries and the alert
   // email fires. Skipped jobs are not failures — they are incremental and

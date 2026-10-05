@@ -19,6 +19,7 @@ import { resolveAlertRecipients } from "@/lib/errors/alert-recipients";
 import { formatDateIST } from "@/lib/format/date";
 
 import { ResolveButton } from "./resolve-button";
+import { RunNightlyButton } from "./run-nightly-button";
 import { TestEmailButton } from "./test-email-button";
 
 export const dynamic = "force-dynamic";
@@ -143,6 +144,14 @@ export default async function HealthPage() {
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">The nightly run</h2>
         <NightlyRunPanel run={nightlyRun} />
+        {/*
+          Under the panel rather than above it: the panel is the question
+          ("did it run, and what did it do?") and this is the way to get a
+          fresh answer without waiting until 10:00 tomorrow. Anything that
+          depends on a credential — ad spend, retargeting, automations —
+          otherwise has a debugging loop of one attempt per day.
+        */}
+        <RunNightlyButton />
       </section>
 
       {!configured && (

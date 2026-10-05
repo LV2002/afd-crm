@@ -3272,3 +3272,36 @@ pick is a counsellor's.
 ads permissions are one app's review. Three submissions is three queues of several days each,
 sequentially, for no benefit — and business verification gates all of them, so it is listed first
 in the order of work.
+
+---
+
+## 2026-10-05 — A daily schedule is a 24-hour debugging loop, and that is a design flaw
+
+The Meta ad spend was missing for a week. The cause was one unset environment variable. The cost
+was not the cause; it was that every attempt to find it took a day.
+
+Ten jobs run once, at 10:00 IST. Each of them depends on credentials an admin pastes in. So the
+loop for "is this the right token?" was: paste, wait until tomorrow morning, read a screen, paste
+something else. Nobody runs that loop. They give up, and the integration stays broken while every
+dashboard reports success.
+
+**Settings → Platform health → Run tonight's jobs now** closes it. The same ten jobs, on demand,
+recorded in `cron_runs` exactly as the schedule records them, with each job's reason visible when
+it finishes.
+
+**It mints a request carrying `CRON_SECRET` rather than bypassing the check.** The sub-routes keep
+their own guard and stay independently callable, and the button becomes a direct test of the
+single most common cause of "nothing ran": no secret, no header, 401, nothing recorded. With the
+secret missing it says that in one sentence instead of sending somebody to a hosting dashboard to
+infer it from a status code.
+
+**It confirms first, because it is not a dry run.** Queued broadcasts are sent, fee reminders go
+out, audiences are rewritten. A button that quietly messages four hundred people is worse than no
+button. The dialog names those consequences in the same words the screen uses.
+
+**What the platform said, again.** Vercel's observability had the answer the whole time: one
+invocation, 4XX, error rate 0%. The schedule was firing; the CRM was refusing it; a 401 is not an
+error to anything that counts 5xx. Three dashboards all showed health, and the one number that
+mattered was a yellow dot nobody had reason to look at. The same lesson as `expectOk` discarding a
+200's body and `sendEmail` keeping only a status: the system knew, and no tool carried it to a
+person.
