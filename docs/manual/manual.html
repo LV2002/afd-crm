@@ -1773,12 +1773,13 @@
 <p>Which widgets each role sees and in what order. You can <strong>remove</strong> a widget from a role but never <strong>add</strong> one the role has no permission for — it would draw a card of zeroes, and a zero is a number somebody will believe.</p>
 <h3 id="settings-notifications">Settings → Notifications</h3>
 <p>Which events notify which roles, on which channels, and <strong>in what words</strong>. The copy is editable.</p>
-<p><strong>Switching email on.</strong> Everything here works on the bell with nothing configured. Sending to inboxes as well needs an account with an email service, which is the one thing the CRM cannot do by itself:</p>
-<ol>
-<li>Create an account at <strong>resend.com</strong> — free at this institute's volume — and verify <strong>afdindia.com</strong> as a sending domain, which means adding two DNS records wherever the domain is managed. <strong>This step needs access to the domain</strong>, so nobody else can do it for you.</li>
-<li>Put the API key and the from-address into the hosting settings as <code>RESEND_API_KEY</code> and <code>EMAIL_FROM</code>, then redeploy. Send the key over and this part can be done for you.</li>
-</ol>
-<p>Until both exist, the <strong>Also send an email</strong> tick is saved and does nothing, and the screen says so. Optional afterwards: <code>NEXT_PUBLIC_APP_URL</code> set to the CRM's real address — links in emails work without it but point at whichever deployment sent the mail.</p>
+<p><strong>Switching email on.</strong> Everything here works on the bell with nothing configured. Sending to inboxes as well needs an account with an email service, which is the one thing the CRM cannot do by itself. Two ways, and the first takes five minutes.</p>
+<p><strong>Just to your own inbox — no DNS.</strong> Sign up at <strong>resend.com</strong> <em>with the address you want the mail to arrive at</em>, copy the API key, and set <code>RESEND_API_KEY</code> and <code>EMAIL_FROM</code> = <code>onboarding@resend.dev</code> in the hosting settings. Until a domain is verified the service only delivers to the address the account was created with — so this covers <strong>platform alerts to you</strong> and nothing else. Put that same address in Settings → Organisation → Send platform alerts to.</p>
+<p><strong>To staff and families — verify the domain.</strong> In the same account add <strong>afdindia.com</strong> and put the two records it shows you wherever the domain is managed, then change <code>EMAIL_FROM</code> to something like <code>AFD India &lt;crm@afdindia.com&gt;</code>.</p>
+<h3 id="why-the-domain-matters-at-all">Why the domain matters at all</h3>
+<p>Domain verification is about the address mail comes <strong>from</strong>, not where it goes. Gmail will not accept mail claiming to be from afdindia.com unless afdindia.com has published a record saying who may send on its behalf — otherwise anybody could send as your institute. Those records are what SPF and DKIM are, and without them the mail is rejected or lands in spam.</p>
+<p>None of that applies when the mail comes from the email service's own address, which is why the five-minute route works: the mail is honestly from <code>resend.dev</code>, and <code>resend.dev</code> vouches for itself.</p>
+<p>Until email is on, the <strong>Also send an email</strong> tick is saved and does nothing, and the screen says so. Optional afterwards: <code>NEXT_PUBLIC_APP_URL</code> set to the CRM's real address — links in emails work without it but point at whichever deployment sent the mail.</p>
 <p>Nineteen events ship, grouped by what they are about:</p>
 <table><thead>
 <tr><th>Group</th><th>Events</th></tr>
