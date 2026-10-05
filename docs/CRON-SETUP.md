@@ -33,17 +33,50 @@ seconds — no cron involved.
 
 ## Before you start
 
-You need the value of **`CRON_SECRET`** from Vercel:
-**Project → Settings → Environment Variables**.
+Two things: your CRM's address (e.g. `https://afd-crm-one.vercel.app`),
+and the value of **`CRON_SECRET`**.
 
-If it is not set there, nothing scheduled works at all — including the
-daily run. The schedule calls, the CRM answers "not allowed", and nothing
-happens, with no failure recorded anywhere, because being turned away is
-not an error. If you need to set it: generate a long random value, add it
-in Vercel, **redeploy** (environment variables only reach a new build),
-and use that same value below.
+### Reading `CRON_SECRET` out of Vercel
 
-You also need your CRM's address, e.g. `https://afd-crm-one.vercel.app`.
+1. **vercel.com** → open the project.
+2. **Settings** → **Environment Variables**.
+3. Find the row named `CRON_SECRET`. If there is an environment filter,
+   make sure you are looking at **Production**.
+4. The **•••** menu at the end of the row → **Edit** shows the value in a
+   dialog. Copy it and **Cancel** — there is nothing to save. Some
+   versions of the dashboard put an **eye icon** on the row instead,
+   which reveals it in place.
+
+### If it will not reveal
+
+Vercel hides variables marked **Sensitive** permanently, from everybody
+including the person who set them. There is no way to read one back, so
+replace it:
+
+1. **Edit** the row, paste a new long random value, save.
+2. **Deployments** → **•••** on the latest → **Redeploy**.
+3. Use the new value when creating the jobs below.
+
+**The redeploy is not optional.** Environment variables only reach a
+*new build*, so changing one and not redeploying leaves the old value
+live — which is the exact trap that made this CRM's original cron look
+broken when it was only unauthorised.
+
+Any long random string will do: a password manager or a browser password
+generator set to 32+ characters. It only has to be hard to guess and
+identical in both places.
+
+### If there is no `CRON_SECRET` row at all
+
+Then nothing scheduled has ever worked, including the daily run — the
+schedule calls, the CRM answers "not allowed", and nothing happens with
+no failure recorded anywhere, because being turned away is not an error.
+Add it as above, redeploy, and both the daily run and the jobs below
+start working at once.
+
+> The secret belongs in exactly two places: Vercel's environment
+> variables and the scheduler's request header. Not in a chat, not in a
+> commit, not in a screenshot.
 
 ---
 
