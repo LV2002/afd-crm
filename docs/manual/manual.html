@@ -1437,7 +1437,7 @@
 <p><strong>Common mistakes and fixes</strong></p>
 <ul>
 <li><em>Not checking the count.</em> "Everybody" is rarely what you meant.</li>
-<li><em>Expecting a broadcast to go out the moment you press Send.</em> <strong>It does not, and "now" is no different from "scheduled"</strong> — pressing Send queues the recipients, and a sweep does the sending. How soon that happens depends entirely on how often the sweep runs: on the hosting plan's own once-a-day schedule, a broadcast created at 2pm leaves at 10:00 the next morning. With the ten-minute schedule described in <code>docs/CRON-SETUP.md</code>, within ten minutes. To send one immediately, whatever the schedule: <strong>Settings → Platform health → Send anything that is waiting</strong>.</li>
+<li><em>Expecting a broadcast to go out the moment you press Send.</em> <strong>It does not, and "now" is no different from "scheduled"</strong> — pressing Send queues the recipients, and a sweep does the sending. With the ten-minute schedule set up (<code>docs/CRON-SETUP.md</code>) that is within ten minutes; without it, a broadcast created at 2pm leaves at 10:00 the next morning. To send one immediately, whatever the schedule: <strong>Settings → Platform health → Send anything that is waiting</strong>.</li>
 <li><em>Messaging people who opted out.</em> You cannot — they are excluded automatically (10.5).</li>
 </ul>
 <h2 id="10-5-opted-out">10.5 Opted out</h2>
@@ -1844,7 +1844,8 @@
 <p><strong>Admin only</strong> (<code>audit.read</code>). Every change and every export: <strong>Who</strong>, <strong>What they touched</strong>, the <strong>Table</strong>, and <strong>Before</strong> / <strong>After</strong>, with filters for <strong>Anybody</strong>, <strong>Any table</strong>, <strong>Anything</strong>, <strong>From</strong>, <strong>To</strong> and <strong>Clear filters</strong>.</p>
 <p>Not available to Co-Admin or Centre Head — it cannot be scoped to a centre, so a centre-scoped grant would expose the whole institute's log.</p>
 <h3 id="settings-platform-health">Settings → Platform Health</h3>
-<p><strong>The nightly run</strong> is the first thing on this screen, and the first thing to check when a number has not appeared: when it last ran, how long it took, and what each of the ten jobs did — including the ones that ran and did nothing because an integration has no credentials yet.</p>
+<p><strong>Scheduled work</strong> is the first thing on this screen, and the first thing to check when a number has not appeared or a message has not gone out. A panel per schedule (13.8): when each last ran, how long it took, and what every job did — including the ones that ran and did nothing because an integration has no credentials yet.</p>
+<p><strong>Inbound deliveries</strong> is the matching panel for things coming <em>in</em>: WhatsApp, Instagram, ad leads, website forms. The number that matters there is <strong>rejected</strong> — any at all means the callbacks are arriving and being refused because a stored App secret does not match the app sending, so no message reaches anybody.</p>
 <blockquote><em>"Meta ad spend — ok"</em> and <em>"Meta ad spend — ok, nothing to do: not configured"</em> are the difference between a bug and a token nobody has pasted in.</blockquote>
 <p><strong>If it says no run has ever been recorded</strong>, nothing overnight is happening at all — not the response-time sweep, not fee reminders, not ad spend. The usual cause is <code>CRON_SECRET</code> missing from the hosting environment: the schedule then calls the CRM without the password it expects, the CRM refuses, and nothing runs with no failure recorded anywhere, because being turned away is not an error. Check Vercel → Project → Cron Jobs; a run listed with status 401 is this.</p>
 <p><strong>Run tonight's jobs now</strong> sits under the panel. It runs the same ten jobs immediately, so a credential you have just pasted in can be tested in a minute rather than tomorrow morning. It asks first, because it is the real run: queued broadcasts go out and fee reminders are sent. If the deployment has no <code>CRON_SECRET</code> the button says so in one sentence, which is the quickest way to confirm the cause above.</p>
@@ -1917,33 +1918,37 @@
 </tbody></table>
 <p>Every delivery is written down <strong>before</strong> it is processed, so a failure is visible rather than silent.</p>
 <h2 id="13-8-what-happens-on-a-schedule">13.8 What happens on a schedule</h2>
-<h3 id="the-nightly-run-10-00-ist">The nightly run — 10:00 IST</h3>
-<p>One scheduled run does all of this, in order:</p>
-<ol>
+<p>Three schedules, because the jobs are three different kinds of thing.</p>
+<h3 id="every-ten-minutes">Every ten minutes</h3>
+<ul>
+<li>WhatsApp automations — <strong>every step, the first one included</strong></li>
+<li>Scheduled broadcasts — **including the ones sent <em>now</em>**</li>
 <li>Response-time (SLA) sweep</li>
-<li>Temperature recalculation</li>
-<li>Fee reminders</li>
-<li>Meta retargeting audience</li>
-<li>Google retargeting audience</li>
-<li>WhatsApp automations</li>
-<li>Scheduled broadcasts</li>
+</ul>
+<p>These are a queue being drained: nothing an automation or a broadcast sends leaves the building until this runs. How often it runs is how quickly those go out.</p>
+<h3 id="hourly">Hourly</h3>
+<ul>
 <li>Meta ad spend</li>
 <li>Google ad spend</li>
-<li>Google offline conversions</li>
-</ol>
-<p>Ordered by how fast the value decays. If the run is short of time the last jobs are skipped, not failed — tomorrow picks them up. A one-day gap in ad spend is normal.</p>
-<h3 id="the-frequent-run-every-ten-minutes-if-you-set-it-up">The frequent run — every ten minutes, if you set it up</h3>
-<p>Three of those ten are not really overnight work; they are a <strong>queue being drained</strong>, and nothing they send leaves the building until a sweep picks it up:</p>
-<ul>
-<li><strong>WhatsApp automations</strong> — every step, the first one included</li>
-<li><strong>Scheduled broadcasts</strong> — including the ones sent <em>now</em></li>
-<li><strong>Response-time sweep</strong> — a breach found tomorrow is a lead already lost</li>
+<li>Meta retargeting audience</li>
+<li>Google retargeting audience</li>
 </ul>
-<p>On the nightly run alone, a broadcast created at 2pm goes out at 10:00 the next morning, and a new-enquiry automation can take a day to say hello. <code>/api/cron/frequent</code> runs just those three, and <strong><code>docs/CRON-SETUP.md</code></strong> sets up a free scheduler to call it every ten minutes. Five minutes of work, no cost.</p>
-<p>It is not part of the deployment, so until somebody sets it up the panel on <strong>Settings → Platform health</strong> says so and explains the consequence. The nightly run still includes all three, so the worst case is the delay you have today.</p>
-<p>**What is <em>not</em> on a schedule at all:** a counsellor replying in the inbox, sending one template to one person, or sending a file. Those go out when the button is pressed. Inbound messages are the same — they arrive by webhook within seconds, and no cron is involved.</p>
-<h3 id="when-it-has-not-run">When it has not run</h3>
-<p><strong>Settings → Platform health</strong> has a panel per schedule showing the last run, what each job did, and why anything failed. Two buttons there do the work immediately: <strong>Run tonight's jobs now</strong> for the full set, and <strong>Send anything that is waiting</strong> for the three above.</p>
+<p>The numbers somebody reads during the day. Once a day would mean the marketing figures are this morning's by the afternoon, and a lead who enquired at 9am is not in a retargeting audience until tomorrow — on the day they were deciding.</p>
+<h3 id="daily-10-00-ist">Daily, 10:00 IST</h3>
+<ul>
+<li>Fee reminders</li>
+<li>Temperature recalculation</li>
+<li>Google offline conversions</li>
+<li><strong>and everything on the two schedules above</strong></li>
+</ul>
+<p>Work that should happen once, at a civilised hour: a fee reminder is a <em>date</em>, and it should not arrive at three in the morning.</p>
+<p>It repeats the other two on purpose. Those run from outside the application and can be switched off or quietly stop; this one ships with it. So the worst case of a scheduler failing is that broadcasts go back to being next-morning — late, never lost.</p>
+<p>If a daily run is short of time the last jobs are skipped rather than failed, and tomorrow covers them. A one-day gap in ad spend is normal.</p>
+<h3 id="what-never-waits-for-a-schedule">What never waits for a schedule</h3>
+<p>A counsellor replying in the inbox, sending one template to one person, or sending a file. Those go out the moment the button is pressed. Inbound messages are the same — they arrive by webhook within seconds.</p>
+<h3 id="when-something-has-not-run">When something has not run</h3>
+<p><strong>Settings → Platform health</strong> has a panel per schedule: the last run, what each job did, and why anything failed. Two buttons do the work immediately — <strong>Send anything that is waiting</strong> for the ten-minute set, and <strong>Run tonight's jobs now</strong> for everything.</p>
+<p>Setting the schedules up is a one-off, in <code>docs/CRON-SETUP.md</code>.</p>
 <p class="back-to-contents"><a href="#contents">Back to contents</a></p>
 </section>
 
@@ -1982,7 +1987,7 @@
 <p><strong>The receipt has no address on it</strong> Settings → Organisation is incomplete. Fill in the letterhead.</p>
 <h2 id="14-4-chats">14.4 Chats</h2>
 <p><strong>I cannot reply to a WhatsApp message</strong> Either more than 24 hours have passed since their last message — Meta's rule, not ours; use an approved template — or the thread is not matched to a lead, so there is nothing to record the message against.</p>
-<p><strong>A broadcast has not gone out — scheduled, or sent now</strong> Both wait for the same sweep, so "send now" is not immediate either. Check <strong>Settings → Platform health → The frequent run</strong>: if it shows no run, or one much older than ten minutes, the sweep is not running often enough and that is the whole explanation. Press <strong>Send anything that is waiting</strong> on the same screen to send it this minute, and see <code>docs/CRON-SETUP.md</code> for the five-minute, no-cost fix.</p>
+<p><strong>A broadcast has not gone out — scheduled, or sent now</strong> Both wait for the same sweep, so "send now" is not immediate either. Check <strong>Settings → Platform health → Every ten minutes</strong>: if it shows no run, or one much older than ten minutes, the sweep is not running often enough and that is the whole explanation. Press <strong>Send anything that is waiting</strong> on the same screen to send it this minute, and see <code>docs/CRON-SETUP.md</code> for the three-minute, no-cost fix.</p>
 <p><strong>Nothing an automation sends ever arrives</strong> Same cause, same screen. An automation's steps — including the first — only move when the sweep runs. Also check the automation is switched <strong>On</strong>, and read the <strong>Only:</strong> line under its trigger on the automations list: conditions narrowed too far mean it matches nobody.</p>
 <p><strong>No inbound WhatsApp message reaches the inbox</strong> <strong>Settings → Platform health → Inbound deliveries</strong> answers this in one look, and it has three different answers:</p>
 <ul>
@@ -2006,7 +2011,7 @@
 <p><strong>Ad Performance shows no spend</strong> The page tells you which of three it is:</p>
 <ul>
 <li><em>not connected at all</em> — credentials missing (administrator)</li>
-<li><em>connected but never synced</em> — the nightly run has not happened yet; numbers appear tomorrow morning, or press <strong>Import past ad spend</strong></li>
+<li><em>connected but never synced</em> — the hourly sync has not run yet; press <strong>Import past ad spend</strong>, or see 14.6a</li>
 <li>nothing spent in those dates — nothing to fix</li>
 </ul>
 <p><strong>Ad Performance will not open at all</strong> It needs institute-wide report access. Advertising cannot honestly be split by centre, so the page declines rather than inventing a number.</p>
@@ -2023,13 +2028,14 @@
 <li><strong>Did a test lead "fail"?</strong> Meta's <strong>Create lead</strong> button fills every answer with placeholder text, so there is no real phone number. That is the whole chain working with nothing real at the end of it. Use <strong>Preview form</strong> and fill it in yourself.</li>
 </ol>
 <h2 id="14-6a-ad-spend-or-any-overnight-figure-has-not-updated">14.6a Ad spend, or any overnight figure, has not updated</h2>
-<p><strong>Check the nightly run first.</strong> Settings → Platform Health, at the top. Everything that happens overnight happens in one run at 10:00 IST, and that panel says whether it happened and what each job did.</p>
-<p>Three different answers, three different fixes:</p>
+<p><strong>Check the schedules first.</strong> Settings → Platform Health, at the top. Ad spend and the retargeting audiences are on the <strong>hourly</strong> schedule; everything else overnight is on the <strong>daily</strong> one at 10:00 IST. Each has its own panel saying whether it ran and what each job did.</p>
+<p>Four different answers, four different fixes:</p>
 <table><thead>
 <tr><th>What the panel says</th><th>What it means</th></tr>
 </thead><tbody>
-<tr><td><em>No nightly run has ever been recorded</em></td><td>Nothing overnight is running. Usually <code>CRON_SECRET</code> is missing from the hosting environment — see Chapter 13, Platform Health.</td></tr>
-<tr><td><em>Last run</em> is more than a day ago</td><td>The schedule has stopped firing. Check Vercel → Project → Cron Jobs.</td></tr>
+<tr><td><em>No run recorded</em> under <strong>Hourly</strong></td><td>The hourly schedule was never set up, so spend updates once a day instead. Not a fault — see <code>docs/CRON-SETUP.md</code>.</td></tr>
+<tr><td><em>No run recorded</em> under <strong>Daily</strong></td><td>Nothing scheduled is running at all. Usually <code>CRON_SECRET</code> is missing from the hosting environment — see Chapter 13, Platform Health.</td></tr>
+<tr><td><em>Last run</em> far older than the schedule's interval</td><td>That schedule has stopped firing. For the daily one check Vercel → Project → Cron Jobs; for the other two check whatever calls them.</td></tr>
 <tr><td>The job ran, <em>nothing to do: not-configured</em></td><td>The credentials for that integration are not saved. For Meta ad spend that is the <strong>Ads access token</strong> and <strong>Ad Account ID</strong> in Settings → Integrations → Meta — the Page token that brings in leads is a different token and does not cover spend.</td></tr>
 <tr><td>The job <em>failed</em> with a message</td><td>That message is the answer. A 401 from Meta means the token expired or lacks a permission.</td></tr>
 </tbody></table>

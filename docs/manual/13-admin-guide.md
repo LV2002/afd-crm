@@ -334,10 +334,17 @@ Not available to Co-Admin or Centre Head — it cannot be scoped to a
 centre, so a centre-scoped grant would expose the whole institute's log.
 
 ### Settings → Platform Health
-**The nightly run** is the first thing on this screen, and the first thing
-to check when a number has not appeared: when it last ran, how long it
-took, and what each of the ten jobs did — including the ones that ran and
-did nothing because an integration has no credentials yet.
+**Scheduled work** is the first thing on this screen, and the first thing
+to check when a number has not appeared or a message has not gone out. A
+panel per schedule (13.8): when each last ran, how long it took, and what
+every job did — including the ones that ran and did nothing because an
+integration has no credentials yet.
+
+**Inbound deliveries** is the matching panel for things coming *in*:
+WhatsApp, Instagram, ad leads, website forms. The number that matters
+there is **rejected** — any at all means the callbacks are arriving and
+being refused because a stored App secret does not match the app
+sending, so no message reaches anybody.
 
 > *"Meta ad spend — ok"* and *"Meta ad spend — ok, nothing to do: not
 > configured"* are the difference between a bug and a token nobody has
@@ -524,58 +531,62 @@ is visible rather than silent.
 
 ## 13.8 What happens on a schedule
 
-### The nightly run — 10:00 IST
+Three schedules, because the jobs are three different kinds of thing.
 
-One scheduled run does all of this, in order:
+### Every ten minutes
 
-1. Response-time (SLA) sweep
-2. Temperature recalculation
-3. Fee reminders
-4. Meta retargeting audience
-5. Google retargeting audience
-6. WhatsApp automations
-7. Scheduled broadcasts
-8. Meta ad spend
-9. Google ad spend
-10. Google offline conversions
+- WhatsApp automations — **every step, the first one included**
+- Scheduled broadcasts — **including the ones sent *now***
+- Response-time (SLA) sweep
 
-Ordered by how fast the value decays. If the run is short of time the
-last jobs are skipped, not failed — tomorrow picks them up. A one-day gap
-in ad spend is normal.
+These are a queue being drained: nothing an automation or a broadcast
+sends leaves the building until this runs. How often it runs is how
+quickly those go out.
 
-### The frequent run — every ten minutes, if you set it up
+### Hourly
 
-Three of those ten are not really overnight work; they are a **queue
-being drained**, and nothing they send leaves the building until a sweep
-picks it up:
+- Meta ad spend
+- Google ad spend
+- Meta retargeting audience
+- Google retargeting audience
 
-- **WhatsApp automations** — every step, the first one included
-- **Scheduled broadcasts** — including the ones sent *now*
-- **Response-time sweep** — a breach found tomorrow is a lead already
-  lost
+The numbers somebody reads during the day. Once a day would mean the
+marketing figures are this morning's by the afternoon, and a lead who
+enquired at 9am is not in a retargeting audience until tomorrow — on the
+day they were deciding.
 
-On the nightly run alone, a broadcast created at 2pm goes out at 10:00
-the next morning, and a new-enquiry automation can take a day to say
-hello. `/api/cron/frequent` runs just those three, and
-**`docs/CRON-SETUP.md`** sets up a free scheduler to call it every ten
-minutes. Five minutes of work, no cost.
+### Daily, 10:00 IST
 
-It is not part of the deployment, so until somebody sets it up the panel
-on **Settings → Platform health** says so and explains the consequence.
-The nightly run still includes all three, so the worst case is the delay
-you have today.
+- Fee reminders
+- Temperature recalculation
+- Google offline conversions
+- **and everything on the two schedules above**
 
-**What is *not* on a schedule at all:** a counsellor replying in the
-inbox, sending one template to one person, or sending a file. Those go
-out when the button is pressed. Inbound messages are the same — they
-arrive by webhook within seconds, and no cron is involved.
+Work that should happen once, at a civilised hour: a fee reminder is a
+*date*, and it should not arrive at three in the morning.
 
-### When it has not run
+It repeats the other two on purpose. Those run from outside the
+application and can be switched off or quietly stop; this one ships with
+it. So the worst case of a scheduler failing is that broadcasts go back
+to being next-morning — late, never lost.
 
-**Settings → Platform health** has a panel per schedule showing the last
-run, what each job did, and why anything failed. Two buttons there do the
-work immediately: **Run tonight's jobs now** for the full set, and **Send
-anything that is waiting** for the three above.
+If a daily run is short of time the last jobs are skipped rather than
+failed, and tomorrow covers them. A one-day gap in ad spend is normal.
+
+### What never waits for a schedule
+
+A counsellor replying in the inbox, sending one template to one person,
+or sending a file. Those go out the moment the button is pressed.
+Inbound messages are the same — they arrive by webhook within seconds.
+
+### When something has not run
+
+**Settings → Platform health** has a panel per schedule: the last run,
+what each job did, and why anything failed. Two buttons do the work
+immediately — **Send anything that is waiting** for the ten-minute set,
+and **Run tonight's jobs now** for everything.
+
+Setting the schedules up is a one-off, in `docs/CRON-SETUP.md`.
 
 ---
 

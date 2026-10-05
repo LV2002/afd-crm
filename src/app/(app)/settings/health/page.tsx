@@ -1,4 +1,4 @@
-import { desc, eq, isNull } from "drizzle-orm";
+import { desc, isNull } from "drizzle-orm";
 
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
@@ -9,16 +9,12 @@ import { getSchemaDrift } from "@/lib/db/schema-drift";
 import { describeDifference } from "@/lib/db/schema-compare";
 import { cronRuns, errorEvents } from "@/lib/db/schema";
 import { EmailNotConfigured } from "@/components/integrations/email-not-configured";
-import {
-  NightlyRunPanel,
-  type NightlyJobRow,
-  type NightlyRun,
-} from "./nightly-run";
+import type { CronTier } from "@/lib/cron/record-run";
 import { emailConfigured } from "@/lib/email/send";
 import { resolveAlertRecipients } from "@/lib/errors/alert-recipients";
 import { formatDateIST } from "@/lib/format/date";
 
-import { FrequentRunPanel } from "./frequent-run";
+import { CronTierPanel, type CronJobRow, type CronRun } from "./cron-tier-panel";
 import { ResolveButton } from "./resolve-button";
 import { RunFrequentButton } from "./run-frequent-button";
 import { RunNightlyButton } from "./run-nightly-button";
@@ -65,7 +61,7 @@ export default async function HealthPage() {
   // Through the direct client, like everything else on this page: it is
   // read by an admin whose scope the RLS policy would allow anyway, and
   // the rest of the panel's data comes the same way.
-  const toRun = (row: typeof cronRuns.$inferSelect | undefined): NightlyRun | null =>
+  const toRun = (row: typeof cronRuns.$inferSelect | undefined): CronRun | null =>
     row
       ? {
           startedAt: row.startedAt.toISOString(),
@@ -74,28 +70,22 @@ export default async function HealthPage() {
           okCount: row.okCount,
           failedCount: row.failedCount,
           skippedCount: row.skippedCount,
-          jobs: (row.jobs ?? []) as NightlyJobRow[],
+          jobs: (row.jobs ?? []) as CronJobRow[],
         }
       : null;
 
-  const [[lastRun], [lastFrequentRun], webhookDeliveries] = await Promise.all([
+  // The last run of each tier, in one query rather than three: `distinct
+  // on` is what Postgres has instead of a window function for "newest row
+  // per group", and this page already runs several queries.
+  const [tierRows, webhookDeliveries] = await Promise.all([
     db
-      .select()
+      .selectDistinctOn([cronRuns.jobKey])
       .from(cronRuns)
-      .where(eq(cronRuns.jobKey, "daily"))
-      .orderBy(desc(cronRuns.startedAt))
-      .limit(1),
-    db
-      .select()
-      .from(cronRuns)
-      .where(eq(cronRuns.jobKey, "frequent"))
-      .orderBy(desc(cronRuns.startedAt))
-      .limit(1),
+      .orderBy(cronRuns.jobKey, desc(cronRuns.startedAt)),
     recentWebhookDeliveries(),
   ]);
 
-  const nightlyRun = toRun(lastRun);
-  const frequentRun = toRun(lastFrequentRun);
+  const runFor = (tier: CronTier) => toRun(tierRows.find((row) => row.jobKey === tier));
 
   return (
     <div className="flex flex-col gap-6">
@@ -158,37 +148,44 @@ export default async function HealthPage() {
         "Did it run?" is the first question when a number is missing, and
         the answer used to be unavailable from any screen.
       */}
-      <section className="flex flex-col gap-3">
-        <h2 className="font-medium">The nightly run</h2>
-        <NightlyRunPanel run={nightlyRun} />
-        {/*
-          Under the panel rather than above it: the panel is the question
-          ("did it run, and what did it do?") and this is the way to get a
-          fresh answer without waiting until 10:00 tomorrow. Anything that
-          depends on a credential — ad spend, retargeting, automations —
-          otherwise has a debugging loop of one attempt per day.
-        */}
-        <RunNightlyButton />
-      </section>
+      <section className="flex flex-col gap-4">
+        <div>
+          <h2 className="font-medium">Scheduled work</h2>
+          <p className="text-sm text-muted-foreground">
+            Three schedules, because the jobs are three different kinds of thing. Nothing a
+            counsellor does by hand waits for any of them — replying, sending a template or a
+            file goes out on the button press, and inbound messages arrive by webhook in seconds.
+          </p>
+        </div>
 
-      {/*
-        Its own section, because the two schedules fail differently and
-        the fix for each is somewhere else: the nightly one is Vercel's
-        and is either set up or not, while this one is an outside
-        scheduler that can be absent, misconfigured, or calling with the
-        wrong secret. A broadcast that has not gone out looks the same in
-        all three cases.
-      */}
-      <section className="flex flex-col gap-3">
-        <h2 className="font-medium">The frequent run</h2>
-        <p className="-mt-2 text-sm text-muted-foreground">
-          WhatsApp automations, scheduled broadcasts and the response-time sweep. Nothing an
-          automation or a broadcast sends leaves the building until this runs, so how often it
-          runs is how quickly those go out. The nightly run does these too — this is the schedule
-          that makes them prompt rather than next-morning.
-        </p>
-        <FrequentRunPanel run={frequentRun} />
-        <RunFrequentButton />
+        {/*
+          Frequent first. It is the one with somebody waiting on it, and
+          the one most likely to be the answer when a person opens this
+          screen because a message has not gone out.
+        */}
+        <div className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold">{"Every ten minutes"}</h3>
+          <CronTierPanel tier="frequent" run={runFor("frequent")} />
+          <RunFrequentButton />
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold">Hourly</h3>
+          <CronTierPanel tier="hourly" run={runFor("hourly")} />
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold">Daily, 10:00 IST</h3>
+          <CronTierPanel tier="daily" run={runFor("daily")} />
+          {/*
+            Under the panel rather than above it: the panel is the question
+            ("did it run, and what did it do?") and this is the way to get a
+            fresh answer without waiting until 10:00 tomorrow. Anything that
+            depends on a credential — ad spend, retargeting, automations —
+            otherwise has a debugging loop of one attempt per day.
+          */}
+          <RunNightlyButton />
+        </div>
       </section>
 
       {/*

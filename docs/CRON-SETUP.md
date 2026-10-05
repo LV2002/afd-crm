@@ -1,149 +1,149 @@
-# Running the CRM's scheduled jobs
+# The CRM's schedules
 
-**Who this is for:** Leon, or whoever administers the deployment. About
-five minutes, no cost.
-
-**What it fixes:** on the hosting plan's own scheduler, the CRM gets
-**one scheduled run a day**. That is fine for nine of the ten jobs and
-wrong for two of them, because those two are a queue being drained:
-
-- **WhatsApp automations.** Every step, including the first. An
-  automation triggered by a new enquiry at 11am sends its first message
-  at 10:00 the next morning.
-- **Scheduled broadcasts.** Including the ones sent *now* — pressing
-  Send queues the recipients and marks the broadcast `sending`; a sweep
-  does the actual sending. Press Send at 2pm, messages leave at 10:00
-  tomorrow.
-
-Everything a counsellor does by hand is unaffected and always has been:
-replying in the inbox, sending one template to one person, sending media.
-Those go out the moment the button is pressed. Inbound messages are also
-immediate — they arrive by webhook, not by schedule.
+**Who this is for:** Leon, or whoever administers the deployment.
+**What you have to do:** add two secrets to GitHub. About three minutes.
+**Cost:** nothing.
 
 ---
 
-## What you are setting up
+## The three schedules, and why there are three
 
-Something outside the CRM that calls one URL every ten minutes:
+The jobs are three different kinds of thing, and lumping them into one
+daily run made two of them behave badly.
 
-```
-GET https://<your-crm-domain>/api/cron/frequent
-Authorization: Bearer <CRON_SECRET>
-```
+| | When | Jobs | Why that often |
+|---|---|---|---|
+| **Frequent** | every 10 min | WhatsApp automations · Scheduled broadcasts · Response-time sweep | A queue being drained. Nothing an automation or a broadcast sends leaves the building until this runs. |
+| **Hourly** | :25 past | Meta & Google ad spend · Both retargeting audiences | Numbers somebody reads during the day, and audiences a lead should join the day they enquire. |
+| **Daily** | 10:00 IST | Fee reminders · Temperature · Google offline conversions — **and everything above** | Work that should happen once, at a civilised hour. Plus a safety net. |
 
-That endpoint runs the three time-critical jobs and nothing else —
-automations, broadcasts, and the response-time sweep. It deliberately
-does **not** run the ad-spend syncs, the retargeting pushes, the offline
-conversion uploads, the fee reminders or the temperature recalculation:
-four of those spend Meta and Google API quota on data that does not
-change every ten minutes, and a fee reminder should arrive at a civilised
-hour rather than whenever a sweep happened to fire. Those stay on the
-daily run.
+**Why the daily run repeats the other two:** the frequent and hourly
+schedules live *outside* the application, so they can be absent,
+disabled, or quietly broken. The daily one ships in `vercel.json`. With
+it as a backstop, the worst case of any scheduler failure is the
+once-a-day behaviour this system had before the tiers existed — late, but
+never lost.
 
-**The daily run keeps going, unchanged.** It includes these three as
-well, so if the frequent schedule is never set up or quietly stops, the
-worst case is the delay you have today.
-
-> ### The secret has to travel in a header
->
-> `CRON_SECRET` is only ever read from the `Authorization` header, and
-> the CRM will not accept it in the URL. That rules out the simplest
-> schedulers, deliberately: a secret in a query string ends up in the
-> hosting access logs, in the scheduler's own history, and in any
-> referrer — and a credential you cannot rotate out of six logs is worse
-> than a slow broadcast. Both options below send headers.
->
-> The value is the same `CRON_SECRET` already set on the deployment. If
-> you do not have it to hand, generate a new one, set it in the hosting
-> environment, **redeploy** (environment variables only reach a new
-> build), and use the new value in both places.
+**What is not on a schedule at all:** a counsellor replying in the inbox,
+sending one template to one person, sending a file. Those go out on the
+button press and always have. Inbound messages arrive by webhook within
+seconds — no cron involved.
 
 ---
 
-## Option A — cron-job.org (recommended)
+## What is already done
 
-A web form. Nothing to install, nothing to write.
+- `/api/cron/frequent` and `/api/cron/hourly` exist.
+- `.github/workflows/cron-frequent.yml` and `cron-hourly.yml` are
+  committed, with the schedules in them.
+- The daily run stays on Vercel's own scheduler, unchanged.
+- **Settings → Platform health** shows all three, with the last run of
+  each and what every job did.
 
-1. Sign up at **cron-job.org** and confirm the email.
+## What you have to do — two secrets
+
+GitHub needs to know where the CRM is and what the password is.
+
+1. Go to the repository → **Settings** → **Secrets and variables** →
+   **Actions** → **New repository secret**.
+2. Add:
+
+   | Name | Value |
+   |---|---|
+   | `CRM_BASE_URL` | `https://your-crm-domain` — no trailing slash |
+   | `CRON_SECRET` | the **same** value as `CRON_SECRET` in Vercel |
+
+3. **Merge the pull request first.** GitHub only runs scheduled workflows
+   that are on the repository's **default branch**. While the workflow
+   files sit on a feature branch they will not fire, however correct the
+   secrets are. You can still test them by hand (next step).
+
+4. Test it now: **Actions** → **CRM — frequent jobs (10 min)** → **Run
+   workflow**. Green tick is success.
+
+5. Confirm from inside the CRM: **Settings → Platform health → Every ten
+   minutes** should show a run from a moment ago.
+
+> ### If `CRON_SECRET` is not already set in Vercel
+>
+> Nothing scheduled works at all without it, including the daily run —
+> the schedule calls, the CRM answers "not allowed", and nothing happens
+> with no failure recorded anywhere, because being turned away is not an
+> error. Generate a value, set it in Vercel's environment variables,
+> **redeploy** (environment variables only reach a new build), and use
+> the same value in the GitHub secret.
+
+> ### The secret travels in a header, never the URL
+>
+> `CRON_SECRET` is only read from the `Authorization` header, and the CRM
+> will not accept it as `?secret=`. That rules out the simplest
+> schedulers, deliberately: a secret in a query string lands in the
+> hosting access log, the scheduler's own history, and any referrer — and
+> a credential you cannot rotate out of six logs is worse than a slow
+> broadcast.
+
+---
+
+## Two things to know about GitHub's scheduler
+
+Worth reading once, because both are surprising.
+
+**It is not punctual.** Scheduled workflows are queued at low priority,
+so `*/10` really means every ten to twenty-five minutes, sometimes worse
+at peak times. Fine for broadcasts and ad spend. If you want an
+automation's first message inside ten minutes reliably, use the
+cron-job.org option below for that one schedule.
+
+**It switches itself off.** GitHub **disables scheduled workflows on a
+repository with no commits for 60 days**, with one email about it. If
+development goes quiet for two months, these stop — and the daily run
+carries on, so the symptom is broadcasts going back to next-morning
+rather than anything breaking. The frequent-run panel on Platform health
+is where that shows up.
+
+---
+
+## The alternative, if you want tighter timing
+
+**cron-job.org** — free, down to one minute, genuinely punctual, sends
+custom headers, and emails you when a job starts failing.
+
+1. Sign up and confirm the email.
 2. **Create cronjob.**
 3. **Title**: `AFD CRM — frequent`.
-4. **URL**: `https://<your-crm-domain>/api/cron/frequent`
-5. **Execution schedule**: *Every 10 minutes*.
-6. Open **Advanced** → **Headers** and add one:
-   - Name: `Authorization`
-   - Value: `Bearer <CRON_SECRET>` — the word `Bearer`, one space, then
-     the secret.
-7. Leave **Enable job** on. **Create.**
-8. Press **Test run** (or **Run now**). A green **200** is success.
+4. **URL**: `https://your-crm-domain/api/cron/frequent`
+5. **Schedule**: every 10 minutes.
+6. **Advanced** → **Headers**, add one:
+   - Name `Authorization`
+   - Value `Bearer <CRON_SECRET>` — the word `Bearer`, one space, the secret.
+7. **Create**, then **Test run**. A 200 is success.
 
-**Then check it from inside the CRM**: *Settings → Platform health → The
-frequent run* should show a run within the last ten minutes. That panel
-is the thing to look at later too — if it goes quiet, the scheduler has
-stopped.
+If you do this, delete `.github/workflows/cron-frequent.yml` or you will
+have two schedules calling the same endpoint. Harmless — every job is
+idempotent, so the second finds nothing to do — but confusing when
+reading the run history.
 
-**Why this one:** the free plan goes down to one minute, it sends custom
-headers, and it emails you when a job starts failing — which matters,
-because a scheduler that silently stops is how this whole class of
-problem happens in the first place.
-
----
-
-## Option B — GitHub Actions
-
-The repository is already on GitHub, so this keeps everything in one
-place and needs no new account.
-
-1. In GitHub: **Settings → Secrets and variables → Actions → New
-   repository secret.**
-   - Name: `CRON_SECRET`, value: the same secret as the deployment.
-   - Add a second: `CRM_BASE_URL`, value: `https://<your-crm-domain>`.
-2. Commit this file as `.github/workflows/frequent-cron.yml`:
-
-```yaml
-name: CRM frequent jobs
-on:
-  schedule:
-    - cron: "*/10 * * * *"
-  workflow_dispatch:
-jobs:
-  run:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Call the frequent cron endpoint
-        run: |
-          code=$(curl -s -o /tmp/body -w '%{http_code}' \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.CRM_BASE_URL }}/api/cron/frequent")
-          cat /tmp/body
-          test "$code" = "200"
-```
-
-3. **Actions → CRM frequent jobs → Run workflow** to test it now.
-
-**Two things to know before choosing this.** GitHub's scheduled
-workflows are queued at low priority, so `*/10` in practice means
-"every ten to twenty-five minutes, sometimes worse" — fine for
-broadcasts, less good if you want an automation's first message inside
-ten minutes. And GitHub **disables scheduled workflows on a repository
-with no commits for 60 days**, with one email about it. If development
-goes quiet, this stops.
+Repeat with `/api/cron/hourly` if you want that punctual too; it matters
+much less.
 
 ---
 
 ## Rejected, and why
 
 - **A second `crons` entry in `vercel.json`.** The right answer, and the
-  plan does not allow it. On a plan that does, add it and delete
-  whichever option above you set up — nothing in the code changes.
-- **Putting the secret in the URL** so that header-less schedulers work.
-  See the box above.
+  Hobby plan does not allow it — a scheduled job there fires once a day.
+  On a plan with minute-level cron, add entries pointing at
+  `/api/cron/frequent` and `/api/cron/hourly`, delete the workflows, and
+  nothing in the code changes.
+- **Putting the secret in the URL** so header-less schedulers work. See
+  the box above.
 - **Running `/api/cron/daily` every ten minutes.** The obvious move and
   the wrong one: 144 ad-spend and retargeting calls a day to Meta and
   Google, re-uploaded offline conversions, and fee reminders landing at
   3am.
 - **Cloudflare Workers / Upstash QStash.** Both work and both are free at
-  this volume. They need a little code or a little CLI, and neither is
-  better than Option A for one URL on a fixed interval.
+  this volume. Both need a little code or CLI, and neither beats the two
+  options above for calling a URL on a fixed interval.
 
 ---
 
@@ -151,24 +151,23 @@ goes quiet, this stops.
 
 Vercel's Hobby plan is for non-commercial use, and this is a business.
 Pro also gives minute-level cron scheduling, which makes this whole
-document unnecessary — a second `crons` entry and done. Worth weighing
-against the five minutes Option A takes.
+document unnecessary — two `crons` entries and done. Worth weighing
+against the three minutes the GitHub option takes.
 
 ---
 
 ## When something is not going out
 
-In this order:
+In this order, all on **Settings → Platform health**:
 
-1. **Settings → Platform health → The frequent run.** No run recorded
-   means no scheduler is calling. A run older than 45 minutes means it
-   has stopped.
-2. **The same panel's job list.** A job listed `failed` names its own
-   error.
-3. **Press "Send anything that is waiting"** on that screen. It does the
-   same work immediately, which both unblocks the thing you were waiting
-   for and proves whether the jobs themselves are healthy — separating
-   "the scheduler is not calling" from "the job is broken".
-4. **Settings → Platform health → Inbound deliveries** if the problem is
-   messages coming *in* rather than going out. That is a different
-   system: webhooks, not cron.
+1. **The relevant schedule's panel.** No run recorded means nothing is
+   calling it. A run much older than its interval means it has stopped.
+2. **That panel's job list.** A job listed `failed` names its own error.
+   One listed `ok — nothing to do: not-configured` is missing a
+   credential, not broken.
+3. **Press "Send anything that is waiting."** It does the frequent tier's
+   work immediately — which both unblocks whatever you were waiting for
+   and separates "the scheduler is not calling" from "the job is broken".
+4. **Inbound deliveries**, if the problem is messages coming *in* rather
+   than going out. That is webhooks, a different system entirely, and
+   that panel diagnoses it.

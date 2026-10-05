@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
-import { runDailyAndRecord } from "@/lib/cron/run-daily";
-import { runFrequentAndRecord } from "@/lib/cron/run-frequent";
+import { dailyJobs, frequentJobs } from "@/lib/cron/jobs";
+import { runTierAndRecord } from "@/lib/cron/record-run";
 import { composeEmail, emailConfigured, sendEmail } from "@/lib/email/send";
 import { resolveAlertRecipients } from "@/lib/errors/alert-recipients";
 import { resolveError } from "@/lib/errors/capture";
@@ -158,10 +158,13 @@ export async function runNightlyNow(): Promise<HealthState> {
     };
   }
 
-  const result = await runDailyAndRecord(
-    new Request("https://cron.local/api/cron/daily", {
-      headers: { authorization: `Bearer ${secret}` },
-    }),
+  const result = await runTierAndRecord(
+    "daily",
+    dailyJobs(
+      new Request("https://cron.local/api/cron/daily", {
+        headers: { authorization: `Bearer ${secret}` },
+      }),
+    ),
   );
 
   await writeAuditLog(await createClient(), {
@@ -216,10 +219,13 @@ export async function runFrequentNow(): Promise<HealthState> {
     };
   }
 
-  const result = await runFrequentAndRecord(
-    new Request("https://cron.local/api/cron/frequent", {
-      headers: { authorization: `Bearer ${secret}` },
-    }),
+  const result = await runTierAndRecord(
+    "frequent",
+    frequentJobs(
+      new Request("https://cron.local/api/cron/frequent", {
+        headers: { authorization: `Bearer ${secret}` },
+      }),
+    ),
   );
 
   await writeAuditLog(await createClient(), {

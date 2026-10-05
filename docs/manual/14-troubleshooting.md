@@ -109,11 +109,11 @@ to a lead, so there is nothing to record the message against.
 
 **A broadcast has not gone out — scheduled, or sent now**
 Both wait for the same sweep, so "send now" is not immediate either.
-Check **Settings → Platform health → The frequent run**: if it shows no
+Check **Settings → Platform health → Every ten minutes**: if it shows no
 run, or one much older than ten minutes, the sweep is not running often
 enough and that is the whole explanation. Press **Send anything that is
 waiting** on the same screen to send it this minute, and see
-`docs/CRON-SETUP.md` for the five-minute, no-cost fix.
+`docs/CRON-SETUP.md` for the three-minute, no-cost fix.
 
 **Nothing an automation sends ever arrives**
 Same cause, same screen. An automation's steps — including the first —
@@ -179,8 +179,8 @@ institute.
 **Ad Performance shows no spend**
 The page tells you which of three it is:
 - *not connected at all* — credentials missing (administrator)
-- *connected but never synced* — the nightly run has not happened yet;
-  numbers appear tomorrow morning, or press **Import past ad spend**
+- *connected but never synced* — the hourly sync has not run yet; press
+  **Import past ad spend**, or see 14.6a
 - nothing spent in those dates — nothing to fix
 
 **Ad Performance will not open at all**
@@ -215,16 +215,18 @@ Work through this in order:
 
 ## 14.6a Ad spend, or any overnight figure, has not updated
 
-**Check the nightly run first.** Settings → Platform Health, at the top.
-Everything that happens overnight happens in one run at 10:00 IST, and
-that panel says whether it happened and what each job did.
+**Check the schedules first.** Settings → Platform Health, at the top.
+Ad spend and the retargeting audiences are on the **hourly** schedule;
+everything else overnight is on the **daily** one at 10:00 IST. Each has
+its own panel saying whether it ran and what each job did.
 
-Three different answers, three different fixes:
+Four different answers, four different fixes:
 
 | What the panel says | What it means |
 |---|---|
-| *No nightly run has ever been recorded* | Nothing overnight is running. Usually `CRON_SECRET` is missing from the hosting environment — see Chapter 13, Platform Health. |
-| *Last run* is more than a day ago | The schedule has stopped firing. Check Vercel → Project → Cron Jobs. |
+| *No run recorded* under **Hourly** | The hourly schedule was never set up, so spend updates once a day instead. Not a fault — see `docs/CRON-SETUP.md`. |
+| *No run recorded* under **Daily** | Nothing scheduled is running at all. Usually `CRON_SECRET` is missing from the hosting environment — see Chapter 13, Platform Health. |
+| *Last run* far older than the schedule's interval | That schedule has stopped firing. For the daily one check Vercel → Project → Cron Jobs; for the other two check whatever calls them. |
 | The job ran, *nothing to do: not-configured* | The credentials for that integration are not saved. For Meta ad spend that is the **Ads access token** and **Ad Account ID** in Settings → Integrations → Meta — the Page token that brings in leads is a different token and does not cover spend. |
 | The job *failed* with a message | That message is the answer. A 401 from Meta means the token expired or lacks a permission. |
 

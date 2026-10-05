@@ -3632,3 +3632,70 @@ plainly, because "it will catch up once we go live" is the natural assumption an
 
 Added to the manual's troubleshooting as its own entry rather than left in the setup guide, since
 the person hitting it is looking at an inbox, not at a setup document.
+
+## 2026-10-05 — Three cron tiers, split by what a job is
+
+Leon: *"use the ideal cron job frequencies and times so that everything works smoothly."* The
+earlier entry got the frequent/daily split right and left the middle case alone. Three tiers now:
+
+| Tier | Interval | Membership rule |
+|---|---|---|
+| frequent | 10 min | A queue being drained |
+| hourly | :25 past | A number somebody reads during the working day |
+| daily | 10:00 IST | Something with a human on the other end at a civilised hour — **plus everything above** |
+
+The hourly tier is the new one, and the argument for it is not cost. Ad spend and the two
+retargeting audiences talk to Meta and Google: once a day means the ROAS figure on the marketing
+screen is this morning's when somebody reads it after lunch, and a lead who enquired at 9am is not
+in a retargeting audience until tomorrow — on the one day they were actually deciding. Hourly is
+24 calls a day per platform, well inside quota. Ten-minutely would be 144 and buy nothing, because
+neither platform's spend moves that fast and the audience diff would find nothing new 140 times
+out of 144.
+
+Three things worth keeping:
+
+**The daily tier is a superset, and `tests/cron-tiers.spec.ts` asserts it.** The faster two live
+outside the deployment — an external scheduler calling a URL — so they can be absent, disabled, or
+silently stopped. The daily one ships in `vercel.json`. As long as it contains everything, the
+worst case of any scheduler failure is *late*, never *lost*. If that superset property is ever
+broken, a scheduler outage starts dropping work, and nothing else in the suite would notice — so
+it is a test, not a comment.
+
+**The membership rule is asserted too.** Putting the ad-spend sync on the ten-minute tier is a
+one-line change that quadruples Meta traffic sixfold, and removing the broadcast sweep from it
+silently restores the once-a-day delay the tiers exist to fix. Neither breaks a type. Both now
+break a test.
+
+**`selectDistinctOn` has a rule the type checker cannot see:** the first ORDER BY column must be
+the distinct column or Postgres rejects the query outright. It is used to read the newest run per
+tier on the health screen — which is the one screen somebody opens when things are already wrong,
+making it the worst possible place for a query to throw. Covered by a test that also proves it
+returns the *newest* row per group rather than an arbitrary one.
+
+## 2026-10-05 — The schedules ship as workflow files, not as instructions
+
+The previous entry left Leon with a document telling him to go and configure a scheduler. That is
+a worse deliverable than it looks: the steps are on someone else's website, they change, and the
+thing most likely to go wrong (a secret that does not match) produces silence rather than an
+error.
+
+So `.github/workflows/cron-frequent.yml` and `cron-hourly.yml` are committed instead. The
+repository already runs CI there, the schedule is version-controlled next to the code it calls,
+and what is left for a human is two repository secrets.
+
+Two deliberate details:
+
+**The workflow checks for a 401 specifically** and fails with a message naming the cause. A 401 is
+the failure that looks like success from outside: the call arrived, was turned away, and nothing
+ran. `test "$code" = "200"` alone would have reported it as a red X with no explanation — and this
+exact failure, from an unset `CRON_SECRET`, is what made the original cron look healthy for weeks
+while doing nothing.
+
+**It is honest in its own comments about GitHub's scheduler**, which is not punctual (`*/10` means
+ten to twenty-five minutes, queued at low priority) and which disables scheduled workflows on a
+repository with no commits for 60 days. Both are written in the file, in `docs/CRON-SETUP.md`, and
+reflected in the health panel's staleness thresholds — 45 minutes for the frequent tier rather
+than 15, because a panel that cries wolf every afternoon is ignored by the time it matters.
+
+cron-job.org stays documented as the upgrade for anybody who wants the ten-minute tier to be
+genuinely ten minutes. It cannot be committed to a repository, which is exactly why it is second.

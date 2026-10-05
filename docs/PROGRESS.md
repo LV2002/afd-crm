@@ -7360,3 +7360,70 @@ rewritten around all of it.
 
 **1552 tests pass** (4 new), lint, typecheck, `db:audit` and the build clean. No migration —
 `cron_runs.job_key` was already free text.
+
+## Session 69 — Three schedules, and the workflows that run them
+
+*"use the ideal cron job frequencies and times so that everything works smoothly… not at only 1
+time of the day."*
+
+### The tiers
+
+| Tier | When | Jobs |
+|---|---|---|
+| **frequent** | every 10 min | WhatsApp automations · scheduled broadcasts · SLA sweep |
+| **hourly** | :25 past | Meta & Google ad spend · both retargeting audiences |
+| **daily** | 10:00 IST | fee reminders · temperature · Google offline conversions — **and everything above** |
+
+Split by **what a job is**, not what it costs. A queue being drained needs minutes. A number
+somebody reads during the day needs hours. A fee reminder is a *date* and must not arrive at 3am;
+temperature is a slow signal; Google's conversion upload is a daily batch by convention.
+
+The hourly tier is new since the last session. Once-a-day ad spend means the ROAS figure is this
+morning's when read after lunch, and a lead who enquired at 9am joins a retargeting audience
+tomorrow — the day after the one that mattered. Hourly is 24 calls per platform per day, well
+inside quota; ten-minutely would be 144 and find nothing new 140 times.
+
+**The daily tier is a superset of the other two, and a test says so.** The faster schedules run
+from outside the deployment and can be absent or silently stopped; the daily one ships in
+`vercel.json`. While it stays a superset, a scheduler failure makes work *late*, never *lost*.
+
+### What shipped rather than what was documented
+
+Last session left a document telling Leon to go and configure a scheduler. This session commits
+`.github/workflows/cron-frequent.yml` and `cron-hourly.yml` — version-controlled next to the code
+they call, in the CI system this repo already uses. All that is left for him is two repository
+secrets, `CRM_BASE_URL` and `CRON_SECRET`.
+
+The workflow **checks for a 401 by name** and fails with the cause, because a 401 is the failure
+that looks like success from outside — the call arrives, is refused, nothing runs. That exact
+failure, from an unset `CRON_SECRET`, is what made the original cron look healthy while doing
+nothing for weeks.
+
+Honest in the file about GitHub's scheduler: `*/10` really means ten to twenty-five minutes, and
+GitHub disables scheduled workflows after 60 days without commits. The health panel's staleness
+thresholds are set to match (45 minutes, not 15) so it does not cry wolf. cron-job.org stays
+documented as the punctual upgrade — it cannot be committed to a repo, which is why it is second.
+
+**It will not fire until PR #69 merges**: GitHub only runs scheduled workflows on the default
+branch. Running it by hand from the Actions tab works today.
+
+### Cleanups the third tier forced
+
+- `run-daily.ts` and `run-frequent.ts` each had their own copy of the `cron_runs` insert and of
+  `budgetMs()`. Collapsed into `lib/cron/record-run.ts` before a third copy existed; every job
+  list now lives in `lib/cron/jobs.ts` with the membership rule written down.
+- `NightlyRunPanel` and `FrequentRunPanel` became one `CronTierPanel` with a copy table, because
+  by the third the only difference was the words — and the words are the point. Each tier's empty
+  state says the right thing: a missing daily run is a **fault**, a missing frequent or hourly run
+  is **expected** until somebody sets up the scheduler.
+- `NightlyRun`/`NightlyJobRow` renamed `CronRun`/`CronJobRow`. "Nightly" was a lie for a
+  ten-minute schedule.
+
+### Manual
+
+Chapter 13.8 rewritten around the three schedules, 13.4's Platform Health entry now covers both
+new panels, and 14.6a's ad-spend table distinguishes "the hourly schedule was never set up" (not a
+fault) from "nothing is running at all" (a fault).
+
+**1560 tests pass** (8 new), lint, typecheck, `db:audit` and the build clean. No migration —
+`cron_runs.job_key` was already free text.

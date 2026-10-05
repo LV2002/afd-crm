@@ -118,11 +118,10 @@ and status, and each recipient's delivery is tracked.
 - *Not checking the count.* "Everybody" is rarely what you meant.
 - *Expecting a broadcast to go out the moment you press Send.* **It does
   not, and "now" is no different from "scheduled"** — pressing Send
-  queues the recipients, and a sweep does the sending. How soon that
-  happens depends entirely on how often the sweep runs: on the hosting
-  plan's own once-a-day schedule, a broadcast created at 2pm leaves at
-  10:00 the next morning. With the ten-minute schedule described in
-  `docs/CRON-SETUP.md`, within ten minutes.
+  queues the recipients, and a sweep does the sending. With the
+  ten-minute schedule set up (`docs/CRON-SETUP.md`) that is within ten
+  minutes; without it, a broadcast created at 2pm leaves at 10:00 the
+  next morning.
   To send one immediately, whatever the schedule: **Settings → Platform
   health → Send anything that is waiting**.
 - *Messaging people who opted out.* You cannot — they are excluded

@@ -1,0 +1,52 @@
+# Every ten minutes: WhatsApp automations, scheduled broadcasts, SLA sweep.
+#
+# These three are a queue being drained — nothing an automation or a
+# broadcast sends leaves the building until this runs — so how often this
+# fires is how quickly those go out. See docs/CRON-SETUP.md.
+#
+# Two things to know about GitHub's scheduler, both documented there:
+# it queues scheduled runs at low priority, so "*/10" in practice means
+# every ten to twenty-five minutes; and it disables scheduled workflows
+# on a repository with no commits for 60 days. For tighter timing, point
+# cron-job.org at the same URL instead — nothing here is load-bearing.
+name: CRM — frequent jobs (10 min)
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  # So it can be run by hand from the Actions tab, which is also how you
+  # test it the first time without waiting for a slot.
+  workflow_dispatch:
+
+concurrency:
+  # A slow run must not have a second one stacked behind it. The jobs are
+  # all idempotent, so cancelling the newer one loses nothing.
+  group: cron-frequent
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Call /api/cron/frequent
+        env:
+          BASE_URL: ${{ secrets.CRM_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$BASE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRM_BASE_URL or CRON_SECRET is not set. See docs/CRON-SETUP.md."
+            exit 1
+          fi
+          code=$(curl -sS --max-time 300 -o /tmp/body -w '%{http_code}' \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$BASE_URL/api/cron/frequent")
+          echo "HTTP $code"
+          cat /tmp/body; echo
+          # A 401 is the one failure that looks like success from outside:
+          # the call arrived and was turned away, and nothing ran.
+          if [ "$code" = "401" ]; then
+            echo "::error::Turned away (401). CRON_SECRET here does not match the deployment's."
+            exit 1
+          fi
+          test "$code" = "200"
