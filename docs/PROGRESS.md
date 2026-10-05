@@ -7478,3 +7478,68 @@ explains a symptom, write the explanation into the screen where the symptom appe
 
 **1560 tests pass**, lint, typecheck and the build clean. (A full-suite run mid-session showed 38
 files failing; the container's Postgres had stopped, not the change.)
+
+## Session 72 — The whole institute as one file
+
+Leon wants a year-end habit: download everything, keep it on a hard disk, start the next year
+clean, upload it again if he ever needs it.
+
+### Settings → Archive
+
+**Download** streams a gzipped NDJSON file of every setting, lead, admission, payment and message.
+Streaming matters: year three of this archive will not fit in a serverless function's memory, and
+`.cursor()` plus a line-at-a-time response keeps peak memory at a page of rows regardless of size.
+
+**Restore** only runs into an **empty** database. If any table has a row it stops before writing
+anything and names what it found. A merge would silently overwrite everything that has happened
+since the archive was taken — dressed up as helpfulness, at the moment somebody can least afford
+to reason about it. One transaction, so a failure leaves nothing behind.
+
+Sequences are reset past the highest restored value, `receipts.receipt_no` included — the ledger's
+gaplessness depends on the next receipt not reusing a number already on somebody's receipt.
+
+### Two things computed rather than listed
+
+**The restore order.** 69 tables, foreign keys, parents first. A hand-written list is right the day
+it is written and silently wrong the first time somebody adds a table — and it fails *a year later,
+during a restore*. It is a topological sort of `pg_constraint`, deterministic, and it throws on a
+cycle at export time rather than emitting an order that cannot work.
+
+**Which columns are JSON**, because of the driver quirk below.
+
+### The probe that saved a silent corruption
+
+A `jsonb` value makes the trip out as an object and back as an object, and postgres.js refuses it.
+`sql.json()` — which reads exactly like the fix — fails identically. A ten-line probe of nine
+cases settled in two minutes what reading would not have: `JSON.stringify` is accepted and
+Postgres casts it. Everything else (text[], bigint, numeric, timestamptz, date, null) passes
+through untouched.
+
+Worth the trouble because the failure is the nasty kind: a restore that writes `"[object Object]"`
+into a jsonb column **succeeds**, and is found when somebody opens a restored lead a year later.
+`tests/backup-roundtrip.spec.ts` puts real rows through the real helpers and compares.
+
+### What it deliberately does not contain
+
+Sign-in accounts (Supabase Auth; no API exposes password hashes), uploaded files (Storage, not
+Postgres), and the operational logs (`webhook_events` alone is usually bigger than everything
+else). All three are written into the file's own header, so a disk copy carries its own caveats,
+and all three are on the screen where somebody is deciding to rely on it.
+
+The screen also says plainly that **this is an archive, not a backup** — one file, one disk, one
+day — and points at Supabase's own continuous backups for the "something was deleted on a Tuesday"
+question.
+
+### Flagged, not decided
+
+`docs/BACKUP.md` records the tax-retention problem with the *emptying* half of the habit: Indian
+income-tax rules generally want books kept six years and the Companies Act eight, and one hard
+disk is a fragile place for eight years of receipts. The safer shape for the same goal is keeping
+the ledger and filtering the screens by academic year. Raised as a recommendation; archives are
+worth taking either way.
+
+Permissions: both `config.export` + `lead.export` to take one, both `config.import` +
+`lead.import` to restore. An archive is configuration *and* every phone number and payment, so
+neither primitive should widen into the other.
+
+**1576 tests pass** (16 new), lint, typecheck, `db:audit` and the build clean. No migration.

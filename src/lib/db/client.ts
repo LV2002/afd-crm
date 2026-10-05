@@ -86,6 +86,17 @@ if (process.env.NODE_ENV !== "production") {
 export const db = drizzle(client, { schema });
 
 /**
+ * The raw postgres.js handle, for the two things drizzle cannot express.
+ *
+ * Both are in the archive feature: `.cursor()`, which streams a table of
+ * any size without holding it in memory, and `sql(row)` for inserting a
+ * row whose columns are not known until runtime. Everything else in this
+ * codebase should use `db` — this is an escape hatch for code that
+ * operates on tables generically, not a second way to write queries.
+ */
+export const sqlClient = client;
+
+/**
  * A db handle that can be either the top-level `db` or a `tx` inside
  * `db.transaction(async (tx) => ...)`. Functions that need to compose into
  * a caller's existing transaction (rather than opening their own: while the

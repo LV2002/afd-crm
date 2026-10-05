@@ -3756,3 +3756,80 @@ is that it is a **separate copy**, that filling in the Meta one does not fill in
 it is usually the same value, and that when it is wrong every inbound message is refused with a
 401 while the inbox simply stays empty. That is the live suspicion for this instance: Instagram
 verifies, WhatsApp does not, and the two read their secret from different places.
+
+## 2026-10-05 — The archive restores only into an empty database
+
+Leon asked for a one-file download and upload of the whole system, for a yearly archive habit.
+The download is unambiguous. The upload needed a decision, because "put this file back" has three
+possible meanings and two of them are traps.
+
+**Merge** — insert what is missing, keep what is there. Sounds helpful. Two archives from the same
+instance share every id, so in practice this is an overwrite of everything that has happened since
+the archive was taken, dressed up as a merge.
+
+**Overwrite by key** — replace rows that collide. Worse: it is the same overwrite, now explicit,
+and performed on a database somebody is in the middle of recovering and cannot reason about.
+
+**Empty only** — refuse if any archivable table has a row, naming what was found, before writing
+anything. Chosen. It fits in a sentence, it cannot be misunderstood at the worst possible moment,
+and it makes the destructive case impossible rather than merely discouraged. Everything lands in
+one transaction, because a half-restored database looks populated — so nobody runs it again — and
+its missing rows surface later as broken references.
+
+Seeded configuration counts as data for this test, and the error says so. A fresh instance that
+has been seeded would otherwise end up with two of every pipeline stage.
+
+## 2026-10-05 — Ask the database what it contains
+
+Two things in the archive could have been lists in a file and are computed instead.
+
+**The restore order.** 69 tables joined by foreign keys must be inserted parents-first. A
+hand-maintained order is correct the day it is written and silently wrong the first time somebody
+adds a table — and the failure surfaces *a year later, during a restore*, which is the worst
+moment in the system's life to discover a bug. It is a topological sort of `pg_constraint`
+instead, deterministic so two archives differ only where the data differs, and it throws on a
+cycle at export time rather than emitting an order that cannot work.
+
+**Which columns are JSON.** Needed because of a measured driver quirk, below.
+
+Same instinct as CLAUDE.md § "Configuration is data", applied to the schema: a second copy of the
+truth is a copy that drifts. `select *` is used for the same reason — naming columns would produce
+an archive that silently drops the newest field, the one most likely to matter and least likely to
+be missed.
+
+## 2026-10-05 — `sql.json()` does not do what it looks like it does
+
+A `jsonb` value comes out of `select *` as a plain JavaScript object, survives the file as JSON,
+and arrives back as a plain object — at which point postgres.js refuses it outright: *"the string
+argument must be of type string… received an instance of Object"*.
+
+The obvious fix is `sql.json(value)`, which reads exactly like the tool for this. It fails
+identically. Probed all nine cases against the real driver and connection settings rather than
+reasoning about it:
+
+```
+plain object jsonb   → rejected
+sql.json(…)          → rejected, identically
+JSON.stringify(…)    → accepted, Postgres casts the text to jsonb
+text[] as JS array   → accepted
+bigint/numeric/timestamptz/date as strings → accepted
+null                 → stays null
+```
+
+Worth recording for two reasons. The narrow one: `JSON.stringify` is the answer here, and the
+comment in `import.ts` says so with the evidence, so nobody "fixes" it back to the helper that
+looks right. The broad one: **a ten-line probe settled in two minutes what an hour of reading
+would not have.** The failure mode it protects against is the nasty kind — a restore that writes
+`"[object Object]"` into a jsonb column *succeeds*, and is discovered when somebody opens a
+restored lead a year later.
+
+## 2026-10-05 — Both halves of two permissions, rather than a new one
+
+An archive is every lead's phone number and every payment ever taken, plus the configuration.
+Gating it on `config.export` alone would quietly turn a configuration permission into a full data
+export; `lead.export` alone would not cover the configuration.
+
+So it requires both, and the restore requires both `config.import` and `lead.import`. No new
+primitive, no seed change, and each existing primitive goes on meaning exactly what its name says
+— which is the entire reason CLAUDE.md fixes the primitive list in code while leaving roles as
+editable rows.
