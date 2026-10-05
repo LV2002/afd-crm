@@ -6690,3 +6690,36 @@ nothing; and a delivery for an unregistered number says what to do about it.
 Migration 0085 verified against an already-seeded database and a clean one.
 
 **1510 tests pass**, lint, typecheck, `db:audit` and the production build clean.
+
+---
+
+## Session 57 — The email message, rewritten for whoever is reading it
+
+Leon pointed at the warning on Settings → Notifications and said to fix it. It read:
+
+> To send them to people's inboxes as well, your developer needs to set `RESEND_API_KEY` and
+> `EMAIL_FROM` in the hosting environment.
+
+Three things wrong with that, none of them about email. It tells the institute's administrator
+to go and find somebody, when most of the work is theirs and takes a quarter of an hour. It
+names two environment variables without saying where they come from or where they go. And it
+puts the blocker on a developer's time when the real blocker is **an account and two DNS
+records** — the one part nobody else can do on their behalf, because it needs access to the
+domain.
+
+It now says what to do, in order: create a Resend account and verify afdindia.com as a sending
+domain, then hand over the key and the from-address for the hosting settings. It also says what
+is *not* affected, which the old wording left to inference: notifications work on the bell with
+nothing configured.
+
+**One component, `EmailNotConfigured`, used by both screens** that say this — Notifications and
+Platform Health. They had already drifted apart once, with Platform Health folding "no address
+set" and "email not switched on" into a single sentence, which made the easy half (one field on
+a settings screen) look as blocked as the hard one.
+
+Also corrected: `NEXT_PUBLIC_APP_URL` is described as optional now, because it is. `appUrl()`
+falls back to `VERCEL_URL`, so links inside emails already work without it — they just point at
+whichever deployment sent the mail rather than at a stable address. The launch checklist had
+overstated this as required.
+
+**1510 tests pass**, lint, typecheck and the production build clean.

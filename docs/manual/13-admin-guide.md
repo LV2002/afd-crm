@@ -219,6 +219,23 @@ believe.
 Which events notify which roles, on which channels, and **in what
 words**. The copy is editable.
 
+**Switching email on.** Everything here works on the bell with nothing
+configured. Sending to inboxes as well needs an account with an email
+service, which is the one thing the CRM cannot do by itself:
+
+1. Create an account at **resend.com** — free at this institute's volume —
+   and verify **afdindia.com** as a sending domain, which means adding two
+   DNS records wherever the domain is managed. **This step needs access to
+   the domain**, so nobody else can do it for you.
+2. Put the API key and the from-address into the hosting settings as
+   `RESEND_API_KEY` and `EMAIL_FROM`, then redeploy. Send the key over and
+   this part can be done for you.
+
+Until both exist, the **Also send an email** tick is saved and does
+nothing, and the screen says so. Optional afterwards:
+`NEXT_PUBLIC_APP_URL` set to the CRM's real address — links in emails work
+without it but point at whichever deployment sent the mail.
+
 Nineteen events ship, grouped by what they are about:
 
 | Group | Events |

@@ -608,7 +608,7 @@
 <p><strong>Common mistakes</strong></p>
 <ul>
 <li><em>Dismissing instead of acting.</em> Dismiss removes the reminder, not the work. The lead is still waiting.</li>
-<li><em>Expecting an email.</em> Emails only go out for the events an administrator has configured for your role, and only if the institute has set up email sending at all (Chapter 13).</li>
+<li><em>Expecting an email.</em> Emails only go out for the events an administrator has configured for your role, and only once the institute has switched email on at all — which is an account with an email service, not a setting (Chapter 13). Until then the bell is the only channel, and the Notifications settings screen says so at the top.</li>
 </ul>
 <p><strong>Related</strong> — Chapter 13, Settings → Notifications.</p>
 <h2 id="4-5-finding-things">4.5 Finding things</h2>
@@ -1773,6 +1773,12 @@
 <p>Which widgets each role sees and in what order. You can <strong>remove</strong> a widget from a role but never <strong>add</strong> one the role has no permission for — it would draw a card of zeroes, and a zero is a number somebody will believe.</p>
 <h3 id="settings-notifications">Settings → Notifications</h3>
 <p>Which events notify which roles, on which channels, and <strong>in what words</strong>. The copy is editable.</p>
+<p><strong>Switching email on.</strong> Everything here works on the bell with nothing configured. Sending to inboxes as well needs an account with an email service, which is the one thing the CRM cannot do by itself:</p>
+<ol>
+<li>Create an account at <strong>resend.com</strong> — free at this institute's volume — and verify <strong>afdindia.com</strong> as a sending domain, which means adding two DNS records wherever the domain is managed. <strong>This step needs access to the domain</strong>, so nobody else can do it for you.</li>
+<li>Put the API key and the from-address into the hosting settings as <code>RESEND_API_KEY</code> and <code>EMAIL_FROM</code>, then redeploy. Send the key over and this part can be done for you.</li>
+</ol>
+<p>Until both exist, the <strong>Also send an email</strong> tick is saved and does nothing, and the screen says so. Optional afterwards: <code>NEXT_PUBLIC_APP_URL</code> set to the CRM's real address — links in emails work without it but point at whichever deployment sent the mail.</p>
 <p>Nineteen events ship, grouped by what they are about:</p>
 <table><thead>
 <tr><th>Group</th><th>Events</th></tr>

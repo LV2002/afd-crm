@@ -109,8 +109,10 @@ head hears nothing about Kochi.
 - *Dismissing instead of acting.* Dismiss removes the reminder, not the
   work. The lead is still waiting.
 - *Expecting an email.* Emails only go out for the events an administrator
-  has configured for your role, and only if the institute has set up
-  email sending at all (Chapter 13).
+  has configured for your role, and only once the institute has switched
+  email on at all — which is an account with an email service, not a
+  setting (Chapter 13). Until then the bell is the only channel, and the
+  Notifications settings screen says so at the top.
 
 **Related** — Chapter 13, Settings → Notifications.
 
