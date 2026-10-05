@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { dailyJobs } from "@/lib/cron/jobs";
+import { runTierAndRecord } from "@/lib/cron/record-run";
 import { requireCronSecret } from "@/lib/cron/require-secret";
-import { runDailyAndRecord } from "@/lib/cron/run-daily";
 import { reportingFailures } from "@/lib/errors/capture";
 
 export const dynamic = "force-dynamic";
@@ -27,11 +28,11 @@ export const dynamic = "force-dynamic";
  * `/api/cron/retargeting-sync/meta` by hand with the secret still works,
  * which is how you test one in isolation without waiting for the night.
  *
- * The jobs themselves live in `lib/cron/run-daily.ts`, because the schedule
- * is no longer the only caller: an admin can run them from Settings →
- * Platform health.
+ * The jobs themselves live in `lib/cron/jobs.ts`, because the schedule is
+ * no longer the only caller: an admin runs them from Settings → Platform
+ * health, and two other tiers share the same list.
  *
- * ## Why 10:00 IST, and what a single daily run costs
+ * ## Why 10:00 IST, and what this tier is for now
  *
  * `vercel.json` runs this at 04:30 UTC — 10:00 in Kerala. The retargeting
  * sync only needs to happen once every 24 hours for a lead who arrived
@@ -39,12 +40,18 @@ export const dynamic = "force-dynamic";
  * job here with a human on the other end: a broadcast that came due
  * overnight goes out mid-morning rather than at 1am.
  *
- * The cost is honest and worth writing down: on one run a day, a broadcast
- * scheduled for 3pm waits until 10am the next morning. That is a property of
- * having a single slot, not of this code — **the same route run hourly gives
- * retargeting and broadcasts within the hour, with no change here at all.**
- * If the hosting plan allows more than one scheduled job a day, change the
- * cron expression and nothing else.
+ * This is no longer the only schedule. Two faster tiers —
+ * `/api/cron/frequent` every ten minutes and `/api/cron/hourly` — now
+ * carry the jobs whose value decays inside a day, called by a scheduler
+ * outside the deployment. What is left that only runs here is the work
+ * that *should* happen once, at a civilised hour: fee reminders,
+ * temperature recalculation, and Google's offline conversion batch.
+ *
+ * It still runs everything, including both faster tiers' jobs. Those
+ * tiers live outside the app and can be absent, disabled or quietly
+ * broken; this one ships in `vercel.json` and has to work. With it as a
+ * safety net the worst case of any scheduler failure is the once-a-day
+ * behaviour this system had before the tiers existed.
  */
 export const maxDuration = 300;
 
@@ -52,7 +59,7 @@ async function run(request: Request) {
   const denied = requireCronSecret(request);
   if (denied) return denied;
 
-  const result = await runDailyAndRecord(request);
+  const result = await runTierAndRecord("daily", dailyJobs(request));
 
   // A failed job means a non-2xx, so the platform retries and the alert
   // email fires. Skipped jobs are not failures — they are incremental and

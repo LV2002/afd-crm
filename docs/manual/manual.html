@@ -241,7 +241,7 @@
 <li><a href="#13-5-what-people-see">13.5 What people see</a></li>
 <li><a href="#13-6-oversight">13.6 Oversight</a></li>
 <li><a href="#13-7-integrations">13.7 Integrations</a></li>
-<li><a href="#13-8-what-happens-overnight">13.8 What happens overnight</a></li>
+<li><a href="#13-8-what-happens-on-a-schedule">13.8 What happens on a schedule</a></li>
 </ol></li>
 <li><a href="#chapter-14-troubleshooting"><strong>Chapter 14 — Troubleshooting</strong></a>
 <ol>
@@ -1437,7 +1437,7 @@
 <p><strong>Common mistakes and fixes</strong></p>
 <ul>
 <li><em>Not checking the count.</em> "Everybody" is rarely what you meant.</li>
-<li><em>Expecting a scheduled broadcast to go out to the minute.</em> Scheduled sends are picked up by the nightly run, so something scheduled for 3pm goes out the following morning. If that matters, send it now instead.</li>
+<li><em>Expecting a broadcast to go out the moment you press Send.</em> <strong>It does not, and "now" is no different from "scheduled"</strong> — pressing Send queues the recipients, and a sweep does the sending. With the ten-minute schedule set up (<code>docs/CRON-SETUP.md</code>) that is within ten minutes; without it, a broadcast created at 2pm leaves at 10:00 the next morning. To send one immediately, whatever the schedule: <strong>Settings → Platform health → Send anything that is waiting</strong>.</li>
 <li><em>Messaging people who opted out.</em> You cannot — they are excluded automatically (10.5).</li>
 </ul>
 <h2 id="10-5-opted-out">10.5 Opted out</h2>
@@ -1516,7 +1516,7 @@
 <p><strong>Common mistakes</strong></p>
 <ul>
 <li><em>Leaving it active while testing.</em> Real leads will receive it.</li>
-<li><em>A wait shorter than a day.</em> Automations advance on the nightly run, so the smallest meaningful wait is about a day.</li>
+<li><em>A wait shorter than the sweep interval.</em> An automation only advances when the sweep runs — <strong>including its first step</strong>, so on a once-a-day schedule a lead who enquires at 11am hears nothing until 10:00 the next morning. With the ten-minute schedule in <code>docs/CRON-SETUP.md</code> the first message is prompt and a wait of an hour means something. Without it, the smallest meaningful wait is about a day.</li>
 <li><em>No stop condition.</em> Always give somebody a way out of the sequence.</li>
 <li><em>Narrowing it so far nobody matches.</em> The automation list shows an <strong>Only:</strong> line under the trigger for every automation that has conditions — read it back and check it says what you meant.</li>
 </ul>
@@ -1844,7 +1844,8 @@
 <p><strong>Admin only</strong> (<code>audit.read</code>). Every change and every export: <strong>Who</strong>, <strong>What they touched</strong>, the <strong>Table</strong>, and <strong>Before</strong> / <strong>After</strong>, with filters for <strong>Anybody</strong>, <strong>Any table</strong>, <strong>Anything</strong>, <strong>From</strong>, <strong>To</strong> and <strong>Clear filters</strong>.</p>
 <p>Not available to Co-Admin or Centre Head — it cannot be scoped to a centre, so a centre-scoped grant would expose the whole institute's log.</p>
 <h3 id="settings-platform-health">Settings → Platform Health</h3>
-<p><strong>The nightly run</strong> is the first thing on this screen, and the first thing to check when a number has not appeared: when it last ran, how long it took, and what each of the ten jobs did — including the ones that ran and did nothing because an integration has no credentials yet.</p>
+<p><strong>Scheduled work</strong> is the first thing on this screen, and the first thing to check when a number has not appeared or a message has not gone out. A panel per schedule (13.8): when each last ran, how long it took, and what every job did — including the ones that ran and did nothing because an integration has no credentials yet.</p>
+<p><strong>Inbound deliveries</strong> is the matching panel for things coming <em>in</em>: WhatsApp, Instagram, ad leads, website forms. The number that matters there is <strong>rejected</strong> — any at all means the callbacks are arriving and being refused because a stored App secret does not match the app sending, so no message reaches anybody.</p>
 <blockquote><em>"Meta ad spend — ok"</em> and <em>"Meta ad spend — ok, nothing to do: not configured"</em> are the difference between a bug and a token nobody has pasted in.</blockquote>
 <p><strong>If it says no run has ever been recorded</strong>, nothing overnight is happening at all — not the response-time sweep, not fee reminders, not ad spend. The usual cause is <code>CRON_SECRET</code> missing from the hosting environment: the schedule then calls the CRM without the password it expects, the CRM refuses, and nothing runs with no failure recorded anywhere, because being turned away is not an error. Check Vercel → Project → Cron Jobs; a run listed with status 401 is this.</p>
 <p><strong>Run tonight's jobs now</strong> sits under the panel. It runs the same ten jobs immediately, so a credential you have just pasted in can be tested in a minute rather than tomorrow morning. It asks first, because it is the real run: queued broadcasts go out and fee reminders are sent. If the deployment has no <code>CRON_SECRET</code> the button says so in one sentence, which is the quickest way to confirm the cause above.</p>
@@ -1916,21 +1917,38 @@
 <tr><td>A custom webhook</td><td><code>/api/webhooks/custom/&lt;its own token&gt;</code></td></tr>
 </tbody></table>
 <p>Every delivery is written down <strong>before</strong> it is processed, so a failure is visible rather than silent.</p>
-<h2 id="13-8-what-happens-overnight">13.8 What happens overnight</h2>
-<p>One scheduled run, at <strong>10:00 IST</strong>, does all of this in order:</p>
-<ol>
+<h2 id="13-8-what-happens-on-a-schedule">13.8 What happens on a schedule</h2>
+<p>Three schedules, because the jobs are three different kinds of thing.</p>
+<h3 id="every-ten-minutes">Every ten minutes</h3>
+<ul>
+<li>WhatsApp automations — <strong>every step, the first one included</strong></li>
+<li>Scheduled broadcasts — **including the ones sent <em>now</em>**</li>
 <li>Response-time (SLA) sweep</li>
-<li>Temperature recalculation</li>
-<li>Fee reminders</li>
-<li>Meta retargeting audience</li>
-<li>Google retargeting audience</li>
-<li>WhatsApp automations</li>
-<li>Scheduled broadcasts</li>
+</ul>
+<p>These are a queue being drained: nothing an automation or a broadcast sends leaves the building until this runs. How often it runs is how quickly those go out.</p>
+<h3 id="hourly">Hourly</h3>
+<ul>
 <li>Meta ad spend</li>
 <li>Google ad spend</li>
+<li>Meta retargeting audience</li>
+<li>Google retargeting audience</li>
+</ul>
+<p>The numbers somebody reads during the day. Once a day would mean the marketing figures are this morning's by the afternoon, and a lead who enquired at 9am is not in a retargeting audience until tomorrow — on the day they were deciding.</p>
+<h3 id="daily-10-00-ist">Daily, 10:00 IST</h3>
+<ul>
+<li>Fee reminders</li>
+<li>Temperature recalculation</li>
 <li>Google offline conversions</li>
-</ol>
-<p>Ordered by how fast the value decays. If the run is short of time the last jobs are skipped, not failed — tomorrow picks them up. That is why a scheduled broadcast set for 3pm goes out the next morning, and why a one-day gap in ad spend is normal.</p>
+<li><strong>and everything on the two schedules above</strong></li>
+</ul>
+<p>Work that should happen once, at a civilised hour: a fee reminder is a <em>date</em>, and it should not arrive at three in the morning.</p>
+<p>It repeats the other two on purpose. Those run from outside the application and can be switched off or quietly stop; this one ships with it. So the worst case of a scheduler failing is that broadcasts go back to being next-morning — late, never lost.</p>
+<p>If a daily run is short of time the last jobs are skipped rather than failed, and tomorrow covers them. A one-day gap in ad spend is normal.</p>
+<h3 id="what-never-waits-for-a-schedule">What never waits for a schedule</h3>
+<p>A counsellor replying in the inbox, sending one template to one person, or sending a file. Those go out the moment the button is pressed. Inbound messages are the same — they arrive by webhook within seconds.</p>
+<h3 id="when-something-has-not-run">When something has not run</h3>
+<p><strong>Settings → Platform health</strong> has a panel per schedule: the last run, what each job did, and why anything failed. Two buttons do the work immediately — <strong>Send anything that is waiting</strong> for the ten-minute set, and <strong>Run tonight's jobs now</strong> for everything.</p>
+<p>Setting the schedules up is a one-off, in <code>docs/CRON-SETUP.md</code>.</p>
 <p class="back-to-contents"><a href="#contents">Back to contents</a></p>
 </section>
 
@@ -1969,17 +1987,31 @@
 <p><strong>The receipt has no address on it</strong> Settings → Organisation is incomplete. Fill in the letterhead.</p>
 <h2 id="14-4-chats">14.4 Chats</h2>
 <p><strong>I cannot reply to a WhatsApp message</strong> Either more than 24 hours have passed since their last message — Meta's rule, not ours; use an approved template — or the thread is not matched to a lead, so there is nothing to record the message against.</p>
-<p><strong>A broadcast scheduled for this afternoon has not gone</strong> Scheduled sends are picked up by the nightly run, so it goes out the next morning. Send now if the timing matters.</p>
+<p><strong>A broadcast has not gone out — scheduled, or sent now</strong> Both wait for the same sweep, so "send now" is not immediate either. Check <strong>Settings → Platform health → Every ten minutes</strong>: if it shows no run, or one much older than ten minutes, the sweep is not running often enough and that is the whole explanation. Press <strong>Send anything that is waiting</strong> on the same screen to send it this minute, and see <code>docs/CRON-SETUP.md</code> for the three-minute, no-cost fix.</p>
+<p><strong>Nothing an automation sends ever arrives</strong> Same cause, same screen. An automation's steps — including the first — only move when the sweep runs. Also check the automation is switched <strong>On</strong>, and read the <strong>Only:</strong> line under its trigger on the automations list: conditions narrowed too far mean it matches nobody.</p>
+<p><strong>No inbound WhatsApp message reaches the inbox</strong> <strong>Settings → Platform health → Inbound deliveries</strong> answers this in one look, and it has three different answers:</p>
+<ul>
+<li><strong>Nothing received.</strong> Meta is not calling. The callback URL or the subscribed fields are wrong, on Meta's side — <code>docs/WHATSAPP-SETUP.md</code>.</li>
+<li><strong>Received, with some rejected.</strong> Meta is calling and being refused because the signature does not match. The <strong>App secret</strong> stored on <strong>Settings → Integrations → WhatsApp</strong> is not the one belonging to the Meta app that is sending. <strong>WhatsApp keeps its own copy, separate from Meta Lead Ads and Instagram</strong> — setting one does not set the other, and this is the usual way it happens.</li>
+<li><strong>Received, none rejected.</strong> The messages are in. Look at the inbox filter, and at whether the number they arrived on is registered under <strong>Settings → Integrations → WhatsApp numbers</strong>.</li>
+</ul>
 <p><strong>My new template cannot be used yet</strong> Meta reviews templates, usually within a day.</p>
 <p><strong>Somebody did not get a broadcast</strong> Check <strong>Chats → Opted out</strong>. Opted-out numbers are excluded from everything, permanently.</p>
 <p><strong>Instagram shows nothing</strong> It is probably not connected. The tab says exactly what is missing. The two things people forget: the <strong>Allow access to messages</strong> switch in the Instagram app itself, and subscribing the webhook to the <strong>Instagram</strong> object rather than the Page.</p>
+<p><strong>Instagram only shows messages from people who run the page</strong> This is not a fault and not fixable in the CRM. A Meta app starts in <strong>Development mode</strong>, and in that state Meta delivers messages only from people who hold a role on the app — which is why your own test DMs and your colleagues' arrive and a student's does not. Exactly the same rule as ad leads (14.6).</p>
+<p>Two things, both on Meta's side:</p>
+<ol>
+<li><strong>App Review</strong> for <code>instagram_manage_messages</code>, moving it from Standard to <strong>Advanced Access</strong>.</li>
+<li>The app switched to <strong>Live</strong> mode.</li>
+</ol>
+<p>Until then, a member of the public's DM is <strong>not queued anywhere</strong> — it is simply never delivered, so there is nothing to recover afterwards. Review usually wants Business Verification done first. <code>docs/WHATSAPP-SETUP.md</code> Part 6 is the single submission that covers this along with everything else.</p>
 <p><strong>A message I sent from my phone is not in the CRM</strong> Known and expected for Instagram. The CRM records what it sends itself.</p>
 <h2 id="14-5-reports-and-advertising">14.5 Reports and advertising</h2>
 <p><strong>Two of us see different totals on the same report</strong> Correct. Reports are scoped: your own leads, your centre, or the institute.</p>
 <p><strong>Ad Performance shows no spend</strong> The page tells you which of three it is:</p>
 <ul>
 <li><em>not connected at all</em> — credentials missing (administrator)</li>
-<li><em>connected but never synced</em> — the nightly run has not happened yet; numbers appear tomorrow morning, or press <strong>Import past ad spend</strong></li>
+<li><em>connected but never synced</em> — the hourly sync has not run yet; press <strong>Import past ad spend</strong>, or see 14.6a</li>
 <li>nothing spent in those dates — nothing to fix</li>
 </ul>
 <p><strong>Ad Performance will not open at all</strong> It needs institute-wide report access. Advertising cannot honestly be split by centre, so the page declines rather than inventing a number.</p>
@@ -1996,13 +2028,14 @@
 <li><strong>Did a test lead "fail"?</strong> Meta's <strong>Create lead</strong> button fills every answer with placeholder text, so there is no real phone number. That is the whole chain working with nothing real at the end of it. Use <strong>Preview form</strong> and fill it in yourself.</li>
 </ol>
 <h2 id="14-6a-ad-spend-or-any-overnight-figure-has-not-updated">14.6a Ad spend, or any overnight figure, has not updated</h2>
-<p><strong>Check the nightly run first.</strong> Settings → Platform Health, at the top. Everything that happens overnight happens in one run at 10:00 IST, and that panel says whether it happened and what each job did.</p>
-<p>Three different answers, three different fixes:</p>
+<p><strong>Check the schedules first.</strong> Settings → Platform Health, at the top. Ad spend and the retargeting audiences are on the <strong>hourly</strong> schedule; everything else overnight is on the <strong>daily</strong> one at 10:00 IST. Each has its own panel saying whether it ran and what each job did.</p>
+<p>Four different answers, four different fixes:</p>
 <table><thead>
 <tr><th>What the panel says</th><th>What it means</th></tr>
 </thead><tbody>
-<tr><td><em>No nightly run has ever been recorded</em></td><td>Nothing overnight is running. Usually <code>CRON_SECRET</code> is missing from the hosting environment — see Chapter 13, Platform Health.</td></tr>
-<tr><td><em>Last run</em> is more than a day ago</td><td>The schedule has stopped firing. Check Vercel → Project → Cron Jobs.</td></tr>
+<tr><td><em>No run recorded</em> under <strong>Hourly</strong></td><td>The hourly schedule was never set up, so spend updates once a day instead. Not a fault — see <code>docs/CRON-SETUP.md</code>.</td></tr>
+<tr><td><em>No run recorded</em> under <strong>Daily</strong></td><td>Nothing scheduled is running at all. Usually <code>CRON_SECRET</code> is missing from the hosting environment — see Chapter 13, Platform Health.</td></tr>
+<tr><td><em>Last run</em> far older than the schedule's interval</td><td>That schedule has stopped firing. For the daily one check Vercel → Project → Cron Jobs; for the other two check whatever calls them.</td></tr>
 <tr><td>The job ran, <em>nothing to do: not-configured</em></td><td>The credentials for that integration are not saved. For Meta ad spend that is the <strong>Ads access token</strong> and <strong>Ad Account ID</strong> in Settings → Integrations → Meta — the Page token that brings in leads is a different token and does not cover spend.</td></tr>
 <tr><td>The job <em>failed</em> with a message</td><td>That message is the answer. A 401 from Meta means the token expired or lacks a permission.</td></tr>
 </tbody></table>

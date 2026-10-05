@@ -3556,3 +3556,175 @@ word that describes the mechanism rather than the job.
 Now open by default and headed **"Who gets it"**, with the four he asked about named in the hint.
 No new capability — the capability was there. **Discoverability is a feature, and a collapsed
 container is a good place to hide one by accident.**
+## 2026-10-05 — Split the schedule by what a job is, not by what it costs
+
+Leon asked whether a once-daily cron means his WhatsApp messages only go out once a day. For two
+of the ten jobs, yes — and he spotted something the nightly-run design had quietly accepted.
+
+**A broadcast and an automation are a queue being drained, not nightly work.** Pressing Send on a
+broadcast queues recipients and marks it `sending`; a sweep does the sending. So "send now" was
+never now, and the manual said it was — a documentation error, now fixed. An automation is worse:
+its *first* step waits for the sweep too, so a lead enquiring at 11am hears nothing until 10:00
+the next morning.
+
+The obvious fix is to run the daily job more often, and it is wrong. Four of the ten talk to Meta
+and Google — ad spend, two retargeting pushes, offline conversions — and 144 runs a day spends
+quota on data that does not move that fast and re-presents conversions already uploaded. Two more
+are cheap but pointless: a fee reminder is a *date*, and sending it at 03:10 because that is when
+a sweep fired is worse than sending it at ten in the morning.
+
+So `/api/cron/frequent` carries three jobs, chosen by what they are:
+
+> **frequent** — draining a queue, or flagging something whose value decays in minutes
+> **daily** — pushing to an external platform, or anything a human reads at a civilised hour
+
+All three are *also* in the daily run. If the frequent schedule is never set up or silently stops,
+the worst case is the delay that exists today — which is the right failure mode for a schedule
+that lives outside the deployment and cannot be guaranteed.
+
+**The secret stays header-only.** The cheapest free schedulers cannot send headers, and the
+temptation was to accept `?secret=` as a fallback. Refused: a secret in a query string lands in
+the hosting access log, the scheduler's own history and any referrer, and a credential you cannot
+rotate out of six logs is worse than a slow broadcast. `docs/CRON-SETUP.md` recommends two
+providers that do send headers, and records this as a rejected option so the next person does not
+re-propose it.
+
+## 2026-10-05 — Three identical symptoms, three different systems
+
+"My inbound WhatsApp is not showing up" has three causes, and from an empty inbox they are
+indistinguishable:
+
+1. **Meta never called** — callback URL or field subscription wrong, on Meta's side.
+2. **Meta called and we refused it** — the stored app secret does not match the sending app, so
+   every delivery 401s.
+3. **Meta called and we stored it** — the problem is the inbox filter or an unregistered number.
+
+The second is the invisible one, *by design*: a rejected delivery is this CRM working correctly,
+so nothing raises an alert. And it is the likely one here, because **WhatsApp keeps its own
+`app_secret` under `provider = 'whatsapp'` while Instagram and Lead Ads share the one under
+`provider = 'meta'`**. Setting the Meta one does not set the WhatsApp one — and the tell is that
+Instagram DMs verify fine while WhatsApp does not, which is exactly what Leon described.
+
+Every one of those deliveries was already written to `webhook_events` before being refused —
+non-negotiable #9 did its job — and **no screen read the table**. So the evidence existed for
+months and was unreachable.
+
+Settings → Platform health now has an **Inbound deliveries** panel: per source, received /
+rejected / failed, last delivery time, last error, with a rejection's reason preferred over a
+downstream one. `tests/webhook-deliveries.spec.ts` pins that preference and runs the hand-written
+SQL, which the type checker cannot see.
+
+This is the fourth entry in this file on the same theme, and the sharpest version of it yet: it is
+not enough to record a degradation — **something has to read the record**. Persisting evidence
+nobody surfaces is the same failure as not persisting it, one step later.
+
+## 2026-10-05 — Instagram showing only staff DMs is Development mode, not a bug
+
+Recorded because it will be asked again and the answer is unsatisfying. Leon sees Instagram DMs
+only from people who run the page. That is Meta delivering messages only from users holding a role
+on the app, which is what Development mode does — identical to the rule already written up for ad
+leads in `docs/ADS-SETUP.md` Part 1.
+
+Nothing in this codebase can change it: `instagram_manage_messages` needs App Review for Advanced
+Access, and the app needs to be Live. **A member of the public's DM in the meantime is not queued
+anywhere** — it is never delivered, so there is nothing to backfill afterwards. Worth saying
+plainly, because "it will catch up once we go live" is the natural assumption and it is false.
+
+Added to the manual's troubleshooting as its own entry rather than left in the setup guide, since
+the person hitting it is looking at an inbox, not at a setup document.
+
+## 2026-10-05 — Three cron tiers, split by what a job is
+
+Leon: *"use the ideal cron job frequencies and times so that everything works smoothly."* The
+earlier entry got the frequent/daily split right and left the middle case alone. Three tiers now:
+
+| Tier | Interval | Membership rule |
+|---|---|---|
+| frequent | 10 min | A queue being drained |
+| hourly | :25 past | A number somebody reads during the working day |
+| daily | 10:00 IST | Something with a human on the other end at a civilised hour — **plus everything above** |
+
+The hourly tier is the new one, and the argument for it is not cost. Ad spend and the two
+retargeting audiences talk to Meta and Google: once a day means the ROAS figure on the marketing
+screen is this morning's when somebody reads it after lunch, and a lead who enquired at 9am is not
+in a retargeting audience until tomorrow — on the one day they were actually deciding. Hourly is
+24 calls a day per platform, well inside quota. Ten-minutely would be 144 and buy nothing, because
+neither platform's spend moves that fast and the audience diff would find nothing new 140 times
+out of 144.
+
+Three things worth keeping:
+
+**The daily tier is a superset, and `tests/cron-tiers.spec.ts` asserts it.** The faster two live
+outside the deployment — an external scheduler calling a URL — so they can be absent, disabled, or
+silently stopped. The daily one ships in `vercel.json`. As long as it contains everything, the
+worst case of any scheduler failure is *late*, never *lost*. If that superset property is ever
+broken, a scheduler outage starts dropping work, and nothing else in the suite would notice — so
+it is a test, not a comment.
+
+**The membership rule is asserted too.** Putting the ad-spend sync on the ten-minute tier is a
+one-line change that quadruples Meta traffic sixfold, and removing the broadcast sweep from it
+silently restores the once-a-day delay the tiers exist to fix. Neither breaks a type. Both now
+break a test.
+
+**`selectDistinctOn` has a rule the type checker cannot see:** the first ORDER BY column must be
+the distinct column or Postgres rejects the query outright. It is used to read the newest run per
+tier on the health screen — which is the one screen somebody opens when things are already wrong,
+making it the worst possible place for a query to throw. Covered by a test that also proves it
+returns the *newest* row per group rather than an arbitrary one.
+
+## 2026-10-05 — cron-job.org, not GitHub Actions (supersedes the entry below it)
+
+Leon, after reading the entry below: *"no dont use github. use cron-job.org"*. The workflow files
+are deleted and `docs/CRON-SETUP.md` is now step-by-step for cron-job.org.
+
+He is right, and the entry below talked itself out of the correct answer. Its argument was about
+*where the configuration lives* — version-controlled next to the code, in a system this repo
+already uses. Real, but it bought tidiness and paid in the one property the ten-minute tier exists
+for. GitHub queues scheduled workflows at low priority, so `*/10` means every ten to twenty-five
+minutes, and it disables scheduled workflows on a repository with no commits for 60 days. A
+schedule whose entire purpose is promptness should not be run by the least punctual available
+scheduler because the config file looks nicer in git.
+
+The general form, worth keeping: **when a mechanism's whole value is one property, do not trade
+that property for convenience elsewhere.** The frequent tier exists so a broadcast goes out in ten
+minutes instead of eighteen hours. Anything that makes it "ten to twenty-five, usually, unless the
+repo goes quiet" is not that feature.
+
+One concrete improvement fell out of the switch: the health panel's staleness threshold for the
+frequent tier was 45 minutes, loosened specifically to tolerate GitHub's unpunctuality. With a
+punctual scheduler it is 30 — three missed runs — so a stopped schedule is reported sooner. The
+comment says why, so that anybody moving to a sloppier scheduler loosens it again rather than
+living with a warning that is usually wrong.
+
+What survives from the entry below: the **401 check** belongs wherever the call is made from.
+cron-job.org treats any non-2xx as a failure and will email about it, which covers the same
+ground, and the setup guide says to turn that on. It is the one setting on that site that matters,
+because a scheduler which stops silently is the whole failure mode this work exists to prevent.
+
+## 2026-10-05 — The schedules ship as workflow files — SUPERSEDED, see above
+
+The previous entry left Leon with a document telling him to go and configure a scheduler. That is
+a worse deliverable than it looks: the steps are on someone else's website, they change, and the
+thing most likely to go wrong (a secret that does not match) produces silence rather than an
+error.
+
+So `.github/workflows/cron-frequent.yml` and `cron-hourly.yml` are committed instead. The
+repository already runs CI there, the schedule is version-controlled next to the code it calls,
+and what is left for a human is two repository secrets.
+
+Two deliberate details:
+
+**The workflow checks for a 401 specifically** and fails with a message naming the cause. A 401 is
+the failure that looks like success from outside: the call arrived, was turned away, and nothing
+ran. `test "$code" = "200"` alone would have reported it as a red X with no explanation — and this
+exact failure, from an unset `CRON_SECRET`, is what made the original cron look healthy for weeks
+while doing nothing.
+
+**It is honest in its own comments about GitHub's scheduler**, which is not punctual (`*/10` means
+ten to twenty-five minutes, queued at low priority) and which disables scheduled workflows on a
+repository with no commits for 60 days. Both are written in the file, in `docs/CRON-SETUP.md`, and
+reflected in the health panel's staleness thresholds — 45 minutes for the frequent tier rather
+than 15, because a panel that cries wolf every afternoon is ignored by the time it matters.
+
+cron-job.org stays documented as the upgrade for anybody who wants the ten-minute tier to be
+genuinely ten minutes. It cannot be committed to a repository, which is exactly why it is second.

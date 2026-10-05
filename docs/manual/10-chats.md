@@ -116,9 +116,14 @@ and status, and each recipient's delivery is tracked.
 
 **Common mistakes and fixes**
 - *Not checking the count.* "Everybody" is rarely what you meant.
-- *Expecting a scheduled broadcast to go out to the minute.* Scheduled
-  sends are picked up by the nightly run, so something scheduled for 3pm
-  goes out the following morning. If that matters, send it now instead.
+- *Expecting a broadcast to go out the moment you press Send.* **It does
+  not, and "now" is no different from "scheduled"** — pressing Send
+  queues the recipients, and a sweep does the sending. With the
+  ten-minute schedule set up (`docs/CRON-SETUP.md`) that is within ten
+  minutes; without it, a broadcast created at 2pm leaves at 10:00 the
+  next morning.
+  To send one immediately, whatever the schedule: **Settings → Platform
+  health → Send anything that is waiting**.
 - *Messaging people who opted out.* You cannot — they are excluded
   automatically (10.5).
 
@@ -297,7 +302,11 @@ it** so you can see what the automation has actually done.
 
 **Common mistakes**
 - *Leaving it active while testing.* Real leads will receive it.
-- *A wait shorter than a day.* Automations advance on the nightly run, so
+- *A wait shorter than the sweep interval.* An automation only advances
+  when the sweep runs — **including its first step**, so on a once-a-day
+  schedule a lead who enquires at 11am hears nothing until 10:00 the next
+  morning. With the ten-minute schedule in `docs/CRON-SETUP.md` the first
+  message is prompt and a wait of an hour means something. Without it,
   the smallest meaningful wait is about a day.
 - *No stop condition.* Always give somebody a way out of the sequence.
 - *Narrowing it so far nobody matches.* The automation list shows an

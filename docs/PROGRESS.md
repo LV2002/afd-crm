@@ -7291,3 +7291,167 @@ and chapter 19.4 now says so.
 
 **1548 tests pass** (6 new on flow conditions, the SLA copy tests rewritten), lint, typecheck,
 `db:audit` and the production build clean. One migration, 0088, additive and nullable.
+
+## Session 68 — Why nothing goes out until the cron runs, and why nothing comes in
+
+Four questions from Leon, with four different answers.
+
+### "Do my WhatsApp messages only go out once a day?"
+
+For two features, yes — and the honest answer is worse than he guessed, because **"send now" on a
+broadcast was never now**. Pressing Send queues the recipients and marks the broadcast `sending`;
+a sweep does the sending. An automation is worse still: its *first* step waits for the sweep too,
+so a lead enquiring at 11am hears nothing until 10:00 next morning.
+
+What is **not** affected, and never was: a counsellor replying in the inbox, sending one template,
+sending a file. Those go out on the button press. Inbound messages arrive by webhook in seconds.
+
+The manual claimed "If that matters, send it now instead", which was wrong. Fixed.
+
+**`/api/cron/frequent`** now carries the three jobs that are a queue being drained — automations,
+scheduled broadcasts, the SLA sweep — and nothing else. Not in `vercel.json`: it is for an outside
+scheduler, because the plan allows one scheduled job a day and an HTTP request has no such limit.
+`docs/CRON-SETUP.md` has two free options with exact steps, and the rejected ones with reasons.
+
+Deliberately **not** the whole daily job on a ten-minute loop: four of those ten talk to Meta and
+Google, and 144 runs a day spends quota on data that does not move and re-uploads conversions
+already sent. The split is by what a job *is*, not what it costs — see DECISIONS.md.
+
+All three stay in the daily run too, so a frequent schedule that is never set up or quietly dies
+costs only the delay that exists today.
+
+### "Why is inbound WhatsApp not in my inbox?"
+
+Three causes, indistinguishable from an empty inbox, and the likely one is invisible by design.
+
+**WhatsApp keeps its own `app_secret` under `provider = 'whatsapp'`; Instagram and Lead Ads share
+the one under `provider = 'meta'`.** Setting the Meta one does not set the WhatsApp one — and the
+tell is Leon's own report: Instagram verifies fine, WhatsApp does not. Every rejected delivery was
+written to `webhook_events` before the 401, exactly as non-negotiable #9 requires, and **no screen
+read that table**, so the evidence sat there unreachable.
+
+Settings → Platform health now has **Inbound deliveries**: per source, received / rejected /
+failed, last delivery, last error, rejections' reasons preferred over downstream ones.
+`tests/webhook-deliveries.spec.ts` runs the hand-written SQL and pins that ordering.
+
+### "Why does Instagram only show messages from page admins?"
+
+Development mode. Meta delivers DMs only from people holding a role on the app — the same rule
+already documented for ad leads. Needs App Review for `instagram_manage_messages` plus the app
+switched to Live, both on Meta's side, both already in BACKLOG.md as Leon's. **A student's DM in
+the meantime is not queued anywhere**, which is the part worth saying out loud.
+
+### "What free scheduler would you suggest?"
+
+`docs/CRON-SETUP.md`: **cron-job.org** first (a web form, one-minute granularity, sends custom
+headers, emails on failure), GitHub Actions second (no new account, but queued at low priority and
+disabled after 60 days of repo inactivity). The secret stays header-only — a query-string
+fallback would put it in three logs we cannot rotate it out of.
+
+Also noted there, once: Hobby is a non-commercial plan and this is a business, and Pro's
+minute-level cron makes the whole document unnecessary.
+
+### Also
+
+Two panels and two buttons on Platform health — the frequent run alongside the nightly one, and
+**Send anything that is waiting**, which is both the fix for "this broadcast needs to go now" and
+the way to tell a dead scheduler from a broken job. Manual chapters 10.4, 10.8, 13.8 and 14.4
+rewritten around all of it.
+
+**1552 tests pass** (4 new), lint, typecheck, `db:audit` and the build clean. No migration —
+`cron_runs.job_key` was already free text.
+
+## Session 69 — Three schedules, and the workflows that run them
+
+*"use the ideal cron job frequencies and times so that everything works smoothly… not at only 1
+time of the day."*
+
+### The tiers
+
+| Tier | When | Jobs |
+|---|---|---|
+| **frequent** | every 10 min | WhatsApp automations · scheduled broadcasts · SLA sweep |
+| **hourly** | :25 past | Meta & Google ad spend · both retargeting audiences |
+| **daily** | 10:00 IST | fee reminders · temperature · Google offline conversions — **and everything above** |
+
+Split by **what a job is**, not what it costs. A queue being drained needs minutes. A number
+somebody reads during the day needs hours. A fee reminder is a *date* and must not arrive at 3am;
+temperature is a slow signal; Google's conversion upload is a daily batch by convention.
+
+The hourly tier is new since the last session. Once-a-day ad spend means the ROAS figure is this
+morning's when read after lunch, and a lead who enquired at 9am joins a retargeting audience
+tomorrow — the day after the one that mattered. Hourly is 24 calls per platform per day, well
+inside quota; ten-minutely would be 144 and find nothing new 140 times.
+
+**The daily tier is a superset of the other two, and a test says so.** The faster schedules run
+from outside the deployment and can be absent or silently stopped; the daily one ships in
+`vercel.json`. While it stays a superset, a scheduler failure makes work *late*, never *lost*.
+
+### What shipped rather than what was documented
+
+Last session left a document telling Leon to go and configure a scheduler. This session commits
+`.github/workflows/cron-frequent.yml` and `cron-hourly.yml` — version-controlled next to the code
+they call, in the CI system this repo already uses. All that is left for him is two repository
+secrets, `CRM_BASE_URL` and `CRON_SECRET`.
+
+The workflow **checks for a 401 by name** and fails with the cause, because a 401 is the failure
+that looks like success from outside — the call arrives, is refused, nothing runs. That exact
+failure, from an unset `CRON_SECRET`, is what made the original cron look healthy while doing
+nothing for weeks.
+
+Honest in the file about GitHub's scheduler: `*/10` really means ten to twenty-five minutes, and
+GitHub disables scheduled workflows after 60 days without commits. The health panel's staleness
+thresholds are set to match (45 minutes, not 15) so it does not cry wolf. cron-job.org stays
+documented as the punctual upgrade — it cannot be committed to a repo, which is why it is second.
+
+**It will not fire until PR #69 merges**: GitHub only runs scheduled workflows on the default
+branch. Running it by hand from the Actions tab works today.
+
+### Cleanups the third tier forced
+
+- `run-daily.ts` and `run-frequent.ts` each had their own copy of the `cron_runs` insert and of
+  `budgetMs()`. Collapsed into `lib/cron/record-run.ts` before a third copy existed; every job
+  list now lives in `lib/cron/jobs.ts` with the membership rule written down.
+- `NightlyRunPanel` and `FrequentRunPanel` became one `CronTierPanel` with a copy table, because
+  by the third the only difference was the words — and the words are the point. Each tier's empty
+  state says the right thing: a missing daily run is a **fault**, a missing frequent or hourly run
+  is **expected** until somebody sets up the scheduler.
+- `NightlyRun`/`NightlyJobRow` renamed `CronRun`/`CronJobRow`. "Nightly" was a lie for a
+  ten-minute schedule.
+
+### Manual
+
+Chapter 13.8 rewritten around the three schedules, 13.4's Platform Health entry now covers both
+new panels, and 14.6a's ad-spend table distinguishes "the hourly schedule was never set up" (not a
+fault) from "nothing is running at all" (a fault).
+
+**1560 tests pass** (8 new), lint, typecheck, `db:audit` and the build clean. No migration —
+`cron_runs.job_key` was already free text.
+
+## Session 70 — cron-job.org instead of GitHub Actions
+
+*"no dont use github. use cron-job.org"*
+
+The two workflow files are deleted and `docs/CRON-SETUP.md` is now a step-by-step for
+cron-job.org: two jobs to create, the exact `Authorization: Bearer …` header, what each failure
+code means, and the two settings on that site worth turning on (failure emails, and treating a
+non-2xx as a failure).
+
+He is right, and my previous reasoning had argued itself out of the correct answer. The case for
+workflow files was about where the configuration lives — version-controlled, in the CI system this
+repo already uses. True, and it traded away the one property the ten-minute tier exists for:
+GitHub queues scheduled workflows at low priority, so `*/10` really means every ten to twenty-five
+minutes, and it switches them off after 60 days without commits. A schedule whose entire purpose
+is promptness should not run on the least punctual scheduler available because the config looks
+tidier in git.
+
+**Nothing about the three tiers changed** — the endpoints, the job lists, the superset property
+and its tests are all as they were. This was the calling mechanism only.
+
+One improvement came out of it: the frequent tier's staleness threshold on Platform health was 45
+minutes, loosened purely to tolerate GitHub's queueing. It is 30 now — three missed runs — so a
+stopped schedule surfaces sooner. The comment records why, so a future move to a sloppier
+scheduler loosens it again rather than leaving a warning that is usually wrong.
+
+Still Leon's to do, and now the only step: create the two jobs on cron-job.org. No merge needed
+first, unlike the GitHub route.
