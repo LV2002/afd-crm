@@ -156,10 +156,19 @@ people who hold a role on the app — which is why your own test DMs and
 your colleagues' arrive and a student's does not. Exactly the same rule
 as ad leads (14.6).
 
-Two things, both on Meta's side:
-1. **App Review** for `instagram_manage_messages`, moving it from
-   Standard to **Advanced Access**.
-2. The app switched to **Live** mode.
+Two things, both on Meta's side, and **both** are needed — Live mode
+with only Standard access still delivers nothing new, which is why
+flipping the toggle alone appears to change nothing:
+1. **Advanced Access** for `instagram_manage_messages`
+   (App Review → Permissions and Features → Request advanced access).
+2. The app switched to **Live** mode (top of the app dashboard).
+
+The Live toggle refuses until App settings → Basic has a privacy policy
+URL, terms URL, icon, category and data-deletion URL, and — for a
+Business-type app — business verification. When it refuses vaguely, the
+real reason is usually sitting under **Required actions** or **Alerts**
+in the left sidebar. `docs/WHATSAPP-SETUP.md` § 6a has the order that
+wastes least time.
 
 Until then, a member of the public's DM is **not queued anywhere** — it
 is simply never delivered, so there is nothing to recover afterwards.

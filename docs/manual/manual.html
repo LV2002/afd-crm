@@ -110,7 +110,7 @@
 <div class="title-block">
   <h1>AFD India CRM</h1>
   <p>The staff manual</p>
-  <p>Built 5 October 2026</p>
+  <p>Built 6 October 2026</p>
 </div>
 
 <nav class="contents" id="contents">
@@ -1999,11 +1999,12 @@
 <p><strong>Somebody did not get a broadcast</strong> Check <strong>Chats → Opted out</strong>. Opted-out numbers are excluded from everything, permanently.</p>
 <p><strong>Instagram shows nothing</strong> It is probably not connected. The tab says exactly what is missing. The two things people forget: the <strong>Allow access to messages</strong> switch in the Instagram app itself, and subscribing the webhook to the <strong>Instagram</strong> object rather than the Page.</p>
 <p><strong>Instagram only shows messages from people who run the page</strong> This is not a fault and not fixable in the CRM. A Meta app starts in <strong>Development mode</strong>, and in that state Meta delivers messages only from people who hold a role on the app — which is why your own test DMs and your colleagues' arrive and a student's does not. Exactly the same rule as ad leads (14.6).</p>
-<p>Two things, both on Meta's side:</p>
+<p>Two things, both on Meta's side, and <strong>both</strong> are needed — Live mode with only Standard access still delivers nothing new, which is why flipping the toggle alone appears to change nothing:</p>
 <ol>
-<li><strong>App Review</strong> for <code>instagram_manage_messages</code>, moving it from Standard to <strong>Advanced Access</strong>.</li>
-<li>The app switched to <strong>Live</strong> mode.</li>
+<li><strong>Advanced Access</strong> for <code>instagram_manage_messages</code> (App Review → Permissions and Features → Request advanced access).</li>
+<li>The app switched to <strong>Live</strong> mode (top of the app dashboard).</li>
 </ol>
+<p>The Live toggle refuses until App settings → Basic has a privacy policy URL, terms URL, icon, category and data-deletion URL, and — for a Business-type app — business verification. When it refuses vaguely, the real reason is usually sitting under <strong>Required actions</strong> or <strong>Alerts</strong> in the left sidebar. <code>docs/WHATSAPP-SETUP.md</code> § 6a has the order that wastes least time.</p>
 <p>Until then, a member of the public's DM is <strong>not queued anywhere</strong> — it is simply never delivered, so there is nothing to recover afterwards. Review usually wants Business Verification done first. <code>docs/WHATSAPP-SETUP.md</code> Part 6 is the single submission that covers this along with everything else.</p>
 <p><strong>A message I sent from my phone is not in the CRM</strong> Known and expected for Instagram. The CRM records what it sends itself.</p>
 <h2 id="14-5-reports-and-advertising">14.5 Reports and advertising</h2>
