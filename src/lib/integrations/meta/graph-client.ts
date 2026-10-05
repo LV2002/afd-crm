@@ -167,16 +167,34 @@ export async function fetchMetaPageIdentity(pageAccessToken: string): Promise<Me
  * Dashboard is the other half and is not enough on its own, exactly as
  * `leadgen` was not.
  *
- * **This POST replaces the set, it does not add to it.** So they are sent
- * together, always. Subscribing for leads alone used to silently
+ * **This POST replaces the set, it does not add to it.** So the fields are
+ * sent together, always. Subscribing for leads alone used to silently
  * unsubscribe a Page from messages, which made "Instagram DMs stopped
  * arriving" a consequence of pressing a button labelled Subscribe Page.
+ *
+ * ## Why the caller passes the fields, and why there are two lists
+ *
+ * Meta refuses the whole call when the token lacks a permission any one
+ * field needs: a Page token without `pages_messaging` answers
+ * `(#200) To subscribe to the messages field, one of these permissions is
+ * needed: pages_messaging` — and subscribes **nothing**, leadgen included.
+ * Sending both fields unconditionally therefore broke lead delivery for
+ * anyone whose token predated Instagram, which is a worse bug than the one
+ * it fixed.
+ *
+ * So the caller asks for everything, and falls back to `PAGE_LEAD_FIELDS`
+ * when Meta refuses. Leads keep working on a token that cannot do
+ * messages, and the refusal is reported rather than swallowed.
  */
 export const PAGE_SUBSCRIBED_FIELDS = ["leadgen", "messages"] as const;
+
+/** What a Page token can always subscribe, with no messaging permission. */
+export const PAGE_LEAD_FIELDS = ["leadgen"] as const;
 
 export async function subscribePageFields(
   pageId: string,
   pageAccessToken: string,
+  fields: readonly string[],
 ): Promise<void> {
   const url = new URL(`${GRAPH_BASE_URL}/${pageId}/subscribed_apps`);
 
@@ -184,7 +202,7 @@ export async function subscribePageFields(
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      subscribed_fields: PAGE_SUBSCRIBED_FIELDS.join(","),
+      subscribed_fields: fields.join(","),
       access_token: pageAccessToken,
     }),
   });

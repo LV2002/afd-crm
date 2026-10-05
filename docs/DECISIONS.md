@@ -3328,3 +3328,32 @@ rather than trusting Meta's acknowledgement, and that is now the only reason the
 *"leads will arrive, Instagram DMs will not, and here is why"* instead of a green tick over a
 silent channel. Writing and verifying are different operations, and only the second one is
 evidence.
+
+---
+
+## 2026-10-05 — Asking for more than the token can do must not cost what it could
+
+Sending `leadgen,messages` in one `subscribed_apps` call was right about the replacement
+semantics and wrong about the failure mode. Meta rejects the **whole** call when the token lacks
+a permission any single field needs:
+
+> (#200) To subscribe to the messages field, one of these permissions is needed: pages_messaging
+
+and subscribes nothing — leadgen included. So a Page token generated for leads, before Instagram
+was ever considered, stopped being able to subscribe for leads. The fix for a silent Instagram
+channel broke the loud, working, revenue-carrying one. That is a straightforwardly worse bug than
+the one it replaced, and it shipped because the change was reasoned about as a set-replacement
+problem and never as a permissions problem.
+
+**Ask for everything, fall back to what is certain.** The call now takes its fields from the
+caller: `PAGE_SUBSCRIBED_FIELDS` first, and on a Graph refusal, `PAGE_LEAD_FIELDS` alone. Leads
+survive a token that cannot do messages.
+
+**And say which happened.** The refusal is carried into the message on screen, with Meta's own
+sentence naming `pages_messaging`, plus the three permissions a replacement token needs. The
+alternative — a quiet fallback that reports success — would have left Instagram broken with a
+green tick over it, which is the failure this whole screen exists to prevent.
+
+The general rule, third time of writing it down in this project: a degraded path is only
+acceptable when the degradation is visible. Falling back silently is not resilience, it is a
+lie with better manners.

@@ -19,6 +19,8 @@ import {
   fetchPageSubscribedFields,
   MetaGraphApiError,
   subscribePageFields,
+  PAGE_LEAD_FIELDS,
+  PAGE_SUBSCRIBED_FIELDS,
 } from "@/lib/integrations/meta/graph-client";
 import { createClient } from "@/lib/supabase/server";
 
@@ -277,7 +279,26 @@ export async function subscribeMetaPage(): Promise<TestConnectionResult> {
     }
 
     const page = await fetchMetaPageIdentity(pageToken);
-    await subscribePageFields(page.id, pageToken);
+    /*
+      Ask for everything, settle for leads.
+
+      Meta rejects the entire call when the token lacks a permission any
+      one field needs — a Page token without `pages_messaging` answers
+      "(#200) To subscribe to the messages field, one of these permissions
+      is needed: pages_messaging" and subscribes nothing at all. So a
+      refusal is caught and retried with the lead field alone: a token that
+      cannot do Instagram must not cost this institute its leads, which is
+      what sending both fields unconditionally did.
+    */
+    let messagesRefusal: string | null = null;
+    try {
+      await subscribePageFields(page.id, pageToken, PAGE_SUBSCRIBED_FIELDS);
+    } catch (err) {
+      if (!(err instanceof MetaGraphApiError)) throw err;
+      messagesRefusal = err.message;
+      await subscribePageFields(page.id, pageToken, PAGE_LEAD_FIELDS);
+    }
+
     const fields = await fetchPageSubscribedFields(page.id, pageToken);
 
     if (!fields.includes("leadgen")) {
@@ -293,7 +314,9 @@ export async function subscribeMetaPage(): Promise<TestConnectionResult> {
     // and silence is the one symptom this screen exists to explain.
     const messagesNote = fields.includes("messages")
       ? " Instagram DMs linked to this Page will arrive too."
-      : " Instagram DMs will not arrive yet: Meta did not list `messages` as subscribed, which usually means the app has no `instagram_manage_messages` permission or the Instagram account is not linked to this Page.";
+      : messagesRefusal
+        ? ` Leads are unaffected, but Instagram DMs will not arrive: Meta refused the messages subscription — ${messagesRefusal} Generate a Page Access Token that also has pages_messaging, instagram_basic and instagram_manage_messages, save it above, and press this again.`
+        : " Instagram DMs will not arrive yet: Meta did not list `messages` as subscribed, which usually means the Instagram account is not linked to this Page.";
 
     const supabase = await createClient();
     await writeAuditLog(supabase, {

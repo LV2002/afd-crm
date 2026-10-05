@@ -6890,3 +6890,28 @@ Both setup docs gain the step, and the Meta settings screen says why pressing th
 after linking Instagram is part of the procedure rather than a retry.
 
 **1519 tests pass**, lint, typecheck and the production build clean. No schema change.
+
+---
+
+## Session 61b — The Instagram fix broke lead subscription, and was fixed back
+
+Leon pressed Subscribe Page and got a 403:
+
+> Meta rejected the request. Meta Graph API returned 403 subscribing the Page — (#200) To
+> subscribe to the messages field, one of these permissions is needed: pages_messaging
+
+Meta refuses the entire `subscribed_apps` call when the token lacks a permission any one field
+needs. His Page token was generated for leads and has no `pages_messaging`, so sending
+`leadgen,messages` together meant **nothing** was subscribed — the fix for a silent channel broke
+the working one.
+
+`subscribePageFields()` now takes its fields from the caller. The action asks for both, and on a
+Graph refusal retries with `leadgen` alone, then reports Meta's own sentence plus the three
+permissions a replacement Page token needs (`pages_messaging`, `instagram_basic`,
+`instagram_manage_messages`). Leads keep working on an old token; Instagram says exactly what it
+is waiting for.
+
+Both setup docs name `pages_messaging` now, and the App Review table in `WHATSAPP-SETUP.md` gained
+it along with `instagram_basic`.
+
+**1519 tests pass**, lint, typecheck and the production build clean.
