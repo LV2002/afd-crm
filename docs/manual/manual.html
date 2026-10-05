@@ -65,6 +65,19 @@
     vertical-align: top;
   }
   th { font-weight: bold; }
+  /*
+    On a phone, a wide table scrolls by itself rather than taking the page
+    with it. A width of 100% is not enough on its own: the cells' own
+    minimum widths can still push a seven-column table past a 412px
+    screen, and with no scroll container the whole document goes sideways.
+
+    Screen-only and narrow-only, so the printed book and the desktop
+    reading width keep an ordinary full-width table.
+  */
+  @media screen and (max-width: 48em) {
+    table { display: block; width: max-content; max-width: 100%; overflow-x: auto; }
+    code { overflow-wrap: anywhere; }
+  }
   hr { border: 0; border-top: 1px solid #000; margin: 2rem 0; }
   a { color: #000; }
   .title-block { text-align: center; margin-bottom: 4rem; }
@@ -1805,6 +1818,8 @@
 <p><strong>The nightly run</strong> is the first thing on this screen, and the first thing to check when a number has not appeared: when it last ran, how long it took, and what each of the ten jobs did — including the ones that ran and did nothing because an integration has no credentials yet.</p>
 <blockquote><em>"Meta ad spend — ok"</em> and <em>"Meta ad spend — ok, nothing to do: not configured"</em> are the difference between a bug and a token nobody has pasted in.</blockquote>
 <p><strong>If it says no run has ever been recorded</strong>, nothing overnight is happening at all — not the response-time sweep, not fee reminders, not ad spend. The usual cause is <code>CRON_SECRET</code> missing from the hosting environment: the schedule then calls the CRM without the password it expects, the CRM refuses, and nothing runs with no failure recorded anywhere, because being turned away is not an error. Check Vercel → Project → Cron Jobs; a run listed with status 401 is this.</p>
+<p><strong>Run tonight's jobs now</strong> sits under the panel. It runs the same ten jobs immediately, so a credential you have just pasted in can be tested in a minute rather than tomorrow morning. It asks first, because it is the real run: queued broadcasts go out and fee reminders are sent. If the deployment has no <code>CRON_SECRET</code> the button says so in one sentence, which is the quickest way to confirm the cause above.</p>
+<p><strong>Send a test email</strong> sits in the alerts box at the top, and is the only honest check that email works. "Alerts are on" means two settings are filled in; the button sends a real message and shows what the mail service said, which is a different sentence for a wrong key, an unverified sending domain, and a free account that will only deliver to its own address.</p>
 <p><strong>Platform health</strong> lists anything that has broken — a failed webhook, a failed nightly job, an unhandled error — with what it was and how often, plus <strong>Recently marked fixed</strong>.</p>
 <p><strong>Check this weekly.</strong> It is where a quietly broken integration shows up before anybody notices leads have stopped arriving.</p>
 <h3 id="settings-config-export-import">Settings → Config Export/Import</h3>
@@ -1828,9 +1843,10 @@
 <p>Lead delivery takes five minutes and needs no approval; the reporting parts wait on Google approving a developer token. Same <strong>Import past ad spend</strong> button. Full walkthrough in <code>docs/ADS-SETUP.md</code>.</p>
 <h3 id="whatsapp">WhatsApp</h3>
 <p><strong>App Secret</strong>, <strong>Verify Token</strong>, <strong>Access Token</strong>, <strong>Phone Number ID</strong>, <strong>WhatsApp Business Account ID</strong>. Note these are stored separately from Meta's even when it is the same app — you must enter the App Secret in both places.</p>
+<p>Full walkthrough, from adding WhatsApp to the Meta app through templates, broadcasts and Coexistence, in <code>docs/WHATSAPP-SETUP.md</code>.</p>
 <h3 id="whatsapp-numbers-and-coexistence">WhatsApp numbers and Coexistence</h3>
 <p>Each of the institute's numbers is registered here with its <strong>Phone number ID</strong> from Meta, a label, whose phone it is, and whether it is API-only or on <strong>Coexistence</strong> (the WhatsApp Business app and the Cloud API on one number at the same time).</p>
-<p>The setting that matters most is <strong>a message from somebody new creates a lead</strong>: right for a counsellor's own number, wrong for the broadcast number. Chapter 10.6a has the full procedure, including the three extra webhook fields that must be subscribed or nothing mirrors.</p>
+<p>The setting that matters most is <strong>a message from somebody new creates a lead</strong>: right for a counsellor's own number, wrong for the broadcast number. Chapter 10.6a has the full procedure, including the three extra webhook fields that must be subscribed or nothing mirrors; the Meta side of it is <code>docs/WHATSAPP-SETUP.md</code> Part 4.</p>
 <h3 id="website-forms">Website forms</h3>
 <p>A signing secret and a webhook address for your own site's forms.</p>
 <h3 id="custom-webhooks">Custom webhooks</h3>

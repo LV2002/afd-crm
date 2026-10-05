@@ -30,6 +30,42 @@ missing message, not a delayed one.
 
 ---
 
+## Meta, WhatsApp and Instagram — Leon's, in Meta's dashboard
+
+Not code. Every one of these is a step only Leon can take, and the CRM side of each is
+already built and waiting. Full walkthroughs in `docs/WHATSAPP-SETUP.md` and
+`docs/ADS-SETUP.md`.
+
+**Done so far:** Lead Ads, Meta ad spend, the nightly run, email alerts, and Instagram DM
+delivery (the Page is subscribed to `messages` with a token carrying `pages_messaging`).
+
+### i. Business verification — start first, it gates the rest
+Business Settings → Security Centre. Meta wants documents proving AFD India is a real
+registered business, with the name and address matching exactly. Days to weeks, and every
+permission below waits on it.
+
+### ii. App Review — one submission, not three
+`whatsapp_business_messaging`, `whatsapp_business_management`, `instagram_manage_messages`,
+`leads_retrieval`, the three `pages_` permissions, `pages_messaging` and `ads_read` all go on
+the same submission. Until it clears, Instagram DMs arrive only from people with a role on the
+Meta app — enough to test with, not enough to run on. A twenty-second screen recording of the
+CRM using the permission is the single most effective thing to attach.
+
+### iii. WhatsApp — the whole of Part 1, nothing started
+Add WhatsApp to the existing Meta app, pick a number that is not a counsellor's (registering
+one to the Cloud API ends its use in the WhatsApp app and the chats do not follow), generate a
+System User token, paste five values into Settings → Integrations → WhatsApp, subscribe the
+`messages` field, register the number, send a test. Coexistence for counsellors' own phones is
+Part 4 and comes after one number is proven.
+
+### iv. Message templates
+Submit the three or four the institute actually uses, from WhatsApp → Templates. Template
+approval and App Review are separate queues and both take days, so start them together.
+Categories matter: a fee reminder is Utility, a discount offer is Marketing, and marketing
+dressed as utility is the most common rejection.
+
+---
+
 ## Backlog proper
 
 ### 2. Telephony — **blocked**
@@ -55,9 +91,14 @@ Malayalam transcription, call scoring, QA dashboard. All of Phase 6 sits behind 
   probability under Settings → Pipeline Stages. Without the first, Insights → Targets counts
   what happened but has nothing to judge it against; without the second, the forecast counts
   those leads as worth nothing (and says so on the page).
-- **Set the alerting environment variables** in Vercel — `RESEND_API_KEY`, `EMAIL_FROM`,
-  `ALERT_EMAIL_TO`, `NEXT_PUBLIC_APP_URL`. Failures are recorded and visible on
-  Settings → Platform Health either way; without these, nobody is emailed about them.
+- ~~**Set the alerting environment variables** in Vercel~~ — **done, 2026-10-05.**
+  `RESEND_API_KEY` and `EMAIL_FROM` are set and a test email arrived. Alerts go to
+  `leonvinny2002@gmail.com`, which is now a setting (Settings → Organisation) rather than
+  `ALERT_EMAIL_TO`. `NEXT_PUBLIC_APP_URL` is still unset: links inside emails work, but point
+  at whichever deployment sent the mail rather than at a stable address.
+- ~~**`CRON_SECRET`**~~ — **done, 2026-10-05.** It was never set, so every scheduled call was
+  turned away with a 401 and nothing overnight had run since launch. Set now; the nightly run
+  is recorded on Settings → Platform Health, which also has a button to run the jobs on demand.
 - **Fill in Settings → Organisation.** Address, phone, email, GSTIN and the logo.
   Every printed document — receipts, the fee agreement, profile sheets, and any
   report somebody prints — reads from there, and until it is filled in they carry

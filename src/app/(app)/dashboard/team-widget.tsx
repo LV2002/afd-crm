@@ -36,7 +36,7 @@ export async function TeamWidget() {
   const { centre, team } = await getCentreView(supabase);
 
   return (
-    <Card className="lg:col-span-2">
+    <Card>
       <CardHeader>
         <CardTitle>Counsellor performance</CardTitle>
         <CardDescription>

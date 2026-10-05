@@ -54,3 +54,95 @@ test.describe("on a phone", () => {
     expect(overflow, "the page scrolls sideways on a phone").toBeLessThanOrEqual(2);
   });
 });
+
+/**
+ * Every screen an administrator can reach, at phone width.
+ *
+ * Two pages were covered before — the dashboard and the lead list — which
+ * is how the settings menu went unnoticed: twenty-five links stacked above
+ * the content on every one of twenty-five screens, none of them tested.
+ * This walks the application the way `crawl.spec.ts` does and asks one
+ * question of each page, the one that cannot be answered from a desktop
+ * run: does it fit?
+ *
+ * Admin rather than counsellor, deliberately. An administrator reaches the
+ * most screens, and the settings area — the part that was actually broken
+ * — is invisible to everybody else.
+ */
+test.describe("at phone width", () => {
+  test.use({ storageState: storageStateFor("admin") });
+
+  const SKIP = [/\/logout/i, /\/auth\//i, /\/print$/i, /\/export/i];
+  const MAX_PAGES = 45;
+
+  test("no screen scrolls sideways", async ({ page, baseURL }) => {
+    test.slow();
+
+    const origin = new URL(baseURL!).origin;
+    const seen = new Set<string>();
+    const queue: string[] = ["/dashboard", "/settings"];
+    const tooWide: string[] = [];
+    let visited = 0;
+
+    while (queue.length > 0 && visited < MAX_PAGES) {
+      const path = queue.shift()!;
+      if (seen.has(path)) continue;
+      seen.add(path);
+
+      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await page.waitForLoadState("networkidle").catch(() => {});
+      visited++;
+
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      // Two pixels of slack for sub-pixel rounding on borders, which is
+      // not a layout anybody can see.
+      if (overflow > 2) tooWide.push(`${path} overflows by ${overflow}px`);
+
+      const hrefs = await page.locator("a[href]").evaluateAll((anchors) =>
+        anchors.map((anchor) => (anchor as HTMLAnchorElement).getAttribute("href") ?? ""),
+      );
+      for (const href of hrefs) {
+        if (!href || href.startsWith("#")) continue;
+        let url: URL;
+        try {
+          url = new URL(href, origin);
+        } catch {
+          continue;
+        }
+        if (url.origin !== origin) continue;
+        if (SKIP.some((pattern) => pattern.test(url.pathname))) continue;
+        const next = `${url.pathname}${url.search}`;
+        if (!seen.has(next)) queue.push(next);
+      }
+    }
+
+    console.log(`phone: measured ${visited} screens`);
+    expect(visited, "reached almost nothing — is the nav rendering on a phone?").toBeGreaterThan(5);
+    expect(tooWide.join("\n"), "screens wider than the phone").toBe("");
+  });
+
+  test("the settings menu is one row until you open it", async ({ page }) => {
+    // The actual bug: the settings nav is a sidebar from `lg` up and was a
+    // 25-item list below it, so the content of every settings screen
+    // started a full screen-height down the page.
+    await page.goto("/settings/health");
+    await page.waitForLoadState("networkidle").catch(() => {});
+
+    // By id rather than by role: the application has several navs and the
+    // point of this test is this one specifically.
+    const list = page.locator("#settings-nav-list");
+    await expect(list).toBeHidden();
+
+    const toggle = page.locator('button[aria-controls="settings-nav-list"]');
+    await expect(toggle).toContainText(/health/i);
+    await toggle.click();
+    await expect(list).toBeVisible();
+
+    // And it goes somewhere.
+    await list.getByRole("link", { name: /centres/i }).first().click();
+    await expect(page).toHaveURL(/\/settings\/centers/);
+    await expect(list).toBeHidden();
+  });
+});

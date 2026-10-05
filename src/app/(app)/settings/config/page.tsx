@@ -64,7 +64,9 @@ export default async function ConfigPage() {
             configuration changes out from under it. Run it against a freshly-migrated database, before
             anyone has logged in:
           </p>
-          <pre className="w-fit rounded-md bg-muted px-3 py-2 font-mono text-sm">
+          {/* `max-w-full` with its own scrollbar: `w-fit` alone sizes to the
+              command, which is wider than a phone. */}
+          <pre className="w-fit max-w-full overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-sm">
             npm run db:config-import -- path/to/bundle.json
           </pre>
         </section>

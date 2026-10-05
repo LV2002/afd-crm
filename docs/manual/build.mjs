@@ -269,6 +269,19 @@ const CSS = `
     vertical-align: top;
   }
   th { font-weight: bold; }
+  /*
+    On a phone, a wide table scrolls by itself rather than taking the page
+    with it. A width of 100% is not enough on its own: the cells' own
+    minimum widths can still push a seven-column table past a 412px
+    screen, and with no scroll container the whole document goes sideways.
+
+    Screen-only and narrow-only, so the printed book and the desktop
+    reading width keep an ordinary full-width table.
+  */
+  @media screen and (max-width: 48em) {
+    table { display: block; width: max-content; max-width: 100%; overflow-x: auto; }
+    code { overflow-wrap: anywhere; }
+  }
   hr { border: 0; border-top: 1px solid #000; margin: 2rem 0; }
   a { color: #000; }
   .title-block { text-align: center; margin-bottom: 4rem; }

@@ -1,5 +1,5 @@
 import { AccessDenied } from "@/components/layout/access-denied";
-import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
+import { can, getCurrentUser, scopeFor, type SessionUser } from "@/lib/auth/session";
 import { getRoleLayout } from "@/lib/dashboard/get-layout";
 import { resolveDashboard } from "@/lib/dashboard/resolve-layout";
 import { createClient } from "@/lib/supabase/server";
@@ -38,6 +38,27 @@ import { TeamWidget } from "./team-widget";
  * the registry rather than one merged card so an admin can still turn either
  * half off per role.
  */
+function renderWidget(key: string, user: SessionUser, canRevealPhone: boolean) {
+  switch (key) {
+    case "my_numbers":
+      return <MyNumbersWidget userId={user.id} />;
+    case "my_day":
+      return <MyDayWidget userId={user.id} canRevealPhone={canRevealPhone} />;
+    case "centre":
+      return <CentreWidget />;
+    case "centre_team":
+      return <TeamWidget />;
+    case "accounts":
+      return <AccountsWidget />;
+    case "academics":
+      return <AcademicsWidget />;
+    case "admin":
+      return <AdminWidget />;
+    default:
+      return null;
+  }
+}
+
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) return <AccessDenied />;
@@ -62,33 +83,38 @@ export default async function DashboardPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {widgets.map((widget) => {
-          switch (widget.key) {
-            case "my_numbers":
-              return <MyNumbersWidget key={widget.key} userId={user.id} />;
-            case "my_day":
-              return (
-                <MyDayWidget
-                  key={widget.key}
-                  userId={user.id}
-                  canRevealPhone={can(user, "lead.reveal_phone")}
-                />
-              );
-            case "centre":
-              return <CentreWidget key={widget.key} />;
-            case "centre_team":
-              return <TeamWidget key={widget.key} />;
-            case "accounts":
-              return <AccountsWidget key={widget.key} />;
-            case "academics":
-              return <AcademicsWidget key={widget.key} />;
-            case "admin":
-              return <AdminWidget key={widget.key} />;
-            default:
-              // A key in the database that the code no longer has. Ignored
-              // rather than crashed on, so removing a widget cannot break
-              // a saved layout.
-              return null;
-          }
+          const card = renderWidget(widget.key, user, can(user, "lead.reveal_phone"));
+          // A key in the database that the code no longer has. Ignored
+          // rather than crashed on, so removing a widget cannot break a
+          // saved layout.
+          if (!card) return null;
+
+          /*
+            The span lives on the wrapper, not inside the widget.
+
+            Each widget renders a Card and knows nothing about the grid it
+            lands in — which is the right split, and the reason a widget
+            cannot simply give itself `lg:col-span-2`: the class would be
+            on the Card, one level below the grid item, and do nothing.
+            The registry says how wide a widget wants to be and this is
+            the one place that honours it.
+
+            `min-w-0` is the same load-bearing class as the one on the
+            main column in the app layout, for the same reason: a grid
+            item's default `min-width: auto` means it refuses to shrink
+            below its content, so the counsellor table inside one widget
+            pushed the whole dashboard 196px past the phone and its own
+            `overflow-x-auto` never engaged. Measured by the phone suite,
+            which is the only thing that can see it.
+          */
+          return (
+            <div
+              key={widget.key}
+              className={widget.width === "full" ? "min-w-0 lg:col-span-2" : "min-w-0"}
+            >
+              {card}
+            </div>
+          );
         })}
       </div>
 

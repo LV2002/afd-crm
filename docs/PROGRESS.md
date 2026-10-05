@@ -6915,3 +6915,75 @@ Both setup docs name `pages_messaging` now, and the App Review table in `WHATSAP
 it along with `instagram_basic`.
 
 **1519 tests pass**, lint, typecheck and the production build clean.
+
+---
+
+## Session 62 — Three of Leon's, and one of them was already built
+
+### The admission did move the stage. It just never said when it couldn't.
+
+`confirmAdmission()` has always moved the lead into the active `stage_type = 'won'` stage,
+inside the same transaction as the enrolment. The line is `if (wonStage) { … }` — and with no
+active won stage it does nothing at all, silently. An institute that built its pipeline by hand
+and left every stage as *normal* gets admissions recorded and leads still sitting at Demo
+Scheduled, with nothing anywhere explaining it.
+
+So the work was not the move, it was everything around it:
+
+- **It reports what happened.** `wonStageId` comes back, and the counsellor is told either
+  *"Admission confirmed, and the lead moved to the admission stage"* or exactly why it didn't,
+  naming the setting and where to change it. The admission is recorded either way — refusing one
+  over a pipeline setting would be absurd.
+- **It writes a `lead.stage_change` audit row.** The lead's own history showed an enrolment
+  appearing and the stage changing by itself.
+- **It starts `stage_entered` automations.** A sequence set up to fire on "entered Admission
+  Confirmed" never fired for the one event that actually puts a lead there.
+- **Settings → Pipeline Stages says which stage is the won one**, and warns when there is none or
+  more than one, naming them.
+- **The stage type dropdown says what each type does.** Eight words with no stated consequence,
+  two of which are load-bearing.
+
+The first version put the explanation inside each `SelectItem`, which this project's `SelectItem`
+wraps in Radix's `ItemText` — so every description would have appeared jammed onto the end of the
+chosen label in the closed trigger. It sits under the control instead.
+
+### The pipeline widget was half a page wide
+
+`WidgetDefinition` gains `width`, the dashboard honours it with `lg:col-span-2`, and the registry
+is the one place listing which widgets are wide. The span goes on a wrapper rather than inside the
+widget: a widget renders a Card and knows nothing about the grid, so a `col-span` class on it
+would sit one level below the grid item and do nothing.
+
+### Navigation on a phone
+
+The drawer worked. The **settings menu** did not: twenty-five links in a column, stacked above the
+content below `lg`, on every one of twenty-five screens. Reaching Platform Health meant scrolling
+past every other settings page, and leaving meant scrolling back up. Now one row naming the screen
+you are on, which opens the list — a disclosure rather than a tab strip, because twenty-five tabs
+is two screens of horizontal scrolling to find a name you already know.
+
+**And the reason it was never noticed: the phone suite tested two pages.** It now crawls every
+screen an administrator can reach at phone width and fails on any that scrolls sideways, which is
+the question a desktop run cannot answer.
+
+**1520 tests pass**, lint, typecheck and the production build clean. No schema change.
+
+### What the phone crawl found on its first run
+
+The new test failed, which is the point of it. Four screens were wider than a 412px phone:
+
+| Screen | Overflow | Cause |
+|---|---|---|
+| `/dashboard` | **196px** | A grid item's default `min-width: auto`. The counsellor table's own `overflow-x-auto` never engaged because the column refused to shrink below it. |
+| `/leads` | **113px** | The header row is `justify-between` and does not wrap. A counsellor has one button there; an administrator has three. |
+| `/manual` | 14px | A wide table in the built book, which has no scroll container of its own. |
+| `/settings/config` | 4px | A `<pre>` with `w-fit` holding a command line longer than the screen. |
+
+`/leads` is the one worth dwelling on: **the old suite tested that exact page and passed**, because
+it ran as a counsellor. One role, two screens, and a layout that breaks only for the person who
+has the most buttons.
+
+The dashboard fix also caught a regression from this session: `TeamWidget` carried its own
+`lg:col-span-2`, which worked while the Card was the grid item and stopped working the moment
+widgets were wrapped — the exact hazard named in the comment two files away, and missed here. Its
+width is declared in the registry now, where the dashboard reads it.
