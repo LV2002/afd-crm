@@ -7161,14 +7161,9 @@ never read. The feature existed and nobody had made a policy.
 
 ### Three things, in order of how much they matter
 
-**Presets.** The hard part was never the typing, it was knowing what a reasonable target is.
-Nobody setting up a CRM for the first time knows whether first response should be 4 hours or 24.
-Three policies a coaching institute would recognise now fill the whole form in — *answer a new
-enquiry the same day*, *keep the follow-up date you promised*, *nobody sits in one stage for a
-fortnight* — and every field stays editable. A preset is a filled form, never a saved row.
-
-Deliberately **not** seeded into the database: a seeded SLA starts breaching leads on day one for
-an institute that has not decided it wants to be measured yet.
+**Presets — since removed, see session 67.** Three one-click starting points, which Leon asked
+out the same day. Left in this entry because the reasoning is in DECISIONS.md and the removal is
+easier to follow with what it removed written down.
 
 **The condition builder** the assignment rules already use, in place of the first textarea. It was
 one import away the whole time.
@@ -7219,3 +7214,80 @@ one catches. **Open question 4 is answered** — not by asking Leon but by readi
 
 **1547 tests pass** (14 new, `tests/sla-presets.spec.ts`), lint, typecheck, `db:audit` and the
 production build clean. No schema change, no migration.
+
+
+## Session 67 — Mobile navigation, flow audiences, and the presets back out again
+
+Five things, in the order they mattered.
+
+### The mobile navigation bar, properly this time
+
+Leon, for the second time: *"the navigation bar is still not working in mobile view"*. Session 62
+built a drawer and I believed that closed it. The drawer component was correct; the drawer was
+**55 pixels tall**.
+
+The app header carries `backdrop-blur`, and an element with a `backdrop-filter` becomes the
+containing block for its fixed-position descendants — same rule as `transform` and `filter`. So
+`fixed inset-0`, rendered inside that header, resolved against a 56px box instead of the viewport.
+Tapping the menu opened a sliver across the top of the screen.
+
+Measured rather than assumed: a standalone Chromium repro at 412×915 gives **55px** with the
+backdrop-filter and **915px** without. Fixed by portalling the drawer to `document.body`, which
+also immunises it against the next `transform` anybody adds to any ancestor.
+
+**The existing e2e test opened the drawer, clicked a link in it, and passed** — `toBeVisible()` is
+true of a sliver, and Playwright scrolls a link into its scroll container before clicking it. It
+proved the links were reachable by a robot. It now asserts the drawer's height exceeds 90% of the
+viewport. When a test is about whether a *human* can use something, assert a measurement.
+
+### Automations can now be narrowed to an audience
+
+Leon wanted WhatsApp automations targeted by stage, source, interested exams and education status.
+A flow had a trigger, a trigger config and a centre — nothing else — so "the NID sequence, but
+only Meta leads in Class 12" meant a flow per combination, each hung off a hand-applied tag.
+
+`whatsapp_flows.applies_to` (migration 0088) stores the same `{"all": [...]}` as every other rule
+here, read by the same evaluator, built by the same picker. Null means no narrowing, so every
+existing automation is untouched. **The trigger says when a run starts; this says for whom.**
+
+Two things that needed fixing underneath:
+
+`startFlows()` selected three columns — right for what it did before, silently wrong for
+evaluating conditions against the row: any condition naming another column would read `undefined`
+and match nobody, and an automation that reaches nobody looks exactly like one nobody triggered.
+It takes the whole row now, with a test specifically on `last_touch_source`, whose column name
+differs from its condition name.
+
+`education_status` and `stage_id` were real lead columns that no rule could test — missing from
+`FIELD_MAP`, so unavailable in assignment, temperature, SLA *and* flow conditions. Added. The
+`satisfies` clause in `condition-fields.ts` refused to build until both had labels and option
+sources, which is exactly what that file is for. `load-options.ts` learned a `stages` option
+source.
+
+### Broadcasts already did all four
+
+Worth stating plainly: the broadcast audience builder has always rendered every lead field with
+its options — stage, source, interested exams, education status, the lot. It was behind a
+`<details>` collapsed by default, labelled **"Filters"**, which names the mechanism and not the
+job. Now open by default, headed **"Who gets it"**, with the four he asked about named in the hint.
+No new capability; the capability was invisible.
+
+### The SLA presets came back out
+
+*"i dont want you to create premade SLAs but rather allow me to create SLAs but just make them
+easier to create."* Right, and for a sharper reason than the one I had: a named policy on the
+screen is the software deciding what the institute measures itself on, saved row or not. Removed
+`SLA_PRESETS`; `lib/sla/presets.ts` is now `lib/sla/policy-copy.ts`, holding only the words and
+the two formatters. Everything that makes the form *easy* stayed — the condition builder, the
+ladder editor, the per-control English, hours read back as days and weeks.
+
+### Tags stay, and the manual leaves the sidebar
+
+Tags: kept, unchanged, on Leon's call — *"i dont use them for anything and they cost me nothing"*.
+The one real gap found while answering him (a tag cannot be tested in a rule) is in BACKLOG.md.
+
+The **Manual** entry is out of the navigation. The page itself still serves at `/manual` by URL,
+and chapter 19.4 now says so.
+
+**1548 tests pass** (6 new on flow conditions, the SLA copy tests rewritten), lint, typecheck,
+`db:audit` and the production build clean. One migration, 0088, additive and nullable.

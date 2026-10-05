@@ -17,10 +17,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { ConditionField } from "@/lib/assignment/evaluate-conditions";
-import { MEASURE_COPY, SLA_PRESETS, describeHours, type SlaPreset } from "@/lib/sla/presets";
+import { MEASURE_COPY, SLA_MEASURES, describeHours, type SlaMeasure } from "@/lib/sla/policy-copy";
 
 import { createSlaPolicy, type SlaFormState } from "./actions";
-import { EscalationEditor, type EscalationRow } from "./escalation-editor";
+import { EscalationEditor } from "./escalation-editor";
 
 const initialState: SlaFormState = {};
 
@@ -33,14 +33,19 @@ const initialState: SlaFormState = {};
  * and one of them taught a key — `flag_breach` — that nothing reads. The
  * result was predictable: the feature existed and nobody made a policy.
  *
- * Three things changed, in order of how much they matter:
+ * What replaced them:
  *
- * 1. **Presets.** The hard part was never the typing, it was knowing what
- *    a reasonable target is. Three policies a coaching institute would
- *    recognise fill the form in; everything stays editable afterwards.
- * 2. **The condition builder** the assignment rules already use, instead
- *    of the JSON textarea. It was sitting one import away the whole time.
- * 3. **A ladder editor**, instead of the other JSON textarea.
+ * 1. **The condition builder** the assignment rules already use, instead
+ *    of the first textarea. It was sitting one import away the whole time.
+ * 2. **A ladder editor**, instead of the second.
+ * 3. **Plain English under every control** — what the clock measures,
+ *    when it pauses, and how priority decides which single policy a lead
+ *    gets. Hours are said back as days and weeks.
+ *
+ * What is deliberately *not* here: ready-made policies. An earlier draft
+ * offered three, and Leon asked for them out — deciding what an institute
+ * measures itself on is his call, not the software's. See
+ * lib/sla/policy-copy.ts.
  *
  * Nothing about the stored shape changed, so existing policies and the
  * hourly sweep are untouched.
@@ -54,67 +59,20 @@ export function PolicyForm({
 }) {
   const [state, formAction, pending] = useActionState(createSlaPolicy, initialState);
 
-  const [preset, setPreset] = React.useState<SlaPreset | null>(null);
-  const [measure, setMeasure] = React.useState<SlaPreset["measure"]>("first_response");
+  const [measure, setMeasure] = React.useState<SlaMeasure>("first_response");
   const [targetHours, setTargetHours] = React.useState(4);
-  const [businessHoursOnly, setBusinessHoursOnly] = React.useState(true);
-  const [name, setName] = React.useState("");
-  const [priority, setPriority] = React.useState(0);
-  const [escalations, setEscalations] = React.useState<EscalationRow[]>([]);
-
-  /**
-   * Remounts the two sub-editors when a preset is chosen.
-   *
-   * Both keep their own state from their initial props — which is right
-   * while somebody is editing and wrong the moment a preset replaces what
-   * they were editing. Changing the key is the honest way to say "this is
-   * a different form now".
-   */
-  const [formKey, setFormKey] = React.useState(0);
-
-  function apply(chosen: SlaPreset) {
-    setPreset(chosen);
-    setName(chosen.name);
-    setMeasure(chosen.measure);
-    setTargetHours(chosen.targetHours);
-    setBusinessHoursOnly(chosen.businessHoursOnly);
-    setPriority(chosen.priority);
-    setEscalations(chosen.escalations);
-    setFormKey((value) => value + 1);
-  }
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-dashed p-4">
       <div>
         <h3 className="text-sm font-semibold">Add a policy</h3>
         <p className="text-sm text-muted-foreground">
-          Start from one of these and change what you disagree with, or fill it in yourself.
-          Nothing is saved until you press Create.
+          Six fields, and only the first two need a decision. Nothing is saved until you press
+          Create.
         </p>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3">
-        {SLA_PRESETS.map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => apply(option)}
-            className={
-              preset?.key === option.key
-                ? "flex flex-col gap-1 rounded-lg border-2 border-primary bg-primary/5 p-3 text-left"
-                : "flex flex-col gap-1 rounded-lg border p-3 text-left hover:bg-accent"
-            }
-          >
-            <span className="text-sm font-medium">{option.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {MEASURE_COPY[option.measure].label} · {describeHours(option.targetHours)}
-            </span>
-            <span className="mt-1 text-xs text-muted-foreground">{option.rationale}</span>
-          </button>
-        ))}
-      </div>
-
-      <form action={formAction} className="flex flex-col gap-4 border-t pt-4">
+      <form action={formAction} className="flex flex-col gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
             <Label htmlFor="name">Name</Label>
@@ -122,8 +80,6 @@ export function PolicyForm({
               id="name"
               name="name"
               required
-              value={name}
-              onChange={(event) => setName(event.target.value)}
               placeholder="Answer a new enquiry the same day"
             />
             <p className="text-xs text-muted-foreground">
@@ -136,20 +92,24 @@ export function PolicyForm({
             <Select
               name="measure"
               value={measure}
-              onValueChange={(next) => setMeasure(next as SlaPreset["measure"])}
+              onValueChange={(next) => setMeasure(next as SlaMeasure)}
               required
             >
               <SelectTrigger id="measure">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(MEASURE_COPY).map(([value, copy]) => (
+                {SLA_MEASURES.map((value) => (
                   <SelectItem key={value} value={value}>
-                    {copy.label}
+                    {MEASURE_COPY[value].label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {/* Under the control, not inside the option: this project's
+                SelectItem wraps all its children in Radix ItemText, which
+                the closed trigger renders — so an explanation written into
+                the option leaks into the trigger. */}
             <p className="text-xs text-muted-foreground">{MEASURE_COPY[measure].clock}</p>
           </div>
 
@@ -180,8 +140,7 @@ export function PolicyForm({
               type="number"
               min={0}
               required
-              value={priority}
-              onChange={(event) => setPriority(Number(event.target.value))}
+              defaultValue={0}
               className="w-28"
             />
             <p className="text-xs text-muted-foreground">
@@ -192,12 +151,7 @@ export function PolicyForm({
         </div>
 
         <label className="flex items-start gap-2 text-sm">
-          <Checkbox
-            name="businessHoursOnly"
-            checked={businessHoursOnly}
-            onCheckedChange={(next) => setBusinessHoursOnly(next === true)}
-            className="mt-0.5"
-          />
+          <Checkbox name="businessHoursOnly" defaultChecked className="mt-0.5" />
           <span>
             Count working hours only
             <span className="block text-xs text-muted-foreground">
@@ -214,17 +168,12 @@ export function PolicyForm({
             Every condition has to be true. Leave it empty and the policy covers everybody, which
             is what you want for your first one.
           </p>
-          <ConditionBuilder
-            key={`conditions-${formKey}`}
-            name="appliesTo"
-            fields={fields}
-            optionsByField={optionsByField}
-          />
+          <ConditionBuilder name="appliesTo" fields={fields} optionsByField={optionsByField} />
         </div>
 
         <div className="flex flex-col gap-2 border-t pt-4">
           <Label>When it is missed</Label>
-          <EscalationEditor key={`escalations-${formKey}`} defaultRows={escalations} />
+          <EscalationEditor />
         </div>
 
         <FormMessage error={state.error} success={state.success} />

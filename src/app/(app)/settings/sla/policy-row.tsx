@@ -7,7 +7,7 @@ import { Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { MEASURE_COPY, describeHours } from "@/lib/sla/presets";
+import { MEASURE_COPY, describeHours } from "@/lib/sla/policy-copy";
 
 import { deleteSlaPolicy, setSlaPolicyActive } from "./actions";
 

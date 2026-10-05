@@ -4,6 +4,9 @@ import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { centers, pipelineStages, tags } from "@/lib/db/schema";
+import { createClient } from "@/lib/supabase/server";
+
+import { loadRuleOptions } from "@/app/(app)/settings/rules/load-options";
 
 import { FlowForm } from "../flow-form";
 
@@ -13,7 +16,8 @@ export default async function NewWhatsAppFlowPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.campaign")) return <AccessDenied />;
 
-  const [stageRows, tagRows, centerRows] = await Promise.all([
+  const supabase = await createClient();
+  const [stageRows, tagRows, centerRows, ruleOptions] = await Promise.all([
     db
       .select({ id: pipelineStages.id, name: pipelineStages.name })
       .from(pipelineStages)
@@ -29,6 +33,7 @@ export default async function NewWhatsAppFlowPage() {
       .from(centers)
       .where(eq(centers.isActive, true))
       .orderBy(asc(centers.name)),
+    loadRuleOptions(supabase),
   ]);
 
   return (
@@ -50,10 +55,13 @@ export default async function NewWhatsAppFlowPage() {
           tagId: "",
           keywords: "",
           centerId: "",
+          appliesTo: [],
         }}
         stages={stageRows}
         tags={tagRows}
         centers={centerRows}
+        fields={ruleOptions.fields}
+        optionsByField={ruleOptions.optionsByField}
       />
     </div>
   );

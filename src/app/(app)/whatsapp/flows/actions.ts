@@ -4,6 +4,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { writeAuditLog } from "@/lib/audit/log";
+import { parseConditions } from "@/lib/rules/parse-rule";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { whatsappFlowRuns, whatsappFlowSteps, whatsappFlows } from "@/lib/db/schema";
@@ -83,7 +84,21 @@ export async function saveFlow(_prev: FlowFormState, formData: FormData): Promis
     return { error: "Give at least one word to listen for." };
   }
 
-  const values = { name, description, triggerType, triggerConfig, centerId };
+  // Validated, not merely parsed: these conditions are evaluated against
+  // every lead the trigger fires for, inside `startFlows()`, which is
+  // called from the middle of ordinary work and swallows its own errors.
+  // An unknown field name stored here would make the automation silently
+  // reach nobody, with nothing anywhere saying why.
+  const appliesToParsed = parseConditions(formData.get("appliesTo"));
+  if (!appliesToParsed.ok) return { error: appliesToParsed.error };
+  const conditions = appliesToParsed.value.all ?? [];
+  // Stored as a fresh object rather than the parser's `RuleConditions`,
+  // which is an interface and so has no implicit index signature to
+  // satisfy the jsonb column's type. Null when empty, so "no narrowing"
+  // is one representation rather than two.
+  const appliesTo = conditions.length > 0 ? { all: conditions } : null;
+
+  const values = { name, description, triggerType, triggerConfig, centerId, appliesTo };
 
   let savedId: string;
   if (flowId) {

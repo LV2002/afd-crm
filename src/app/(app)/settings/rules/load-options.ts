@@ -26,7 +26,7 @@ export interface RuleOptions {
 }
 
 export async function loadRuleOptions(supabase: SupabaseClient): Promise<RuleOptions> {
-  const [{ data: centerRows }, { data: userRows }] = await Promise.all([
+  const [{ data: centerRows }, { data: userRows }, { data: stageRows }] = await Promise.all([
     supabase
       .from("centers")
       .select("id, name")
@@ -41,9 +41,16 @@ export async function loadRuleOptions(supabase: SupabaseClient): Promise<RuleOpt
       .eq("is_active", true)
       .order("full_name")
       .returns<Array<{ id: string; full_name: string; roles: { name: string } | null }>>(),
+    supabase
+      .from("pipeline_stages")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("sort_order")
+      .returns<Array<{ id: string; name: string }>>(),
   ]);
 
   const centers = (centerRows ?? []).map((row) => ({ value: row.id, label: row.name }));
+  const stages = (stageRows ?? []).map((row) => ({ value: row.id, label: row.name }));
 
   const optionsByField: Record<string, Array<{ value: string; label: string }>> = {};
   const states = INDIAN_STATES_DISTRICTS.map((entry) => ({ value: entry.state, label: entry.state }));
@@ -56,6 +63,7 @@ export async function loadRuleOptions(supabase: SupabaseClient): Promise<RuleOpt
       const source = CONDITION_FIELDS[field].optionSource;
       if (!source) return;
       if (source === "centers") optionsByField[field] = centers;
+      else if (source === "stages") optionsByField[field] = stages;
       else if (source === "states") optionsByField[field] = states;
       else if (source === "districts") optionsByField[field] = districts;
       else optionsByField[field] = await getDropdownOptions(supabase, source.slice("dropdown:".length));

@@ -1428,7 +1428,7 @@
 <p><strong>Steps</strong></p>
 <ol>
 <li><strong>Chats</strong> → <strong>Broadcasts</strong> → <strong>New broadcast</strong>.</li>
-<li><strong>Who it goes to</strong> — build the audience with the filters. The form shows how many people match; check that number before going on.</li>
+<li><strong>Who gets it</strong> — narrow the audience. <strong>Every lead field is a filter</strong>: stage, lead source, interested exams, education status, temperature, centre, district, exam year and any custom field an administrator has added. They are ANDed — <em>stage is Counselling Done</em> <strong>and</strong> <em>source is Meta</em> means both. The form shows how many people match; check that number before going on.</li>
 <li><strong>What it says</strong> — <em>Choose an approved template</em> and fill in any placeholder values.</li>
 <li><strong>When it goes out</strong> — now, or pick a date and time.</li>
 <li>Press <strong>Schedule</strong> (the button shows the recipient count).</li>
@@ -1499,13 +1499,16 @@
 <h2 id="10-8-automations">10.8 Automations</h2>
 <p><strong>Chats</strong> → <strong>Automations</strong> (<code>whatsapp.campaign</code>). A sequence that runs by itself when something happens.</p>
 <p><strong>What can start one</strong>: a lead being created, a lead entering a stage, a tag being added, an inbound keyword, or starting it by hand.</p>
+<p><strong>Who it then goes to</strong> — <em>Only for these leads</em> narrows it further, with the same point-and-click conditions as the assignment rules: stage, lead source, interested exams, education status, temperature, centre, district, exam year. The trigger decides <strong>when</strong> a run starts; this decides <strong>for whom</strong>.</p>
+<blockquote>This is how you run one automation per audience without one automation per combination. <em>A lead enters Counselling Done</em> <strong>and</strong> <em>source is Meta</em> <strong>and</strong> <em>education status is 12th</em> is one automation, not a tag somebody has to remember to apply by hand.</blockquote>
+<p>Leave it empty and the automation reaches everybody the trigger fires for, which is what every automation built before this did.</p>
 <p><strong>What a step can be</strong>: send a template, wait, wait for a reply, add a tag, set a stage, notify the owner, or stop.</p>
 <p>The editor has <strong>The steps</strong>, <strong>Settings</strong>, and <strong>Who has been through it</strong> so you can see what the automation has actually done.</p>
 <h3 id="procedure-build-a-simple-follow-up-automation">Procedure: build a simple follow-up automation</h3>
 <ol>
 <li><strong>Chats</strong> → <strong>Automations</strong> → <strong>New automation</strong>.</li>
 <li>Give it a name, for example <em>NIFT enquiry follow-up</em>.</li>
-<li>Choose the trigger — <em>Pick a stage</em> or <em>Pick a tag</em> as appropriate.</li>
+<li>Choose the trigger — <em>Pick a stage</em> or <em>Pick a tag</em> as appropriate. Then, if this sequence is only for some of them, add conditions under <em>Only for these leads</em>.</li>
 <li>Add steps: a template, a wait, a wait-for-reply with answers (<em>Add an answer</em>, e.g. <em>Yes, interested</em>), and what each answer does.</li>
 <li>Use <strong>If unknown, say…</strong> for replies that match nothing.</li>
 <li>Save, then activate it.</li>
@@ -1515,6 +1518,7 @@
 <li><em>Leaving it active while testing.</em> Real leads will receive it.</li>
 <li><em>A wait shorter than a day.</em> Automations advance on the nightly run, so the smallest meaningful wait is about a day.</li>
 <li><em>No stop condition.</em> Always give somebody a way out of the sequence.</li>
+<li><em>Narrowing it so far nobody matches.</em> The automation list shows an <strong>Only:</strong> line under the trigger for every automation that has conditions — read it back and check it says what you meant.</li>
 </ul>
 <p class="back-to-contents"><a href="#contents">Back to contents</a></p>
 </section>
@@ -1773,15 +1777,7 @@
 <p><strong>What you should see</strong> — matching new leads are assigned on arrival, whatever route they came in by. Watch the <strong>Unassigned</strong> badge: if it keeps filling, no rule matches those leads and you need a catch-all at the lowest priority.</p>
 <h3 id="settings-sla-policies">Settings → SLA Policies</h3>
 <p>How quickly a lead has to be answered, and what happens when it is not.</p>
-<p><strong>Start from one of the three suggestions at the top of the form.</strong> Each one fills in the whole policy — the thing it measures, the target, and who gets told when it is missed — and every field stays yours to change before you press <strong>Create policy</strong>. Nothing is saved until you do.</p>
-<table><thead>
-<tr><th>Suggestion</th><th>What it catches</th></tr>
-</thead><tbody>
-<tr><td>Answer a new enquiry the same day</td><td>A form filled in this morning, still unanswered this afternoon. The one worth having if you only have one.</td></tr>
-<tr><td>Keep the follow-up date you promised</td><td>A counsellor said Thursday; Thursday has passed and nothing is logged.</td></tr>
-<tr><td>Nobody sits in one stage for a fortnight</td><td>The lead moved to <em>Counselling Done</em> in March that has not moved since.</td></tr>
-</tbody></table>
-<p>The fields, if you are filling it in yourself:</p>
+<p>There are <strong>no ready-made policies</strong>, on purpose: what an institute measures itself on is its own decision. Six fields, and only the first two need thinking about. Nothing is saved until you press <strong>Create policy</strong>.</p>
 <ul>
 <li><strong>Name</strong> — what you would call it out loud. It appears on the policy list and nowhere else.</li>
 <li><strong>What it measures</strong> — <em>First response</em> (from the lead arriving until somebody logs their first interaction), <em>Follow-up kept</em> (from the date a counsellor promised), or <em>Time in one stage</em>.</li>
@@ -2494,7 +2490,7 @@
 <p>That runs <code>docs/manual/build.mjs</code>, which reads every numbered chapter and writes <code>docs/manual/manual.html</code> — one self-contained file with a table of contents, no external files, no internet needed.</p>
 <p>Open it by double-clicking. Print it with your browser's print command; each chapter starts on a new page.</p>
 <h2 id="19-4-reading-it-inside-the-crm">19.4 Reading it inside the CRM</h2>
-<p>The manual is also served at <strong><code>/manual</code></strong> for anybody signed in. The route reads <code>docs/manual/manual.html</code> at request time, so <strong>rebuilding and deploying is all that is needed</strong> — no second copy to keep in step.</p>
+<p>The manual is also served at <strong><code>/manual</code></strong> for anybody signed in — by URL only; it is deliberately not in the sidebar. The route reads <code>docs/manual/manual.html</code> at request time, so <strong>rebuilding and deploying is all that is needed</strong> — no second copy to keep in step.</p>
 <p>If the file is missing, the page says so and tells you to run <code>npm run manual</code>.</p>
 <h2 id="19-5-when-to-update-it">19.5 When to update it</h2>
 <p>Update the manual in the same change as the code, not afterwards.</p>

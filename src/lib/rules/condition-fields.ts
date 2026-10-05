@@ -29,7 +29,7 @@ export interface ConditionFieldMeta {
    * `dropdown_options` category, so an admin adding a lead source gets it
    * in the rule builder with no deploy.
    */
-  optionSource?: "centers" | "states" | "districts" | `dropdown:${string}`;
+  optionSource?: "centers" | "states" | "districts" | "stages" | `dropdown:${string}`;
   /** True for the text[] columns: only `contains` behaves correctly on them. */
   isArray?: boolean;
   hint?: string;
@@ -66,6 +66,18 @@ const FIELDS = {
     input: "options",
     optionSource: "dropdown:course",
     isArray: true,
+  },
+  education_status: {
+    label: "Education status",
+    input: "options",
+    optionSource: "dropdown:education_status",
+    hint: "Where they are in school or college — Class 12, dropper, graduate.",
+  },
+  stage_id: {
+    label: "Stage",
+    input: "options",
+    optionSource: "stages",
+    hint: "Where they are in the funnel right now.",
   },
 } as const satisfies Record<ConditionField, ConditionFieldMeta>;
 

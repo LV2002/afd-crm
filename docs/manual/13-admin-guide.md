@@ -144,18 +144,10 @@ the lowest priority.
 ### Settings → SLA Policies
 How quickly a lead has to be answered, and what happens when it is not.
 
-**Start from one of the three suggestions at the top of the form.** Each
-one fills in the whole policy — the thing it measures, the target, and
-who gets told when it is missed — and every field stays yours to change
-before you press **Create policy**. Nothing is saved until you do.
-
-| Suggestion | What it catches |
-|---|---|
-| Answer a new enquiry the same day | A form filled in this morning, still unanswered this afternoon. The one worth having if you only have one. |
-| Keep the follow-up date you promised | A counsellor said Thursday; Thursday has passed and nothing is logged. |
-| Nobody sits in one stage for a fortnight | The lead moved to *Counselling Done* in March that has not moved since. |
-
-The fields, if you are filling it in yourself:
+There are **no ready-made policies**, on purpose: what an institute
+measures itself on is its own decision. Six fields, and only the first
+two need thinking about. Nothing is saved until you press **Create
+policy**.
 
 - **Name** — what you would call it out loud. It appears on the policy
   list and nowhere else.

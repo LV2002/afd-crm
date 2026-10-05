@@ -1,6 +1,6 @@
 import type { RuleConditions } from "@/lib/assignment/evaluate-conditions";
 import { describeConditions } from "@/lib/rules/describe-rule";
-import { describeEscalationLadder } from "@/lib/sla/presets";
+import { describeEscalationLadder } from "@/lib/sla/policy-copy";
 import { createClient } from "@/lib/supabase/server";
 
 import { loadRuleOptions, ruleLabelLookup } from "../rules/load-options";

@@ -26,6 +26,12 @@ const FIELD_MAP = {
   interested_exams: "interestedExams",
   courses_interested: "coursesInterested",
   preferred_mode: "preferredMode",
+  education_status: "educationStatus",
+  // Funnel position. Useful on an SLA policy ("answer leads sitting in
+  // Counselling Done") and on a WhatsApp flow triggered by something
+  // other than entering a stage. On an assignment rule evaluated at
+  // creation it is always the first stage, which is harmless.
+  stage_id: "stageId",
 } as const satisfies Record<string, keyof Lead>;
 
 export type ConditionField = keyof typeof FIELD_MAP;

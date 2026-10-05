@@ -2,6 +2,10 @@ import "server-only";
 
 import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
+import {
+  evaluateConditions,
+  type RuleConditions,
+} from "@/lib/assignment/evaluate-conditions";
 import { db } from "@/lib/db/client";
 import {
   leadTags,
@@ -110,8 +114,11 @@ export async function startFlows(
   input: { leadId: string; stageId?: string | null; tagId?: string | null; text?: string | null },
 ): Promise<number> {
   try {
+    // The whole row, not three columns: a flow's `applies_to` conditions
+    // are evaluated against it below, and which columns they name is
+    // configuration an admin changes without a deploy.
     const [lead] = await db
-      .select({ id: leads.id, centerId: leads.centerId, doNotContact: leads.doNotContact })
+      .select()
       .from(leads)
       .where(and(eq(leads.id, input.leadId), isNull(leads.deletedAt)));
     if (!lead) return 0;
@@ -138,6 +145,16 @@ export async function startFlows(
     let started = 0;
     for (const flow of candidates) {
       if (!triggerMatches(flow.triggerType, flow.triggerConfig, input)) continue;
+
+      // The trigger said when; this says for whom. Null `applies_to` is
+      // every lead the trigger fired for, which is what every flow
+      // written before the column meant.
+      if (
+        flow.appliesTo &&
+        !evaluateConditions(flow.appliesTo as RuleConditions, lead)
+      ) {
+        continue;
+      }
 
       const [created] = await db
         .insert(whatsappFlowRuns)

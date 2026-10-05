@@ -318,3 +318,103 @@ describe("startFlows", () => {
     expect(runs).toHaveLength(0);
   });
 });
+
+/**
+ * The trigger says when a run may start; `applies_to` says for whom.
+ *
+ * Worth testing against the database rather than trusting
+ * `evaluateConditions`' own unit tests, because the thing that breaks is
+ * not the evaluator — it is the lead row reaching it. `startFlows` used
+ * to select three columns, so every condition naming any other column
+ * would have read `undefined` and quietly matched nothing. An automation
+ * that reaches nobody looks exactly like one nobody has triggered yet.
+ */
+describe("startFlows honours a flow's conditions", () => {
+  async function flowFor(label: string, appliesTo: Record<string, unknown> | null) {
+    const { flowId } = await makeFlow(label);
+    await db.update(whatsappFlows).set({ appliesTo }).where(eq(whatsappFlows.id, flowId));
+    return flowId;
+  }
+
+  async function runsOf(flowId: string) {
+    return db.select().from(whatsappFlowRuns).where(eq(whatsappFlowRuns.flowId, flowId));
+  }
+
+  it("starts when every condition matches", async () => {
+    const flowId = await flowFor(`cond-hit-${randomUUID().slice(0, 6)}`, {
+      all: [{ field: "education_status", op: "equals", value: "12th" }],
+    });
+    const leadId = await makeLead("Nithya", "+919847701111");
+    await db.update(leads).set({ educationStatus: "12th" }).where(eq(leads.id, leadId));
+
+    await startFlows("manual", { leadId });
+    expect(await runsOf(flowId)).toHaveLength(1);
+  });
+
+  it("does not start when a condition fails", async () => {
+    const flowId = await flowFor(`cond-miss-${randomUUID().slice(0, 6)}`, {
+      all: [{ field: "education_status", op: "equals", value: "12th" }],
+    });
+    const leadId = await makeLead("Vivek", "+919847701212");
+    await db.update(leads).set({ educationStatus: "graduate" }).where(eq(leads.id, leadId));
+
+    await startFlows("manual", { leadId });
+    expect(await runsOf(flowId)).toHaveLength(0);
+  });
+
+  it("reads the lead source, which lives on a differently named column", async () => {
+    // `source` maps to `last_touch_source`, not a column called source.
+    // The exact kind of mapping a three-column select would have broken.
+    const flowId = await flowFor(`cond-source-${randomUUID().slice(0, 6)}`, {
+      all: [{ field: "source", op: "equals", value: "meta_ads" }],
+    });
+    const leadId = await makeLead("Rahul", "+919847701313");
+    await db.update(leads).set({ lastTouchSource: "meta_ads" }).where(eq(leads.id, leadId));
+
+    await startFlows("manual", { leadId });
+    expect(await runsOf(flowId)).toHaveLength(1);
+  });
+
+  it("matches an exam inside the interested-exams array", async () => {
+    // text[] with `contains` — `equals` against an array never matches,
+    // which is why the builder refuses to offer it.
+    const flowId = await flowFor(`cond-exam-${randomUUID().slice(0, 6)}`, {
+      all: [{ field: "interested_exams", op: "contains", value: "nift_ug" }],
+    });
+    const leadId = await makeLead("Aleena", "+919847701414");
+    await db
+      .update(leads)
+      .set({ interestedExams: ["nid", "nift_ug"] })
+      .where(eq(leads.id, leadId));
+
+    await startFlows("manual", { leadId });
+    expect(await runsOf(flowId)).toHaveLength(1);
+  });
+
+  it("ANDs them, so one failure is enough to hold it back", async () => {
+    const flowId = await flowFor(`cond-and-${randomUUID().slice(0, 6)}`, {
+      all: [
+        { field: "source", op: "equals", value: "meta_ads" },
+        { field: "education_status", op: "equals", value: "12th" },
+      ],
+    });
+    const leadId = await makeLead("Sana", "+919847701515");
+    await db
+      .update(leads)
+      .set({ lastTouchSource: "meta_ads", educationStatus: "graduate" })
+      .where(eq(leads.id, leadId));
+
+    await startFlows("manual", { leadId });
+    expect(await runsOf(flowId)).toHaveLength(0);
+  });
+
+  it("reaches everybody when there are no conditions", async () => {
+    // What every flow written before this column means. If null were
+    // read as "matches nothing", every existing automation would stop.
+    const flowId = await flowFor(`cond-null-${randomUUID().slice(0, 6)}`, null);
+    const leadId = await makeLead("Joseph", "+919847701616");
+
+    await startFlows("manual", { leadId });
+    expect(await runsOf(flowId)).toHaveLength(1);
+  });
+});
