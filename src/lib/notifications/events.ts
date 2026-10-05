@@ -54,6 +54,28 @@ export const NOTIFICATION_EVENTS = [
     defaultNotifyRoleCodes: [],
   },
   {
+    // The companion to lead.assigned, and the answer to "who hears about
+    // a lead nobody was given?". `lead.assigned` tells the counsellor it
+    // landed on; a lead that matched no assignment rule has no counsellor,
+    // so before this it arrived in total silence and waited in the
+    // Unassigned queue for somebody to think to look.
+    //
+    // Fires for every new lead, assigned or not, because the person
+    // running a centre wants intake visible either way — and the owner is
+    // deliberately NOT notified here, since they already get
+    // `lead.assigned` about the same lead a moment later.
+    key: "lead.created",
+    label: "New lead arrived",
+    description:
+      "A lead entered the system from any source — an ad, the website, an import, or typed in by hand. Says who it went to, or that it went to nobody.",
+    category: "Leads",
+    variables: ["lead_name", "lead_number", "source", "owner_name", "center_name"],
+    defaultTitle: "New lead: {{lead_name}}",
+    defaultBody: "#{{lead_number}} from {{source}} at {{center_name}}. Assigned to {{owner_name}}.",
+    defaultNotifyOwner: false,
+    defaultNotifyRoleCodes: ["center_head"],
+  },
+  {
     key: "lead.sla_breached",
     label: "SLA breached",
     description: "A lead passed its response or follow-up target without being worked.",
@@ -116,6 +138,44 @@ export const NOTIFICATION_EVENTS = [
     // about it, so they hear by default even though they can't record it.
     defaultNotifyOwner: true,
     defaultNotifyRoleCodes: ["accounts", "center_head", "academics"],
+  },
+  {
+    // One event for course, batch, mode and academic year rather than one
+    // each, because they move together on one form and a person who
+    // switched course and batch in the same breath should produce one
+    // message saying both, not two saying half each. `changes` carries
+    // the detail: "Course: Foundation → DWO · Batch: Kochi A → Kochi B".
+    //
+    // Also fired by Settings → Batches, so moving somebody between class
+    // groups reads the same wherever it was done.
+    key: "enrolment.plan_changed",
+    label: "Course or batch changed",
+    description:
+      "Somebody changed what a confirmed student is enrolled on — their course, batch, mode or academic year. Accounts may need to re-check the fee; academics need to know who is in which room.",
+    category: "Academics",
+    variables: ["student_name", "changes", "changed_by", "course", "center_name"],
+    defaultTitle: "Plan changed: {{student_name}}",
+    defaultBody: "{{changes}} — changed by {{changed_by}}.",
+    // The counsellor who sold it is the one the family rings about it.
+    defaultNotifyOwner: true,
+    defaultNotifyRoleCodes: ["accounts", "academics", "center_head"],
+  },
+  {
+    // Deliberately separate from the plan change above: the audience is
+    // different. A batch move is academics' business and accounts can
+    // ignore it; a fee that moved is the opposite, and burying it inside
+    // a general "something changed" event is how a ₹20,000 correction
+    // goes unread.
+    key: "enrolment.fee_changed",
+    label: "Fee changed after admission",
+    description:
+      "The agreed fee or instalment schedule of a confirmed admission was changed. Only fires after the admission is confirmed — setting the fee for the first time is not a change.",
+    category: "Money",
+    variables: ["student_name", "old_fee", "new_fee", "changed_by", "center_name"],
+    defaultTitle: "Fee changed: {{student_name}}",
+    defaultBody: "{{old_fee}} → {{new_fee}}, changed by {{changed_by}}.",
+    defaultNotifyOwner: true,
+    defaultNotifyRoleCodes: ["accounts", "center_head"],
   },
   {
     key: "profile_form.submitted",

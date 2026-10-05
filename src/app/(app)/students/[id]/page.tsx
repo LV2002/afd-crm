@@ -9,13 +9,18 @@ import { Button } from "@/components/ui/button";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { groupBySection } from "@/lib/fields/group-by-section";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
-import { OPTION_BEARING_TYPES, resolveFieldOptions, type FieldOption } from "@/lib/fields/resolve-field-options";
+import { ChangePlanPanel } from "@/components/enrolment/change-plan-panel";
+import { getBatchOptionsForCentre } from "@/lib/enrolment/batch-options";
+import { getDropdownOptions, OPTION_BEARING_TYPES, resolveFieldOptions, type FieldOption } from "@/lib/fields/resolve-field-options";
 import { formatDateIST } from "@/lib/format/date";
 import { listAttachments } from "@/lib/storage/attachments";
 import { createClient } from "@/lib/supabase/server";
 
 import { StudentEditForm } from "./student-edit-form";
 import type { StudentDetailRow } from "./types";
+
+/** Student fields whose truth lives on the enrolment, not on `students`. */
+const ENROLMENT_OWNED_FIELDS = new Set(["current_course", "current_batch_id"]);
 
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -38,7 +43,27 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   const canEdit = can(user, "student.update");
   const canReadFiles = can(user, "file.read");
 
-  const fields = await getFieldSchema(supabase, "student", user);
+  /*
+    Course and batch are shown here and changed below.
+
+    They look like two more columns on `students`, and they are — but
+    they are a copy of what the enrolment says, kept so the roster reads
+    without a join. Editing them from this form wrote the copy and left
+    the admission record, the printed agreement and the accounts screens
+    on the old course, which is three screens disagreeing about what
+    somebody is studying. So they are read-only here and editable in
+    "What they are studying" further down, which writes all of it at
+    once. `updateStudent` skips them too, so this is not the only guard.
+  */
+  const fields = (await getFieldSchema(supabase, "student", user)).map((field) =>
+    ENROLMENT_OWNED_FIELDS.has(field.key)
+      ? {
+          ...field,
+          isEditable: false,
+          helpText: "Changed in \u201cWhat they are studying\u201d below.",
+        }
+      : field,
+  );
   const attachments = canReadFiles ? await listAttachments(supabase, { kind: "student", id }) : [];
   const sections = groupBySection(fields);
 
@@ -48,6 +73,9 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
       ? (student as unknown as Record<string, unknown>)[field.key]
       : (student.custom ?? {})[field.key];
   }
+  // The batch is stored as an id and read by people, so the one place it
+  // is only ever displayed shows its name.
+  values.current_batch_id = student.batches?.name ?? null;
 
   const optionsByKey: Record<string, FieldOption[]> = {};
   for (const field of fields) {
@@ -55,6 +83,44 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
       optionsByKey[field.key] = await resolveFieldOptions(supabase, field);
     }
   }
+
+  /*
+    Academics change a student's course and batch more often than anyone
+    else does, so the panel is on their own screen too.
+
+    It edits the ENROLMENT, not the two columns on `students` that look
+    like they say the same thing. Those columns are a copy kept for the
+    roster to read quickly, and editing them directly — which the generic
+    field form used to be the only way to do — left the admission record,
+    the printed agreement and the accounts screens still saying the old
+    course. One path writes all of them; see `changeEnrolmentPlan`.
+  */
+  const canChangePlan = can(user, "enrolment.change_plan");
+  const { data: enrolment } = canChangePlan
+    ? await supabase
+        .from("enrolments")
+        .select("id, course, batch_id, mode, academic_year, center_id, dropped_at")
+        .eq("student_id", id)
+        .is("deleted_at", null)
+        .is("dropped_at", null)
+        .maybeSingle<{
+          id: string;
+          course: string;
+          batch_id: string | null;
+          mode: string;
+          academic_year: string;
+          center_id: string;
+          dropped_at: string | null;
+        }>()
+    : { data: null };
+
+  const planOptions = enrolment
+    ? await Promise.all([
+        getDropdownOptions(supabase, "course"),
+        getDropdownOptions(supabase, "preferred_mode"),
+        getBatchOptionsForCentre(supabase, enrolment.center_id),
+      ])
+    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -101,6 +167,25 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
               <span className="text-sm font-medium">{formatFieldValue(field.key, values[field.key])}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {enrolment && planOptions && (
+        <div className="flex max-w-2xl flex-col gap-3">
+          <h2 className="text-lg font-semibold">What they are studying</h2>
+          <ChangePlanPanel
+            enrolmentId={enrolment.id}
+            current={{
+              course: enrolment.course,
+              batchId: enrolment.batch_id,
+              mode: enrolment.mode,
+              academicYear: enrolment.academic_year,
+            }}
+            courses={planOptions[0]}
+            modes={planOptions[1]}
+            batches={planOptions[2]}
+            canEdit
+          />
         </div>
       )}
 

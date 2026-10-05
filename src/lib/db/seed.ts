@@ -178,6 +178,7 @@ const ROLE_SEEDS: RoleSeed[] = [
           "enrolment.read",
           "enrolment.create",
           "enrolment.update",
+          "enrolment.change_plan",
           "enrolment.drop",
           "payment.read",
           "discount.approve",
@@ -226,6 +227,10 @@ const ROLE_SEEDS: RoleSeed[] = [
           "file.upload",
           "enrolment.read",
           "enrolment.create",
+          // Moving a student they sold from one course or batch to
+          // another. Not `enrolment.update`: the fee stays with accounts
+          // and the people who hold the discount limits.
+          "enrolment.change_plan",
           "payment.read",
           "report.read",
         ],
@@ -254,6 +259,10 @@ const ROLE_SEEDS: RoleSeed[] = [
           "finance.record",
           "finance.manage",
           "enrolment.read",
+          // Correcting a fee that was agreed wrongly is accounts' work,
+          // and before this it had to go through a centre head.
+          "enrolment.update",
+          "enrolment.change_plan",
           "enrolment.drop",
           "student.read",
           "report.read",
@@ -278,6 +287,9 @@ const ROLE_SEEDS: RoleSeed[] = [
           "file.read",
           "file.upload",
           "enrolment.read",
+          // The team actually teaching them moves people between courses
+          // and batches more often than anyone else does.
+          "enrolment.change_plan",
           "report.read",
           "report.center",
         ],

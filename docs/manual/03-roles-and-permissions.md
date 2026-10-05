@@ -60,8 +60,9 @@ accounts, the audit log, or system settings.
 ### Counsellor
 Their own leads, at **own** scope: read, create and update leads, reveal a
 phone number, log interactions, read and send WhatsApp, read and upload
-files, read and create enrolments, read payments, and read reports about
-their own leads.
+files, read and create enrolments, change the course or batch of an
+admission they sold, read payments, and read reports about their own
+leads.
 
 They cannot: assign leads to anyone, merge, export, import, delete,
 record payments, see Finance, or reach Settings.
@@ -70,13 +71,17 @@ record payments, see Finance, or reach Settings.
 Their centre(s), at **centre** scope: read leads and reveal phone numbers,
 read interactions, read and upload files, read/record/refund payments,
 approve discounts, full finance (read, record, manage accounts), read
-enrolments and mark them dropped, read students, and centre reports.
+enrolments, **change a fee** and change a course or batch, mark an
+admission dropped, read students, and centre reports.
 
 They cannot create or edit leads.
 
 ### Academics
 Their centre(s), at **centre** scope: read and update students, manage
-batches, read and upload files, read enrolments, and centre reports.
+batches, read and upload files, read enrolments and change the course or
+batch on one, and centre reports.
+
+They cannot change a fee — that stays with accounts and the centre head.
 
 They see no leads at all.
 

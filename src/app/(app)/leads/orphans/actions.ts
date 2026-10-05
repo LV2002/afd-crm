@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
+import { notify } from "@/lib/notifications/notify";
 import { createClient } from "@/lib/supabase/server";
 
 export interface AssignOrphanResult {
@@ -69,6 +70,39 @@ export async function assignOrphanLead(leadId: string, userId: string): Promise<
     entityType: "leads",
     entityId: leadId,
     after: { assignedTo: userId },
+  });
+
+  // The one assignment path that never told anybody.
+  //
+  // A lead the rules engine assigns has always notified its new owner
+  // (`notifyLeadArrived` in resolve-or-create-lead.ts); a lead a centre
+  // head hands to a counsellor from this queue did not, so the counsellor
+  // found out when they next happened to open their lead list. Which is
+  // the worst case of the two, because this is the lead somebody has
+  // already decided is worth chasing by hand.
+  //
+  // `actorId` is passed so a centre head claiming a lead for themselves
+  // is not sent a message about their own click — notify() drops the
+  // actor from its own recipient list.
+  const { data: assigned } = await supabase
+    .from("leads")
+    .select("student_name, lead_number, lead_source")
+    .eq("id", leadId)
+    .maybeSingle<{ student_name: string; lead_number: number; lead_source: string | null }>();
+
+  await notify({
+    eventKey: "lead.assigned",
+    context: {
+      lead_name: assigned?.student_name ?? "A lead",
+      lead_number: assigned?.lead_number ?? null,
+      source: assigned?.lead_source ?? "the unassigned queue",
+    },
+    href: `/leads/${leadId}`,
+    entityType: "leads",
+    entityId: leadId,
+    centerId: lead.center_id,
+    ownerId: userId,
+    actorId: user.id,
   });
 
   revalidatePath("/leads/orphans");

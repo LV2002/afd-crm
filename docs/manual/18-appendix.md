@@ -168,6 +168,7 @@ All of these are editable in Settings → Dropdowns.
 | `enrolment.read` | See admissions |
 | `enrolment.create` | Confirm an admission |
 | `enrolment.update` | Change the fee plan |
+| `enrolment.change_plan` | Change the course, batch, mode or academic year |
 | `enrolment.drop` | Mark an admission dropped |
 | `payment.read` | See payments |
 | `payment.record` | Record a payment |

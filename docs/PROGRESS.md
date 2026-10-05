@@ -6417,3 +6417,72 @@ can drop a submission. If it fails again after this, that race is ruled out too
 and the read-back in `createLeadManually()` is what is left.
 
 **1408 tests pass**, lint and typecheck clean.
+
+---
+
+## Session 52 — Telling people, and letting them change their minds
+
+Two requests from Leon: notify the right people when something happens to a lead or a
+student, and let counsellors, accounts and academics change the course and batch a student
+registered for — with accounts able to change the fee.
+
+### Notifications
+
+The machinery was already there and well built; what was missing was events and emit
+sites. **Three new events**, taking the catalogue from thirteen to sixteen:
+
+| Event | Goes to, by default |
+|---|---|
+| **New lead arrived** | Centre heads, for every lead from every source — including the ones no rule could assign, which it says out loud |
+| **Course or batch changed** | Accounts, academics, centre head and the counsellor who sold it |
+| **Fee changed after admission** | Accounts, centre head and the counsellor |
+
+**Three gaps closed in what already existed.** A lead assigned by hand from the Unassigned
+queue now tells its new owner — it never did, and that is the lead somebody has already
+decided is worth chasing. A batch move made from Settings → Batches now fires the same
+event, in the same words, as one made from a student's own page. And `notify()` now
+resolves an event's default roles when no settings row exists, which its own comment had
+promised since the feature shipped and which quietly did not happen.
+
+`tests/notification-emit-sites.spec.ts` now asserts that **every one of the sixteen keys
+has a real `notify()` call behind it**. `events.ts` has stated that rule in its header
+since it was written; nothing checked it, which is exactly how the SLA escalation ladder
+stayed configurable and completely inert for months.
+
+### Changing a course, a batch, or a fee
+
+**`enrolment.change_plan`** is a new permission primitive, split out of `enrolment.update`:
+the course, batch, mode and academic year, for counsellors at `own` scope and accounts,
+academics and centre heads at `center`. `enrolment.update` now means the fee plan and
+nothing else, and **accounts hold it**, which is the part of Leon's ask that was a straight
+grant. Forty-five primitives now.
+
+**Course & batch** is one panel on three screens — the lead, the admission and the student
+— because three different people change this and a single screen would mean two of them
+asking somebody else. All three submit the same action, which writes the enrolment, the
+student's two copy columns and the `student_batches` history in one transaction, and
+reports exactly what moved: *Course: Foundation → DWO · Batch: Kochi A → Kochi B*.
+
+**Changing the course does not change the fee.** The obvious implementation looks up the
+new course's fee structure and applies it — which is a fee change nobody agreed, arriving
+through a form labelled "course" and going round the discount approval limits. Accounts
+are told the course moved and change the figure deliberately if it should change.
+
+**A fee has a floor, not a freeze.** Accounts can correct a fee after money has arrived;
+they cannot set it below what has been collected, because that is a negative balance, and
+a negative balance is a refund nobody recorded. The error says how much has come in.
+
+**One fact, one path.** `students.current_course` and `current_batch_id` are a copy of
+what the enrolment says. The generic student form could write them directly, leaving the
+admission record, the printed agreement and the accounts screens on the old course — three
+screens disagreeing with no way to tell which was right. Both are read-only on that form
+now, and skipped by `updateStudent` so the guard is not only in the UI.
+
+### Verified
+
+Migration 0082 applied to **an already-seeded database** (the grants and the three
+notification rows land) and to **a clean one** (83 migrations then the seed, where the
+migration's inserts correctly no-op and the seed does the work) — the 0081 lesson applied
+rather than remembered.
+
+**1436 tests pass**, lint, typecheck and `db:audit` clean.

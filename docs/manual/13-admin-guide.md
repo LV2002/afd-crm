@@ -219,6 +219,29 @@ believe.
 Which events notify which roles, on which channels, and **in what
 words**. The copy is editable.
 
+Sixteen events ship, grouped by what they are about:
+
+| Group | Events |
+|---|---|
+| **Leads** | New lead arrived · Lead assigned · WhatsApp reply · Automation needs a person |
+| **SLA** | SLA breached · SLA escalation step |
+| **Admissions** | Admission confirmed · Admission dropped · Student profile form submitted |
+| **Money** | Payment recorded · Fee instalment overdue · Fee changed after admission · Discount needs approval · Discount approved or rejected |
+| **Academics** | Student joined (accounts → academics) · Course or batch changed |
+
+Each has three switches: whether it fires at all, which **roles** hear
+it, and whether the lead's **own counsellor** hears it regardless of
+role. Nobody is ever told about a lead they could not open anyway — a
+Kannur centre head is not notified about a Kochi lead — and nobody is
+told about their own action.
+
+**New lead arrived** fires for every lead from every source, including
+ones the assignment rules could not place; it says *Assigned to nobody
+yet* when that happens. It goes to centre heads by default and not to
+the counsellor, who hears about the same lead through **Lead assigned** a
+moment later. If a centre head finds two hundred a month too many, turn
+the event off here rather than living with it.
+
 ### Settings → Student Profile Form
 Which questions students answer on their own form. Keep internal fields
 (batch, status, centre) off it.

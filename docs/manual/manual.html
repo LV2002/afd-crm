@@ -163,6 +163,7 @@
 <ol>
 <li><a href="#7-1-confirming-an-admission-gate-1">7.1 Confirming an admission (Gate 1)</a></li>
 <li><a href="#7-2-the-fee-plan-and-instalments">7.2 The fee plan and instalments</a></li>
+<li><a href="#7-3a-changing-the-course-or-batch">7.3a Changing the course or batch</a></li>
 <li><a href="#7-3-the-admissions-screen">7.3 The Admissions screen</a></li>
 <li><a href="#7-4-recording-a-payment">7.4 Recording a payment</a></li>
 <li><a href="#7-5-discounts-and-approval">7.5 Discounts and approval</a></li>
@@ -481,13 +482,14 @@
 <p>They do <strong>not</strong> get: recording or refunding payments, managing finance accounts, the audit log, or system settings.</p>
 <blockquote>Why no audit log? It cannot be limited to one centre — a record about a role change belongs to no centre — so a centre-scoped grant would show the whole institute's log. It stays with Admin.</blockquote>
 <h3 id="counsellor">Counsellor</h3>
-<p>Their own leads, at <strong>own</strong> scope: read, create and update leads, reveal a phone number, log interactions, read and send WhatsApp, read and upload files, read and create enrolments, read payments, and read reports about their own leads.</p>
+<p>Their own leads, at <strong>own</strong> scope: read, create and update leads, reveal a phone number, log interactions, read and send WhatsApp, read and upload files, read and create enrolments, change the course or batch of an admission they sold, read payments, and read reports about their own leads.</p>
 <p>They cannot: assign leads to anyone, merge, export, import, delete, record payments, see Finance, or reach Settings.</p>
 <h3 id="accounts">Accounts</h3>
-<p>Their centre(s), at <strong>centre</strong> scope: read leads and reveal phone numbers, read interactions, read and upload files, read/record/refund payments, approve discounts, full finance (read, record, manage accounts), read enrolments and mark them dropped, read students, and centre reports.</p>
+<p>Their centre(s), at <strong>centre</strong> scope: read leads and reveal phone numbers, read interactions, read and upload files, read/record/refund payments, approve discounts, full finance (read, record, manage accounts), read enrolments, <strong>change a fee</strong> and change a course or batch, mark an admission dropped, read students, and centre reports.</p>
 <p>They cannot create or edit leads.</p>
 <h3 id="academics">Academics</h3>
-<p>Their centre(s), at <strong>centre</strong> scope: read and update students, manage batches, read and upload files, read enrolments, and centre reports.</p>
+<p>Their centre(s), at <strong>centre</strong> scope: read and update students, manage batches, read and upload files, read enrolments and change the course or batch on one, and centre reports.</p>
+<p>They cannot change a fee — that stays with accounts and the centre head.</p>
 <p>They see no leads at all.</p>
 <h2 id="3-3-discount-authority">3.3 Discount authority</h2>
 <p>Separately from permissions, each role has a ceiling on how much it can take off a fee before the discount needs approving. As shipped:</p>
@@ -579,6 +581,17 @@
 <h2 id="4-4-notifications">4.4 Notifications</h2>
 <h3 id="where-they-appear">Where they appear</h3>
 <p>In the bell at the top of the screen, and in full at <strong>Notifications</strong>. Some events also send an email, if email is configured and your role is set to receive that event.</p>
+<h3 id="what-you-get-told-about">What you get told about</h3>
+<p>Sixteen things can notify somebody, and which of them reach <em>you</em> depends on your role and on what an administrator has configured (Chapter 13). The ones most people see:</p>
+<table><thead>
+<tr><th>You are</th><th>You hear about</th></tr>
+</thead><tbody>
+<tr><td>A counsellor</td><td>A lead assigned to you · a WhatsApp reply from one of your leads · an SLA breach on one of your leads · a discount you asked for being approved or rejected · a payment on an admission you sold · the course, batch or fee of one of your students changing</td></tr>
+<tr><td>A centre head</td><td>Everything above for your centre, plus every new lead arriving — including ones no rule could assign · SLA escalations · admissions confirmed and dropped · discounts waiting on you</td></tr>
+<tr><td>Accounts</td><td>Admissions confirmed and waiting for a fee · payments recorded · instalments overdue · a fee or a course changing</td></tr>
+<tr><td>Academics</td><td>A student joining, ready to onboard · a student moving course or batch · an admission dropped</td></tr>
+</tbody></table>
+<p>Two rules hold everywhere. <strong>You are never told about your own action</strong> — confirming an admission does not notify you that it was confirmed. And <strong>you are never told about a lead you could not open</strong>: a Kannur centre head hears nothing about Kochi.</p>
 <h3 id="procedure-clear-your-notifications">Procedure: clear your notifications</h3>
 <p><strong>Goal</strong> — stop the bell counting things you have already dealt with.</p>
 <p><strong>Before you start</strong> — nothing.</p>
@@ -958,7 +971,7 @@
 <li>7.2 The fee plan · 7.5 Discounts · Chapter 13, Settings → Fee Structures</li>
 </ul>
 <h2 id="7-2-the-fee-plan-and-instalments">7.2 The fee plan and instalments</h2>
-<p>Once an admission exists, the lead page gains a <strong>Fees &amp; instalment agreement</strong> section.</p>
+<p>Once an admission exists, the lead page gains a <strong>Fees &amp; instalment agreement</strong> section. Accounts see the same panel on the admission's own page, so a fee that was agreed wrongly can be corrected by the people collecting it rather than by finding a centre head.</p>
 <h3 id="what-it-shows">What it shows</h3>
 <ul>
 <li><strong>Course fee</strong> — the standard fee from the fee structure</li>
@@ -970,10 +983,10 @@
 </ul>
 <h3 id="procedure-set-up-a-payment-plan">Procedure: set up a payment plan</h3>
 <p><strong>Goal</strong> — agree how the fee will be paid.</p>
-<p><strong>Before you start</strong> — <code>enrolment.update</code>.</p>
+<p><strong>Before you start</strong> — <code>enrolment.update</code>. Accounts, centre heads and administrators.</p>
 <p><strong>Steps</strong></p>
 <ol>
-<li>Open the lead and scroll to <strong>Fees &amp; instalment agreement</strong>.</li>
+<li>Open the lead and scroll to <strong>Fees &amp; instalment agreement</strong>. Accounts can do the same from <strong>Admissions</strong> → the student.</li>
 <li><strong>Course fee</strong> — usually pre-filled from the fee structure.</li>
 <li><strong>Discount</strong>, and <strong>Discount name</strong> if it needs one (for example <em>Early Bird</em>), or choose a running offer from the offers list.</li>
 <li><strong>Down payment</strong> — what they are paying today.</li>
@@ -986,6 +999,29 @@
 <ul>
 <li><em>Instalments that do not add up to the payable amount.</em> The panel says so explicitly. Fix it before printing an agreement.</li>
 <li><em>Dates in the past.</em> They will immediately show as overdue and start generating reminders.</li>
+<li><em>Setting the fee below what has already been paid.</em> Refused, and the message says how much has been received. The institute is holding more than the student owes, which is a refund — record that first.</li>
+</ul>
+<p><strong>Changing a fee later.</strong> The same panel does it, and the change is not quiet: accounts, the centre head and the counsellor who sold the admission are all told the old figure and the new one. Nothing in the payments ledger is touched — what was received was received.</p>
+<h2 id="7-3a-changing-the-course-or-batch">7.3a Changing the course or batch</h2>
+<p>A student who enquired about Foundation and joined DWO, or who moved from the Tuesday batch to the Thursday one, is ordinary — and until recently the admission record could not say so.</p>
+<p><strong>Course &amp; batch</strong> appears on three screens, because three different people change it: the lead (the counsellor), the admission (accounts) and the student's own page (academics). All three do the same thing.</p>
+<p><strong>Procedure: change what a student is enrolled on</strong></p>
+<p><strong>Goal</strong> — correct or update the course, batch, mode or academic year of a confirmed admission.</p>
+<p><strong>Before you start</strong> — <code>enrolment.change_plan</code>. Counsellors for their own students; accounts, academics and centre heads for their centre.</p>
+<p><strong>Steps</strong></p>
+<ol>
+<li>Open the lead, the admission or the student, and find <strong>Course &amp; batch</strong>.</li>
+<li>Change <strong>Course</strong>, <strong>Mode</strong>, <strong>Academic year</strong> or <strong>Batch</strong>. The batch list shows only batches running that course at that centre — clear the box to take them out of a batch altogether.</li>
+<li><strong>Reason (optional)</strong> — kept on the batch history.</li>
+<li>Press <strong>Save course &amp; batch</strong>, then <strong>Yes, change it</strong>.</li>
+</ol>
+<p><strong>What you should see</strong> — a line confirming exactly what moved, for example <em>Course: Foundation → DWO · Batch: Kochi A → Kochi B</em>.</p>
+<p><strong>The fee does not change.</strong> Moving somebody to a more expensive course does not re-price their admission — that would be a fee change nobody agreed. Accounts are notified so they can adjust it deliberately.</p>
+<p><strong>Common mistakes</strong></p>
+<ul>
+<li><em>Expecting the fee to follow the course.</em> It does not, on purpose.</li>
+<li><em>Trying to change the course of a student who has dropped.</em> Refused — restore the admission first.</li>
+<li><em>Looking for the course on the student edit form.</em> It is shown there but not editable, because editing it in one place used to leave the admission record saying something else.</li>
 </ul>
 <h3 id="procedure-print-the-instalment-agreement">Procedure: print the instalment agreement</h3>
 <ol>
@@ -1166,7 +1202,13 @@
 <p><strong>Why it works this way</strong> — "outstanding" needs a definition. Without somebody marking a form read, the count would either be every form ever (a number people learn to ignore) or forms from the last N days (a queue that empties itself whether or not anyone looked).</p>
 <h2 id="8-6-batches">8.6 Batches</h2>
 <p>Batches are class groups — their timings, and who is in them. Managed in <strong>Settings → Batches</strong> (<code>batch.manage</code>: Academics, centre heads, administrators).</p>
-<p>A batch can be chosen when an admission is confirmed, and changed on the student record afterwards.</p>
+<p>A batch can be chosen when an admission is confirmed, and changed afterwards in either of two places:</p>
+<ul>
+<li><strong>Course &amp; batch</strong>, on the student's own page (and on the lead and the admission — Chapter 7.3a). Use this one. It changes the course and the batch together and keeps the admission record in step.</li>
+<li><strong>Settings → Batches</strong> → the batch → add or remove a student. Use this when you are working batch-first — filling a new group, or emptying one that has finished.</li>
+</ul>
+<p>Both write the same three things: the admission record, the student's current batch, and the batch history (<strong>who was in which group, from when to when, and why they left</strong>). A membership is closed, never deleted, so <em>"she was in Kochi A until August"</em> stays answerable.</p>
+<p>Both also notify academics, accounts and the counsellor who sold the admission, in the same words, so it does not matter which one was used.</p>
 <h2 id="8-7-handovers">8.7 Handovers</h2>
 <p><strong>Handovers</strong> is now a tab inside <strong>Insights</strong> (the old address redirects). It measures the lag between the two gates: how long between a counsellor confirming an admission and the first payment clearing.</p>
 <p>It is a performance report, not a workspace. A growing lag means admissions are being confirmed before families are ready to pay — which is a sales-discipline problem, and this is the screen that shows it.</p>
@@ -1678,6 +1720,18 @@
 <p>Which widgets each role sees and in what order. You can <strong>remove</strong> a widget from a role but never <strong>add</strong> one the role has no permission for — it would draw a card of zeroes, and a zero is a number somebody will believe.</p>
 <h3 id="settings-notifications">Settings → Notifications</h3>
 <p>Which events notify which roles, on which channels, and <strong>in what words</strong>. The copy is editable.</p>
+<p>Sixteen events ship, grouped by what they are about:</p>
+<table><thead>
+<tr><th>Group</th><th>Events</th></tr>
+</thead><tbody>
+<tr><td><strong>Leads</strong></td><td>New lead arrived · Lead assigned · WhatsApp reply · Automation needs a person</td></tr>
+<tr><td><strong>SLA</strong></td><td>SLA breached · SLA escalation step</td></tr>
+<tr><td><strong>Admissions</strong></td><td>Admission confirmed · Admission dropped · Student profile form submitted</td></tr>
+<tr><td><strong>Money</strong></td><td>Payment recorded · Fee instalment overdue · Fee changed after admission · Discount needs approval · Discount approved or rejected</td></tr>
+<tr><td><strong>Academics</strong></td><td>Student joined (accounts → academics) · Course or batch changed</td></tr>
+</tbody></table>
+<p>Each has three switches: whether it fires at all, which <strong>roles</strong> hear it, and whether the lead's <strong>own counsellor</strong> hears it regardless of role. Nobody is ever told about a lead they could not open anyway — a Kannur centre head is not notified about a Kochi lead — and nobody is told about their own action.</p>
+<p><strong>New lead arrived</strong> fires for every lead from every source, including ones the assignment rules could not place; it says <em>Assigned to nobody yet</em> when that happens. It goes to centre heads by default and not to the counsellor, who hears about the same lead through <strong>Lead assigned</strong> a moment later. If a centre head finds two hundred a month too many, turn the event off here rather than living with it.</p>
 <h3 id="settings-student-profile-form">Settings → Student Profile Form</h3>
 <p>Which questions students answer on their own form. Keep internal fields (batch, status, centre) off it.</p>
 <h2 id="13-6-oversight">13.6 Oversight</h2>
@@ -2151,6 +2205,7 @@
 <tr><td><code>enrolment.read</code></td><td>See admissions</td></tr>
 <tr><td><code>enrolment.create</code></td><td>Confirm an admission</td></tr>
 <tr><td><code>enrolment.update</code></td><td>Change the fee plan</td></tr>
+<tr><td><code>enrolment.change_plan</code></td><td>Change the course, batch, mode or academic year</td></tr>
 <tr><td><code>enrolment.drop</code></td><td>Mark an admission dropped</td></tr>
 <tr><td><code>payment.read</code></td><td>See payments</td></tr>
 <tr><td><code>payment.record</code></td><td>Record a payment</td></tr>

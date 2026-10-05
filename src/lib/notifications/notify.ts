@@ -9,6 +9,7 @@ import {
   orgSettings,
   profiles,
   rolePermissions,
+  roles,
   userCenters,
 } from "@/lib/db/schema";
 
@@ -80,7 +81,7 @@ export async function notify(input: {
       notifyRoles:
         input.overrideRoles && input.overrideRoles.length > 0
           ? input.overrideRoles
-          : (setting?.notifyRoles ?? []),
+          : (setting?.notifyRoles ?? (await defaultRoleIds(definition.defaultNotifyRoleCodes))),
       notifyOwner:
         input.overrideNotifyOwner ??
         (setting ? setting.notifyOwner : definition.defaultNotifyOwner),
@@ -152,6 +153,30 @@ export async function notify(input: {
     console.error(`notify(${input.eventKey}) failed`, error);
     return 0;
   }
+}
+
+/**
+ * The role ids an event ships with, for an event the seed has not reached.
+ *
+ * The comment on the fallback above has always claimed a newly added
+ * event works on deploy rather than after somebody remembers to re-seed.
+ * It was half true: the wording and the notify-the-owner switch did fall
+ * back to the definition, but the roles fell back to `[]`, so a new event
+ * whose whole point was telling accounts something told only the owner —
+ * and told nobody at all when `defaultNotifyOwner` was false.
+ *
+ * Resolved by code rather than id for the usual reason: an institute that
+ * renamed "Accounts" to "Finance Office" still has a role whose code is
+ * `accounts`. A code that matches no role is skipped rather than failing
+ * the notification; a deployment that deleted the role meant to delete it.
+ */
+async function defaultRoleIds(codes: readonly string[]): Promise<string[]> {
+  if (codes.length === 0) return [];
+  const rows = await db
+    .select({ id: roles.id })
+    .from(roles)
+    .where(inArray(roles.code, [...codes]));
+  return rows.map((row) => row.id);
 }
 
 /**

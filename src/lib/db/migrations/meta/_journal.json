@@ -575,6 +575,13 @@
       "when": 1791900001000,
       "tag": "0081_instagram_dms",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1791900002000,
+      "tag": "0082_enrolment_change_plan",
+      "breakpoints": true
     }
   ]
 }

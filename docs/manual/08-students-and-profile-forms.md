@@ -134,8 +134,23 @@ Batches are class groups — their timings, and who is in them. Managed in
 **Settings → Batches** (`batch.manage`: Academics, centre heads,
 administrators).
 
-A batch can be chosen when an admission is confirmed, and changed on the
-student record afterwards.
+A batch can be chosen when an admission is confirmed, and changed
+afterwards in either of two places:
+
+- **Course & batch**, on the student's own page (and on the lead and the
+  admission — Chapter 7.3a). Use this one. It changes the course and the
+  batch together and keeps the admission record in step.
+- **Settings → Batches** → the batch → add or remove a student. Use this
+  when you are working batch-first — filling a new group, or emptying one
+  that has finished.
+
+Both write the same three things: the admission record, the student's
+current batch, and the batch history (**who was in which group, from
+when to when, and why they left**). A membership is closed, never
+deleted, so *"she was in Kochi A until August"* stays answerable.
+
+Both also notify academics, accounts and the counsellor who sold the
+admission, in the same words, so it does not matter which one was used.
 
 ## 8.7 Handovers
 

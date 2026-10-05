@@ -2866,3 +2866,103 @@ as a possible regression in whatever had just merged, because "it only ever fail
 own" is exactly what a real intermittent bug looks like too — and the one confident
 explanation offered along the way was wrong, which is why it got a disproving experiment
 rather than a comment.
+
+## 2026-10-05 — Changing a course does not change the fee
+
+Leon asked for two things that sound like one: let counsellors, accounts and academics
+change the course and batch a student registered for, and let accounts change the fee.
+
+They are not one thing, and building them as one would have been the mistake. A different
+course almost always has a different fee structure, so the obvious implementation looks up
+the new course's fee and applies it. That is a fee change nobody agreed, arriving through
+a form labelled "course", and bypassing the discount authority limits — the whole
+machinery that exists to stop a fee moving without someone who may move it saying so.
+
+So `changeEnrolmentPlan` writes the course, batch, mode and academic year, and does not
+touch a single fee column. Accounts are notified that the course moved, with what it moved
+from and to, and they change the figure deliberately if it should change. One extra step
+for the one case where the fee really should follow, and no silent re-pricing in the many
+cases where it should not.
+
+### Two permissions, not one
+
+`enrolment.update` was described as "edit an enrolment's course, batch or fee plan" and
+held only by centre heads and the two admin roles. Granting it to counsellors, accounts and
+academics so they could move a batch would have handed all three the fee as well.
+
+It is split. `enrolment.change_plan` is the course, batch, mode and year — counsellors at
+`own`, accounts, academics and centre heads at `center`. `enrolment.update` now means the
+fee plan and nothing else, and gains accounts at `center`, which is the part of Leon's ask
+that really was a straight grant.
+
+RLS cannot express the split, because it is a column-level distinction and a policy sees
+rows. `enrolments_update` therefore accepts either permission — the row-level question is
+"may you touch this admission at all", and the answer is the same for both — and the two
+server actions enforce which columns each may move. That is written into the migration
+rather than left implicit, because CLAUDE.md's non-negotiable #3 is about rows, and this
+still satisfies it: no counsellor can reach another counsellor's enrolment through either
+route.
+
+### A fee has a floor, not a freeze
+
+Accounts can now change a fee after payments have arrived — that is the point, since a
+figure typed wrong on day one should not need a centre head and a week. What they cannot
+do is set it below what has already been collected. That would leave a balance of minus
+three thousand rupees, and there is no such student: if the institute is holding more than
+is owed, the institute owes *them*, and that is a refund entry against the original
+payment. The error says how much has been received, so the next step is obvious.
+
+Nothing in the ledger is touched by a fee change either way. `payments` and `receipts`
+remain append-only; what moves is the agreed amount, which was always a column on
+`enrolments`.
+
+### One fact, one path
+
+`students.current_course` and `students.current_batch_id` are a copy of what the enrolment
+says, kept so the roster reads without a join. The generic student edit form could write
+them directly, which left the admission record, the printed agreement and the accounts
+screens still saying the old course — three screens disagreeing about what somebody is
+studying, with no way to tell which was right.
+
+Both columns are now read-only on that form (and skipped by `updateStudent`, so the guard
+is not only in the UI), and `changeEnrolmentPlan` writes the enrolment, the two copies and
+the `student_batches` history together in one transaction. Settings → Batches, which had
+the same gap in the other direction, now writes `enrolments.batch_id` too and fires the
+same notification in the same words.
+
+## 2026-10-05 — A new lead that nobody was given is now announced
+
+`lead.assigned` returned early when a lead arrived unassigned, with a comment arguing that
+the orphan queue surfaces those and that telling a role about every unmatched lead would
+drown the people who work it.
+
+Half right. The queue does surface them — to somebody who thinks to open it. A lead
+arriving at 9pm from a source no rule covers was announced to nobody at all, and the
+highest-value enquiry of the week is exactly the one most likely to come from a source the
+rules have never seen.
+
+So there are two events. `lead.created` fires for every new lead from every source and
+goes to centre heads, saying who it went to or *"Assigned to nobody yet"*. `lead.assigned`
+fires only when there is somebody to tell, and goes to them. Different audiences, different
+news, no duplicate message about the same lead — and the volume concern is answered by the
+fact that an admin can turn the event off in Settings → Notifications, which is where that
+decision belongs.
+
+Manual assignment from the Unassigned queue now fires `lead.assigned` too. It never did:
+a lead a rule assigned told its new owner, and a lead a centre head handed over by hand
+told nobody, which is the worse case of the two — somebody had already decided that lead
+was worth chasing.
+
+### notify() now means what its comment said
+
+The fallback for an event with no `notification_settings` row claimed "a newly added event
+should work on deploy, not after somebody remembers to re-seed". The wording and the
+notify-the-owner switch did fall back to the definition; the roles fell back to `[]`. So a
+new event whose whole point was telling accounts something told only the owner — and told
+nobody at all when `defaultNotifyOwner` was false. It resolves the definition's role codes
+now, so the comment is true.
+
+And `tests/notification-emit-sites.spec.ts` asserts that every key in the catalogue has a
+real `notify()` call behind it. The header of `events.ts` has always stated that rule;
+nothing checked it, which is how the SLA escalation ladder stayed configurable and inert
+for months.

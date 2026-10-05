@@ -59,7 +59,9 @@ there goes up by one.
 ## 7.2 The fee plan and instalments
 
 Once an admission exists, the lead page gains a **Fees & instalment
-agreement** section.
+agreement** section. Accounts see the same panel on the admission's own
+page, so a fee that was agreed wrongly can be corrected by the people
+collecting it rather than by finding a centre head.
 
 ### What it shows
 - **Course fee** — the standard fee from the fee structure
@@ -74,10 +76,12 @@ agreement** section.
 
 **Goal** — agree how the fee will be paid.
 
-**Before you start** — `enrolment.update`.
+**Before you start** — `enrolment.update`. Accounts, centre heads and
+administrators.
 
 **Steps**
-1. Open the lead and scroll to **Fees & instalment agreement**.
+1. Open the lead and scroll to **Fees & instalment agreement**. Accounts
+   can do the same from **Admissions** → the student.
 2. **Course fee** — usually pre-filled from the fee structure.
 3. **Discount**, and **Discount name** if it needs one (for example
    *Early Bird*), or choose a running offer from the offers list.
@@ -95,6 +99,56 @@ whether anything is *not yet scheduled*. Aim for zero.
   so explicitly. Fix it before printing an agreement.
 - *Dates in the past.* They will immediately show as overdue and start
   generating reminders.
+- *Setting the fee below what has already been paid.* Refused, and the
+  message says how much has been received. The institute is holding more
+  than the student owes, which is a refund — record that first.
+
+**Changing a fee later.** The same panel does it, and the change is not
+quiet: accounts, the centre head and the counsellor who sold the
+admission are all told the old figure and the new one. Nothing in the
+payments ledger is touched — what was received was received.
+
+## 7.3a Changing the course or batch
+
+A student who enquired about Foundation and joined DWO, or who moved from
+the Tuesday batch to the Thursday one, is ordinary — and until recently
+the admission record could not say so.
+
+**Course & batch** appears on three screens, because three different
+people change it: the lead (the counsellor), the admission (accounts) and
+the student's own page (academics). All three do the same thing.
+
+**Procedure: change what a student is enrolled on**
+
+**Goal** — correct or update the course, batch, mode or academic year of
+a confirmed admission.
+
+**Before you start** — `enrolment.change_plan`. Counsellors for their own
+students; accounts, academics and centre heads for their centre.
+
+**Steps**
+1. Open the lead, the admission or the student, and find **Course &
+   batch**.
+2. Change **Course**, **Mode**, **Academic year** or **Batch**. The batch
+   list shows only batches running that course at that centre — clear the
+   box to take them out of a batch altogether.
+3. **Reason (optional)** — kept on the batch history.
+4. Press **Save course & batch**, then **Yes, change it**.
+
+**What you should see** — a line confirming exactly what moved, for
+example *Course: Foundation → DWO · Batch: Kochi A → Kochi B*.
+
+**The fee does not change.** Moving somebody to a more expensive course
+does not re-price their admission — that would be a fee change nobody
+agreed. Accounts are notified so they can adjust it deliberately.
+
+**Common mistakes**
+- *Expecting the fee to follow the course.* It does not, on purpose.
+- *Trying to change the course of a student who has dropped.* Refused —
+  restore the admission first.
+- *Looking for the course on the student edit form.* It is shown there
+  but not editable, because editing it in one place used to leave the
+  admission record saying something else.
 
 ### Procedure: print the instalment agreement
 1. Open the lead, scroll to **Fees & instalment agreement**.

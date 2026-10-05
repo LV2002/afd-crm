@@ -2,7 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { applyAssignment } from "@/lib/assignment/apply-assignment";
 import { db } from "@/lib/db/client";
-import { centers, enquiries, leadIdentifiers, leads, mergeReviewQueue, pipelineStages } from "@/lib/db/schema";
+import { centers, enquiries, leadIdentifiers, leads, mergeReviewQueue, pipelineStages, profiles } from "@/lib/db/schema";
 import { notify } from "@/lib/notifications/notify";
 import { startFlows } from "@/lib/whatsapp/flow-runner";
 
@@ -89,7 +89,7 @@ export async function resolveOrCreateLead(input: ResolveLeadInput): Promise<Reso
   // transaction still holds the first would deadlock — and a notification
   // about a lead that then fails to commit would be a lie besides.
   if (result.isNewLead) {
-    await notifyLeadAssigned(result.leadId, input.source, input.actorId ?? null);
+    await notifyLeadArrived(result.leadId, input.source, input.actorId ?? null);
     await startFlows("lead_created", { leadId: result.leadId });
   }
 
@@ -97,13 +97,23 @@ export async function resolveOrCreateLead(input: ResolveLeadInput): Promise<Reso
 }
 
 /**
- * The lead was just created and assigned — by a rule inside the
- * transaction, or explicitly by the caller. Reads the committed row rather
- * than threading the assignment back out through two return branches: one
- * small query on the create path, and it cannot disagree with what was
- * actually stored.
+ * A lead just entered the system. Two different pieces of news.
+ *
+ * `lead.created` goes to whoever runs the place: intake is visible
+ * whether or not a rule matched. `lead.assigned` goes to the counsellor
+ * it landed on, and only exists when it landed on somebody.
+ *
+ * That split replaces a single early-return that said an unassigned lead
+ * "has nobody to tell". The orphan queue does surface those, but only to
+ * somebody who thinks to open it — so the highest-value lead of the week,
+ * arriving at 9pm from a source no rule covers, was announced to nobody
+ * at all. It is announced now, saying plainly that it is unassigned.
+ *
+ * Reads the committed row rather than threading the assignment back out
+ * through two return branches: one small query on the create path, and it
+ * cannot disagree with what was actually stored.
  */
-async function notifyLeadAssigned(
+async function notifyLeadArrived(
   leadId: string,
   source: string,
   actorId: string | null,
@@ -115,15 +125,35 @@ async function notifyLeadAssigned(
       studentName: leads.studentName,
       leadNumber: leads.leadNumber,
       centerName: centers.name,
+      ownerName: profiles.fullName,
     })
     .from(leads)
     .leftJoin(centers, eq(centers.id, leads.centerId))
+    .leftJoin(profiles, eq(profiles.id, leads.assignedTo))
     .where(eq(leads.id, leadId));
 
-  // An unassigned lead has nobody to tell. It is not lost: the orphan
-  // queue is what surfaces those, and telling a role about every unmatched
-  // lead would drown the very people who work that queue.
-  if (!row?.assignedTo) return;
+  if (!row) return;
+
+  await notify({
+    eventKey: "lead.created",
+    context: {
+      lead_name: row.studentName,
+      lead_number: row.leadNumber,
+      source,
+      // Said out loud rather than left blank. "Assigned to nobody yet" is
+      // the whole reason a centre head would act on this one.
+      owner_name: row.ownerName ?? "nobody yet",
+      center_name: row.centerName,
+    },
+    href: `/leads/${leadId}`,
+    entityType: "leads",
+    entityId: leadId,
+    centerId: row.centerId,
+    ownerId: row.assignedTo,
+    actorId,
+  });
+
+  if (!row.assignedTo) return;
 
   await notify({
     eventKey: "lead.assigned",
