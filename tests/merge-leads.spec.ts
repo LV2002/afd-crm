@@ -95,7 +95,16 @@ describe("mergeLeads", () => {
     const mergedId = await makeLead("merged", "+919847100104");
 
     await db.insert(enquiries).values({ leadId: mergedId, source: "Meta" });
-    await db.insert(interactions).values({ leadId: mergedId, type: "call", nextAction: "follow up", source: "manual" });
+    // `nextFollowupAt` is not incidental here: migration 0087 requires a
+    // date beside the next action, and a fixture is not a reason to make
+    // the rule optional.
+    await db.insert(interactions).values({
+      leadId: mergedId,
+      type: "call",
+      nextAction: "follow up",
+      nextFollowupAt: new Date(Date.now() + 86_400_000),
+      source: "manual",
+    });
     await db.insert(tasks).values({ leadId: mergedId, title: "Send brochure" });
 
     await db.transaction((tx) =>

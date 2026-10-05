@@ -7053,3 +7053,36 @@ Documents and the Timeline stay full width below, and the delete panel stays las
 Nothing moved between permission gates and no query changed: this is the same panels, in the order
 the work happens. `min-w-0` on every grid column, because the phone crawl only passes while the
 panels inside can shrink.
+
+---
+
+## Session 64 — An interaction has to say what happens next, and when
+
+Leon: *"when logging a interaction, i also want the next action and the next action date to be
+mandatory"*, then *"only when converted is selected that next action is not required"*.
+
+Next action was already mandatory, in the form and in a CHECK constraint (migration 0009). **The
+date was not**, and it is the half that matters: a next action with no date is a sentence nobody
+is ever shown again.
+
+Now both are required unless the outcome is `converted`, stated in three places — the form (which
+relaxes both fields the moment Converted is picked, and says why), `logInteraction()`, and the
+CHECK constraint, rewritten in migration 0087 as NOT VALID so interactions logged before today
+stay as the record of what happened.
+
+### The constraint did not work, and a three-month-old test caught it
+
+`outcome = 'converted'` is NULL when no outcome was chosen, a CHECK rejects a row only when its
+expression is FALSE, and `false OR null OR false` is NULL. So the first version accepted every
+interaction where the counsellor skipped the dropdown — precisely the row it existed to stop.
+
+`tests/interactions-constraint.spec.ts` had a test asserting that an interaction with no next
+action is rejected. It started *passing the insert*, which is how the hole was found. Fixed with
+`coalesce(outcome, '')`, and written up in DECISIONS.
+
+Two existing tests changed because the contract did: that file's "accepts a next action" case
+gained the date it was missing (it was the exact row the new rule forbids), and a fixture in
+`tests/merge-leads.spec.ts` did the same.
+
+**1528 tests pass** (8 new), lint, typecheck, `db:audit` and the production build clean. Migration
+0087 applied to an already-seeded database.

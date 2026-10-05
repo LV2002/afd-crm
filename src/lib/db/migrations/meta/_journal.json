@@ -610,6 +610,13 @@
       "when": 1791900006000,
       "tag": "0086_cron_runs",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1791900007000,
+      "tag": "0087_interaction_follow_up_required",
+      "breakpoints": true
     }
   ]
 }

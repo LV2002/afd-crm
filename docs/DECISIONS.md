@@ -3357,3 +3357,43 @@ green tick over it, which is the failure this whole screen exists to prevent.
 The general rule, third time of writing it down in this project: a degraded path is only
 acceptable when the degradation is visible. Falling back silently is not resilience, it is a
 lie with better manners.
+
+---
+
+## 2026-10-05 — A CHECK constraint passes on NULL, which is the row you were trying to stop
+
+Every interaction must now say what happens next **and when**. The next action was already
+required (migration 0009); the date beside it was not, which made the next action a sentence
+nobody would ever be shown again — nothing surfaced the lead in the morning queue, nothing counted
+it against a response target, and it turned up months later in a list of leads quietly abandoned
+mid-conversation.
+
+The exemption is the outcome with nowhere left to go: `converted` means the student joined, and
+demanding a next call would have counsellors typing "nothing" into a field forever.
+
+**The first version of the constraint did not work, and the way it failed is worth keeping.**
+
+```sql
+source = 'system' or outcome = 'converted' or (next_action is not null and next_followup_at is not null)
+```
+
+A CHECK rejects a row only when its expression evaluates to **FALSE**. With the outcome left
+blank, `null = 'converted'` is NULL, so the whole predicate was `false OR null OR false` = NULL,
+and Postgres accepted the row. The constraint worked for every outcome a counsellor chose and
+silently did nothing for the one case it most needed to catch: somebody in a hurry skipping the
+dropdown. `coalesce(outcome, '')` fixes it.
+
+It was caught by a test written three months ago for the *old* rule, which started passing a row
+it had been written to reject. A green suite that goes greener is not always good news.
+
+**NOT VALID, deliberately.** Interactions logged before today have a next action and no date, and
+they are a true record of what happened. The constraint governs what may be written from now on
+rather than retroactively making history invalid; Postgres still enforces it on every insert and
+update, since NOT VALID only skips the scan of rows already there.
+
+**Why a dropdown value is named in code.** CLAUDE.md §10 puts lists in the database and the
+outcomes are there — admin-editable `dropdown_options` rows. What is keyed on is the row's
+**value**, the stable identifier in a system category, exactly as `stage_type = 'won'` is keyed on
+while the stage's name stays editable. Renaming "Converted" to "Joined" changes nothing; deleting
+the row turns the exemption off, and then every interaction needs a follow-up, which is the safe
+direction to fail in.
