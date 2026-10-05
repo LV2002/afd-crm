@@ -3357,3 +3357,202 @@ green tick over it, which is the failure this whole screen exists to prevent.
 The general rule, third time of writing it down in this project: a degraded path is only
 acceptable when the degradation is visible. Falling back silently is not resilience, it is a
 lie with better manners.
+
+---
+
+## 2026-10-05 — A CHECK constraint passes on NULL, which is the row you were trying to stop
+
+Every interaction must now say what happens next **and when**. The next action was already
+required (migration 0009); the date beside it was not, which made the next action a sentence
+nobody would ever be shown again — nothing surfaced the lead in the morning queue, nothing counted
+it against a response target, and it turned up months later in a list of leads quietly abandoned
+mid-conversation.
+
+The exemption is the outcome with nowhere left to go: `converted` means the student joined, and
+demanding a next call would have counsellors typing "nothing" into a field forever.
+
+**The first version of the constraint did not work, and the way it failed is worth keeping.**
+
+```sql
+source = 'system' or outcome = 'converted' or (next_action is not null and next_followup_at is not null)
+```
+
+A CHECK rejects a row only when its expression evaluates to **FALSE**. With the outcome left
+blank, `null = 'converted'` is NULL, so the whole predicate was `false OR null OR false` = NULL,
+and Postgres accepted the row. The constraint worked for every outcome a counsellor chose and
+silently did nothing for the one case it most needed to catch: somebody in a hurry skipping the
+dropdown. `coalesce(outcome, '')` fixes it.
+
+It was caught by a test written three months ago for the *old* rule, which started passing a row
+it had been written to reject. A green suite that goes greener is not always good news.
+
+**NOT VALID, deliberately.** Interactions logged before today have a next action and no date, and
+they are a true record of what happened. The constraint governs what may be written from now on
+rather than retroactively making history invalid; Postgres still enforces it on every insert and
+update, since NOT VALID only skips the scan of rows already there.
+
+**Why a dropdown value is named in code.** CLAUDE.md §10 puts lists in the database and the
+outcomes are there — admin-editable `dropdown_options` rows. What is keyed on is the row's
+**value**, the stable identifier in a system category, exactly as `stage_type = 'won'` is keyed on
+while the stage's name stays editable. Renaming "Converted" to "Joined" changes nothing; deleting
+the row turns the exemption off, and then every interaction needs a follow-up, which is the safe
+direction to fail in.
+
+## 2026-10-05 — Strict where it is written, tolerant where it is read
+
+`parseEscalationStep()` tolerates anything: a mistyped key yields null and the rung is skipped.
+That is correct for its caller, the hourly SLA sweep, where throwing partway through would abandon
+every lead after the bad one.
+
+It is wrong for the *writer*. A rung the sweep silently skips is a promise an administrator
+believes they made and nobody kept — and this was not hypothetical: the old form's placeholder
+taught `flag_breach`, a key nothing has ever read, so the example everybody copied produced an
+inert rung.
+
+So the two paths get different strictness. `createSlaPolicy` validates with a `.strict()` schema
+that refuses an unknown key and names it; the sweep keeps reading tolerantly. The rule, stated
+generally: **validate strictly at the point a human asserts something, tolerate liberally at the
+point a job acts on it.** Mixing them up gives you either a cron that dies on bad config or a
+screen that accepts promises it cannot keep. We had the second.
+
+Same family as the three entries above it — a tool discarding what the platform already said, and
+a degraded path that is only acceptable when the degradation is visible.
+
+## 2026-10-05 — No starting-point SLA policies at all (supersedes the entry below it)
+
+I briefly shipped three presets on the SLA screen: buttons that filled the form in, never saved
+rows. Leon asked for them out the same day — *"i dont want you to create premade SLAs but rather
+allow me to create SLAs but just make them easier to create"* — and that is the right call for a
+reason the original entry half-saw.
+
+The original reasoning was about *seeding*: a policy live on day one starts accusing counsellors
+of being late before the institute has decided it wants to be measured. True, and the presets
+avoided it. What the reasoning missed is that **a named policy on the screen is still the software
+making the decision**, saved or not. "Answer a new enquiry the same day, 4 working hours" is a
+claim about how this institute should run, and three of them framed as the obvious starting points
+is a default even when nothing is written to the database.
+
+So the two jobs separate cleanly:
+
+- *Knowing what to measure* is the institute's. The screen does not answer it.
+- *Filling the form in without hating it* is the software's. That is the condition builder, the
+  ladder editor, the plain-English copy under every control, and hours said back as days and
+  weeks.
+
+What is left after removing the presets is all of the second and none of the first — which is
+what "simplify" asked for, read properly.
+
+## 2026-10-05 — A preset is a filled form, not a seeded row — SUPERSEDED, see above
+
+Kept because the seeding argument is still correct and will come up again the next time somebody
+proposes shipping default configuration.
+
+A seeded SLA policy is live the moment the instance exists. It starts marking leads breached, and
+dropping them into an **At risk** bucket, for an institute that has not yet decided it wants to be
+measured — and the first thing anybody would do is go looking for how to switch off the thing
+accusing their counsellors of being late.
+
+It also keeps CLAUDE.md § "Configuration is data" honest in the other direction: config an admin
+never chose is still config they have to maintain.
+
+## 2026-10-05 — Tags and stages are not substitutes
+
+Recorded because Leon asked whether tags could be dropped in favour of lead stages, having kept
+them only for WhatsApp retargeting.
+
+A lead has exactly **one** stage and **many** tags, and the two behave differently over time: a
+stage change *replaces* (the funnel is a position), while a tag *accumulates and survives* (the
+history is the point). Using a stage to record an attribute — *wants a hostel*, *came to the Kochi
+open day*, *parent is an architect* — therefore costs the funnel position it overwrites, and
+conversion-by-stage starts counting attributes as pipeline states.
+
+This is the v1 mistake in a new costume. v1 merged stage and temperature, which is why CLAUDE.md
+non-negotiable 1 exists; merging stage and tag would corrupt the same numbers for the same reason.
+
+Tags are used in seven places today beyond retargeting: the lead detail tag strip, Settings →
+Tags, the leads-list filter, the `tag_added` flow trigger, the `add_tag` flow step, broadcast
+audience narrowing (`spec.tagId`), the AI's `person-history` tool, and the config export bundle.
+Kept.
+
+Worth saying plainly, because it shapes the decision: **no tags ship seeded.** The table and all
+seven call sites exist, and the list an institute sees is empty until somebody creates one. So
+this was never "remove something in use" — it was "remove a capability nobody has reached for
+yet", which is the cheaper question and also the easier one to get wrong, since the cost of
+keeping an empty list is nearly zero and the cost of needing it back is a migration.
+
+Noted while looking: tags are **not** available as a condition in assignment or temperature rules,
+which is the one place an admin would reasonably expect them. Logged in BACKLOG.md.
+
+
+## 2026-10-05 — A backdrop-filter is a containing block, and it broke mobile navigation
+
+Leon, for the second time: *"the navigation bar is still not working in mobile view"*. The drawer
+component was correct. The app header carries `backdrop-blur`, and **an element whose
+`backdrop-filter` is not `none` becomes the containing block for its fixed-position descendants**
+— the same rule as `transform` and `filter`. The drawer's `fixed inset-0` therefore resolved
+against a 56px-tall header instead of the viewport.
+
+Measured, not guessed: a standalone repro in Chromium at 412×915 gives the panel **55px** of
+height with the backdrop-filter and **915px** without it. Tapping the menu opened an unusable
+sliver across the top of the screen.
+
+Two things worth keeping from this:
+
+**The existing test opened the drawer and passed.** `e2e/mobile.spec.ts` clicked the menu,
+asserted the dialog was visible, and clicked a link inside it — all true of a 55px sliver, because
+`toBeVisible()` does not mean "usable" and Playwright scrolls a link into its container before
+clicking. The test proved the links were reachable *by a robot*. The fix is a dimensional
+assertion: the drawer's height must exceed 90% of the viewport. **When a test is about whether a
+human can use something, assert a measurement, not a presence.**
+
+**The fix is the portal, not removing the blur.** Deleting `backdrop-blur` would also have worked
+and would have left the trap armed for the next `transform` anybody adds to any ancestor.
+`createPortal(…, document.body)` puts the drawer outside every containing block for good.
+
+Invisible on a laptop, by construction: the component is `md:hidden` and the sidebar is used
+instead. The whole class of bug only exists below the breakpoint.
+
+## 2026-10-05 — A flow's trigger says when; its conditions say for whom
+
+`whatsapp_flows` had a trigger, a trigger config and a centre. So "the NID fee sequence, but only
+for Meta leads in Class 12" was not expressible, and the only approximation was a flow per
+combination, each hung off a tag somebody had to remember to apply by hand — which is how tags
+become a second, worse pipeline.
+
+Added `applies_to` jsonb, the same `{"all": [...]}` every other rule in this system stores, read
+by the same `evaluateConditions()` and built by the same picker. Null means no narrowing, which is
+what every existing flow means, so the change is additive.
+
+Two things this needed that are worth writing down:
+
+**`startFlows()` was selecting three columns.** It read `id`, `center_id` and `do_not_contact`,
+which is exactly right for what it did before and silently wrong the moment conditions are
+evaluated against the row: every condition naming any other column would have read `undefined`
+and matched nothing. An automation that reaches nobody looks identical to one nobody has triggered
+yet. It selects the whole row now, and `tests/whatsapp-flow-runner.spec.ts` covers a condition on
+`last_touch_source` specifically — a field whose column name differs from its condition name,
+which is the case a three-column select would have broken.
+
+**`education_status` and `stage_id` were missing from the condition whitelist.** Both are real
+columns; neither was in `FIELD_MAP`, so neither was offerable in any rule — assignment,
+temperature, SLA or flow. Leon asked for education status by name. The `satisfies` clause in
+`condition-fields.ts` did its job: adding them to the map broke the build until they had labels
+and option sources, which is the whole point of that file.
+
+Noted: the gap logged in BACKLOG.md after the tags conversation — tags not being testable in a
+rule — is now the only lead attribute still missing from the picker.
+
+## 2026-10-05 — A feature behind a collapsed summary reads as missing
+
+Leon asked to be able to send broadcasts targeted by stage, source, interested exams and education
+status. **All four already worked**, and had since broadcasts shipped: the audience builder
+renders every lead field `field_definitions` offers, with its options resolved.
+
+They were behind a `<details>` collapsed by default whose summary said **"Filters"**, with
+"every variable, ANDed together" as the hint. Nothing on the screen named a single thing you could
+target, so the only way to discover that stage was in there was to open a control labelled with a
+word that describes the mechanism rather than the job.
+
+Now open by default and headed **"Who gets it"**, with the four he asked about named in the hint.
+No new capability — the capability was there. **Discoverability is a feature, and a collapsed
+container is a good place to hide one by accident.**

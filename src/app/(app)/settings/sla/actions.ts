@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { parseConditions } from "@/lib/rules/parse-rule";
 import { createClient } from "@/lib/supabase/server";
 
 export interface SlaFormState {
@@ -24,14 +25,33 @@ const policySchema = z.object({
   escalations: z.string().trim().optional().or(z.literal("")),
 });
 
-function parseJsonOrNull(raw: string | undefined) {
-  if (!raw) return { ok: true as const, value: null };
-  try {
-    return { ok: true as const, value: JSON.parse(raw) };
-  } catch {
-    return { ok: false as const };
-  }
-}
+/**
+ * The escalation ladder, validated rather than merely parsed.
+ *
+ * `parseEscalationStep` in lib/sla/escalations.ts is deliberately
+ * tolerant — it is read inside an hourly cron sweep, where throwing on a
+ * mistyped key would abandon every lead after the bad one. That is right
+ * for the reader and wrong for the writer: a rung the sweep silently
+ * skips is a promise an administrator believes they made and nobody
+ * kept. So the write path is strict, and says which rung is wrong.
+ *
+ * Only the keys the sweep actually reads are accepted. The schema comment
+ * on the table once mentioned `flag_breach`, the old form's placeholder
+ * taught it, and nothing has ever read it — so a ladder containing it is
+ * refused here rather than stored looking like it does something.
+ */
+const escalationSchema = z
+  .array(
+    z
+      .object({
+        at_hours: z.number().int().min(0),
+        notify_owner: z.boolean().optional(),
+        unassign: z.boolean().optional(),
+        notify_roles: z.array(z.string()).optional(),
+      })
+      .strict(),
+  )
+  .max(10, "Ten escalation steps is already more than anybody reads.");
 
 export async function createSlaPolicy(
   _prevState: SlaFormState,
@@ -55,11 +75,35 @@ export async function createSlaPolicy(
     return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
-  const appliesTo = parseJsonOrNull(parsed.data.appliesTo);
-  if (!appliesTo.ok) return { error: "Applies-to must be valid JSON." };
-  const escalations = parseJsonOrNull(parsed.data.escalations);
-  if (!escalations.ok || (escalations.value !== null && !Array.isArray(escalations.value))) {
-    return { error: "Escalations must be a JSON array." };
+  // Same validation the assignment rules use, for the same reason: a
+  // condition naming a field the evaluator does not know reaches
+  // `evaluateConditions` once per lead inside the hourly sweep, where
+  // nobody is watching it throw.
+  const appliesTo = parseConditions(parsed.data.appliesTo);
+  if (!appliesTo.ok) return { error: appliesTo.error };
+
+  let escalations: Array<Record<string, unknown>> | null = null;
+  if (parsed.data.escalations) {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(parsed.data.escalations);
+    } catch {
+      return { error: "The escalation steps were not valid JSON." };
+    }
+    const ladder = escalationSchema.safeParse(raw);
+    if (!ladder.success) {
+      const issue = ladder.error.issues[0];
+      // Name the dead key rather than echoing zod. `flag_breach` is the
+      // one anybody is likely to have: it was in the old placeholder and
+      // nothing has ever read it.
+      if (issue?.code === "unrecognized_keys") {
+        return {
+          error: `An escalation step has a setting this system does not act on: ${issue.keys.join(", ")}. Remove it — a step is only ever "hours past the target", "tell the counsellor" and "take it off them".`,
+        };
+      }
+      return { error: issue?.message ?? "An escalation step is not valid." };
+    }
+    escalations = ladder.data;
   }
 
   const supabase = await createClient();
@@ -72,7 +116,7 @@ export async function createSlaPolicy(
       target_hours: parsed.data.targetHours,
       business_hours_only: parsed.data.businessHoursOnly ?? false,
       applies_to: appliesTo.value,
-      escalations: escalations.value,
+      escalations,
     })
     .select("id")
     .single();

@@ -68,7 +68,17 @@ dressed as utility is the most common rejection.
 
 ## Backlog proper
 
-### 2. Telephony — **blocked**
+### 2. A tag should be usable as a rule condition
+Tags are the one lead attribute an admin cannot test in an assignment or temperature rule —
+`condition-fields.ts` has no tag field, so "assign anybody tagged *walk-in* to the Kochi desk" is
+not expressible. The evaluator already has `includes_any` for `interested_exams`, a text[], so the
+operator exists; what is missing is a field whose value comes from the `lead_tags` join rather
+than a column on `leads`, which means the evaluator's `Lead` shape has to carry the tag ids.
+
+Small, and worth doing before anybody builds a workflow around a tag. Noticed while answering
+Leon's question about whether tags could be dropped (DECISIONS.md, 2026-10-05).
+
+### 3. Telephony — **blocked**
 Click-to-call, auto-logged direction/duration/disposition, recordings, missed-call → lead,
 Malayalam transcription, call scoring, QA dashboard. All of Phase 6 sits behind one decision:
 **Exotel or Ozonetel**. Nothing can start until Leon picks.

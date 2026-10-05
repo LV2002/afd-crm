@@ -19,7 +19,6 @@ export type NavIconKey =
   | "insights"
   | "marketing"
   | "ask"
-  | "manual"
   | "settings";
 
 export interface NavItem {
@@ -146,14 +145,6 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     label: "Ad Performance",
   },
   { href: "/ask", iconKey: "ask", permission: "ai.query", label: "Ask AI" },
-  {
-    // The staff manual, for everybody. No permission: a manual nobody
-    // without a role can read is a manual nobody reads on their first
-    // day, which is the day it is for.
-    href: "/manual",
-    iconKey: "manual",
-    label: "Manual",
-  },
   { href: "/settings", iconKey: "settings", permission: "settings.manage", label: "Settings" },
 ];
 

@@ -32,6 +32,31 @@ test.describe("on a phone", () => {
     const drawer = page.getByRole("dialog", { name: /menu/i });
     await expect(drawer).toBeVisible();
 
+    /**
+     * The drawer has to be the height of the screen, not merely present.
+     *
+     * This test already opened the drawer and clicked a link in it, and it
+     * passed while the drawer was **55px tall** — a sliver across the top
+     * of the screen that no human could use. `toBeVisible()` is true of a
+     * sliver, and Playwright scrolls a link into view inside the drawer's
+     * own scroll container before clicking it, so both assertions held.
+     * The test proved the links were reachable by a robot, which is not
+     * what it was written to mean.
+     *
+     * The cause was `position: fixed` resolving against the app header
+     * instead of the viewport, because that header carries `backdrop-blur`
+     * and a backdrop-filter makes an element the containing block for its
+     * fixed descendants. So the assertion is dimensional: anything that
+     * puts the drawer back inside a containing block fails here.
+     */
+    const box = await drawer.boundingBox();
+    const viewport = page.viewportSize();
+    expect(box).not.toBeNull();
+    expect(viewport).not.toBeNull();
+    expect(box!.height).toBeGreaterThan(viewport!.height * 0.9);
+    // And wide enough to read a label in, rather than a hairline.
+    expect(box!.width).toBeGreaterThan(200);
+
     await drawer.getByRole("link", { name: /leads/i }).first().click();
     await expect(page).toHaveURL(/\/leads/);
     // Closing on navigation is the bit that reads as "the tap didn't work"

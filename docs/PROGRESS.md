@@ -7029,3 +7029,265 @@ for days as though somebody meant it.
 
 **1520 tests pass**, lint, typecheck and the production build clean. No schema change. Manual 6.1
 rewritten.
+
+### The lead page now divides at the admission
+
+Leon, on the layout: *"the top part is lead details and to log interaction and the bottom part is
+student profile form, fee details and on the right side of that confirming the admission. so
+basically in the top its the conversion part and the bottom is converted part."*
+
+That is a better description of the page than the page had of itself. It was interleaved: the
+**Confirm admission** form sat at the top of the right-hand rail, *above* the interaction log, while
+the profile form and fee panels ran full width underneath with a column of empty space beside them.
+A counsellor reading down the page crossed the before/after boundary three times.
+
+Now:
+
+| | Left (wide) | Right |
+|---|---|---|
+| **Top — winning them** | Lead details | Log an interaction, Tasks, referrals |
+| **Bottom — once they are joining** | Student profile form, Fees & instalment agreement | Confirm admission, then the admission summary and change-plan panel |
+
+Documents and the Timeline stay full width below, and the delete panel stays last.
+
+Nothing moved between permission gates and no query changed: this is the same panels, in the order
+the work happens. `min-w-0` on every grid column, because the phone crawl only passes while the
+panels inside can shrink.
+
+---
+
+## Session 64 — An interaction has to say what happens next, and when
+
+Leon: *"when logging a interaction, i also want the next action and the next action date to be
+mandatory"*, then *"only when converted is selected that next action is not required"*.
+
+Next action was already mandatory, in the form and in a CHECK constraint (migration 0009). **The
+date was not**, and it is the half that matters: a next action with no date is a sentence nobody
+is ever shown again.
+
+Now both are required unless the outcome is `converted`, stated in three places — the form (which
+relaxes both fields the moment Converted is picked, and says why), `logInteraction()`, and the
+CHECK constraint, rewritten in migration 0087 as NOT VALID so interactions logged before today
+stay as the record of what happened.
+
+### The constraint did not work, and a three-month-old test caught it
+
+`outcome = 'converted'` is NULL when no outcome was chosen, a CHECK rejects a row only when its
+expression is FALSE, and `false OR null OR false` is NULL. So the first version accepted every
+interaction where the counsellor skipped the dropdown — precisely the row it existed to stop.
+
+`tests/interactions-constraint.spec.ts` had a test asserting that an interaction with no next
+action is rejected. It started *passing the insert*, which is how the hole was found. Fixed with
+`coalesce(outcome, '')`, and written up in DECISIONS.
+
+Two existing tests changed because the contract did: that file's "accepts a next action" case
+gained the date it was missing (it was the exact row the new rule forbids), and a fixture in
+`tests/merge-leads.spec.ts` did the same.
+
+**1528 tests pass** (8 new), lint, typecheck, `db:audit` and the production build clean. Migration
+0087 applied to an already-seeded database.
+
+---
+
+## Session 65 — Receipts where the accountant is, and the course back with academics
+
+Three of Leon's, and the first was mostly already built.
+
+### Receipts
+
+A professional receipt has existed since the finance module shipped: letterhead from
+Settings → Organisation, the centre's own address, a gapless receipt number, the amount in figures
+**and in words**, total fee, paid to date, balance, and reversals printed as reversals rather than
+vanishing. Every incoming payment already writes one.
+
+**What was missing was reach.** It lived at `/accounts/[id]/receipt/[paymentId]` and was linked
+from exactly one place — the admission screen. From **Finance → Transactions**, the screen an
+accountant actually works in, it could not be reached at all, because a ledger row carries
+`payment_id` and no enrolment id.
+
+So the route is now `/receipts/[paymentId]`: the payment names its own enrolment, so one receipt
+has one address, linkable from anywhere a payment appears. Linked from the ledger as well as the
+admission, gated on `payment.read` rather than `finance.manage` — fetching a receipt for a family
+is not the same authority as reversing an entry.
+
+`PrintButton` now reads **"Print or save as PDF"** and takes a hint, which the receipt uses to say
+that choosing *Save as PDF* is how you get a file to send. Not a detail: generating the PDF
+server-side would be a rendering engine and a font stack to maintain for a file the browser
+already makes correctly from the same stylesheet.
+
+**Not done, deliberately:** the receipt does not appear on the academics student page. That page
+carries no fee or payment data at all, by design and with RLS behind it — academics are not shown
+money. Putting receipts there would be the first hole in that.
+
+### The course belongs to academics
+
+`enrolment.change_plan` covered course, batch, mode and year together, so accounts could change
+what a student is studying while correcting a fee. Split: **`enrolment.change_course`** is a new
+primitive (46 now), held by academics, admin and co-admin. Accounts, centre heads and counsellors
+keep the batch and lose the course — they see it on the panel, read-only, with a line saying who
+moves it.
+
+Checked in the action, not only in the form: a hidden field is a courtesy, not a boundary. And
+refused rather than silently ignored, because quietly saving the batch while keeping the old
+course tells somebody their change went through when half of it did.
+
+`ROLE_SEEDS` moved out of `seed.ts` into `role-seeds.ts` to make this testable at all — `seed.ts`
+calls `main()` on import and exits the process, so "assert accounts cannot change a course" was
+unwritable. `tests/role-grants.spec.ts` now states the whole rule, including that a counsellor
+keeps the batch.
+
+### Who hears about it
+
+`enrolment.plan_changed` already notified accounts, academics and centre heads; co-admin and admin
+join them. Accounts matter most of the three: **a course change does not move the fee**, so the
+one department that has to decide whether the money should follow is the one that did not make the
+change.
+
+> Note for Leon: default notify roles only apply where no row exists in
+> Settings → Notifications for that event. If that event has been configured there already, set
+> the roles on that screen.
+
+**1533 tests pass** (5 new), lint, typecheck, `db:audit` and the production build clean. No schema
+change. Seed re-run and the grants verified in the database.
+
+## Session 66 — SLA policies without JSON, and the last JSON screen
+
+Leon: *"the SLAs seem complicated, can you simplify them so i can create them easily."*
+
+He was right, and the reason was specific: the form had **two raw JSON textareas** —
+*Applies to (JSON, empty = everyone)* and *Escalation ladder (JSON array)*. Both asked an
+administrator to hand-write a structure whose keys are documented in a schema comment they will
+never read. The feature existed and nobody had made a policy.
+
+### Three things, in order of how much they matter
+
+**Presets — since removed, see session 67.** Three one-click starting points, which Leon asked
+out the same day. Left in this entry because the reasoning is in DECISIONS.md and the removal is
+easier to follow with what it removed written down.
+
+**The condition builder** the assignment rules already use, in place of the first textarea. It was
+one import away the whole time.
+
+**A ladder editor** in place of the second: rows saying *how many hours past the target*, *tell
+the counsellor*, *take it off them*. Nothing about the stored shape changed, so existing policies
+and the hourly sweep are untouched.
+
+### The dead key
+
+The old placeholder taught `flag_breach`. `parseEscalationStep()` has never read it — it reads
+`at_hours`, `notify_roles`, `notify_owner`, `unassign`. So the example anybody copied produced a
+rung that silently did nothing, which is the house failure mode written up three times already in
+DECISIONS.md: *a degraded path is only acceptable when the degradation is visible.*
+
+The write path is now strict and names the key. The reader stays tolerant on purpose — it runs
+inside an hourly cron sweep where throwing on a mistyped key would abandon every lead after the
+bad one. **Strict where it is written, tolerant where it is read.**
+
+### Two real defects found on the way
+
+`createSlaPolicy` only `JSON.parse`d the conditions. Now that the form posts real rule conditions,
+a condition naming a field the evaluator does not know would reach `evaluateConditions` once per
+lead *inside the sweep*, where nobody watches it throw. It now validates with `parseConditions` —
+the same function the assignment rules have always used, for the same stated reason.
+
+The policy list printed `first_response · 4h` and said **nothing at all** about which leads a
+policy covers or what happens when it is missed — so a policy with an empty ladder looked
+identical to one that pages a centre head. Both are now sentences, built by reading the stored
+JSON back through the sweep's own parser, so the summary cannot claim a rung the sweep will skip.
+
+### The last JSON screen
+
+Settings → Temperatures still had `Conditions (JSON)` with a textarea, and the manual had grown a
+paragraph calling it *"the one genuinely technical screen — if you are not comfortable with it,
+leave the shipped rules alone"*. That is a documented admission that a configurable thing was not
+configurable. Same builder, dropped in; the server action already validated with
+`parseConditions`, so nothing behind the form changed. Its rule list showed a `<pre>` of raw JSON
+and now reads as English.
+
+The id→name map three screens were each building is now `ruleLabelLookup()` in one place.
+
+### Manual
+
+Chapter 13.3's SLA section is rewritten around the three suggestions, with a table of what each
+one catches. **Open question 4 is answered** — not by asking Leon but by reading
+`sla-sweep/route.ts`: the ladder is fully live, only the highest due rung fires, and it fires once.
+
+**1547 tests pass** (14 new, `tests/sla-presets.spec.ts`), lint, typecheck, `db:audit` and the
+production build clean. No schema change, no migration.
+
+
+## Session 67 — Mobile navigation, flow audiences, and the presets back out again
+
+Five things, in the order they mattered.
+
+### The mobile navigation bar, properly this time
+
+Leon, for the second time: *"the navigation bar is still not working in mobile view"*. Session 62
+built a drawer and I believed that closed it. The drawer component was correct; the drawer was
+**55 pixels tall**.
+
+The app header carries `backdrop-blur`, and an element with a `backdrop-filter` becomes the
+containing block for its fixed-position descendants — same rule as `transform` and `filter`. So
+`fixed inset-0`, rendered inside that header, resolved against a 56px box instead of the viewport.
+Tapping the menu opened a sliver across the top of the screen.
+
+Measured rather than assumed: a standalone Chromium repro at 412×915 gives **55px** with the
+backdrop-filter and **915px** without. Fixed by portalling the drawer to `document.body`, which
+also immunises it against the next `transform` anybody adds to any ancestor.
+
+**The existing e2e test opened the drawer, clicked a link in it, and passed** — `toBeVisible()` is
+true of a sliver, and Playwright scrolls a link into its scroll container before clicking it. It
+proved the links were reachable by a robot. It now asserts the drawer's height exceeds 90% of the
+viewport. When a test is about whether a *human* can use something, assert a measurement.
+
+### Automations can now be narrowed to an audience
+
+Leon wanted WhatsApp automations targeted by stage, source, interested exams and education status.
+A flow had a trigger, a trigger config and a centre — nothing else — so "the NID sequence, but
+only Meta leads in Class 12" meant a flow per combination, each hung off a hand-applied tag.
+
+`whatsapp_flows.applies_to` (migration 0088) stores the same `{"all": [...]}` as every other rule
+here, read by the same evaluator, built by the same picker. Null means no narrowing, so every
+existing automation is untouched. **The trigger says when a run starts; this says for whom.**
+
+Two things that needed fixing underneath:
+
+`startFlows()` selected three columns — right for what it did before, silently wrong for
+evaluating conditions against the row: any condition naming another column would read `undefined`
+and match nobody, and an automation that reaches nobody looks exactly like one nobody triggered.
+It takes the whole row now, with a test specifically on `last_touch_source`, whose column name
+differs from its condition name.
+
+`education_status` and `stage_id` were real lead columns that no rule could test — missing from
+`FIELD_MAP`, so unavailable in assignment, temperature, SLA *and* flow conditions. Added. The
+`satisfies` clause in `condition-fields.ts` refused to build until both had labels and option
+sources, which is exactly what that file is for. `load-options.ts` learned a `stages` option
+source.
+
+### Broadcasts already did all four
+
+Worth stating plainly: the broadcast audience builder has always rendered every lead field with
+its options — stage, source, interested exams, education status, the lot. It was behind a
+`<details>` collapsed by default, labelled **"Filters"**, which names the mechanism and not the
+job. Now open by default, headed **"Who gets it"**, with the four he asked about named in the hint.
+No new capability; the capability was invisible.
+
+### The SLA presets came back out
+
+*"i dont want you to create premade SLAs but rather allow me to create SLAs but just make them
+easier to create."* Right, and for a sharper reason than the one I had: a named policy on the
+screen is the software deciding what the institute measures itself on, saved row or not. Removed
+`SLA_PRESETS`; `lib/sla/presets.ts` is now `lib/sla/policy-copy.ts`, holding only the words and
+the two formatters. Everything that makes the form *easy* stayed — the condition builder, the
+ladder editor, the per-control English, hours read back as days and weeks.
+
+### Tags stay, and the manual leaves the sidebar
+
+Tags: kept, unchanged, on Leon's call — *"i dont use them for anything and they cost me nothing"*.
+The one real gap found while answering him (a tag cannot be tested in a rule) is in BACKLOG.md.
+
+The **Manual** entry is out of the navigation. The page itself still serves at `/manual` by URL,
+and chapter 19.4 now says so.
+
+**1548 tests pass** (6 new on flow conditions, the SLA copy tests rewritten), lint, typecheck,
+`db:audit` and the production build clean. One migration, 0088, additive and nullable.

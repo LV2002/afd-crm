@@ -152,10 +152,30 @@ export const PERMISSIONS = [
   // hold the fee plan and the approval limits.
   {
     code: "enrolment.change_plan",
-    label: "Change course, batch or mode",
+    label: "Change batch, mode or academic year",
     category: "Enrolment",
     description:
-      "Move a confirmed admission to a different course, batch, mode or academic year. Does not include changing the fee.",
+      "Move a confirmed admission to a different batch, mode or academic year. Does not include changing the course or the fee.",
+  },
+  // Split out of enrolment.change_plan, because the course is not the
+  // same kind of decision as the batch.
+  //
+  // A batch move is scheduling: the Tuesday group filled, somebody goes
+  // to Thursday, and whoever notices can do it. The course is what the
+  // student is actually studying — it decides which room, which syllabus
+  // and which exam they are being prepared for, and it is the one field
+  // on this form that academics own outright. Accounts could change it
+  // because it travelled with the batch in a single permission; now it
+  // does not.
+  //
+  // Everyone who could change a course can still change a batch. The
+  // reverse is the restriction.
+  {
+    code: "enrolment.change_course",
+    label: "Change the course",
+    category: "Enrolment",
+    description:
+      "Move a confirmed admission onto a different course. Academics' decision — the fee does not follow, so accounts are told and adjust it deliberately.",
   },
   // Deliberately separate from enrolment.update. Marking an admission
   // dropped removes it from the conversion numbers and stops the fee

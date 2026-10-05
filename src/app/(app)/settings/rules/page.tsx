@@ -7,10 +7,10 @@ import { getCurrentUser } from "@/lib/auth/session";
 
 import { manageScope } from "./scope";
 import type { RuleConditions } from "@/lib/assignment/evaluate-conditions";
-import { describeAction, describeConditions, type LabelLookup } from "@/lib/rules/describe-rule";
+import { describeAction, describeConditions } from "@/lib/rules/describe-rule";
 import { createClient } from "@/lib/supabase/server";
 
-import { loadRuleOptions } from "./load-options";
+import { loadRuleOptions, ruleLabelLookup } from "./load-options";
 import { RuleRow, type RuleRowData } from "./rule-row";
 
 export const dynamic = "force-dynamic";
@@ -54,13 +54,7 @@ export default async function AssignmentRulesPage() {
     loadRuleOptions(supabase),
   ]);
 
-  const names = new Map<string, string>();
-  for (const center of options.centers) names.set(center.value, center.label);
-  for (const person of options.users) names.set(person.value, person.label);
-  for (const list of Object.values(options.optionsByField)) {
-    for (const option of list) if (!names.has(option.value)) names.set(option.value, option.label);
-  }
-  const label: LabelLookup = (_kind, value) => names.get(value) ?? value;
+  const label = ruleLabelLookup(options);
 
   const rows: RuleRowData[] = (rules ?? []).map((rule) => ({
     id: rule.id,

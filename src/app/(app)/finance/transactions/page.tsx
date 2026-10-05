@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -48,6 +50,10 @@ export default async function FinanceTransactionsPage({
   const accountNames = new Map(accounts.map((a) => [a.id, a.name]));
   const newestFirst = entries.slice().reverse();
   const canManage = Boolean(user && can(user, "finance.manage"));
+  // A receipt is a different permission from running the ledger: an
+  // accountant who may read payments may fetch one for a family, whether
+  // or not they are allowed to reverse anything.
+  const canSeeReceipts = Boolean(user && can(user, "payment.read"));
 
   return (
     <div className="flex flex-col gap-4">
@@ -101,6 +107,22 @@ export default async function FinanceTransactionsPage({
                         <Badge variant="outline" className="ml-2">
                           Reversal
                         </Badge>
+                      )}
+                      {/*
+                        The row a family rings up about. Every fee payment
+                        already has a numbered receipt waiting for it, and
+                        until now it could only be reached by finding the
+                        student, opening their admission and scrolling to
+                        the payment — from the one screen an accountant
+                        actually works in, it was unreachable.
+                      */}
+                      {canSeeReceipts && entry.payment_id && (
+                        <Link
+                          href={`/receipts/${entry.payment_id}`}
+                          className="ml-2 text-xs font-medium underline underline-offset-2"
+                        >
+                          Receipt
+                        </Link>
                       )}
                       {entry.kind === "transfer" && (
                         <Badge variant="outline" className="ml-2">

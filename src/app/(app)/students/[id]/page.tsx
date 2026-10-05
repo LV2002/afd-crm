@@ -185,6 +185,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
             modes={planOptions[1]}
             batches={planOptions[2]}
             canEdit
+            canChangeCourse={can(user, "enrolment.change_course")}
           />
         </div>
       )}

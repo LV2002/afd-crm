@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
@@ -9,16 +9,28 @@ import { Label } from "@/components/ui/label";
 import { Combobox } from "@/components/ui/combobox";
 import { Textarea } from "@/components/ui/textarea";
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
+import { needsFollowUp } from "@/lib/leads/interaction-follow-up";
 
 import { logInteraction, type FormState } from "./actions";
 
 const initialState: FormState = {};
 
 /**
- * "Next action" has no default and no way to skip it — it's the one field
- * this form treats as non-negotiable, matching the CHECK constraint on
- * `interactions` itself (migration 0009) so the enforcement isn't only
- * client-side.
+ * Logging what was said, and what happens next.
+ *
+ * **Next action and its date are both required**, and neither has a
+ * default. A call that ends with nothing scheduled is a lead that quietly
+ * stops being worked — nothing surfaces it in the morning queue and
+ * nobody notices until a report counts it months later.
+ *
+ * The exemption is the outcome with nowhere left to go: pick
+ * **Converted** and both fields relax, because the student has joined and
+ * there is no next call. Everything else, including leaving the outcome
+ * blank, needs a follow-up.
+ *
+ * The same rule is applied again in `logInteraction()` and again by the
+ * CHECK constraint on `interactions` (migrations 0009 and 0087), so this
+ * is the courteous half of three, not the enforcement.
  */
 export function InteractionForm({
   leadId,
@@ -33,6 +45,8 @@ export function InteractionForm({
     logInteraction.bind(null, leadId),
     initialState,
   );
+  const [outcome, setOutcome] = useState("");
+  const required = needsFollowUp(outcome);
 
   return (
     <form action={formAction} className="flex flex-col gap-3 rounded-lg border p-4">
@@ -54,6 +68,8 @@ export function InteractionForm({
           <Combobox
             id="interaction-outcome"
             name="outcome"
+            value={outcome}
+            onChange={setOutcome}
             options={outcomes}
             placeholder="Select outcome"
             searchPlaceholder="Type to search…"
@@ -69,15 +85,28 @@ export function InteractionForm({
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="interaction-next-action">
-          Next action <span className="text-destructive">*</span>
+          Next action {required && <span className="text-destructive">*</span>}
         </Label>
-        <Textarea id="interaction-next-action" name="nextAction" rows={2} required />
+        <Textarea id="interaction-next-action" name="nextAction" rows={2} required={required} />
       </div>
 
       <div className="flex flex-col gap-2 sm:w-64">
-        <Label htmlFor="interaction-next-followup">Next follow-up</Label>
-        <Input id="interaction-next-followup" type="datetime-local" name="nextFollowupAt" />
+        <Label htmlFor="interaction-next-followup">
+          Next follow-up {required && <span className="text-destructive">*</span>}
+        </Label>
+        <Input
+          id="interaction-next-followup"
+          type="datetime-local"
+          name="nextFollowupAt"
+          required={required}
+        />
       </div>
+
+      {!required && (
+        <p className="text-sm text-muted-foreground">
+          No follow-up needed — they have joined.
+        </p>
+      )}
 
       <FormMessage error={state.error} success={state.success} />
       <Button type="submit" disabled={pending} className="w-fit">

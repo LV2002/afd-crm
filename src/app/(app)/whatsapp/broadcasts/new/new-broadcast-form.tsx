@@ -239,11 +239,18 @@ export function NewBroadcastForm({
           </div>
         )}
 
-        <details open={activeFilters > 0}>
+        {/*
+          Open by default. Every lead field was already targetable here —
+          stage, source, interested exams, education status, the lot — and
+          it was all behind a collapsed summary labelled "Filters", which
+          is a word that tells you nothing about what you can target. The
+          feature reads as missing when it is merely folded up.
+        */}
+        <details open>
           <summary className="cursor-pointer text-sm font-medium">
-            Filters{activeFilters > 0 ? ` — ${activeFilters} active` : ""}
+            Who gets it{activeFilters > 0 ? ` — ${activeFilters} active` : ""}
             <span className="ml-2 text-xs font-normal text-muted-foreground">
-              every variable, ANDed together
+              stage, source, exam, education status and every other field — all must match
             </span>
           </summary>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

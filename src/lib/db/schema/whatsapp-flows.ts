@@ -57,6 +57,20 @@ export const whatsappFlows = pgTable(
     isActive: boolean("is_active").notNull().default(false),
     /** Null means every centre. Set to keep a Kannur sequence off Kochi's leads. */
     centerId: uuid("center_id").references(() => centers.id, { onDelete: "cascade" }),
+    /**
+     * Extra narrowing beyond the trigger: `{"all": [...]}`, the same
+     * shape assignment rules, temperature rules and SLA policies store,
+     * read by the same `evaluateConditions()`.
+     *
+     * The trigger says *when* a run may start; this says *for whom*. A
+     * stage-entry flow that should only chase Meta leads sitting in
+     * Class 12 was otherwise a flow per combination, each hung off a tag
+     * somebody had to apply by hand.
+     *
+     * Null means no narrowing, which is what every flow written before
+     * this column meant.
+     */
+    appliesTo: jsonb("applies_to").$type<Record<string, unknown>>(),
     createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
     ...timestamps(),
     ...softDelete(),

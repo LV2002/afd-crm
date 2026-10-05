@@ -64,9 +64,10 @@ each chapter starts on a new page.
 
 ## 19.4 Reading it inside the CRM
 
-The manual is also served at **`/manual`** for anybody signed in. The
-route reads `docs/manual/manual.html` at request time, so **rebuilding
-and deploying is all that is needed** — no second copy to keep in step.
+The manual is also served at **`/manual`** for anybody signed in — by
+URL only; it is deliberately not in the sidebar. The route reads
+`docs/manual/manual.html` at request time, so **rebuilding and deploying
+is all that is needed** — no second copy to keep in step.
 
 If the file is missing, the page says so and tells you to run
 `npm run manual`.

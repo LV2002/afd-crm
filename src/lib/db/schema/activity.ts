@@ -51,9 +51,30 @@ export const interactions = pgTable(
     ...softDelete(),
   },
   (t) => [
+    /*
+      A human-logged interaction has to say what happens next, and when.
+
+      The date used to be optional, which made the next action a sentence
+      nobody would ever be shown again: nothing surfaced the lead in the
+      morning queue and nothing counted it against a response target.
+
+      `outcome = 'converted'` is the one exemption — the student joined,
+      so there is no next call. The VALUE is keyed on and not the label;
+      `dropdown_options` rows stay admin-editable, and renaming
+      "Converted" to "Joined" changes nothing here, exactly as renaming a
+      `stage_type = 'won'` stage does not change what it means.
+
+      Migration 0087 adds this NOT VALID, so interactions logged before it
+      — a next action, no date — stay as the true record of what happened.
+
+      `coalesce` on the outcome is load-bearing: a CHECK rejects a row only
+      when its expression is FALSE, and `null = 'converted'` is NULL, so
+      without it an interaction with no outcome chosen passed the whole
+      constraint. That is exactly the row this is meant to catch.
+    */
     check(
       "interactions_next_action_required",
-      sql`${t.source} = 'system' or ${t.nextAction} is not null`,
+      sql`${t.source} = 'system' or coalesce(${t.outcome}, '') = 'converted' or (${t.nextAction} is not null and ${t.nextFollowupAt} is not null)`,
     ),
   ],
 );

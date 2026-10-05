@@ -17,6 +17,7 @@ import { NOT_PROVIDED, parseFieldValue } from "@/lib/fields/parse-field-value";
 import { captureError } from "@/lib/errors/capture";
 import { isFrameworkControlFlow } from "@/lib/errors/request-error";
 import { parseRupeesToPaise } from "@/lib/format/currency";
+import { needsFollowUp } from "@/lib/leads/interaction-follow-up";
 import { temperatureOverrideFor } from "@/lib/leads/temperature-override";
 import { notify } from "@/lib/notifications/notify";
 import { startFlows } from "@/lib/whatsapp/flow-runner";
@@ -142,13 +143,35 @@ export async function logInteraction(leadId: string, _prevState: FormState, form
   const type = interactionSchema.type(formData.get("type"));
   const nextAction = interactionSchema.nextAction(formData.get("nextAction"));
   if (!type) return { error: "Interaction type is required." };
-  if (!nextAction) return { error: "Next action is required." };
 
   const direction = formData.get("direction");
   const outcome = formData.get("outcome");
   const notes = formData.get("notes");
   const durationRaw = formData.get("durationSeconds");
   const nextFollowupAtRaw = formData.get("nextFollowupAt");
+
+  /*
+    An interaction has to say what happens next, and when.
+
+    The date is the half that was optional, and it is the half that
+    matters: a next action with no date is a sentence nobody will ever be
+    shown again. Nothing surfaces the lead in the morning queue, no SLA
+    counts against it, and it is found months later in a list of leads
+    that were quietly abandoned mid-conversation.
+
+    Unless the conversation is over because they joined — see
+    `needsFollowUp()` for why that one outcome is exempt and why it is
+    keyed on the row's value rather than its label.
+  */
+  const followUpRequired = needsFollowUp(typeof outcome === "string" ? outcome : null);
+  if (followUpRequired && !nextAction) {
+    return { error: "Next action is required — say what happens next, however small." };
+  }
+  if (followUpRequired && !nextFollowupAtRaw) {
+    return {
+      error: "A date for the next action is required, so this lead comes back to somebody.",
+    };
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase

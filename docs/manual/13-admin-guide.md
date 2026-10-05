@@ -104,11 +104,13 @@ whether it **requires a reason**.
 ### Settings → Temperatures
 The temperature values themselves, their colours and order, and the
 rules that assign them. A rule has **Sets temperature to**, a
-**Priority**, and **Conditions (JSON)**.
+**Priority**, and **Which leads** — the same point-and-click condition
+builder as the assignment rules, so there is no JSON on this screen.
 
-> **Conditions are entered as JSON.** This is the one genuinely technical
-> screen. If you are not comfortable with it, leave the shipped rules
-> alone — they work.
+A lead gets the temperature of the **first** rule it matches, highest
+priority first. A rule with no conditions matches every lead, which is
+what you want for the catch-all at the bottom and a mistake anywhere
+else — the screen says so when you leave the conditions empty.
 
 Remember the override window: a manual temperature beats the rules for a
 few days (Settings → Organisation sets how many), then the rules resume.
@@ -140,13 +142,39 @@ keeps filling, no rule matches those leads and you need a catch-all at
 the lowest priority.
 
 ### Settings → SLA Policies
-Response-time targets and what happens when they are missed: **Name**,
-**Priority**, **Measure**, **Target hours**, **Applies to (JSON, empty =
-everyone)** and an **Escalation ladder (JSON array)**. Business hours
-and holidays (for example *Onam*, marked **Closed**) are set here too,
-so a target does not expire overnight on a day the office is shut.
+How quickly a lead has to be answered, and what happens when it is not.
 
-Two of these fields are JSON. Same caution as temperatures.
+There are **no ready-made policies**, on purpose: what an institute
+measures itself on is its own decision. Six fields, and only the first
+two need thinking about. Nothing is saved until you press **Create
+policy**.
+
+- **Name** — what you would call it out loud. It appears on the policy
+  list and nowhere else.
+- **What it measures** — *First response* (from the lead arriving until
+  somebody logs their first interaction), *Follow-up kept* (from the
+  date a counsellor promised), or *Time in one stage*.
+- **Target** — in hours. The screen says it back in days or weeks, so
+  `336` reads as *2 weeks*.
+- **Priority** — a lead gets **one** policy: the highest-priority one
+  whose conditions it matches. Give a catch-all a low number and your
+  specific policies higher ones.
+- **Count working hours only** — the clock pauses overnight, on weekly
+  offs and on holidays. Leave this on, or a Saturday-evening enquiry is
+  four hours late by Sunday morning with nobody in the building.
+- **Which leads** — the same point-and-click condition builder the
+  assignment rules use. Leave it empty and the policy covers everybody,
+  which is what you want for your first one.
+- **When it is missed** — rows, each saying how many hours *past the
+  target* it fires, and whether to tell the counsellor or take the lead
+  off them. Use *take it off them* sparingly: a counsellor who loses
+  leads for being late learns to stop logging calls, not to make them.
+
+Business hours and holidays (for example *Onam*, marked **Closed**) are
+set on the same screen, so a target does not expire overnight on a day
+the office is shut.
+
+No JSON anywhere on this screen any more.
 
 ### Settings → Tags
 Labels a lead can carry: **Name** and **Colour**.

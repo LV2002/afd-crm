@@ -4,6 +4,7 @@ import { Save } from "lucide-react";
 import { useActionState, useState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
+import { ConditionBuilder, type ConditionFieldOptions } from "@/components/rules/condition-builder";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { Condition, ConditionField } from "@/lib/assignment/evaluate-conditions";
 import { FLOW_TRIGGERS, type FlowTrigger } from "@/lib/whatsapp/flow-engine";
 
 import { saveFlow, type FlowFormState } from "./actions";
@@ -41,6 +43,8 @@ export interface FlowValues {
   tagId: string;
   keywords: string;
   centerId: string;
+  /** Extra narrowing beyond the trigger. Empty means every lead it fires for. */
+  appliesTo: Condition[];
 }
 
 export function FlowForm({
@@ -48,11 +52,15 @@ export function FlowForm({
   stages,
   tags,
   centers,
+  fields,
+  optionsByField,
 }: {
   values: FlowValues;
   stages: Array<{ id: string; name: string }>;
   tags: Array<{ id: string; name: string }>;
   centers: Array<{ id: string; name: string }>;
+  fields: ConditionField[];
+  optionsByField: ConditionFieldOptions;
 }) {
   const [state, action, pending] = useActionState(saveFlow, initialState);
   const [trigger, setTrigger] = useState<FlowTrigger>(values.triggerType);
@@ -183,6 +191,21 @@ export function FlowForm({
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="flex flex-col gap-2 border-t pt-4">
+        <Label>Only for these leads (optional)</Label>
+        <p className="text-xs text-muted-foreground">
+          The trigger above decides <strong>when</strong> a run starts; this decides{" "}
+          <strong>for whom</strong>. Every condition has to be true. Leave it empty and the
+          automation reaches everybody the trigger fires for.
+        </p>
+        <ConditionBuilder
+          name="appliesTo"
+          defaultConditions={values.appliesTo}
+          fields={fields}
+          optionsByField={optionsByField}
+        />
       </div>
 
       <FormMessage error={state.error} success={state.success} />

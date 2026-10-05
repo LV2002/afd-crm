@@ -12,9 +12,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { RuleConditions } from "@/lib/assignment/evaluate-conditions";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { whatsappFlowRuns, whatsappFlowSteps, whatsappFlows } from "@/lib/db/schema";
+import { describeConditions } from "@/lib/rules/describe-rule";
+import { createClient } from "@/lib/supabase/server";
+
+import { loadRuleOptions, ruleLabelLookup } from "@/app/(app)/settings/rules/load-options";
 
 export const dynamic = "force-dynamic";
 
@@ -30,12 +35,17 @@ export default async function WhatsAppFlowsPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.campaign")) return <AccessDenied />;
 
+  const supabase = await createClient();
+  const ruleOptions = await loadRuleOptions(supabase);
+  const label = ruleLabelLookup(ruleOptions);
+
   const flows = await db
     .select({
       id: whatsappFlows.id,
       name: whatsappFlows.name,
       description: whatsappFlows.description,
       triggerType: whatsappFlows.triggerType,
+      appliesTo: whatsappFlows.appliesTo,
       isActive: whatsappFlows.isActive,
       steps: sql<number>`(select count(*) from ${whatsappFlowSteps} where ${whatsappFlowSteps.flowId} = ${whatsappFlows.id})`,
       live: sql<number>`(select count(*) from ${whatsappFlowRuns} where ${whatsappFlowRuns.flowId} = ${whatsappFlows.id} and status in ('running','waiting'))`,
@@ -84,6 +94,14 @@ export default async function WhatsAppFlowsPage() {
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {TRIGGER_LABELS[flow.triggerType] ?? flow.triggerType}
+                  {/* An automation narrowed to a slice of leads looked
+                      identical here to one that reaches everybody, which
+                      is the difference between 200 messages and 12. */}
+                  {flow.appliesTo && (
+                    <p className="text-xs">
+                      Only: {describeConditions(flow.appliesTo as RuleConditions, label)}
+                    </p>
+                  )}
                 </TableCell>
                 <TableCell>{Number(flow.steps)}</TableCell>
                 <TableCell>{Number(flow.live)}</TableCell>

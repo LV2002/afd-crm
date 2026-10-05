@@ -100,8 +100,12 @@ people at once.
 
 **Steps**
 1. **Chats** → **Broadcasts** → **New broadcast**.
-2. **Who it goes to** — build the audience with the filters. The form
-   shows how many people match; check that number before going on.
+2. **Who gets it** — narrow the audience. **Every lead field is a
+   filter**: stage, lead source, interested exams, education status,
+   temperature, centre, district, exam year and any custom field an
+   administrator has added. They are ANDed — *stage is Counselling Done*
+   **and** *source is Meta* means both. The form shows how many people
+   match; check that number before going on.
 3. **What it says** — *Choose an approved template* and fill in any
    placeholder values.
 4. **When it goes out** — now, or pick a date and time.
@@ -260,6 +264,20 @@ by itself when something happens.
 **What can start one**: a lead being created, a lead entering a stage, a
 tag being added, an inbound keyword, or starting it by hand.
 
+**Who it then goes to** — *Only for these leads* narrows it further, with
+the same point-and-click conditions as the assignment rules: stage, lead
+source, interested exams, education status, temperature, centre,
+district, exam year. The trigger decides **when** a run starts; this
+decides **for whom**.
+
+> This is how you run one automation per audience without one automation
+> per combination. *A lead enters Counselling Done* **and** *source is
+> Meta* **and** *education status is 12th* is one automation, not a tag
+> somebody has to remember to apply by hand.
+
+Leave it empty and the automation reaches everybody the trigger fires
+for, which is what every automation built before this did.
+
 **What a step can be**: send a template, wait, wait for a reply, add a
 tag, set a stage, notify the owner, or stop.
 
@@ -270,6 +288,8 @@ it** so you can see what the automation has actually done.
 1. **Chats** → **Automations** → **New automation**.
 2. Give it a name, for example *NIFT enquiry follow-up*.
 3. Choose the trigger — *Pick a stage* or *Pick a tag* as appropriate.
+   Then, if this sequence is only for some of them, add conditions under
+   *Only for these leads*.
 4. Add steps: a template, a wait, a wait-for-reply with answers
    (*Add an answer*, e.g. *Yes, interested*), and what each answer does.
 5. Use **If unknown, say…** for replies that match nothing.
@@ -280,6 +300,9 @@ it** so you can see what the automation has actually done.
 - *A wait shorter than a day.* Automations advance on the nightly run, so
   the smallest meaningful wait is about a day.
 - *No stop condition.* Always give somebody a way out of the sequence.
+- *Narrowing it so far nobody matches.* The automation list shows an
+  **Only:** line under the trigger for every automation that has
+  conditions — read it back and check it says what you meant.
 
 ---
 

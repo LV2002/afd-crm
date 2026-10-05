@@ -800,15 +800,19 @@
 <p>Tapping the temperature you are already on clears it, which hands the lead back to the automatic rules.</p>
 <p>Moving to a stage that needs a reason — <strong>Lost</strong>, normally — asks for the reason before it moves, not after.</p>
 <blockquote><strong>Temperature you set beats the overnight recalculation</strong>, for a few days (an admin sets how many). You have just spoken to them; the rules have not.</blockquote>
+<p>The rest of the page is in two halves, and the line between them is the admission.</p>
+<h3 id="the-top-half-winning-them">The top half — winning them</h3>
 <p><strong>Left (the wide column)</strong>: the lead's details, grouped into sections (Personal, Education, Preferences, Tracking…). You edit them here, in place.</p>
 <p><strong>Right (the narrow column)</strong>, from top to bottom:</p>
 <ul>
-<li><strong>Confirm admission</strong> (or, once confirmed, the admission summary)</li>
-<li><strong>Log an interaction</strong></li>
+<li><strong>Log an interaction</strong> — first, because it is the thing you do most</li>
 <li><strong>Tasks</strong></li>
 <li><strong>Sent us N people</strong> — who this person referred, if any</li>
 </ul>
-<p><strong>Below, full width</strong>: <strong>Student profile form</strong>, <strong>Fees &amp; instalment agreement</strong>, <strong>Documents</strong>, and the <strong>Timeline</strong>.</p>
+<h3 id="the-bottom-half-once-they-are-joining">The bottom half — once they are joining</h3>
+<p><strong>Left (the wide column)</strong>: <strong>Student profile form</strong>, then <strong>Fees &amp; instalment agreement</strong>.</p>
+<p><strong>Right (the narrow column)</strong>: <strong>Confirm admission</strong> — or, once it is confirmed, the admission summary and the controls for changing course or batch.</p>
+<p><strong>Below, full width</strong>: <strong>Documents</strong> and the <strong>Timeline</strong>.</p>
 <p>Panels you do not have permission for simply are not there.</p>
 <p>[Screenshot: A lead detail page with all panels visible]</p>
 <h2 id="6-2-logging-an-interaction">6.2 Logging an interaction</h2>
@@ -1041,11 +1045,12 @@
 <p><strong>Course &amp; batch</strong> appears on three screens, because three different people change it: the lead (the counsellor), the admission (accounts) and the student's own page (academics). All three do the same thing.</p>
 <p><strong>Procedure: change what a student is enrolled on</strong></p>
 <p><strong>Goal</strong> — correct or update the course, batch, mode or academic year of a confirmed admission.</p>
-<p><strong>Before you start</strong> — <code>enrolment.change_plan</code>. Counsellors for their own students; accounts, academics and centre heads for their centre.</p>
+<p><strong>Before you start</strong> — <code>enrolment.change_plan</code> for the batch, mode and academic year. Counsellors for their own students; accounts, academics and centre heads for their centre.</p>
+<p><strong>The course needs <code>enrolment.change_course</code>, which only academics hold</strong> (and admin and co-admin). Everybody else sees the course on this panel but cannot change it: it decides which room and which syllabus a student is in, and that is academics' call. When academics do move it, accounts, the co-admin and the admin are all notified — the fee does not follow a course change, so somebody has to decide whether it should.</p>
 <p><strong>Steps</strong></p>
 <ol>
 <li>Open the lead, the admission or the student, and find <strong>Course &amp; batch</strong>.</li>
-<li>Change <strong>Course</strong>, <strong>Mode</strong>, <strong>Academic year</strong> or <strong>Batch</strong>. The batch list shows only batches running that course at that centre — clear the box to take them out of a batch altogether.</li>
+<li>Change <strong>Mode</strong>, <strong>Academic year</strong> or <strong>Batch</strong> — and <strong>Course</strong>, if you are academics. The batch list shows only batches running that course at that centre — clear the box to take them out of a batch altogether.</li>
 <li><strong>Reason (optional)</strong> — kept on the batch history.</li>
 <li>Press <strong>Save course &amp; batch</strong>, then <strong>Yes, change it</strong>.</li>
 </ol>
@@ -1136,13 +1141,16 @@
 </ul>
 <h2 id="7-7-receipts">7.7 Receipts</h2>
 <p>Every payment gets a receipt with a number from a <strong>gapless sequence</strong> — 1, 2, 3, with no holes. The numbers come from the database, never from the app, so two people recording payments at the same moment cannot get the same number.</p>
-<h3 id="procedure-print-a-receipt">Procedure: print a receipt</h3>
-<ol>
-<li>Open <strong>Admissions</strong> → the student.</li>
-<li>In the <strong>Payment ledger</strong>, open the receipt for that payment.</li>
-<li>Print or save as PDF.</li>
-</ol>
-<p>The receipt carries the institute's letterhead from Settings → Organisation — name, address, phone, GSTIN. If those are blank, the receipt prints without them.</p>
+<h3 id="procedure-get-a-receipt-to-send-to-a-family">Procedure: get a receipt to send to a family</h3>
+<p><strong>Two ways in, whichever screen you are already on:</strong></p>
+<ul>
+<li><strong>Admissions → the student → Payment ledger → Receipt</strong>, next to the payment itself.</li>
+<li><strong>Finance → Transactions → Receipt</strong>, on the row for that payment. This is the quicker one when somebody rings up about a payment and you have the date rather than the name.</li>
+</ul>
+<p>Then press <strong>Print or save as PDF</strong> and choose <em>Save as PDF</em> as the destination. That gives you a file to send on WhatsApp or email.</p>
+<p>The receipt carries the institute's letterhead from Settings → Organisation — name, address, phone, GSTIN — and the centre's own address and phone from Settings → Centres, so a Kannur receipt shows Kannur. If those are blank, the receipt prints without them, which is the one thing worth checking before you send the first one.</p>
+<p>It states the amount received in figures <strong>and in words</strong>, the mode of payment, the total fee, what has been paid to date and the balance outstanding — which is the question that otherwise generates the next phone call.</p>
+<p><strong>Reprinting is not reissuing.</strong> The receipt number, amount and date come from rows that can never be edited, so the tenth print is identical to the first. A correction is a reversal with its own entry, and it prints marked as one rather than quietly disappearing.</p>
 <h2 id="7-8-when-a-student-drops-out">7.8 When a student drops out</h2>
 <h3 id="goal-11">Goal</h3>
 <p>Record that somebody who had confirmed is not coming.</p>
@@ -1420,7 +1428,7 @@
 <p><strong>Steps</strong></p>
 <ol>
 <li><strong>Chats</strong> → <strong>Broadcasts</strong> → <strong>New broadcast</strong>.</li>
-<li><strong>Who it goes to</strong> — build the audience with the filters. The form shows how many people match; check that number before going on.</li>
+<li><strong>Who gets it</strong> — narrow the audience. <strong>Every lead field is a filter</strong>: stage, lead source, interested exams, education status, temperature, centre, district, exam year and any custom field an administrator has added. They are ANDed — <em>stage is Counselling Done</em> <strong>and</strong> <em>source is Meta</em> means both. The form shows how many people match; check that number before going on.</li>
 <li><strong>What it says</strong> — <em>Choose an approved template</em> and fill in any placeholder values.</li>
 <li><strong>When it goes out</strong> — now, or pick a date and time.</li>
 <li>Press <strong>Schedule</strong> (the button shows the recipient count).</li>
@@ -1491,13 +1499,16 @@
 <h2 id="10-8-automations">10.8 Automations</h2>
 <p><strong>Chats</strong> → <strong>Automations</strong> (<code>whatsapp.campaign</code>). A sequence that runs by itself when something happens.</p>
 <p><strong>What can start one</strong>: a lead being created, a lead entering a stage, a tag being added, an inbound keyword, or starting it by hand.</p>
+<p><strong>Who it then goes to</strong> — <em>Only for these leads</em> narrows it further, with the same point-and-click conditions as the assignment rules: stage, lead source, interested exams, education status, temperature, centre, district, exam year. The trigger decides <strong>when</strong> a run starts; this decides <strong>for whom</strong>.</p>
+<blockquote>This is how you run one automation per audience without one automation per combination. <em>A lead enters Counselling Done</em> <strong>and</strong> <em>source is Meta</em> <strong>and</strong> <em>education status is 12th</em> is one automation, not a tag somebody has to remember to apply by hand.</blockquote>
+<p>Leave it empty and the automation reaches everybody the trigger fires for, which is what every automation built before this did.</p>
 <p><strong>What a step can be</strong>: send a template, wait, wait for a reply, add a tag, set a stage, notify the owner, or stop.</p>
 <p>The editor has <strong>The steps</strong>, <strong>Settings</strong>, and <strong>Who has been through it</strong> so you can see what the automation has actually done.</p>
 <h3 id="procedure-build-a-simple-follow-up-automation">Procedure: build a simple follow-up automation</h3>
 <ol>
 <li><strong>Chats</strong> → <strong>Automations</strong> → <strong>New automation</strong>.</li>
 <li>Give it a name, for example <em>NIFT enquiry follow-up</em>.</li>
-<li>Choose the trigger — <em>Pick a stage</em> or <em>Pick a tag</em> as appropriate.</li>
+<li>Choose the trigger — <em>Pick a stage</em> or <em>Pick a tag</em> as appropriate. Then, if this sequence is only for some of them, add conditions under <em>Only for these leads</em>.</li>
 <li>Add steps: a template, a wait, a wait-for-reply with answers (<em>Add an answer</em>, e.g. <em>Yes, interested</em>), and what each answer does.</li>
 <li>Use <strong>If unknown, say…</strong> for replies that match nothing.</li>
 <li>Save, then activate it.</li>
@@ -1507,6 +1518,7 @@
 <li><em>Leaving it active while testing.</em> Real leads will receive it.</li>
 <li><em>A wait shorter than a day.</em> Automations advance on the nightly run, so the smallest meaningful wait is about a day.</li>
 <li><em>No stop condition.</em> Always give somebody a way out of the sequence.</li>
+<li><em>Narrowing it so far nobody matches.</em> The automation list shows an <strong>Only:</strong> line under the trigger for every automation that has conditions — read it back and check it says what you meant.</li>
 </ul>
 <p class="back-to-contents"><a href="#contents">Back to contents</a></p>
 </section>
@@ -1742,8 +1754,8 @@
 <p>Add, rename, reorder, recolour. Each stage has a <strong>type</strong> (fixed list: new, normal, scheduled, enrolment_form, payment, won, lost, parked), a <strong>probability</strong> used by the forecast, an optional <strong>SLA hours</strong>, and whether it <strong>requires a reason</strong>.</p>
 <p><strong>Choose the type carefully</strong> — it drives behaviour, not just colour. A <code>lost</code> stage demands a reason; a <code>won</code> stage counts as an admission.</p>
 <h3 id="settings-temperatures">Settings → Temperatures</h3>
-<p>The temperature values themselves, their colours and order, and the rules that assign them. A rule has <strong>Sets temperature to</strong>, a <strong>Priority</strong>, and <strong>Conditions (JSON)</strong>.</p>
-<blockquote><strong>Conditions are entered as JSON.</strong> This is the one genuinely technical screen. If you are not comfortable with it, leave the shipped rules alone — they work.</blockquote>
+<p>The temperature values themselves, their colours and order, and the rules that assign them. A rule has <strong>Sets temperature to</strong>, a <strong>Priority</strong>, and <strong>Which leads</strong> — the same point-and-click condition builder as the assignment rules, so there is no JSON on this screen.</p>
+<p>A lead gets the temperature of the <strong>first</strong> rule it matches, highest priority first. A rule with no conditions matches every lead, which is what you want for the catch-all at the bottom and a mistake anywhere else — the screen says so when you leave the conditions empty.</p>
 <p>Remember the override window: a manual temperature beats the rules for a few days (Settings → Organisation sets how many), then the rules resume.</p>
 <h3 id="settings-assignment-rules">Settings → Assignment Rules</h3>
 <p>Who gets a new lead. <strong>This is the screen that stops leads going unassigned.</strong></p>
@@ -1764,8 +1776,19 @@
 </ol>
 <p><strong>What you should see</strong> — matching new leads are assigned on arrival, whatever route they came in by. Watch the <strong>Unassigned</strong> badge: if it keeps filling, no rule matches those leads and you need a catch-all at the lowest priority.</p>
 <h3 id="settings-sla-policies">Settings → SLA Policies</h3>
-<p>Response-time targets and what happens when they are missed: <strong>Name</strong>, <strong>Priority</strong>, <strong>Measure</strong>, <strong>Target hours</strong>, <strong>Applies to (JSON, empty = everyone)</strong> and an <strong>Escalation ladder (JSON array)</strong>. Business hours and holidays (for example <em>Onam</em>, marked <strong>Closed</strong>) are set here too, so a target does not expire overnight on a day the office is shut.</p>
-<p>Two of these fields are JSON. Same caution as temperatures.</p>
+<p>How quickly a lead has to be answered, and what happens when it is not.</p>
+<p>There are <strong>no ready-made policies</strong>, on purpose: what an institute measures itself on is its own decision. Six fields, and only the first two need thinking about. Nothing is saved until you press <strong>Create policy</strong>.</p>
+<ul>
+<li><strong>Name</strong> — what you would call it out loud. It appears on the policy list and nowhere else.</li>
+<li><strong>What it measures</strong> — <em>First response</em> (from the lead arriving until somebody logs their first interaction), <em>Follow-up kept</em> (from the date a counsellor promised), or <em>Time in one stage</em>.</li>
+<li><strong>Target</strong> — in hours. The screen says it back in days or weeks, so <code>336</code> reads as <em>2 weeks</em>.</li>
+<li><strong>Priority</strong> — a lead gets <strong>one</strong> policy: the highest-priority one whose conditions it matches. Give a catch-all a low number and your specific policies higher ones.</li>
+<li><strong>Count working hours only</strong> — the clock pauses overnight, on weekly offs and on holidays. Leave this on, or a Saturday-evening enquiry is four hours late by Sunday morning with nobody in the building.</li>
+<li><strong>Which leads</strong> — the same point-and-click condition builder the assignment rules use. Leave it empty and the policy covers everybody, which is what you want for your first one.</li>
+<li><strong>When it is missed</strong> — rows, each saying how many hours <em>past the target</em> it fires, and whether to tell the counsellor or take the lead off them. Use <em>take it off them</em> sparingly: a counsellor who loses leads for being late learns to stop logging calls, not to make them.</li>
+</ul>
+<p>Business hours and holidays (for example <em>Onam</em>, marked <strong>Closed</strong>) are set on the same screen, so a target does not expire overnight on a day the office is shut.</p>
+<p>No JSON anywhere on this screen any more.</p>
 <h3 id="settings-tags">Settings → Tags</h3>
 <p>Labels a lead can carry: <strong>Name</strong> and <strong>Colour</strong>.</p>
 <h3 id="settings-dropdowns">Settings → Dropdowns</h3>
@@ -2335,7 +2358,8 @@
 <tr><td><code>enrolment.read</code></td><td>See admissions</td></tr>
 <tr><td><code>enrolment.create</code></td><td>Confirm an admission</td></tr>
 <tr><td><code>enrolment.update</code></td><td>Change the fee plan</td></tr>
-<tr><td><code>enrolment.change_plan</code></td><td>Change the course, batch, mode or academic year</td></tr>
+<tr><td><code>enrolment.change_plan</code></td><td>Change the batch, mode or academic year</td></tr>
+<tr><td><code>enrolment.change_course</code></td><td>Change the course — academics, admin and co-admin only</td></tr>
 <tr><td><code>enrolment.drop</code></td><td>Mark an admission dropped</td></tr>
 <tr><td><code>payment.read</code></td><td>See payments</td></tr>
 <tr><td><code>payment.record</code></td><td>Record a payment</td></tr>
@@ -2466,7 +2490,7 @@
 <p>That runs <code>docs/manual/build.mjs</code>, which reads every numbered chapter and writes <code>docs/manual/manual.html</code> — one self-contained file with a table of contents, no external files, no internet needed.</p>
 <p>Open it by double-clicking. Print it with your browser's print command; each chapter starts on a new page.</p>
 <h2 id="19-4-reading-it-inside-the-crm">19.4 Reading it inside the CRM</h2>
-<p>The manual is also served at <strong><code>/manual</code></strong> for anybody signed in. The route reads <code>docs/manual/manual.html</code> at request time, so <strong>rebuilding and deploying is all that is needed</strong> — no second copy to keep in step.</p>
+<p>The manual is also served at <strong><code>/manual</code></strong> for anybody signed in — by URL only; it is deliberately not in the sidebar. The route reads <code>docs/manual/manual.html</code> at request time, so <strong>rebuilding and deploying is all that is needed</strong> — no second copy to keep in step.</p>
 <p>If the file is missing, the page says so and tells you to run <code>npm run manual</code>.</p>
 <h2 id="19-5-when-to-update-it">19.5 When to update it</h2>
 <p>Update the manual in the same change as the code, not afterwards.</p>

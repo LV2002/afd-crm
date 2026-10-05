@@ -22,6 +22,7 @@ import {
   whatsappFlowSteps,
   whatsappFlows,
 } from "@/lib/db/schema";
+import type { RuleConditions } from "@/lib/assignment/evaluate-conditions";
 import { formatDateIST } from "@/lib/format/date";
 import {
   describeStep,
@@ -30,6 +31,9 @@ import {
   type FlowTrigger,
 } from "@/lib/whatsapp/flow-engine";
 import { templateBody, templatePlaceholderCount } from "@/lib/integrations/whatsapp/templates";
+import { createClient } from "@/lib/supabase/server";
+
+import { loadRuleOptions } from "@/app/(app)/settings/rules/load-options";
 
 import { listTemplates } from "../../templates/actions";
 import { FlowForm } from "../flow-form";
@@ -58,44 +62,47 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
     .where(and(eq(whatsappFlows.id, id), isNull(whatsappFlows.deletedAt)));
   if (!flow) notFound();
 
-  const [stepRows, stageRows, tagRows, centerRows, templateResult, runRows] = await Promise.all([
-    db
-      .select()
-      .from(whatsappFlowSteps)
-      .where(eq(whatsappFlowSteps.flowId, id))
-      .orderBy(asc(whatsappFlowSteps.position)),
-    db
-      .select({ id: pipelineStages.id, name: pipelineStages.name })
-      .from(pipelineStages)
-      .where(isNull(pipelineStages.deletedAt))
-      .orderBy(asc(pipelineStages.sortOrder)),
-    db
-      .select({ id: tags.id, name: tags.name })
-      .from(tags)
-      .where(isNull(tags.deletedAt))
-      .orderBy(asc(tags.name)),
-    db
-      .select({ id: centers.id, name: centers.name })
-      .from(centers)
-      .where(eq(centers.isActive, true))
-      .orderBy(asc(centers.name)),
-    listTemplates(),
-    db
-      .select({
-        id: whatsappFlowRuns.id,
-        status: whatsappFlowRuns.status,
-        stopReason: whatsappFlowRuns.stopReason,
-        startedAt: whatsappFlowRuns.startedAt,
-        wakeAt: whatsappFlowRuns.wakeAt,
-        studentName: leads.studentName,
-        leadId: leads.id,
-      })
-      .from(whatsappFlowRuns)
-      .innerJoin(leads, eq(leads.id, whatsappFlowRuns.leadId))
-      .where(eq(whatsappFlowRuns.flowId, id))
-      .orderBy(desc(whatsappFlowRuns.startedAt))
-      .limit(25),
-  ]);
+  const supabase = await createClient();
+  const [stepRows, stageRows, tagRows, centerRows, templateResult, runRows, ruleOptions] =
+    await Promise.all([
+      db
+        .select()
+        .from(whatsappFlowSteps)
+        .where(eq(whatsappFlowSteps.flowId, id))
+        .orderBy(asc(whatsappFlowSteps.position)),
+      db
+        .select({ id: pipelineStages.id, name: pipelineStages.name })
+        .from(pipelineStages)
+        .where(isNull(pipelineStages.deletedAt))
+        .orderBy(asc(pipelineStages.sortOrder)),
+      db
+        .select({ id: tags.id, name: tags.name })
+        .from(tags)
+        .where(isNull(tags.deletedAt))
+        .orderBy(asc(tags.name)),
+      db
+        .select({ id: centers.id, name: centers.name })
+        .from(centers)
+        .where(eq(centers.isActive, true))
+        .orderBy(asc(centers.name)),
+      listTemplates(),
+      db
+        .select({
+          id: whatsappFlowRuns.id,
+          status: whatsappFlowRuns.status,
+          stopReason: whatsappFlowRuns.stopReason,
+          startedAt: whatsappFlowRuns.startedAt,
+          wakeAt: whatsappFlowRuns.wakeAt,
+          studentName: leads.studentName,
+          leadId: leads.id,
+        })
+        .from(whatsappFlowRuns)
+        .innerJoin(leads, eq(leads.id, whatsappFlowRuns.leadId))
+        .where(eq(whatsappFlowRuns.flowId, id))
+        .orderBy(desc(whatsappFlowRuns.startedAt))
+        .limit(25),
+      loadRuleOptions(supabase),
+    ]);
 
   const steps: FlowStep[] = stepRows.map((row) => ({
     id: row.id,
@@ -196,10 +203,13 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
               ? (triggerConfig.keywords as string[]).join(", ")
               : "",
             centerId: flow.centerId ?? "",
+            appliesTo: (flow.appliesTo as RuleConditions | null)?.all ?? [],
           }}
           stages={stageRows}
           tags={tagRows}
           centers={centerRows}
+          fields={ruleOptions.fields}
+          optionsByField={ruleOptions.optionsByField}
         />
       </section>
 

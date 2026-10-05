@@ -177,7 +177,13 @@ export const NOTIFICATION_EVENTS = [
     defaultBody: "{{changes}} — changed by {{changed_by}}.",
     // The counsellor who sold it is the one the family rings about it.
     defaultNotifyOwner: true,
-    defaultNotifyRoleCodes: ["accounts", "academics", "center_head"],
+    // Accounts above all: a course change does NOT move the fee (see
+    // changeEnrolmentPlan), so the one department that has to decide
+    // whether the money should follow is the one that did not make the
+    // change. Co-admin and admin are on it because a student quietly
+    // studying something other than what they are being billed for is the
+    // kind of thing somebody senior should see without being asked.
+    defaultNotifyRoleCodes: ["accounts", "academics", "center_head", "co_admin", "admin"],
   },
   {
     // Deliberately separate from the plan change above: the audience is

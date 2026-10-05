@@ -40,6 +40,7 @@ export function ChangePlanPanel({
   modes,
   batches,
   canEdit,
+  canChangeCourse,
 }: {
   enrolmentId: string;
   current: { course: string; batchId: string | null; mode: string; academicYear: string };
@@ -48,6 +49,16 @@ export function ChangePlanPanel({
   /** Batches at this student's own centre. */
   batches: AdmissionBatchOption[];
   canEdit: boolean;
+  /**
+   * The course is academics' to move, and the batch is not.
+   *
+   * Accounts keep this panel — correcting a batch, a mode or an academic
+   * year is ordinary work for them — and lose one field in it. Shown
+   * read-only rather than hidden, because "why can I not see the course
+   * on this screen" is a worse question than "why can I not change it",
+   * and the answer to the second is written underneath.
+   */
+  canChangeCourse: boolean;
 }) {
   const [state, action, pending] = useActionState(changeEnrolmentPlan, initialState);
   const [course, setCourse] = useState(current.course);
@@ -86,16 +97,35 @@ export function ChangePlanPanel({
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="plan-course">Course</Label>
-          <Combobox
-            id="plan-course"
-            name="course"
-            required
-            value={course}
-            onChange={setCourse}
-            options={courses}
-            placeholder="Select course"
-            searchPlaceholder="Type to search…"
-          />
+          {canChangeCourse ? (
+            <Combobox
+              id="plan-course"
+              name="course"
+              required
+              value={course}
+              onChange={setCourse}
+              options={courses}
+              placeholder="Select course"
+              searchPlaceholder="Type to search…"
+            />
+          ) : (
+            <>
+              {/*
+                The value still posts, so a save that changes only the
+                batch sends the course it already had and the server sees
+                no change at all — rather than an empty field it would
+                reject, or a missing one it would read as "clear it".
+              */}
+              <input type="hidden" name="course" value={course} />
+              <p className="flex min-h-9 items-center rounded-md border bg-muted/40 px-3 text-sm">
+                {courses.find((option) => option.value === course)?.label ?? course}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Academics change the course. They are told nothing automatically — ask them, and
+                accounts are notified the moment they do it.
+              </p>
+            </>
+          )}
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="plan-mode">Mode</Label>
