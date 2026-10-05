@@ -35,6 +35,15 @@ export default async function IntegrationsPage() {
     .maybeSingle<{ retargeting_window_days: number }>();
   const retargetingWindowDays = org?.retargeting_window_days ?? DEFAULT_RETARGETING_WINDOW_DAYS;
 
+  const { count } = await supabase
+    .from("custom_webhooks")
+    .select("id", { count: "exact", head: true })
+    .eq("is_active", true)
+    .is("deleted_at", null);
+  // Null when the count could not be read at all, which for this card
+  // means "say nothing about how many" rather than "say zero".
+  const customWebhookCount = count ?? 0;
+
   const cards: IntegrationCard[] = [
     {
       href: "/settings/integrations/meta",
@@ -59,6 +68,18 @@ export default async function IntegrationsPage() {
       name: "Website forms",
       description: "Enquiries from afdindia.com, straight into the pipeline instead of a spreadsheet.",
       connected: websiteConnected,
+    },
+    {
+      href: "/settings/integrations/webhooks",
+      name: "Custom webhooks",
+      // The count rather than a Connected badge: "connected" means
+      // nothing here, because the answer is however many endpoints the
+      // institute has made.
+      description:
+        customWebhookCount === 0
+          ? "An endpoint for any service that can post JSON — a course platform, a form builder, a landing page."
+          : `${customWebhookCount} endpoint${customWebhookCount === 1 ? "" : "s"}, each with its own URL and source name.`,
+      connected: customWebhookCount > 0,
     },
     { href: null, name: "Telephony", description: "Click-to-call and call logging. Coming soon.", connected: false },
   ];

@@ -1772,7 +1772,7 @@
 <h3 id="settings-config-export-import">Settings → Config Export/Import</h3>
 <p>See Chapter 12.4.</p>
 <h2 id="13-7-integrations">13.7 Integrations</h2>
-<p><strong>Settings → Integrations</strong> lists Meta, Google, WhatsApp, Website forms and Telephony (not built), each marked <strong>Connected</strong> or <strong>Not connected</strong>.</p>
+<p><strong>Settings → Integrations</strong> lists Meta, Google, WhatsApp, Website forms, Custom webhooks and Telephony (not built), each marked <strong>Connected</strong> or <strong>Not connected</strong>.</p>
 <p><strong>Before anything else:</strong> if the page says credentials cannot be saved, the encryption key is missing from the hosting environment. Nothing can be connected until that is set — it is the one setting that cannot live in the database, because it is the key everything else is encrypted under.</p>
 <h3 id="meta">Meta</h3>
 <p>Fields: <strong>App ID</strong>, <strong>App Secret</strong>, <strong>Verify Token</strong>, <strong>Page Access Token</strong>, <strong>Ads Access Token</strong>, <strong>Ad Account ID</strong> (digits only, no <code>act_</code>), <strong>Instagram Account ID</strong>.</p>
@@ -1792,6 +1792,32 @@
 <p><strong>App Secret</strong>, <strong>Verify Token</strong>, <strong>Access Token</strong>, <strong>Phone Number ID</strong>, <strong>WhatsApp Business Account ID</strong>. Note these are stored separately from Meta's even when it is the same app — you must enter the App Secret in both places.</p>
 <h3 id="website-forms">Website forms</h3>
 <p>A signing secret and a webhook address for your own site's forms.</p>
+<h3 id="custom-webhooks">Custom webhooks</h3>
+<p>For any service that can post JSON and has no screen of its own — a course platform, a form builder, a Zapier step, a landing page built by somebody else. Each endpoint gets <strong>its own URL and its own source name</strong>, so the reports can tell one feed from another.</p>
+<p>Leads from here go through exactly the same path as a Meta lead: the raw delivery is written down before anything is done with it, a phone number already in the system attaches as a second enquiry rather than becoming a duplicate, and the assignment rules pick the owner.</p>
+<p><strong>Procedure: add a custom webhook</strong></p>
+<p><strong>Goal</strong> — take leads from a service nobody built a screen for.</p>
+<p><strong>Before you start</strong> — <code>settings.manage</code>. You also need the other service's "post to a URL" setting open in another tab.</p>
+<p><strong>Steps</strong></p>
+<ol>
+<li><strong>Settings → Integrations → Custom webhooks</strong>.</li>
+<li><strong>Name</strong> — what you will recognise in six months, e.g. <em>Knorish course purchases</em>.</li>
+<li><strong>Source name</strong> — what the reports group these leads under, e.g. <em>Knorish</em>. It is added to the <strong>Lead source</strong> dropdown automatically.</li>
+<li><strong>Create endpoint</strong>.</li>
+<li>Press <strong>Set up</strong> on the new card and copy <strong>POST this URL</strong> into the other service.</li>
+<li>If that service can sign its requests, copy the <strong>Signing secret</strong> too and have it send <code>X-AFD-Signature: sha256=&lt;hex&gt;</code> — an HMAC SHA-256 of the exact request body.</li>
+<li>If it cannot sign, open the card and untick <strong>Require a signature</strong>. Read the next paragraph before you do.</li>
+</ol>
+<p><strong>What you should see</strong> — the card counts deliveries as they arrive, and names the last error if one failed. Opening the URL in a browser confirms the endpoint is live.</p>
+<p><strong>Field names do not have to match anything.</strong> <code>name</code>, <code>Full Name</code> and <code>student_name</code> are all understood, and so are most spellings of phone, email, city, exam year and course. Anything not recognised is still kept on the enquiry. Only a <strong>name</strong> and a <strong>phone number</strong> are required.</p>
+<p>If a delivery fails because a field was not found, the error names every field the sender actually posted — put the unusual one into <strong>Extra field names</strong> on the card, one per line, like <code>phone: mob, contact_no</code>.</p>
+<p><strong>Common mistakes</strong></p>
+<ul>
+<li><em>Turning off the signature without thinking about it.</em> Then the random token in the URL is the only credential, and anyone who ever sees that URL can post leads into your CRM. Only do it for a service that cannot sign at all, and treat the URL like a password.</li>
+<li><em>Reusing one endpoint for two services.</em> They would share a source name and the reports could not separate them. Make two.</li>
+<li><em>Deleting an endpoint to stop it.</em> <strong>Switch off</strong> is what you want — deleting also works and keeps the history, but switching off is reversible with one press.</li>
+<li><em>Expecting the old URL to keep working after <strong>New URL &amp; secret</strong>.</em> It stops immediately. Have the sender's settings open first.</li>
+</ul>
 <h3 id="where-each-webhook-points">Where each webhook points</h3>
 <table><thead>
 <tr><th>Source</th><th>Address</th></tr>
@@ -1801,6 +1827,7 @@
 <tr><td>WhatsApp</td><td><code>/api/webhooks/whatsapp</code></td></tr>
 <tr><td>Google lead forms</td><td><code>/api/webhooks/google-leads</code></td></tr>
 <tr><td>Your website</td><td><code>/api/webhooks/website</code></td></tr>
+<tr><td>A custom webhook</td><td><code>/api/webhooks/custom/&lt;its own token&gt;</code></td></tr>
 </tbody></table>
 <p>Every delivery is written down <strong>before</strong> it is processed, so a failure is visible rather than silent.</p>
 <h2 id="13-8-what-happens-overnight">13.8 What happens overnight</h2>

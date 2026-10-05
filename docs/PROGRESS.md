@@ -6578,3 +6578,57 @@ Platform Health now says which of the two halves is missing, in those words, ins
 naming an environment variable at somebody who does not have a terminal.
 
 **1450 tests pass**, lint, typecheck and the production build clean.
+
+---
+
+## Session 55 — Custom webhooks
+
+Leon asked for a webhook feature with several endpoints — one for Knorish, one for an
+online form — each with its own source name.
+
+**One generic handler, many rows.** `custom_webhooks` holds a name, a URL token, a signing
+secret, the `source` to stamp, an optional sub-source and centre, and optional extra field
+aliases. `/api/webhooks/custom/[slug]` looks the endpoint up, verifies, persists, maps and
+calls `resolveOrCreateLead()`. Adding a lead source stopped being a deploy.
+
+This also retires a dead switch. `webhook_source` has carried a `knorish` value since Phase
+4 for a handler nobody ever wrote — precisely what the comment above that enum warns
+against. A Knorish feed set up today is two fields on a settings screen.
+
+**Not a second ingestion path.** Non-negotiable #8 holds: every lead goes through
+`resolveOrCreateLead()`, so the assignment rules run and a duplicate attaches rather than
+being rejected. #9 holds in order: verify against the raw body, persist whether or not it
+passed, then process.
+
+### The mapper was already generic, just in the wrong place
+
+`mapWebsiteForm` had solved this: match by alias, case- and punctuation-insensitively, keep
+every field recognised or not, require only a name and a phone. The generic half moved to
+`integrations/form-payload/map-fields.ts`; the website module kept only what is really about
+a website. **The 31 existing website tests passed unchanged**, which is the point of moving
+code rather than copying it.
+
+Two additions: **extra aliases per endpoint** (`phone: mob, contact_no`), because the next
+platform will name a field something nobody predicted; and a mapping failure that **names
+the fields that did arrive**, because the person reading it is setting up a feed and needs to
+know what the sender actually called things.
+
+### Signatures, and where it is honest to turn them off
+
+Same HMAC scheme as Meta and the website form, reusing `verifyMetaSignature`. But some
+platforms only offer "POST this JSON to a URL", so `require_signature` can be turned off per
+endpoint — beside a sentence saying the URL token then becomes the only credential, and with
+an **Unsigned** badge on the card afterwards so the choice stays visible.
+
+### Verified
+
+**29 new tests.** Sixteen on the mapper, thirteen end to end against Postgres: an unknown
+token is a 404 that writes nothing, a switched-off endpoint is a 404, an unsigned request to a
+signed endpoint is a 401 whose payload is kept as evidence, a retried delivery does not create
+a second lead, extra aliases map a payload the built-in list cannot, the endpoint's centre is
+stamped when the payload carries none, an unusable payload is recorded as failed and answered
+200, and the GET probe leaks neither the token nor the secret.
+
+Migration 0084 applied to an already-seeded database and to a clean one.
+
+**1480 tests pass**, lint, typecheck, `db:audit` and the production build clean.

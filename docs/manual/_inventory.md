@@ -103,7 +103,7 @@ Batches · Fee Structures · Payment Reminders · Audit Log ·
 Platform Health · Targets · Offers · Discount Authority · Tags ·
 Dropdowns · Dashboards · Notifications · Student Profile Form ·
 Custom Fields · Config Export/Import · Integrations (Meta, Google,
-WhatsApp, Website). — Chapter 13.
+WhatsApp, Website, Custom webhooks). — Chapter 13.
 
 ## 7. Other screens
 
@@ -184,6 +184,7 @@ whatsapp_optout_keyword · task_type. — Chapter 13, Appendix.
 | WhatsApp Cloud API webhook | `/api/webhooks/whatsapp` | 10, 13 |
 | Google Lead Form webhook | `/api/webhooks/google-leads` | 13 |
 | Website form webhook | `/api/webhooks/website` | 13 |
+| Custom webhooks (admin-created endpoints) | `/api/webhooks/custom/[slug]` | 13 |
 | Ad spend history import (button) | Settings → Integrations | 13 |
 | Retargeting window setting | Settings → Integrations | 13 |
 | Recent deliveries panels | Settings → Integrations | 13, 14 |

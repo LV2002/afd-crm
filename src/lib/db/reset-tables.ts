@@ -68,6 +68,17 @@ export const CONFIG_TABLES = [
    * is keyed by phone number, so it survives the lead it came from.
    */
   "whatsapp_suppressions",
+  /**
+   * The endpoints an admin created, with their URLs and secrets.
+   *
+   * Configuration, and the kind a reset must not touch: clearing it would
+   * silently 404 every sender that was already posting to one, and the fix
+   * would be re-creating each endpoint and updating every service with a
+   * new URL. The deliveries those endpoints received are data and are
+   * cleared (`webhook_events`, below); the endpoints themselves are
+   * setup.
+   */
+  "custom_webhooks",
 ] as const;
 
 /** Cleared by a reset: a record of something that happened. */

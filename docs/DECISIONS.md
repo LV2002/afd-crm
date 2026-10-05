@@ -3062,3 +3062,79 @@ It fires on the same damping decision as the email (first occurrence, then at te
 the count), and when no email recipient is configured the damping counter is still
 advanced — otherwise the bell would fire on every single occurrence of a fault that is
 firing every few seconds.
+
+## 2026-10-05 — Custom webhooks: one handler, many endpoints
+
+Leon asked for a webhook feature where he can add several endpoints — one for Knorish, one
+for an online form — each with its own source name.
+
+The shape that falls out of the existing code is better than it sounds. Every new lead
+source used to mean a route handler, a signature scheme and a deploy, so a course platform
+or somebody else's landing page either waited for developer time or kept its leads in a
+spreadsheet. Meanwhile `webhook_source` carried a `knorish` value for a handler nobody ever
+wrote — a dead switch, exactly what the comment above that enum warns against, and exactly
+the failure mode this project keeps finding in itself.
+
+So the handler is generic and the endpoints are rows. `custom_webhooks` holds a name, a
+URL token, a signing secret, the `source` to stamp, an optional sub-source and centre, and
+optional extra field aliases. `/api/webhooks/custom/[slug]` looks the endpoint up, verifies,
+persists, maps and calls `resolveOrCreateLead()`. Adding a source became configuration.
+
+**It is not a second ingestion path.** Non-negotiable #8 still holds — every lead goes
+through `resolveOrCreateLead()`, which runs the assignment rules and never rejects a
+duplicate — and #9 still holds, in order: verify the signature against the raw body,
+persist the payload whether or not it passed, then process.
+
+### The mapper was already generic; it was just in the wrong place
+
+`mapWebsiteForm` solved this problem first and solved it properly: match by alias, case- and
+punctuation-insensitively, keep every field whether or not it was recognised, require only a
+name and a phone. That is precisely what an unknown sender needs, so the generic half moved
+to `integrations/form-payload/map-fields.ts` and the website module kept only what is
+genuinely about a website — which page the form was on and the UTM parameters that have to be
+dug out of a page URL. The 31 existing website tests passed unchanged, which is the point of
+moving code rather than copying it.
+
+Two additions. An admin can add **extra aliases per endpoint** (`phone: mob, contact_no`),
+because the next platform will name a field something nobody predicted and the fix for that
+should be a text box. And a mapping failure now **names the fields that did arrive**: the
+person reading that error is setting up a new feed and needs to know what the sender
+actually called things, not that "no phone field" was found.
+
+### Signatures, and the one place it is honest to turn them off
+
+The same HMAC scheme as Meta's and the website form's, reusing `verifyMetaSignature` rather
+than inventing a third. But some course platforms and form builders only offer "POST this
+JSON to a URL" and cannot sign anything, and an integration that refuses them is an
+integration nobody can use.
+
+So `require_signature` can be turned off, per endpoint, beside a sentence saying what it
+costs: the random token in the URL becomes the only credential, so anyone who ever sees that
+URL can post leads into the CRM. The token is 32 random bytes and never derived from the
+name, which is what makes that trade survivable. The card shows an **Unsigned** badge
+afterwards, so the choice stays visible rather than becoming a setting somebody forgot.
+
+### Small decisions worth writing down
+
+**An unknown token writes nothing** — a 404 and no `webhook_events` row. Recording unknown
+tokens would let anybody with the URL shape fill a table that holds raw payloads and is read
+by admins, and a request to an endpoint that does not exist is not a delivery that failed.
+
+**One source value, many endpoints.** `webhook_events.source` is `custom` for all of them
+with a `custom_webhook_id` beside it, and the idempotency key stays `(source, external_id)` —
+the handler prefixes the sender's own id with the endpoint's uuid, so two feeds that both
+number their submissions from 1 cannot collide. A partial index would have been a second rule
+to keep in step with the first.
+
+**The source name is upserted into `dropdown_options`.** Without that the sources report would
+show a value nobody configured: present in the data, absent from every filter. The whole point
+of giving each feed its own source name is being able to group by it.
+
+**A GET on the endpoint answers.** Several form builders verify a URL before they will save it,
+and some only give you a browser to test with. It says the endpoint's name and whether a
+signature is expected, and nothing else — not the token (the caller already has it) and never
+the secret.
+
+**`custom_webhooks` is configuration, not data,** so a data reset leaves it alone. Clearing it
+would 404 every sender already posting to an endpoint, and the repair would be re-creating each
+one and updating every external service with a new URL.

@@ -60,13 +60,17 @@ rung fires.
 
 ---
 
-## 5. What is in the Knorish source, and is it still used?
+## 5. Is Knorish still used?
 
-**Chapter 18.4.** `Knorish` is a seeded lead source and there is an
-unbuilt webhook for it. The CRM has nothing else about it.
+**Chapter 18.4.** `Knorish` is a seeded lead source. There used to be an
+unbuilt webhook behind it; **custom webhooks replaced the need for one**
+(Chapter 13.7), so if Knorish is still in use the answer is now an
+endpoint an admin creates in two fields rather than a feature anybody has
+to build.
 
-**What I need:** is Knorish still in use? If not, retire the dropdown
-option so it stops appearing in reports. If yes, it needs a section.
+**What I need:** is Knorish still in use? If yes, set up a custom webhook
+for it and point Knorish's own integration settings at the URL. If no,
+retire the dropdown option so it stops appearing in reports.
 
 ---
 

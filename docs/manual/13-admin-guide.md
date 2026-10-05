@@ -283,9 +283,9 @@ See Chapter 12.4.
 
 ## 13.7 Integrations
 
-**Settings → Integrations** lists Meta, Google, WhatsApp, Website forms
-and Telephony (not built), each marked **Connected** or **Not
-connected**.
+**Settings → Integrations** lists Meta, Google, WhatsApp, Website forms,
+Custom webhooks and Telephony (not built), each marked **Connected** or
+**Not connected**.
 
 **Before anything else:** if the page says credentials cannot be saved,
 the encryption key is missing from the hosting environment. Nothing can
@@ -340,6 +340,66 @@ both places.
 ### Website forms
 A signing secret and a webhook address for your own site's forms.
 
+### Custom webhooks
+
+For any service that can post JSON and has no screen of its own — a
+course platform, a form builder, a Zapier step, a landing page built by
+somebody else. Each endpoint gets **its own URL and its own source name**,
+so the reports can tell one feed from another.
+
+Leads from here go through exactly the same path as a Meta lead: the raw
+delivery is written down before anything is done with it, a phone number
+already in the system attaches as a second enquiry rather than becoming a
+duplicate, and the assignment rules pick the owner.
+
+**Procedure: add a custom webhook**
+
+**Goal** — take leads from a service nobody built a screen for.
+
+**Before you start** — `settings.manage`. You also need the other
+service's "post to a URL" setting open in another tab.
+
+**Steps**
+1. **Settings → Integrations → Custom webhooks**.
+2. **Name** — what you will recognise in six months, e.g. *Knorish course
+   purchases*.
+3. **Source name** — what the reports group these leads under, e.g.
+   *Knorish*. It is added to the **Lead source** dropdown automatically.
+4. **Create endpoint**.
+5. Press **Set up** on the new card and copy **POST this URL** into the
+   other service.
+6. If that service can sign its requests, copy the **Signing secret** too
+   and have it send `X-AFD-Signature: sha256=<hex>` — an HMAC SHA-256 of
+   the exact request body.
+7. If it cannot sign, open the card and untick **Require a signature**.
+   Read the next paragraph before you do.
+
+**What you should see** — the card counts deliveries as they arrive, and
+names the last error if one failed. Opening the URL in a browser confirms
+the endpoint is live.
+
+**Field names do not have to match anything.** `name`, `Full Name` and
+`student_name` are all understood, and so are most spellings of phone,
+email, city, exam year and course. Anything not recognised is still kept
+on the enquiry. Only a **name** and a **phone number** are required.
+
+If a delivery fails because a field was not found, the error names every
+field the sender actually posted — put the unusual one into **Extra field
+names** on the card, one per line, like `phone: mob, contact_no`.
+
+**Common mistakes**
+- *Turning off the signature without thinking about it.* Then the random
+  token in the URL is the only credential, and anyone who ever sees that
+  URL can post leads into your CRM. Only do it for a service that cannot
+  sign at all, and treat the URL like a password.
+- *Reusing one endpoint for two services.* They would share a source name
+  and the reports could not separate them. Make two.
+- *Deleting an endpoint to stop it.* **Switch off** is what you want —
+  deleting also works and keeps the history, but switching off is
+  reversible with one press.
+- *Expecting the old URL to keep working after **New URL & secret**.* It
+  stops immediately. Have the sender's settings open first.
+
 ### Where each webhook points
 
 | Source | Address |
@@ -349,6 +409,7 @@ A signing secret and a webhook address for your own site's forms.
 | WhatsApp | `/api/webhooks/whatsapp` |
 | Google lead forms | `/api/webhooks/google-leads` |
 | Your website | `/api/webhooks/website` |
+| A custom webhook | `/api/webhooks/custom/<its own token>` |
 
 Every delivery is written down **before** it is processed, so a failure
 is visible rather than silent.
