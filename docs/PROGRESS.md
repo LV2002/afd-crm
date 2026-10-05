@@ -6632,3 +6632,61 @@ stamped when the payload carries none, an unusable payload is recorded as failed
 Migration 0084 applied to an already-seeded database and to a clean one.
 
 **1480 tests pass**, lint, typecheck, `db:audit` and the production build clean.
+
+---
+
+## Session 56 — WhatsApp Coexistence
+
+`/whatsapp/personal` has argued for two months that Coexistence is the only supported way to
+put a counsellor's own WhatsApp inside the CRM, and then stopped. Leon asked for it; this
+builds it.
+
+Coexistence is the WhatsApp Business app on a phone AND the Cloud API on the same number at
+once. It matters more here than anywhere else in this project, because `whatsapp_messages` has
+carried this comment since Phase 5: *"AFD's enquiries arrive on the counsellors' own WhatsApp
+Business apps and are typed into the CRM by hand."* That is what this removes.
+
+### The rule that inverts
+
+The inbound handler never created a lead, for a good reason: the API number is a broadcast
+channel and a reply to it is somebody who pressed a button. On a counsellor's own number every
+word of that is false — a stranger asking about NIFT coaching is the highest-intent enquiry the
+institute gets.
+
+So **`whatsapp_numbers`** is a table now, with `creates_leads` per number, and a lead made that
+way is assigned to the phone's owner directly rather than routed through the rules engine: the
+person already holding the conversation is the right owner.
+
+### Three new webhook fields, two of which deliberately create nothing
+
+| Field | What happens |
+|---|---|
+| `smb_message_echoes` | What the counsellor sent from the phone, into the lead's thread as outbound, attributed to them. Attaches to existing leads only — a counsellor's phone also messages their colleagues and their mother. |
+| `history` | Up to 180 days of past chats, in chunks, attached to leads the CRM already holds, keeping their own dates so a March conversation reads as March. Never creates leads: it is six months of everything in one burst. |
+| `smb_app_state_sync` | The phone's address book, recorded and imported as nothing. A counsellor's contacts are their dentist and their landlord as much as any student. |
+
+Direction is decided by which end matches the business number Meta names, compared **on
+digits** — Meta writes the display number with a `+` in some places and without one in others,
+and comparing strings would make every echo look inbound, putting the counsellor's words in the
+student's mouth.
+
+### What Leon has to do in Meta
+
+Three of the four steps are his, and the screen lists them: the counsellor installs the free
+**WhatsApp Business app**, the number is onboarded through **Embedded Signup** (QR scan,
+history consent), and three extra webhook fields are subscribed on the WABA. **Without the
+subscriptions the number connects and nothing mirrors**, which looks exactly like the feature
+not working — so it is said on the screen and in Chapter 10.6a, not buried.
+
+### Verified
+
+**29 new tests.** Nineteen on the mapping (direction, digits comparison, timestamps kept, the
+history phases, refusing to guess), ten end to end against Postgres — including the inversion
+in both directions: a coexistence number creates a lead assigned to the phone's owner, the
+broadcast number does not; an echo to a non-lead stores nothing; a redelivered echo does not
+duplicate; phase 0 at 100% does not mark the backfill finished; the address book creates
+nothing; and a delivery for an unregistered number says what to do about it.
+
+Migration 0085 verified against an already-seeded database and a clean one.
+
+**1510 tests pass**, lint, typecheck, `db:audit` and the production build clean.

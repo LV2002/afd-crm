@@ -337,6 +337,17 @@ spend** button. Full walkthrough in `docs/ADS-SETUP.md`.
 Meta's even when it is the same app — you must enter the App Secret in
 both places.
 
+### WhatsApp numbers and Coexistence
+Each of the institute's numbers is registered here with its **Phone number
+ID** from Meta, a label, whose phone it is, and whether it is API-only or
+on **Coexistence** (the WhatsApp Business app and the Cloud API on one
+number at the same time).
+
+The setting that matters most is **a message from somebody new creates a
+lead**: right for a counsellor's own number, wrong for the broadcast
+number. Chapter 10.6a has the full procedure, including the three extra
+webhook fields that must be subscribed or nothing mirrors.
+
 ### Website forms
 A signing secret and a webhook address for your own site's forms.
 
@@ -406,7 +417,7 @@ names** on the card, one per line, like `phone: mob, contact_no`.
 |---|---|
 | Meta Lead Ads | `/api/webhooks/meta-leads` |
 | Instagram DMs | `/api/webhooks/instagram` |
-| WhatsApp | `/api/webhooks/whatsapp` |
+| WhatsApp (including Coexistence) | `/api/webhooks/whatsapp` |
 | Google lead forms | `/api/webhooks/google-leads` |
 | Your website | `/api/webhooks/website` |
 | A custom webhook | `/api/webhooks/custom/<its own token>` |

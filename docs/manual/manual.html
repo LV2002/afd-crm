@@ -202,6 +202,7 @@
 <li><a href="#10-4-broadcasts">10.4 Broadcasts</a></li>
 <li><a href="#10-5-opted-out">10.5 Opted out</a></li>
 <li><a href="#10-6-personal-whatsapp-why-it-is-not-an-inbox">10.6 Personal WhatsApp — why it is not an inbox</a></li>
+<li><a href="#10-6a-coexistence-a-counsellor-s-own-number-in-the-crm">10.6a Coexistence — a counsellor's own number in the CRM</a></li>
 <li><a href="#10-7-instagram-dms">10.7 Instagram DMs</a></li>
 <li><a href="#10-8-automations">10.8 Automations</a></li>
 </ol></li>
@@ -1350,7 +1351,7 @@
 <tr><th>Channel</th><th>What it is</th></tr>
 </thead><tbody>
 <tr><td><strong>WhatsApp Business</strong></td><td>The institute's one WhatsApp Business API number</td></tr>
-<tr><td><strong>Personal WhatsApp</strong></td><td>An explanation, not an inbox — see 10.6</td></tr>
+<tr><td><strong>Personal WhatsApp</strong></td><td>An explanation, and how to put a counsellor's own number in the CRM — see 10.6</td></tr>
 <tr><td><strong>Instagram</strong></td><td>DMs to the institute's Instagram account</td></tr>
 </tbody></table>
 <p>Under the WhatsApp Business channel there is a second row of tabs — <strong>Inbox</strong>, <strong>Templates</strong>, <strong>Broadcasts</strong>, <strong>Automations</strong>, <strong>Opted out</strong> — which apply only to that channel.</p>
@@ -1417,8 +1418,34 @@
 <h2 id="10-6-personal-whatsapp-why-it-is-not-an-inbox">10.6 Personal WhatsApp — why it is not an inbox</h2>
 <p>This tab explains, rather than showing conversations. The short version:</p>
 <p><strong>There is no legal way to put a counsellor's personal WhatsApp inside the CRM.</strong> Every tool that claims to drives WhatsApp Web through a reverse-engineered protocol, which breaks WhatsApp's terms. What gets banned is <strong>the number</strong> — the line the counsellor answers enquiries on — permanently, with no appeal. An iframe of WhatsApp Web does not work either: WhatsApp sends a header that forbids it.</p>
-<p>The supported answer is <strong>Coexistence</strong>: one number running the WhatsApp Business app and the Cloud API at the same time, mirroring messages both ways. The counsellor keeps their phone and their number. Group chats do not sync; one-to-one business conversations do.</p>
-<p>The tab lays out the real options so the institute can choose, rather than hiding the trade inside a feature.</p>
+<p>The supported answer is <strong>Coexistence</strong>, and the CRM now does it: one number running the WhatsApp Business app and the Cloud API at the same time, mirroring messages both ways. The counsellor keeps their phone, their number and their chats.</p>
+<h2 id="10-6a-coexistence-a-counsellor-s-own-number-in-the-crm">10.6a Coexistence — a counsellor's own number in the CRM</h2>
+<p>This is the one that stops the typing. A counsellor's number joins the institute's WhatsApp account, keeps working exactly as it does today on their phone, and every one-to-one conversation on it appears in the CRM against the right lead.</p>
+<h3 id="what-it-does">What it does</h3>
+<ul>
+<li><strong>Messages they send from the phone</strong> appear in the lead's thread, marked as theirs.</li>
+<li><strong>Messages a student sends them</strong> arrive the same way — and on this kind of number a message from somebody not yet in the CRM <strong>creates a lead</strong>, assigned to them. On the institute's broadcast number it does not, because a reply there is somebody who pressed a button on a campaign.</li>
+<li><strong>Up to 180 days of past chats</strong> sync across in the minutes after setup, attached to the leads the CRM already holds, keeping their own dates so a March conversation reads as March.</li>
+</ul>
+<h3 id="what-it-does-not-do">What it does not do</h3>
+<ul>
+<li><strong>Group chats never sync.</strong> Nor do disappearing messages or live location, and broadcast lists in the app become read-only.</li>
+<li><strong>The phone's address book is not imported.</strong> Meta sends it; the CRM records that it arrived and creates nothing from it. A counsellor's contacts are their dentist and their landlord as much as any prospective student.</li>
+<li><strong>Messages they send to somebody who is not a lead</strong> are not stored. Only conversations with people the CRM holds.</li>
+<li><strong>It is the WhatsApp Business app</strong>, not ordinary WhatsApp. A counsellor on the consumer app moves to the free Business one — same number, same chats.</li>
+</ul>
+<h3 id="setting-one-up">Setting one up</h3>
+<p>Steps 1–3 happen in Meta and need an administrator with access to the business account; step 4 is in the CRM. <strong>Settings → Integrations → WhatsApp</strong> lists all four on screen.</p>
+<ol>
+<li>The counsellor installs the <strong>WhatsApp Business app</strong> on that number.</li>
+<li>Onboard the number through Meta's <strong>Embedded Signup</strong>, choosing the WhatsApp Business app flow. The counsellor scans a QR code and consents to syncing history.</li>
+<li>Subscribe three extra webhook fields on the WhatsApp Business Account: <code>smb_message_echoes</code>, <code>history</code> and <code>smb_app_state_sync</code>. <strong>Without these the number connects and nothing mirrors</strong> — which looks exactly like the feature not working.</li>
+<li>In the CRM, register the number under <strong>Settings → Integrations → WhatsApp → Numbers</strong>: its <strong>Phone number ID</strong> from Meta, a label, whose phone it is, and <em>Coexistence</em>.</li>
+</ol>
+<p><strong>What you should see</strong> — the number's card says whether history has finished arriving and how many past messages it attached. A delivery for a number nobody registered shows up on <strong>Recent deliveries</strong> saying so, with what to do about it.</p>
+<h3 id="tell-the-counsellors">Tell the counsellors</h3>
+<p>Admissions conversations on that number become visible to their centre head, the same way a shared inbox is. That is reasonable for work on a business number and it is not a surprise anybody should get afterwards.</p>
+<p>Group chats and anything on a different number stay private — the sync is one-to-one business conversations only.</p>
 <h2 id="10-7-instagram-dms">10.7 Instagram DMs</h2>
 <p><strong>Chats</strong> → <strong>Instagram</strong>.</p>
 <p><strong>An Instagram DM does not create a lead.</strong> Most are a question, a reply to a story, or nothing, and a CRM that turned each one into a lead would stop being a record of who is enrolling.</p>
@@ -1790,6 +1817,9 @@
 <p>Lead delivery takes five minutes and needs no approval; the reporting parts wait on Google approving a developer token. Same <strong>Import past ad spend</strong> button. Full walkthrough in <code>docs/ADS-SETUP.md</code>.</p>
 <h3 id="whatsapp">WhatsApp</h3>
 <p><strong>App Secret</strong>, <strong>Verify Token</strong>, <strong>Access Token</strong>, <strong>Phone Number ID</strong>, <strong>WhatsApp Business Account ID</strong>. Note these are stored separately from Meta's even when it is the same app — you must enter the App Secret in both places.</p>
+<h3 id="whatsapp-numbers-and-coexistence">WhatsApp numbers and Coexistence</h3>
+<p>Each of the institute's numbers is registered here with its <strong>Phone number ID</strong> from Meta, a label, whose phone it is, and whether it is API-only or on <strong>Coexistence</strong> (the WhatsApp Business app and the Cloud API on one number at the same time).</p>
+<p>The setting that matters most is <strong>a message from somebody new creates a lead</strong>: right for a counsellor's own number, wrong for the broadcast number. Chapter 10.6a has the full procedure, including the three extra webhook fields that must be subscribed or nothing mirrors.</p>
 <h3 id="website-forms">Website forms</h3>
 <p>A signing secret and a webhook address for your own site's forms.</p>
 <h3 id="custom-webhooks">Custom webhooks</h3>
@@ -1824,7 +1854,7 @@
 </thead><tbody>
 <tr><td>Meta Lead Ads</td><td><code>/api/webhooks/meta-leads</code></td></tr>
 <tr><td>Instagram DMs</td><td><code>/api/webhooks/instagram</code></td></tr>
-<tr><td>WhatsApp</td><td><code>/api/webhooks/whatsapp</code></td></tr>
+<tr><td>WhatsApp (including Coexistence)</td><td><code>/api/webhooks/whatsapp</code></td></tr>
 <tr><td>Google lead forms</td><td><code>/api/webhooks/google-leads</code></td></tr>
 <tr><td>Your website</td><td><code>/api/webhooks/website</code></td></tr>
 <tr><td>A custom webhook</td><td><code>/api/webhooks/custom/&lt;its own token&gt;</code></td></tr>

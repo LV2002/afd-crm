@@ -79,6 +79,16 @@ export const CONFIG_TABLES = [
    * setup.
    */
   "custom_webhooks",
+  /**
+   * Which numbers the institute has, whose phone each one is, and whether
+   * it may create leads.
+   *
+   * Configuration: clearing it would stop a Coexistence number mirroring
+   * anything — its deliveries would arrive for a number the CRM no longer
+   * recognises and be recorded as unregistered. The messages those numbers
+   * brought in are data and go with the leads they belong to.
+   */
+  "whatsapp_numbers",
 ] as const;
 
 /** Cleared by a reset: a record of something that happened. */
