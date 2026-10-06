@@ -7650,3 +7650,29 @@ before it refuses. Zero rows means Meta has never called — the Callback URL, v
 The panel that settled it already existed and I reasoned past it.
 
 **1599 tests pass** (5 new), lint, typecheck and the build clean.
+
+## Session 77 — A template for the import, generated not written
+
+Leon is about to structure years of existing leads into a spreadsheet and wanted a template.
+
+**Settings is not where it lives — the import page is**, and it is generated on demand from
+`field_definitions` rather than committed as a file. A static template is correct the day it is
+written and wrong the first time somebody adds a custom field, and the person it misleads is
+exactly the one doing a one-off bulk import with no way to know the file is stale. Generating it
+from the same `importableFields()` the column mapper uses makes the two incapable of disagreeing.
+
+The example row answers the questions people actually have rather than saying `string`:
+
+- **Dates in ISO** (`2009-04-15`). `05/06/2026` is June 5th to half the world and May 6th to the
+  other half, and the importer hands the string to `new Date()`, which picks one silently.
+- **Multiselects as real option labels**, comma separated — `"NID, NIFT UG"`. A real option both
+  shows the format and imports cleanly; an invented one would warn.
+- **Booleans as `yes`/`no`**, which is what the parser reads.
+- **Every column filled**, including optional ones. A blank sample teaches nothing, and deleting
+  a column is easier than inventing one.
+
+`assigned_to` and `stage_id` are absent, as they are from the mapper: every ingestion path goes
+through `applyAssignment()` and enters at the `new` stage (non-negotiable #8). A template offering
+them would invite a spreadsheet that quietly bypasses the rules engine.
+
+**1606 tests pass** (7 new), lint, typecheck and the build clean.

@@ -38,6 +38,22 @@ export default async function ImportLeadsPage() {
           to the existing lead as a new enquiry instead. Assignment and stage are set automatically, same as any
           other lead source.
         </p>
+        {/*
+          Offered before the upload control, because the question "what
+          should my spreadsheet look like?" comes before "here is my
+          spreadsheet". Generated from this instance's own fields, so it
+          cannot disagree with what the mapper below will accept.
+        */}
+        <p className="mt-2 text-sm">
+          <a href="/api/leads/import-template" download className="font-medium underline">
+            Download a template
+          </a>{" "}
+          <span className="text-muted-foreground">
+            — every column this CRM can import, with one example row filled in. Delete the columns
+            you do not have; only <strong>Student Name</strong> and <strong>Primary Phone</strong>{" "}
+            are required.
+          </span>
+        </p>
       </div>
       <ImportWizard fields={fields} centers={centers} />
     </div>
