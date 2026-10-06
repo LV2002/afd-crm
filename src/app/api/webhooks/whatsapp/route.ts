@@ -258,7 +258,12 @@ export async function POST(request: Request) {
             .insert(whatsappMessages)
             .values({
               leadId: matched?.id ?? null,
-              counsellorId: matched?.assignedTo ?? null,
+              // Falls back to the number's owner so an unmatched message
+              // on a counsellor's coexistence number is visible to that
+              // counsellor: migration 0090's SELECT shows a lead-less row
+              // to whoever runs campaigns or to the counsellor named
+              // here, and a null here meant only the former.
+              counsellorId: matched?.assignedTo ?? number?.counsellorId ?? null,
               direction: "inbound",
               waMessageId: message.id,
               fromPhone: normalizePhone(message.from) ?? message.from,
@@ -476,10 +481,16 @@ async function describeEchoes(
     value.message_echoes ?? [],
     number,
     value.metadata?.display_phone_number,
+    // A live conversation on this counsellor's phone. One with somebody
+    // not yet in the CRM is kept with no lead on it, so it shows under
+    // "Not in the CRM" and can be converted when it becomes an enquiry
+    // — see recordKnownMessages' own note on why the backfill does not
+    // do the same.
+    { keepUnmatched: true },
   );
   return (
-    `Sent from the phone: ${result.stored} added to a lead's thread, ` +
-    `${result.skipped} skipped (not a lead we hold, or already recorded).`
+    `Sent from the phone: ${result.stored} recorded, ` +
+    `${result.skipped} skipped (already recorded, or unreadable).`
   );
 }
 

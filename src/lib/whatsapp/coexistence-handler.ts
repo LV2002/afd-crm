@@ -91,11 +91,29 @@ export interface RecordedMessages {
  * most of them not students. It attaches to the leads that already
  * exist, which is the part worth having: the conversation a counsellor
  * had in March now sits on the lead they created in March.
+ *
+ * ## `keepUnmatched`, and why the two paths differ again
+ *
+ * Not creating a lead used to mean throwing the message away, so a
+ * counsellor's live conversation with somebody not yet in the CRM never
+ * appeared at all. Echoes now keep those rows with `lead_id` null, the
+ * same shape the API number's inbound path has always used, so the
+ * thread shows under "Not in the CRM" and **Convert to lead** can pick
+ * it up when it turns into an enquiry.
+ *
+ * The backfill does not, and the asymmetry is the point. One is a
+ * conversation happening now, on a number whose owner is reading this
+ * inbox. The other is six months of their life arriving at once —
+ * suppliers, family, wrong numbers — and importing all of it would both
+ * bury the inbox and put a counsellor's personal chats in front of
+ * whoever runs campaigns. The leads that already exist still get their
+ * history, which was always the valuable half.
  */
 export async function recordKnownMessages(
   messages: EchoMessage[],
   number: CoexistenceNumber,
   businessDisplayPhone: string | null | undefined,
+  options: { keepUnmatched?: boolean } = {},
 ): Promise<RecordedMessages> {
   let stored = 0;
   let skipped = 0;
@@ -118,7 +136,7 @@ export async function recordKnownMessages(
       .from(leads)
       .where(and(eq(leads.primaryPhone, phone), isNull(leads.deletedAt)));
 
-    if (!lead) {
+    if (!lead && !options.keepUnmatched) {
       skipped += 1;
       continue;
     }
@@ -145,10 +163,15 @@ export async function recordKnownMessages(
     const businessPhone = normalizePhone(message.businessPhone) ?? message.businessPhone;
 
     await db.insert(whatsappMessages).values({
-      leadId: lead.id,
+      leadId: lead?.id ?? null,
       // The phone's owner, not whoever is signed in: nobody is signed in
       // when a webhook arrives, and the conversation belongs to them.
-      counsellorId: number.counsellorId ?? lead.assignedTo,
+      //
+      // On an unmatched row this is also the only thing that makes the
+      // message visible to anybody: migration 0090 shows a lead-less row
+      // to whoever runs campaigns OR to the counsellor named here. A null
+      // would hide a counsellor's own conversation from them.
+      counsellorId: number.counsellorId ?? lead?.assignedTo ?? null,
       sentBy: message.direction === "outbound" ? number.counsellorId : null,
       direction: message.direction,
       waMessageId: message.waMessageId,

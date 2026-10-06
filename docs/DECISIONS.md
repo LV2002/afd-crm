@@ -4133,3 +4133,40 @@ The arithmetic went into `scoreboard.ts` with the rest of it — pure, boundarie
 in, tested. `buildDailySeries` keeps a day with nothing in it, because a series that
 skips empty days draws a busy month out of a quiet one, and it buckets by IST day: an
 enquiry at 11pm in Kochi is 17:30 UTC and belongs to the day it was made.
+
+## 2026-10-07 — A WhatsApp conversation can be answered before it is a lead, and the backfill still cannot
+
+Leon: *"i would like to be able to respond to the inbox even if they are not a lead. and if
+they are not a lead, just like in instagram DMs, i would like to mark them as a lead after
+exchanging some interactions nd i can define them to be a lead. same for whatsapp
+coexistence."*
+
+The rule that an inbound WhatsApp message never creates a lead (migration 0042) was right and
+is unchanged. What was wrong was the consequence: the only thing anybody could do with such a
+message was read it. A person wrote to the institute, the message arrived, and the screen
+offered a dead end — so in practice a counsellor retyped the number into Leads → New, and the
+conversation stayed orphaned behind them.
+
+This is the Instagram model (2026-10-04) applied to WhatsApp. Answer first; decide whether it
+is an enquiry afterwards, when you know. Migration 0090 lets a row with no `lead_id` be
+written by whoever can already see it, and **Convert to lead** runs `resolveOrCreateLead()`
+like every other source.
+
+Two things decided along the way.
+
+**Converting moves the history.** An Instagram conversation is a row that messages hang off,
+so linking it is enough. A WhatsApp thread is assembled from the message rows themselves, so a
+conversion that only created a lead would strand every message already said under "Not in the
+CRM" permanently. They are moved in the same action, scoped to `lead_id is null` so a
+conversion can never pull another lead's history across.
+
+**Coexistence echoes keep unmatched conversations; the 180-day backfill does not.** Both used
+to be discarded. An echo is a conversation happening now, on a number whose owner is reading
+this inbox, and it is exactly what Leon asked to see. The backfill is six months of a
+counsellor's life arriving in one burst — suppliers, family, wrong numbers — and importing all
+of it would bury the inbox and put their personal chats in front of whoever runs campaigns.
+The leads that already exist still get their history, which was always the valuable half.
+
+The visibility rule follows from that: an unmatched row is shown to whoever runs campaigns
+**or** to the counsellor whose number it arrived on. Without the second clause a counsellor
+could not see their own conversation while the marketing lead could see all of them.

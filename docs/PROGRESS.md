@@ -8067,3 +8067,38 @@ not a problem a component solves, and the diff to introduce one would be larger 
 everything it prevents.
 
 **1640 tests pass**, typecheck, lint and build clean.
+
+## Answering a WhatsApp conversation before it is a lead
+
+Leon's own test exposed it: he messaged the business number from his personal phone, the
+message arrived, and the thread had no box to type in. The screen said *"+91… isn't in
+the CRM"* and offered a link to Leads → New — a dead end dressed as an explanation.
+
+The rule it came from is right and is unchanged: an inbound WhatsApp message never creates
+a lead, because most replies on a broadcast number are somebody who pressed a button on a
+campaign. What was wrong was that not creating a lead had come to mean not being able to
+do anything at all.
+
+- **Migration 0090** lets a message row with no `lead_id` be written by whoever can
+  already read it, and shows an unmatched row to whoever runs campaigns **or** to the
+  counsellor whose number it arrived on. `(select auth.uid())`, not a bare call —
+  `npm run db:audit` fails the build over the per-row version, which is how that was
+  caught.
+- **A composer on the unmatched thread**, text only. Templates are billed and gated on
+  `whatsapp.campaign`; an unmatched thread exists because somebody just wrote, so the
+  24-hour window is open and free-form is what is wanted.
+- **Convert to lead**, through `resolveOrCreateLead()` like every other source — and it
+  moves the messages already said onto the new lead, which the Instagram version does not
+  need to do and this one does, because a WhatsApp thread is assembled from the message
+  rows themselves.
+- **Coexistence echoes now keep a conversation with somebody who is not a lead** instead
+  of discarding it. The 180-day backfill still does not: six months of a counsellor's
+  personal chats would bury the inbox and put their private conversations in front of
+  whoever runs campaigns.
+
+Stubbed: nothing. Not done on purpose — attachments and templates on an unmatched thread,
+and `/whatsapp/personal` is still an explainer rather than an inbox of its own
+(Coexistence conversations appear in the main inbox, which is where they belong).
+
+**1649 tests pass** (8 new on the 24-hour window boundary, one coexistence test inverted),
+typecheck, lint, `db:audit` and build clean.

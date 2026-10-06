@@ -24,14 +24,17 @@ number sends campaigns and receives the replies to them.
 So: **an inbound WhatsApp message never creates a lead.** It is matched to
 a lead that already exists by phone number, or filed with no lead at all.
 A reply from somebody nobody has entered is real and worth seeing, but it
-is not an enquiry.
+is not an enquiry — not yet. You can answer it, and make them a lead
+yourself once it becomes one.
 
 ## 10.2 The inbox
 
 Left: the list of conversations. Right: the selected thread.
 
-**Filters**: **All**, **Needs a reply**, and **Not in the CRM** (replies
-from numbers that match no lead — visible to whoever runs campaigns).
+**Filters**: **All**, **Needs a reply**, and **Not in the CRM** (messages
+from numbers that match no lead). You can answer those as well as read
+them, and turn one into a lead when it becomes an enquiry — see the
+procedure below.
 
 **The counsellor switcher** appears for centre heads, co-admins and
 admins when there is more than one counsellor to choose between:
@@ -39,8 +42,36 @@ admins when there is more than one counsellor to choose between:
 extra access — it only sorts conversations you could already see.
 
 A matched thread shows a masked number; an unmatched one shows it in full,
-because the number is the thread's only identity and the thing you would
-copy into a new lead.
+because the number is the thread's only identity.
+
+### Procedure: reply to somebody who is not in the CRM
+
+**Goal** — answer a message from a number no lead holds, and make them a
+lead if it turns into an enquiry.
+
+**Before you start** — `whatsapp.send`, and a conversation you can already
+see: replies to campaigns are visible to whoever runs them, and a
+conversation on a counsellor's own Coexistence number to that counsellor.
+
+**Steps**
+1. Open **Chats** and pick the conversation. It is the one headed
+   *"… isn't in the CRM."*
+2. Type your reply and press **Send**. The same 24-hour rule applies.
+3. If it turns into a real enquiry, press **Convert to lead**, give them a
+   name, and press **Create the lead**.
+
+**What you should see** — the reply in the thread; and after converting, a
+lead carrying that number with the whole conversation attached, on
+whichever counsellor your assignment rules chose.
+
+**Why converting is a decision and not automatic.** Most replies to a
+campaign are somebody who pressed a button, and a CRM that made a lead out
+of each would fill the pipeline with people who are not enrolling. You
+answer first and decide afterwards, when you know.
+
+**One thing to know.** Converting moves the messages onto the lead. If the
+number already belongs to somebody in the CRM they are linked rather than
+duplicated — the same person arriving twice stays one record.
 
 ### Procedure: reply to a WhatsApp message
 

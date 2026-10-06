@@ -13,7 +13,10 @@ import {
 } from "@/lib/integrations/whatsapp/client";
 import { MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
 import { createClient } from "@/lib/supabase/server";
-import { isWithinCustomerServiceWindow } from "@/lib/whatsapp/get-thread";
+import {
+  isWithinCustomerServiceWindow,
+  isWithinCustomerServiceWindowForPhone,
+} from "@/lib/whatsapp/get-thread";
 import { mediaKindFor, trimCaption, validateWhatsAppMedia } from "@/lib/whatsapp/media";
 
 export interface WhatsAppSendState {
@@ -28,9 +31,14 @@ export interface WhatsAppSendState {
  * Cloud API, then update that same row with the real `wa_message_id` and
  * final status. A Cloud API failure still leaves a real 'failed' row on
  * the thread, not a silently lost send attempt.
+ *
+ * `leadId` is null for a reply to somebody who is not in the CRM.
+ * Migration 0090 accepts those rows from whoever can already see the
+ * thread; the `counsellor_id` written below is what that policy tests, so
+ * it is the sender's own id and never anything a form supplied.
  */
 async function recordAndSend(
-  leadId: string,
+  leadId: string | null,
   toPhone: string,
   insertFields: {
     messageType: "text" | "template" | "media";
@@ -78,7 +86,11 @@ async function recordAndSend(
     .single<{ id: string }>();
 
   if (insertError || !inserted) {
-    return { error: "You don't have access to message this lead." };
+    return {
+      error: leadId
+        ? "You don't have access to message this lead."
+        : "You don't have access to reply to this conversation.",
+    };
   }
 
   try {
@@ -93,21 +105,44 @@ async function recordAndSend(
   await writeAuditLog(supabase, {
     actorId: user.id,
     action: "whatsapp.message_send",
-    entityType: "leads",
-    entityId: leadId,
-    after: { messageType: insertFields.messageType, templateName: insertFields.templateName },
+    // An unmatched reply is not about a lead, so it is logged against the
+    // message itself rather than against a lead id that does not exist.
+    // The number it went to is in `after`, which is the only handle
+    // anybody has on that conversation until somebody converts it.
+    entityType: leadId ? "leads" : "whatsapp_messages",
+    entityId: leadId ?? inserted.id,
+    after: {
+      messageType: insertFields.messageType,
+      templateName: insertFields.templateName,
+      ...(leadId ? {} : { toPhone }),
+    },
   });
 
-  revalidatePath(`/leads/${leadId}`);
+  if (leadId) revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/whatsapp");
   return { success: "Sent." };
 }
 
-/** Free-form text — only accepted by the Cloud API within Meta's 24-hour customer service window (the lead's last inbound message). */
-export async function sendWhatsAppMessage(leadId: string, toPhone: string, body: string): Promise<WhatsAppSendState> {
+/**
+ * Free-form text — only accepted by the Cloud API within Meta's 24-hour
+ * customer service window, opened by their last inbound message.
+ *
+ * `leadId` null is a reply to somebody who is not in the CRM yet. The
+ * window is then read off the unmatched thread rather than off a lead,
+ * and it is the same 24 hours: Meta's rule is about the conversation, and
+ * it does not care whether the CRM has decided this person is an enquiry.
+ */
+export async function sendWhatsAppMessage(
+  leadId: string | null,
+  toPhone: string,
+  body: string,
+): Promise<WhatsAppSendState> {
   if (!body.trim()) return { error: "Message can't be empty." };
 
   const supabase = await createClient();
-  const withinWindow = await isWithinCustomerServiceWindow(supabase, leadId);
+  const withinWindow = leadId
+    ? await isWithinCustomerServiceWindow(supabase, leadId)
+    : await isWithinCustomerServiceWindowForPhone(supabase, toPhone);
   if (!withinWindow) {
     // Meta only accepts a free-form reply inside the 24-hour window the
     // lead's own message opens. Outside it the only API route is a paid
@@ -115,8 +150,7 @@ export async function sendWhatsAppMessage(leadId: string, toPhone: string, body:
     // sendWhatsAppTemplate) — so the honest instruction is the one Leon
     // gave: message them from your own phone.
     return {
-      error:
-        "This lead hasn't messaged in the last 24 hours, so WhatsApp won't accept a reply from here. Message them from the WhatsApp Business app on your phone — the window reopens as soon as they write back.",
+      error: `${leadId ? "This lead hasn't" : "They haven't"} messaged in the last 24 hours, so WhatsApp won't accept a reply from here. Message them from the WhatsApp Business app on your phone — the window reopens as soon as they write back.`,
     };
   }
 
