@@ -283,8 +283,16 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         on the right the two things a counsellor does while the call is
         still happening — log what was said, and set what happens next.
       */}
+      {/*
+        On a phone the order is reversed. The details form is thirty
+        fields; putting it first meant scrolling past all of them to
+        reach "log what was said" and the history — on the device a
+        counsellor holds while the call is happening. On a wide screen
+        both are visible at once and the details read better on the left,
+        so only the small-screen order changes.
+      */}
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="min-w-0 lg:col-span-2">
+        <div className="order-2 min-w-0 lg:order-1 lg:col-span-2">
           {can(user, "lead.update") ? (
             <LeadEditForm
               key={String(row.updated_at)}
@@ -302,10 +310,53 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           )}
         </div>
 
-        <div className="flex min-w-0 flex-col gap-4">
+        <div className="order-1 flex min-w-0 flex-col gap-4 lg:order-2">
           {can(user, "interaction.create") && (
             <InteractionForm leadId={id} types={interactionTypes} outcomes={interactionOutcomes} />
           )}
+
+          {/*
+            The timeline used to be the last thing on the page, below the
+            fee agreement and the documents. It is what a counsellor reads
+            before they ring — "what did we say last time" — so it sat
+            three screens below the question it answers.
+
+            Here it is directly under the box where the next line gets
+            written, which is also the order the work happens in: read
+            what was said, ring, write what was said.
+          */}
+          <div className="flex flex-col gap-3 rounded-lg border p-4">
+            <h2 className="text-sm font-semibold">Timeline</h2>
+            {timeline.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nothing logged yet. Whatever gets said on the first call goes above, and
+                appears here.
+              </p>
+            ) : (
+              /*
+                Capped and scrolling: a lead two years old has a hundred
+                entries, and a column that long pushes everything else off
+                the screen. The newest are at the top, which is the end
+                anybody reads.
+              */
+              <ul className="flex max-h-[28rem] flex-col gap-3 overflow-y-auto pr-1">
+                {timeline.map((entry) => (
+                  <li key={entry.id} className="flex gap-3 border-l-2 border-muted pl-3">
+                    <div className="min-w-0">
+                      <p className="text-sm">{entry.label}</p>
+                      {entry.detail && (
+                        <p className="text-sm text-muted-foreground">{entry.detail}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        {formatDateIST(entry.at, "d MMM yyyy, h:mm a")}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <TasksPanel leadId={id} tasks={taskRows ?? []} />
           {referred.length > 0 && (
             <div className="flex flex-col gap-2 rounded-lg border p-4">
@@ -479,26 +530,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           />
         </div>
       )}
-
-      <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">Timeline</h2>
-        {timeline.length === 0 && (
-          <p className="text-sm text-muted-foreground">Nothing logged yet.</p>
-        )}
-        <ul className="flex flex-col gap-3">
-          {timeline.map((entry) => (
-            <li key={entry.id} className="flex gap-3 border-l-2 border-muted pl-3">
-              <div>
-                <p className="text-sm">{entry.label}</p>
-                {entry.detail && <p className="text-sm text-muted-foreground">{entry.detail}</p>}
-                <p className="text-xs text-muted-foreground">
-                  {formatDateIST(entry.at, "d MMM yyyy, h:mm a")}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
 
       {/*
         Last on the page, below everything somebody actually works with.

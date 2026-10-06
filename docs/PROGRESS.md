@@ -8005,3 +8005,42 @@ lead in the system on the day it shipped. Silence since the last activity says t
 thing honestly, for leads that are already in the CRM.
 
 **1640 tests pass**, typecheck, lint and build clean. Manual chapter 5 covers both.
+
+## 2026-10-06 — The lead page, reordered around the call
+
+Sixth UI pass, on the screen counsellors spend the day in.
+
+### A number you can ring
+
+There was no `tel:` link anywhere in this CRM. A counsellor on a phone revealed the
+number and then typed it into their dialler by hand, digit by digit, dozens of times a
+day. **Call** and **WhatsApp** now appear beside a revealed number.
+
+They cannot come first: a dial link has to carry the real number in its href, so
+rendering one unrevealed would put every number on the page in plain HTML and make the
+masking decorative — which is what non-negotiable #6 exists to stop. Revealing is the
+audited moment and the buttons sit on the other side of it.
+
+A refused reveal falls back to the masked string, and a dial link built from
+`+91 98••••3456` is a call to a number that does not exist, so the buttons appear only
+for a genuinely revealed number. That was a bug in the first draft, caught by re-reading
+the diff rather than by a test.
+
+### The timeline moved three screens up
+
+It was the last thing on the page, below the fee agreement and the documents. It is what
+a counsellor reads before they ring — *what did we say last time* — so it sat three
+screens below the question it answers. It is now directly under the box where the next
+line gets written, which is the order the work actually happens in: read what was said,
+ring, write what was said. Long histories scroll inside their own box, newest first,
+rather than pushing the rest of the page away.
+
+### The phone order is reversed
+
+The details form is thirty fields. Putting it first meant scrolling past all of them to
+reach "log what was said" and the history, on the device a counsellor holds while the
+call is happening. Below `lg` the work column comes first; on a wide screen both are
+visible at once and the details read better on the left, so only the small-screen order
+changes.
+
+**1640 tests pass**, typecheck, lint and build clean. Manual chapter 6 updated.
