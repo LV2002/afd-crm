@@ -47,9 +47,13 @@ export async function updateLead(leadId: string, _prevState: FormState, formData
 
   const { data: existing, error: readError } = await supabase
     .from("leads")
-    .select("custom, temperature")
+    .select("custom, temperature, primary_phone")
     .eq("id", leadId)
-    .maybeSingle<{ custom: Record<string, unknown> | null; temperature: string | null }>();
+    .maybeSingle<{
+      custom: Record<string, unknown> | null;
+      temperature: string | null;
+      primary_phone: string | null;
+    }>();
 
   // A transient read failure here must not fall through to `?? {}` below —
   // that would make the update at the end of this function overwrite the
@@ -63,8 +67,24 @@ export async function updateLead(leadId: string, _prevState: FormState, formData
   const customUpdates: Record<string, unknown> = { ...(existing?.custom ?? {}) };
   let touchedCustom = false;
 
+  /*
+    Phone numbers used to be skipped outright here, and rendered as a
+    read-only reveal button on the form — so no number on a lead could be
+    corrected, ever. A counsellor who took down a digit wrong had to
+    delete the lead and start again, and alternate and parent numbers
+    could be captured at intake and never afterwards.
+
+    They are editable now, but only by somebody who may reveal them. That
+    is not an extra rule so much as the only coherent one: the form shows
+    a masked number until it is revealed, and letting somebody overwrite a
+    value they are not allowed to see is how a number gets replaced by
+    accident with nobody able to tell what it used to be.
+  */
+  const canEditPhones = can(user, "lead.reveal_phone");
+
   for (const field of fields) {
-    if (field.type === "phone" || !field.isEditable) continue;
+    if (!field.isEditable) continue;
+    if (field.type === "phone" && !canEditPhones) continue;
 
     // One typed parse for every field type, shared with the public
     // student form — see lib/fields/parse-field-value.ts. It replaces a
@@ -105,10 +125,76 @@ export async function updateLead(leadId: string, _prevState: FormState, formData
     Object.assign(coreUpdates, await temperatureOverrideFor(supabase, user.id));
   }
 
+  /*
+    Changing the primary phone changes the lead's identity.
+
+    `lead_identifiers` is the dedup index: it is what every webhook, the
+    importer and manual entry are matched against. Updating `leads` alone
+    would leave the index pointing at the old number, so the next enquiry
+    from the corrected number would create a second lead for the same
+    person, while the wrong number went on claiming them — the exact
+    duplicate non-negotiable #2 exists to prevent, created by fixing a
+    typo.
+
+    The check runs on the direct client because the question is "does any
+    live lead hold this number", and a counsellor cannot see the leads
+    that would answer it. The write goes through the RLS client, where
+    `lead_identifiers_update` enforces the boundary (migration 0005).
+  */
+  const nextPrimary = coreUpdates.primary_phone;
+  const primaryChanged =
+    typeof nextPrimary === "string" && nextPrimary !== (existing?.primary_phone ?? null);
+
+  if (primaryChanged) {
+    const [taken] = await db
+      .select({ leadId: leadIdentifiers.leadId })
+      .from(leadIdentifiers)
+      .innerJoin(leads, eq(leads.id, leadIdentifiers.leadId))
+      .where(
+        and(
+          eq(leadIdentifiers.kind, "phone"),
+          eq(leadIdentifiers.valueNormalised, nextPrimary as string),
+          isNull(leadIdentifiers.deletedAt),
+          isNull(leads.deletedAt),
+        ),
+      );
+
+    // Deliberately refused rather than merged. Non-negotiable #2 is about
+    // never rejecting an incoming enquiry; this is somebody retyping a
+    // number in an edit box, and silently folding two leads together
+    // because of it would be the most surprising thing this CRM could do.
+    if (taken && taken.leadId !== leadId) {
+      return {
+        error:
+          "Another lead already has that phone number. If they are the same person, merge them — that keeps both histories.",
+      };
+    }
+  }
+
   const payload = touchedCustom ? { ...coreUpdates, custom: customUpdates } : coreUpdates;
   const { error } = await supabase.from("leads").update(payload).eq("id", leadId);
   if (error) {
     return { error: error.message };
+  }
+
+  if (primaryChanged) {
+    const { error: identifierError } = await supabase
+      .from("lead_identifiers")
+      .update({ value_normalised: nextPrimary as string, updated_at: new Date().toISOString() })
+      .eq("lead_id", leadId)
+      .eq("kind", "phone")
+      .eq("value_normalised", existing?.primary_phone ?? "")
+      .is("deleted_at", null);
+
+    if (identifierError) {
+      // The lead carries the new number and the index still carries the
+      // old one. Said plainly, because the symptom otherwise shows up
+      // weeks later as a duplicate nobody can explain.
+      return {
+        error:
+          "The number was changed on the lead, but the duplicate-matching index could not be updated, so a new enquiry from this number may create a second lead. Tell an administrator before using it.",
+      };
+    }
   }
 
   await writeAuditLog(supabase, {
@@ -671,13 +757,30 @@ export async function deleteLead(
     return { error: "That lead is not yours." };
   }
 
-  // A confirmed admission is money and an obligation, not a lead any more.
-  // Deleting it would hide an enrolment that accounts is still collecting
-  // against, so it is refused rather than cascaded.
+  /*
+    A confirmed admission is money and an obligation, not a lead any more.
+    Deleting it would hide an enrolment accounts is still collecting
+    against, so it is refused rather than cascaded.
+
+    `droppedAt` has to be in this test as well as `deletedAt`. Dropping an
+    admission records a drop — it does not soft-delete the row, because
+    the enrolment is still the history of what was agreed and what was
+    paid. So a lead whose admission had been dropped stayed undeletable
+    for ever, while the refusal told them to "drop the admission first if
+    it is not going ahead", which they had already done. The one thing a
+    person is told to do to get past a block has to actually get them past
+    it.
+  */
   const [enrolment] = await db
     .select({ id: enrolments.id })
     .from(enrolments)
-    .where(and(eq(enrolments.leadId, leadId), isNull(enrolments.deletedAt)));
+    .where(
+      and(
+        eq(enrolments.leadId, leadId),
+        isNull(enrolments.deletedAt),
+        isNull(enrolments.droppedAt),
+      ),
+    );
   if (enrolment) {
     return {
       error:

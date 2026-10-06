@@ -14,6 +14,7 @@ import {
   slaPolicies,
   stageHistory,
 } from "@/lib/db/schema";
+import { isNoLongerWorked } from "@/lib/leads/no-longer-worked";
 import type { DayHours } from "@/lib/sla/business-hours";
 import { dueEscalations, policyEscalationSteps } from "@/lib/sla/escalations";
 import { evaluateLeadSla } from "@/lib/sla/evaluate-sla";
@@ -84,9 +85,17 @@ async function run(request: Request) {
 
   const timeZoneByCenter = new Map(centerRows.map((c) => [c.id, c.timezone]));
 
-  const evaluableLeads = activeLeads.filter(
-    (lead) => !lead.stageId || !terminalStageIds.has(lead.stageId),
-  );
+  /*
+    Won, lost — and Dead.
+
+    The first two were always excluded. The third was not, so a lead a
+    counsellor had explicitly marked Dead went on breaching its SLA every
+    night and escalating to whoever the ladder named. The one action
+    available for saying "stop chasing this person" changed nothing about
+    what the system chased them about, which is how an escalation ladder
+    stops being read.
+  */
+  const evaluableLeads = activeLeads.filter((lead) => !isNoLongerWorked(lead, terminalStageIds));
   const leadIds = evaluableLeads.map((lead) => lead.id);
 
   // Only the most recent stage_history row per lead is needed (when it

@@ -8,6 +8,7 @@ import {
   leadIsVisibleToCaller,
   SCOPE_VIOLATION_MESSAGE,
 } from "@/lib/identity/assert-lead-visible";
+import { getDropdownOptions } from "@/lib/fields/resolve-field-options";
 import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
 import { createClient } from "@/lib/supabase/server";
 
@@ -109,6 +110,30 @@ export async function createLeadManually(_prevState: FormState, formData: FormDa
       ? referredByLeadIdRaw.trim()
       : null;
 
+  /*
+    Where they came from, and it is required.
+
+    Every manually entered lead used to be filed as "Manual", which is not
+    a source — it is a description of the keyboard. A walk-in, a phone
+    enquiry and a school seminar arrived indistinguishable, so the report
+    that decides where the marketing money goes had a bucket in it that
+    grew steadily and meant nothing. It cannot be reconstructed afterwards
+    either: nobody remembers in March how somebody found them in January.
+
+    Checked against the configured options rather than accepted as free
+    text, so the column stays countable.
+  */
+  const supabase = await createClient();
+
+  const source = String(formData.get("source") ?? "").trim();
+  if (!source) {
+    return { error: "Choose where this lead came from — it cannot be worked out later." };
+  }
+  const sources = await getDropdownOptions(supabase, "lead_source");
+  if (!sources.some((option) => option.value === source)) {
+    return { error: "That is not one of the lead sources. Pick one from the list." };
+  }
+
   const interestedExams = formData.getAll("interestedExams").map(String).filter(Boolean);
   const coursesInterested = formData.getAll("coursesInterested").map(String).filter(Boolean);
 
@@ -126,7 +151,7 @@ export async function createLeadManually(_prevState: FormState, formData: FormDa
     centerId,
     assignedTo,
     referredByLeadId,
-    source: "Manual",
+    source,
   }).catch((error: unknown) => ({ error: error instanceof Error ? error.message : "Could not create lead." }));
 
   if ("error" in result) {
@@ -147,8 +172,6 @@ export async function createLeadManually(_prevState: FormState, formData: FormDa
     name, no counsellor, no centre: the whole reason they cannot see this
     lead is that it is not theirs to see (non-negotiable #6).
   */
-  const supabase = await createClient();
-
   if (!result.isNewLead) {
     const { data: reachable } = await supabase
       .from("leads")

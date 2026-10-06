@@ -8164,3 +8164,60 @@ cover the parsing and the origin allowlist, which is where the decisions are; th
 calls themselves are three fetches in the existing client's shape.
 
 **1665 tests pass**, typecheck, lint, `db:audit` and build clean.
+
+## Editable phone numbers, a WhatsApp number of its own, and a Chat button that stays home
+
+Three asks from Leon, and the first turned out to be a gap rather than a feature.
+
+- **No phone on a lead could be edited at all.** The edit form rendered every `phone` field
+  as a read-only reveal button and `updateLead` skipped them outright, so a wrong digit
+  meant deleting the lead and starting again. They are editable now, behind
+  `lead.reveal_phone` — you cannot sensibly overwrite a number you are not allowed to read,
+  and an unrevealed field renders no input, so saving a form without touching the numbers
+  leaves them alone.
+- **Changing the primary phone moves `lead_identifiers` with it**, or the old number goes on
+  claiming the person while the corrected one matches nothing and the next enquiry creates a
+  duplicate. A number already held by another live lead is refused with a pointer to merge,
+  rather than silently folding two people together because somebody retyped a digit.
+- **`whatsapp_phone`** (migration 0092), null meaning "same as the primary". The CRM had
+  been assuming the form number and the WhatsApp number were one and the same.
+- **The WhatsApp button goes to `/whatsapp?thread=lead:<id>`** instead of opening `wa.me` in
+  a new tab. It carries no number, so unlike Call it shows without revealing first; and a
+  lead who has never messaged gets a panel explaining the 24-hour rule rather than an inbox
+  saying "pick a conversation".
+
+Stubbed: nothing. Not done on purpose — the `whatsapp_phone` column is not yet used to route
+outbound sends; the inbox still keys on the number a message arrived from, which is the
+honest behaviour until a lead actually has a different one filled in.
+
+**1666 tests pass** (1 new on the phone-correction invariant, 1 updated), typecheck, lint,
+`db:audit` and build clean.
+
+## Eight fixes from one morning of Leon using the CRM
+
+- **A dropped admission still blocked deletion.** The check looked at `deleted_at` only, and
+  dropping records a `dropped_at` — so the refusal told him to do the thing he had already
+  done.
+- **Stage tags have colours now**, defaulted from `stage_type` (won green, lost red, parked
+  grey, payment amber, forms teal) because nobody fills in fourteen colour pickers. An
+  explicit colour in Settings → Pipeline still wins.
+- **Filters survive opening a lead**, including via the sidebar's Leads link, which is what
+  people actually press. Per tab, and clearing really clears.
+- **Lead source is required on manual entry.** Everything manual was filed as "Manual",
+  which is a description of the keyboard, not a source.
+- **Dead stops the chasing.** No SLA breach, no escalation, no overdue listing. Only
+  terminal stages counted before, so the one action for "stop chasing this person" changed
+  nothing.
+- **The counsellor sets the instalment plan** until the first payment lands; after that it
+  is accounts'. It was an accounts-only permission, so the person who agreed the plan could
+  not record it.
+- **The lead profile autosaves**, like stage and temperature already did.
+- **Preferences fits on a screen.** Multiselects wrap into columns past five options, and
+  short fields stop stretching to match the tall one beside them.
+
+Stubbed: nothing. Not done on purpose — autosave submits the whole form rather than the one
+changed field, which is deliberate (same path as the Save button, no second code path), and
+`isNoLongerWorked()` is not yet applied to WhatsApp automations, which have their own
+scheduling and were not what Leon described.
+
+**1666 tests pass**, typecheck, lint, `db:audit` and build clean.

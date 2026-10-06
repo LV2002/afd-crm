@@ -120,11 +120,23 @@ same as follow-ups.
 ## 6.4 Revealing a phone number
 
 
-**Once it is revealed, two buttons appear beside it: Call and WhatsApp.**
-Call opens your phone's dialler with the number in it; WhatsApp opens a
-chat with them. They only appear after revealing, because a link has to
-carry the real number to work — showing them before would put every
-number on the screen in plain text and make the masking decorative.
+**Chat is always there. Call appears once the number is revealed.**
+
+**Chat** opens that lead's conversation in **Chats**, inside the CRM —
+not WhatsApp Web in another tab. Everything said there is on the lead's
+record and the rest of the office can see it. It needs no number of its
+own, which is why it does not wait for the reveal.
+
+**Call** opens your phone's dialler with the number in it. It only
+appears after revealing, because a dial link has to carry the real
+number to work, and showing one before would put every number on the
+screen in plain text and make the masking pointless.
+
+If a lead has never messaged the institute's WhatsApp number, Chat says
+so and offers the way back. You cannot write to them first from here —
+WhatsApp only allows a free-form message within 24 hours of theirs, which
+is Meta's rule, not the CRM's. Message them from the WhatsApp Business
+app on your phone and the conversation appears here once they reply.
 
 ### Goal
 See a lead's full number so you can ring them.
@@ -177,6 +189,20 @@ The values update, and the change is written to the audit log.
   deliberate (Chapter 7).
 - **Some fields you cannot set.** Stage, temperature, owner and centre are
   changed through their own actions, not as free text.
+- **Phone numbers are edited after revealing them.** A number shows as
+  `+91 98••••3456` with a reveal button; press it and the masked text
+  becomes a box you can correct. That is not an obstacle course — you
+  cannot sensibly overwrite a number you are not allowed to read, so the
+  permission that reveals is the permission that edits.
+- **Changing the primary phone moves the lead's identity with it.** That
+  number is what every form, ad and import is matched against, so
+  correcting a typo also corrects what future enquiries from that person
+  attach to. If the number you type already belongs to another lead, the
+  save is refused and you are told to merge them instead — that keeps both
+  histories, which overwriting would not.
+- **WhatsApp Number** is separate from Primary Phone, for the student who
+  fills in a form with one number and does their talking on another. Leave
+  it blank when they are the same.
 
 ## 6.6 Tags
 

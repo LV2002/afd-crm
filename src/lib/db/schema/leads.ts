@@ -40,6 +40,16 @@ export const leads = pgTable(
     primaryPhone: text("primary_phone").notNull(),
     alternatePhone: text("alternate_phone"),
     parentPhone: text("parent_phone"),
+    /**
+     * The number this person uses on WhatsApp, when it is not the one
+     * they were entered under — a student who fills in a form with their
+     * own mobile and does the actual talking on a parent's handset.
+     *
+     * Null means "the same as `primaryPhone`", which is true of nearly
+     * every lead. Readers coalesce; nothing backfills it, because filling
+     * it in everywhere would be inventing data to avoid one `??`.
+     */
+    whatsappPhone: text("whatsapp_phone"),
     email: text("email"),
 
     dob: date("dob"),

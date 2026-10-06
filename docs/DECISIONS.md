@@ -4247,3 +4247,95 @@ means running the whole dialog again for nothing.
 None of this can be exercised against Meta until Advanced Access lands — under Standard Access
 the dialog opens and refuses at the end. The tests therefore cover the parsing and the origin
 allowlist, which is where the decisions are.
+
+## 2026-10-07 — Phone numbers are editable, and the WhatsApp button stays inside the CRM
+
+Leon: *"I should be able to change a leads WhatsApp number and I should be able to add a
+leads alternate phone number as well in the leads profile. Also the WhatsApp button should
+open that leads chat from the assigned counsellors WhatsApp coexistence in the chat section.
+Not WhatsApp web in a new browser."*
+
+**No phone on a lead could be edited at all.** Not the alternate, not the primary. The edit
+form rendered every `phone` field as a read-only reveal button, and `updateLead` skipped them
+outright. So a counsellor who took one digit down wrong had to delete the lead and enter it
+again, and an alternate or parent number could be captured at intake and never afterwards. It
+read as a deliberate rule and was really the absence of one.
+
+They are editable now, gated on `lead.reveal_phone` rather than `lead.update` alone. Not an
+extra hurdle: the form shows a masked number until it is revealed, and letting somebody
+overwrite a value they are not allowed to see is how a number gets replaced with nobody able
+to say what it used to be. Revealing is already the audited moment; editing lives on the other
+side of it. An unrevealed field renders no input at all, so it is absent from the form data
+and `NOT_PROVIDED` skips it — the safety comes from the absence rather than a sentinel.
+
+**Changing the primary phone moves `lead_identifiers` with it.** That table is what every
+webhook, the importer and manual entry are matched against, so updating `leads` alone would
+leave the old number claiming the person while the corrected one matched nothing — and the
+next enquiry from it would create a second lead. The duplicate non-negotiable #2 exists to
+prevent, produced by fixing a typo. If the new number already belongs to a live lead the save
+is refused and the merge flow is named: non-negotiable #2 is about never rejecting an incoming
+*enquiry*, and silently folding two leads together because somebody retyped a number in an
+edit box would be the most surprising thing this CRM could do.
+
+**`whatsapp_phone` is a column of its own** (migration 0092), null meaning "same as the
+primary". Students fill in forms with one number and do their talking on another, and the CRM
+had been assuming they were the same.
+
+**The WhatsApp button now points at `/whatsapp?thread=lead:<id>`.** It used to be a `wa.me`
+link that opened WhatsApp Web in a new tab, which took the counsellor out of the CRM — so the
+conversation that followed happened somewhere this system has no record of, on the institute's
+highest-volume channel. Two consequences worth noting: it needs no phone number, so unlike
+Call it can show before the reveal; and a lead who has never messaged now gets a panel saying
+so and explaining the 24-hour rule, rather than an inbox shrugging "pick a conversation".
+
+## 2026-10-07 — Eight things from one morning of Leon using the CRM
+
+**A dropped admission still blocked deletion.** `deleteLead` refused while any enrolment row
+existed with `deleted_at` null — but dropping an admission records a `dropped_at`, it does not
+soft-delete the row, because the enrolment is still the history of what was agreed and paid.
+So the refusal said "drop the admission first if it is not going ahead" to somebody who had
+already done exactly that. The one instruction given for getting past a block has to actually
+get them past it.
+
+**Stages had no colours because nobody fills in fourteen colour pickers.** `pipeline_stages.color`
+has been editable since Settings → Pipeline existed and every stage still rendered the same grey
+pill. Defaults now come from `stage_type` — won green, lost red, parked grey, and the two
+money-in-motion ones amber and teal. Keyed on the type rather than the name so it survives
+renaming "Admission Confirmed", and so it works in an instance with entirely different stages.
+The eight ordinary stages get nothing on purpose: colouring all fourteen makes a rainbow in
+which nothing stands out.
+
+**Filters survived the browser's Back and not the sidebar's Leads link**, which is the one
+people actually press. Remembered per tab in `sessionStorage` and restored on a bare `/leads`.
+An emptied filter bar is stored as empty rather than ignored, so clearing really clears.
+
+**Manual leads were all filed as "Manual"**, which is not a source — it is a description of the
+keyboard. A walk-in, a phone enquiry and a school seminar arrived indistinguishable, so the
+report that decides where the marketing money goes had a growing bucket in it that meant
+nothing, and it cannot be reconstructed afterwards. Now required, and validated against the
+configured options rather than taken as free text.
+
+**Dead now stops the chasing.** Only terminal stages did. A lead a counsellor had explicitly
+marked Dead went on breaching its SLA every night, escalating to whoever the ladder named, and
+sitting in the overdue list — so the one action for saying "stop chasing this person" changed
+nothing about what the system chased them about, which is how an escalation ladder stops being
+read. `isNoLongerWorked()` is the shared notion; `dead` is the single temperature value with
+behaviour attached, matched on the stored value so renaming its label changes nothing.
+
+**The counsellor can set the instalment plan until the first payment lands.** It was
+`enrolment.update` and nothing else — an accounts permission — so the counsellor who had just
+agreed three instalments with a family could not record them and had to message accounts to
+type them in. The first payment is the line because that is where the plan stops being an
+intention and becomes something a ledger is reconciled against; `payments` is append-only, so
+the question has an exact answer rather than a judgement.
+
+**The lead profile autosaves**, like the stage and temperature controls above it have all
+along. The whole form is submitted rather than the one changed field: the action is idempotent
+and already skips fields a form did not render, so autosave and the Save button take the same
+path and there is no second code path to keep in step. Success is a quiet line rather than a
+toast — thirty fields deep, a toast per blur is a screen that flickers all day.
+
+**Preferences was four fields and a screenful of nothing.** Two of them are multiselects that
+rendered as a single tall stack inside a two-column grid, so the cell beside each was four
+hundred pixels of empty. Options wrap into columns past five, and the section grid stops short
+fields stretching to match the tall one.

@@ -75,8 +75,27 @@ export function DynamicFieldInput({
 
     case "multiselect": {
       const current = Array.isArray(defaultValue) ? (defaultValue as string[]) : [];
+      /*
+        Columns once there are more than a handful.
+
+        A single stack of eight exams is nearly four hundred pixels tall,
+        and it sits in a two-column grid — so the cell beside it is four
+        hundred pixels of nothing, and the section runs off the bottom of
+        the screen for four fields. Wrapping the options puts the height
+        back under control without shrinking the tap targets, which stay
+        at 44px because this is used on phones.
+
+        Six is the threshold rather than two: a Yes/No pair in two columns
+        reads as a mistake.
+      */
+      const columns =
+        options.length > 10
+          ? "grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3"
+          : options.length > 5
+            ? "grid grid-cols-2 gap-x-4 gap-y-1.5"
+            : "flex flex-col gap-1.5";
       return (
-        <div className="flex flex-col gap-1.5">
+        <div className={columns}>
           {options.map((option) => (
             <label
               key={option.value}

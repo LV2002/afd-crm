@@ -15,9 +15,10 @@ export default async function NewLeadPage() {
   const leadSingular = formatTerm(terms, "lead", "singular");
 
   const supabase = await createClient();
-  const [examOptions, courseOptions, centerRows] = await Promise.all([
+  const [examOptions, courseOptions, sourceOptions, centerRows] = await Promise.all([
     getDropdownOptions(supabase, "exam"),
     getDropdownOptions(supabase, "course"),
+    getDropdownOptions(supabase, "lead_source"),
     supabase
       .from("centers")
       .select("id, name")
@@ -41,6 +42,7 @@ export default async function NewLeadPage() {
         centers={centers}
         examOptions={examOptions}
         courseOptions={courseOptions}
+        sourceOptions={sourceOptions}
         showCenterPicker={scope !== "own"}
       />
     </div>

@@ -90,6 +90,12 @@ export default async function WhatsAppInboxPage({
 
   const selected = selectedKey ? (threads.find((t) => t.key === selectedKey) ?? null) : null;
 
+  // A `lead:<id>` key that matched nothing: the Chat button on a lead who
+  // has never exchanged a message. Kept so the empty panel can say that,
+  // and link back, rather than shrugging.
+  const askedForLeadId =
+    !selected && selectedKey?.startsWith("lead:") ? selectedKey.slice("lead:".length) : null;
+
   const [messages, withinWindow] = selected
     ? selected.leadId
       ? await Promise.all([
@@ -276,6 +282,31 @@ export default async function WhatsAppInboxPage({
                 />
               )}
             </>
+          ) : askedForLeadId ? (
+            /*
+              Arrived from a lead's Chat button, and that lead has never
+              exchanged a message on this number.
+
+              Worth answering properly rather than showing "pick a
+              conversation", because the person did pick one — the answer
+              is that there is nothing to pick. And the reason they cannot
+              simply start one is Meta's, not this CRM's: a free-form
+              message is only allowed inside the 24 hours somebody else's
+              message opens, which is the same rule stated on every other
+              screen that touches WhatsApp.
+            */
+            <div className="flex h-full min-h-64 flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-8 text-center">
+              <p className="text-sm font-medium">No WhatsApp conversation with this lead yet.</p>
+              <p className="max-w-md text-sm text-muted-foreground">
+                A conversation appears here once they message the institute&apos;s number, or
+                once a broadcast to them gets a reply. WhatsApp only accepts a free-form
+                message within 24 hours of theirs — that is Meta&apos;s rule — so to write
+                first, message them from the WhatsApp Business app on your phone.
+              </p>
+              <Link href={`/leads/${askedForLeadId}`} className="text-sm font-medium underline">
+                Back to the lead
+              </Link>
+            </div>
           ) : (
             <div className="flex h-full min-h-64 items-center justify-center rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
               Pick a conversation to read.

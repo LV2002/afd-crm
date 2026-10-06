@@ -39,6 +39,8 @@ import { getTerminologyMap } from "@/lib/terminology/get-terminology";
 
 import { ExportButton } from "./export-button";
 import { LeadFilters, type FilterFieldWithOptions } from "./lead-filters";
+import { DEAD_TEMPERATURE } from "@/lib/leads/no-longer-worked";
+import { RememberLeadFilters } from "./remember-filters";
 import { RevealPhoneButton } from "./reveal-phone-button";
 
 const PAGE_SIZE = 25;
@@ -163,6 +165,11 @@ export default async function LeadsPage({
     if (terminalIds.length > 0) {
       query = query.not("stage_id", "in", `(${terminalIds.join(",")})`);
     }
+    // And Dead, for the same reason one step further on: the counsellor
+    // has already said they are not chasing this person. A catch-up list
+    // that keeps showing them is asking the same question every morning
+    // and being given the same answer.
+    query = query.or(`temperature.is.null,temperature.neq.${DEAD_TEMPERATURE}`);
   }
   // Stripped before it reaches the filter expression: a comma in a search
   // box would otherwise open a second clause. See lib/db/filter-term.ts.
@@ -312,6 +319,8 @@ export default async function LeadsPage({
           )}
         </div>
       </div>
+
+      <RememberLeadFilters />
 
       <LeadFilters
         filterFields={filterFieldsWithOptions}
