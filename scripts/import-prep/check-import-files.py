@@ -30,7 +30,7 @@ SOURCES = {
 }
 EXAMS = {
     "NID", "NIFT UG", "NIFT MDes", "UCEED", "CEED", "NATA", "JEE Paper 2",
-    "NID MDes", "BFA", "NIFT PG", "B.Arch", "KS DAT", "KEAM",
+    "NID PG", "BFA", "NIFT PG", "B.Arch", "KS DAT", "KEAM",
 }
 COURSES = {
     "Foundation", "DWO", "DAO", "DRH", "Crash", "Repeat Batch", "MDes", "Consultancy",

@@ -7784,3 +7784,90 @@ exams (NID MDes, NIFT PG, BFA, B.Arch, KS DAT, KEAM), and assignment to one coun
 a temporary rule rather than an owner column — assignment stays the rules engine's job.
 
 **1623 tests pass**, typecheck, lint and build clean.
+
+## 2026-10-06 — The dashboard gets a shape
+
+Leon asked for better UI and more visual data, starting with the dashboard, polishing
+rather than redesigning. `docs/DESIGN-REFERENCES.md` holds the research — what is weak,
+which repos fix which part, and the order to do it in.
+
+### What shipped
+
+**Three hero figures** on both the counsellor's card and the centre head's: new leads
+this month, admissions this month, and what needs somebody today. Each of the first two
+carries last month's figure, the direction of travel in words as well as colour, and a
+14-day sparkline. The other five figures are demoted to a compact row — same data, less
+weight.
+
+**A 30-day chart of arrivals** on both cards, with a crosshair, a hover tooltip, an empty
+state that explains itself, and a screen-reader table of the same numbers.
+
+**Progress against target**, when somebody has set one, with a pace marker for where an
+even month would have you today.
+
+New pure functions in `lib/dashboard/scoreboard.ts`: last month's leads and admissions
+for the comparison, and `buildDailySeries` for the chart. `Boundaries` gained
+`startOfPreviousMonth`, derived as one millisecond before this month began, so it is
+right in January without month arithmetic.
+
+`getMyDashboard` replaces `getMyScoreboard` and returns the figures, the series and the
+target in one pass; the enrolment query reaches back to whichever is earlier, the start
+of last month or the start of the chart.
+
+### Tests
+
+`tests/dashboard-scoreboard.spec.ts` gains 6 cases: the previous-month window excludes
+the last instant of the month before it, a dropped admission counts in neither month, the
+daily series buckets an 11pm Kochi enquiry into the right IST day, keeps empty days, and
+ignores an admission belonging to somebody else's lead.
+
+Chapter 4 of the manual now describes the card as it is, including what the arrow, the
+sparkline and the pace line mean.
+
+## 2026-10-06 — Insights draws its numbers before it lists them
+
+Second pass on the UI work, following `docs/DESIGN-REFERENCES.md`. Every Insights tab
+computed real figures and rendered them only as a table.
+
+### A chart kit, two components
+
+`components/charts/chart-figure.tsx` — the frame every chart sits in: a caption, the
+chart, and the same numbers as a screen-reader table. The table is not politeness. A
+chart that exists only as pixels cannot be read by somebody using a screen reader or
+quoted by anybody who wants the figure, and it is also the relief the palette requires.
+
+`components/charts/bar-list.tsx` — a ranked horizontal bar list in plain CSS, no charting
+library, so it renders on the server inside the page that computed the numbers and works
+before JavaScript does. One hue: a single measure across categories is magnitude, and
+colour there would encode a variable that does not exist. It takes an optional
+`reference` line — the institute's own average — because "18%" is a number and "18%
+against an overall 11%" is a decision.
+
+### Five tabs got one, sorted biggest first
+
+Sources (leads per source, admissions as the hint), Segments (conversion with the overall
+rate as the line), Referrals (who sent people who enrolled), Targets (expected admissions
+per stage, weighted), Handovers (median confirmed-to-paid days, slowest first). The
+pages that use only the bar list ship **868 bytes** of JavaScript.
+
+### Timing got the one chart that needs colour
+
+Cohort curves — one line per arrival month — is the only chart here where colour carries
+identity rather than decoration. It uses the dataviz skill's validated categorical theme,
+added to `globals.css` as `--series-1` … `--series-6` in its fixed slot order, which is
+the colourblind-safety mechanism rather than a cosmetic choice. Validated in both modes
+before shipping: worst adjacent CVD ΔE 9.1 light / 8.4 dark, normal-vision 19.6 / 19.3.
+Three light-mode steps fall below 3:1 on white, which the validator permits only with
+relief — hence the legend and the table.
+
+Capped at six lines: a seventh would need a seventh hue, and past six the adjacent pairs
+stop being separable. The table still lists every month.
+
+### What the charts refuse to do
+
+**They do not invent a number.** A segment too small for a meaningful rate is left out
+rather than drawn at zero; a cohort too young for a 90-day figure has a gap in its line,
+not a fall to the floor. **They do not replace the table** — each shows the top twelve
+and the table below lists everything.
+
+**1628 tests pass**, typecheck, lint and build clean. Manual chapter 11 updated.

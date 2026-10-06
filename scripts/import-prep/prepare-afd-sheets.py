@@ -2,7 +2,20 @@
 """
 Turns AFD India's four historic lead sheets into the CRM's import format.
 
-    python3 scripts/import-prep/prepare-afd-sheets.py <folder-of-sheets> <output-folder>
+    python3 scripts/import-prep/prepare-afd-sheets.py <folder-of-sheets> <output-folder> \
+        [--admissions kochi-workbook.xlsx] [--ad-archive feedback-workbook.xlsx] [--ad-year 2026]
+
+`--admissions` is the Excel original of the main enquiry sheet. A CSV
+cannot carry cell colour, and in that sheet green means the enquiry became
+an admission — so the colour is read back out of the workbook and those
+leads are marked.
+
+`--ad-archive` is the lead feedback workbook, which holds a Google Ads
+sheet and a Meta sheet for every month rather than the single month the
+CSV exports carry. Given it, the Google and Meta files are built from the
+workbook for `--ad-year` (2026 by default) instead of from the CSVs.
+
+Both need `pip install openpyxl`; without them everything else still runs.
 
 The four sheets are a main enquiry register kept by hand since 2025, a
 Google Ads export, a Meta Lead Ads export and a website-forms log. They
@@ -38,6 +51,12 @@ COLUMNS = [
 ]
 
 CENTRE = "Kochi"
+
+# What the enquiry register's cell colours mean, phone number by phone
+# number. Colour is formatting rather than data, so a CSV export drops it
+# — and in that sheet it carries the outcome of the whole conversation.
+# Filled by `load_colours()` when the workbook is passed in.
+MARKED = {}
 
 report = Counter()
 unmapped = {"source": Counter(), "education": Counter(), "exam": Counter(), "course": Counter()}
@@ -158,7 +177,7 @@ def education_status(raw):
 # --------------------------------------------------------------------------
 
 EXAM_PATTERNS = [
-    (r"nid\s*(m ?des|pg|mdes)", "NID MDes"),
+    (r"nid\s*(m ?des|pg|mdes)", "NID PG"),
     # NIFT's postgraduate programmes are named, not numbered: somebody
     # writing "mfm" or "m f tech" is naming a NIFT PG entrance.
     (r"\bmfm\b|m ?f ?tech", "NIFT PG"),
@@ -254,10 +273,12 @@ def source_for(raw):
         return "Instagram", original
     if "fb" in v or "facebook" in v or "meta" in v:
         return "Meta", original
+    # Six leads across two years, so no source option of their own — the
+    # wording survives in the sub-source either way.
     if "brochure" in v or "broshure" in v or "brichure" in v or "brochur" in v:
-        return "Brochure", original
+        return "Other", original
     if "event" in v or "expo" in v or "fair" in v or "mariett" in v:
-        return "Event", original
+        return "Other", original
     if "scholarship" in v or "schlarship" in v:
         return "Website", original
     if "walk" in v or "office" in v:
@@ -370,6 +391,159 @@ def note_block(pairs):
     return "\n".join(lines)
 
 
+def cell_text(value):
+    """A cell as the string a person would have typed.
+
+    Excel stores a phone number typed as digits as a float, so openpyxl
+    hands back 9847012345.0 — and stripping non-digits from that leaves a
+    trailing zero that normalises to nothing and matches nobody. This is
+    the single place that is undone.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value).strip()
+
+
+def sheet_rows(worksheet, header_row=1):
+    """Rows of a worksheet as dicts, keyed by the stripped header."""
+    rows = list(worksheet.iter_rows(values_only=True))
+    if len(rows) <= header_row:
+        return []
+    headers = [cell_text(c) for c in rows[header_row - 1]]
+    out = []
+    for offset, values in enumerate(rows[header_row:], start=header_row + 1):
+        if not any(v not in (None, "") for v in values):
+            continue
+        row = {headers[i] if i < len(headers) and headers[i] else f"col{i}": cell_text(v)
+               for i, v in enumerate(values)}
+        # Its real row number in that worksheet. Without this a note says
+        # "row 253" of a sheet with 24 rows, because the rows of twelve
+        # months are read into one list.
+        row["__row"] = str(offset)
+        out.append(row)
+    return out
+
+
+# Confirmed with the client, colour by colour. Four greys rather than the
+# three they named: the sheet has one more shade than anybody remembers
+# applying, and all four mean the same thing.
+COLOURS = {
+    "FF00FF00": "admitted",
+    "FFFF9900": "competitor",
+    "FF999999": "negative",
+    "FFB7B7B7": "negative",
+    "FFCCCCCC": "negative",
+    "FFD9D9D9": "negative",
+    "FF00FFFF": "very hot",
+    "FFFF0000": "hot",
+    "FFFFFF00": "warm",
+}
+
+# A row can carry more than one colour, so one has to win. An outcome
+# beats a temperature: somebody who joined a competitor in March was warm
+# in February, and the February colour is not news. `admitted` is first
+# because it is the only one of these the client checked by hand.
+PRIORITY = ["admitted", "competitor", "negative", "very hot", "hot", "warm"]
+
+# What each meaning does to the lead.
+TEMPERATURE_FOR = {
+    "admitted": "Dead",
+    "competitor": "Dead",
+    "negative": "Dead",
+    "very hot": "Hot",
+    "hot": "Hot",
+    "warm": "Warm",
+}
+
+NOTE_FOR = {
+    "admitted": "ADMITTED — this enquiry became an admission (marked green in the Kochi workbook). "
+                "Imported as history, not as an open lead.",
+    "competitor": "JOINED A COMPETITOR — marked orange in the Kochi workbook.",
+    "negative": "Marked negative or wrong target in the Kochi workbook.",
+    "very hot": "Marked very hot in the Kochi workbook — the sheet's own top grade, above Hot.",
+    "hot": "Marked hot in the Kochi workbook.",
+    "warm": "Marked warm in the Kochi workbook.",
+}
+
+
+def load_colours(path, sheet="follow up"):
+    """Reads the green rows out of the Excel workbook.
+
+    openpyxl is imported here rather than at the top so the script still
+    runs without it when no workbook is given — the CSV path needs nothing
+    installed, and that is the path somebody will run in a hurry.
+    """
+    import openpyxl
+
+    workbook = openpyxl.load_workbook(path, data_only=True)
+    worksheet = workbook[sheet]
+    headers = [str(c.value).strip() if c.value is not None else "" for c in next(worksheet.iter_rows(min_row=1, max_row=1))]
+    phone_at = headers.index("phone")
+
+    marked, stranded, unknown = {}, [], Counter()
+    for row in worksheet.iter_rows(min_row=2):
+        if not any(c.value not in (None, "") for c in row):
+            continue
+
+        meanings = set()
+        for cell in row:
+            fill = cell.fill
+            if not (fill and fill.patternType and fill.fgColor is not None and fill.fgColor.type == "rgb"):
+                continue
+            rgb = fill.fgColor.rgb
+            if rgb in COLOURS:
+                meanings.add(COLOURS[rgb])
+            elif rgb not in ("FFFFFFFF", "00000000", None):
+                unknown[rgb] += 1
+        if not meanings:
+            continue
+        meaning = min(meanings, key=PRIORITY.index)
+        # Excel hands back a phone typed as a number as 9847012345.0, and
+        # stripping non-digits from that leaves a trailing zero that
+        # matches nobody. Drop the float tail first.
+        raw = str(row[phone_at].value or "").strip()
+        if raw.endswith(".0"):
+            raw = raw[:-2]
+        normalised = normalise_phone(raw)
+        if normalised:
+            # First colour wins when two rows share a number: the sheet is
+            # in date order, so that is the earlier conversation, and the
+            # later one is the row that is still open.
+            marked.setdefault(normalised, meaning)
+            continue
+
+        if meaning != "admitted":
+            continue
+
+        # A green row with no usable number is an admission the CRM cannot
+        # be told about — the one kind of lost row worth chasing, since
+        # these are students who actually joined. Collected by name so
+        # somebody can look them up.
+        cells = {headers[i]: c.value for i, c in enumerate(row) if i < len(headers)}
+        stranded.append({
+            "Name": clean_name(str(cells.get("Name") or "")),
+            "Phone as written": raw,
+            "Email": clean_text(str(cells.get("email") or "")),
+            "Course": clean_text(str(cells.get("COURSE") or "")),
+            "Exam": clean_text(str(cells.get("EXAM") or "")),
+            "Place": clean_text(str(cells.get("Place") or "")),
+            "Conversation": clean_text(str(cells.get("Conversation Details") or ""))[:300],
+        })
+
+    report["admissions_marked_green"] = sum(1 for m in marked.values() if m == "admitted")
+    report["admissions_green_without_a_phone"] = len(stranded)
+    for meaning in PRIORITY:
+        report[f"marked_{meaning.replace(' ', '_')}"] = sum(1 for m in marked.values() if m == meaning)
+    if unknown:
+        print("Colours in the sheet that nobody has explained, left alone:")
+        for rgb, n in unknown.most_common(8):
+            print(f"  #{rgb[2:]}  on {n} cells")
+        print()
+    return marked, stranded
+
+
 def blank_row():
     return {column: "" for column in COLUMNS}
 
@@ -422,6 +596,7 @@ def main_sheet(rows, rejects):
         row = blank_row()
         source, sub_source = source_for(r.get("Source"))
         city, district, state = place(r.get("Place"))
+        marked = MARKED.get(primary)
         exam_year = re.sub(r"\D", "", clean_text(r.get("exam year")))[:4]
         previous = clean_text(r.get("Previous attempt")).lower()
         competitor = clean_text(r.get("Competitor details"))
@@ -436,16 +611,28 @@ def main_sheet(rows, rejects):
             "Education Status": education_status(r.get("Current Education Status")),
             "School / College": clean_text(r.get("Name of School or College (current or last attended)")),
             "Previous Attempts": "1" if previous.startswith("yes") else ("0" if previous.startswith("no") else ""),
-            "Competitor Student?": "yes" if competitor else "",
+            # Orange means they joined a competitor, which is what this
+            # field asks — so it is true even where the sheet never named
+            # the institute.
+            "Competitor Student?": "yes" if competitor or marked == "competitor" else "",
             "Competitor Institute": competitor,
             "Interested Exams": exams(r.get("EXAM")),
             "Exam Year": exam_year if re.fullmatch(r"20\d\d", exam_year) else "",
             "Courses Interested": courses(r.get("COURSE")),
             "Lead Source": source,
-            "Sub-source": sub_source,
-            "Temperature": temperature_from_status(status),
+            # The marker goes in Sub-source because it is the only field in
+            # the import format that is free text and filterable. An
+            # imported lead always enters at the New stage, so the CRM has
+            # no way to say "this one converted" — this, and the first line
+            # of the note, are how somebody finds them afterwards.
+            "Sub-source": f"{sub_source} — ADMITTED" if marked == "admitted" else sub_source,
+            # The colour wins over the status column: it is the mark
+            # somebody applied deliberately, and the status text is often
+            # a note to themselves from an earlier call.
+            "Temperature": TEMPERATURE_FOR.get(marked) or temperature_from_status(status),
             "Centre": CENTRE,
             "Notes": note_block([
+                ("", NOTE_FOR.get(marked, "")),
                 ("", f"Imported from the main enquiry sheet, row {index}."),
                 ("Enquiry date", r.get("24-Sep-2026")),
                 ("Status in the sheet", status),
@@ -470,6 +657,83 @@ def main_sheet(rows, rejects):
 
 
 # --------------------------------------------------------------------------
+# The feedback workbook: two years of monthly ad sheets
+# --------------------------------------------------------------------------
+
+MONTHS = ("JANUARY FEBRUARY MARCH APRIL MAY JUNE JULY AUGUST SEPTEMBER OCTOBER "
+          "NOVEMBER DECEMBER").split()
+
+
+def ad_sheets(path, year, kind):
+    """The monthly lead sheets for one year, newest last.
+
+    The workbook also holds `Google Leads Status …` sheets, which are
+    reports — spend, cost per lead, counts by status — not leads, and
+    `GAds JULY 2026-Calls`, which is call volumes. Both are excluded by
+    name: a sheet is a lead sheet only if its title is "<kind> <month>
+    <year>".
+    """
+    import openpyxl
+
+    workbook = openpyxl.load_workbook(path, data_only=True, read_only=True)
+    wanted = []
+    for title in workbook.sheetnames:
+        name = title.strip().upper()
+        if not name.startswith(kind.upper()):
+            continue
+        if str(year) not in name:
+            continue
+        if not any(month in name for month in MONTHS):
+            continue
+        if "CALL" in name or "STATUS" in name or "REPORT" in name:
+            continue
+        wanted.append(title)
+
+    rows = []
+    for title in wanted:
+        for row in sheet_rows(workbook[title]):
+            row["__sheet"] = title
+            rows.append(row)
+    return wanted, rows
+
+
+def meta_archive(path, year):
+    """The Meta rows, from the two sheets that hold them.
+
+    `Meta New` is an ordinary export. `META 2026` is the same export with
+    a year of months stacked into it by hand — a stray header part-way
+    down, month-name separator rows, and a test lead at the top — so it
+    is read positionally against the export's own column order and
+    anything without a date, a name and a phone is dropped.
+    """
+    import openpyxl
+
+    workbook = openpyxl.load_workbook(path, data_only=True, read_only=True)
+    columns = ["id", "created_time", "ad_id", "ad_name", "adset_id", "adset_name",
+               "campaign_id", "campaign_name", "form_id", "form_name", "is_organic",
+               "platform", "which_exam_are_you_interested_in?",
+               "what_is_your_current_qualification?", "first_name", "email",
+               "phone_number", "city", "lead_status"]
+
+    rows = []
+    for title in workbook.sheetnames:
+        upper = title.strip().upper()
+        if upper not in ("META NEW", f"META {year}"):
+            continue
+        for offset, values in enumerate(workbook[title].iter_rows(values_only=True), start=1):
+            row = {columns[i]: cell_text(v) for i, v in enumerate(values) if i < len(columns)}
+            row["__row"] = str(offset)
+            created = row.get("created_time", "")
+            if not created.startswith(str(year)):
+                continue
+            if not row.get("first_name") or not row.get("phone_number"):
+                continue
+            row["__sheet"] = title
+            rows.append(row)
+    return rows
+
+
+# --------------------------------------------------------------------------
 # Sheet 2 — Google Ads
 # --------------------------------------------------------------------------
 
@@ -483,23 +747,37 @@ def google_sheet(rows, rejects):
         found = re.search(r"utm_campaign=([^&]+)", landing)
         if found:
             campaign = found.group(1).replace("_", " ")
+        elif landing and not landing.startswith("http"):
+            # The monthly sheets name the campaign ("NIFT", "UCEED-CEED")
+            # where the September export pastes the landing-page URL.
+            campaign = landing
         exam_from_url = ""
         page = re.search(r"campaign\.afdindia\.com/(\w+)", landing)
         if page:
             exam_from_url = exams(page.group(1))
+        elif campaign:
+            exam_from_url = exams(campaign)
 
         if not name or not primary:
             rejects.append({
-                "Sheet": "Google Ads", "Row": index, "Name": clean_text(r.get("Name")),
-                "Phone as written": clean_text(r.get("Student Contact Number ")),
+                "Sheet": clean_text(r.get("__sheet")) or "Google Ads", "Row": index,
+                "Name": clean_text(r.get("Name")),
+                "Phone as written": clean_text(r.get("Student Contact Number ")) or clean_text(r.get("Student Contact Number")),
                 "Email": clean_text(r.get("Email")),
                 "Why it cannot be imported": "No name" if not name else "No usable phone number",
-                "Everything else on the row": note_block([("Campaign", campaign), ("Status", r.get("Status"))]),
+                "Everything else on the row": note_block([
+                    ("Sheet", r.get("__sheet")), ("Campaign", campaign), ("Status", r.get("Status")),
+                    ("Conversation", r.get("Comments: location, grade, school, student/parent, weekend/regular/synopsis")),
+                ]),
             })
             continue
 
         row = blank_row()
         city, district, state = place(r.get("District"))
+        sheet = clean_text(r.get("__sheet")) or "the Google Ads sheet"
+        # The monthly sheets' first column is the date and is sometimes
+        # unheaded, which `sheet_rows` names col0.
+        when = clean_text(r.get("Date")) or clean_text(r.get("col0"))
         row.update({
             "Student Name": name,
             "Primary Phone": primary,
@@ -507,13 +785,16 @@ def google_sheet(rows, rejects):
             "Email": clean_email(r.get("Email")),
             "City": city, "District": district, "State": state,
             "Interested Exams": exam_from_url,
+            "Courses Interested": courses(r.get("action")),
             "Lead Source": "Google",
             "Sub-source": f"Google Ads — {campaign}" if campaign else "Google Ads",
-            "Temperature": temperature_from_status(r.get("Status")),
+            "Temperature": temperature_from_status(r.get("Status")) or temperature_from_status(r.get("follow up")),
             "Centre": CENTRE,
             "Notes": note_block([
-                ("", f"Imported from the Google Ads sheet, row {index}."),
-                ("Enquiry date", (clean_text(r.get("Date")) or "")[:10]),
+                ("", f"Imported from {sheet}, row {clean_text(r.get('__row')) or index}."),
+                ("Enquiry date", when[:10]),
+                ("Campaign type", r.get("Campaign Type")),
+                ("Follow-up column", r.get("follow up")),
                 ("Status in the sheet", r.get("Status")),
                 ("Conversation", r.get("Comments: location, grade, school, student/parent, weekend/regular/synopsis")),
                 ("Message on the form", r.get("Message")),
@@ -574,7 +855,7 @@ def meta_sheet(rows, rejects, excluded):
             "Sub-source": clean_text(r.get("campaign_name")) or ("Organic Meta form" if organic else "Meta lead form"),
             "Centre": CENTRE,
             "Notes": note_block([
-                ("", f"Imported from the Meta Lead Ads export, row {index}."),
+                ("", f"Imported from {clean_text(r.get('__sheet')) or 'the Meta Lead Ads export'}, row {clean_text(r.get('__row')) or index}."),
                 ("Submitted", (clean_text(r.get("created_time")) or "")[:10]),
                 ("Form", r.get("form_name")),
                 ("Ad", r.get("ad_name")),
@@ -652,11 +933,39 @@ def website_sheet(rows, rejects, excluded):
 
 # --------------------------------------------------------------------------
 
-def main():
-    if len(sys.argv) != 3:
+def parse_args(argv):
+    """Two positional paths plus a few long flags. argparse would do, but
+    this script's whole promise is that it reads top to bottom."""
+    positional, flags = [], {}
+    i = 1
+    while i < len(argv):
+        if argv[i].startswith("--"):
+            if i + 1 >= len(argv):
+                sys.exit(f"{argv[i]} needs a value")
+            flags[argv[i][2:]] = argv[i + 1]
+            i += 2
+        else:
+            positional.append(argv[i])
+            i += 1
+    if len(positional) != 2 or set(flags) - {"admissions", "ad-archive", "ad-year"}:
         sys.exit(__doc__)
-    source_folder, out_folder = sys.argv[1], sys.argv[2]
+    return positional[0], positional[1], flags
+
+
+def main():
+    source_folder, out_folder, flags = parse_args(sys.argv)
     os.makedirs(out_folder, exist_ok=True)
+
+    stranded_admissions = []
+    if "admissions" in flags:
+        marked, stranded_admissions = load_colours(flags["admissions"])
+        MARKED.update(marked)
+        print("Colour marks read from the workbook:")
+        for meaning in PRIORITY:
+            n = sum(1 for m in MARKED.values() if m == meaning)
+            if n:
+                print(f"  {meaning:12} {n:5} enquiries -> {TEMPERATURE_FOR[meaning]}")
+        print()
 
     files = os.listdir(source_folder)
     def find(fragment):
@@ -666,10 +975,24 @@ def main():
         sys.exit(f"No sheet matching {fragment!r} in {source_folder}")
 
     rejects, excluded = [], []
+
+    # The September Google Ads export and the recent Meta export are each a
+    # single month of what the feedback workbook holds a year of, so when
+    # that workbook is given it replaces them rather than adding to them.
+    if "ad-archive" in flags:
+        year = int(flags.get("ad-year", 2026))
+        titles, google_rows = ad_sheets(flags["ad-archive"], year, "GAds")
+        meta_rows = meta_archive(flags["ad-archive"], year)
+        print(f"Ad archive {year}: {len(google_rows)} Google rows from {len(titles)} monthly sheets, "
+              f"{len(meta_rows)} Meta rows.\n")
+    else:
+        google_rows = read_sheet(source_folder, find("Google_Ads"))
+        meta_rows = read_sheet(source_folder, find("Meta_Leads"))
+
     sheets = [
         ("afd-import-1-main-enquiry-sheet.csv", main_sheet(read_sheet(source_folder, find("main_enquiry")), rejects)),
-        ("afd-import-2-google-ads.csv", google_sheet(read_sheet(source_folder, find("Google_Ads")), rejects)),
-        ("afd-import-3-meta-lead-ads.csv", meta_sheet(read_sheet(source_folder, find("Meta_Leads")), rejects, excluded)),
+        ("afd-import-2-google-ads.csv", google_sheet(google_rows, rejects)),
+        ("afd-import-3-meta-lead-ads.csv", meta_sheet(meta_rows, rejects, excluded)),
         ("afd-import-4-website-forms.csv", website_sheet(read_sheet(source_folder, find("Website_Forms")), rejects, excluded)),
     ]
 
@@ -685,6 +1008,9 @@ def main():
                "Everything else on the row"])
     write_csv(os.path.join(out_folder, "afd-review-left-out.csv"), excluded,
               ["Sheet", "Row", "Name", "Why it was left out"])
+    if stranded_admissions:
+        write_csv(os.path.join(out_folder, "afd-review-admissions-without-a-phone.csv"), stranded_admissions,
+                  ["Name", "Phone as written", "Email", "Course", "Exam", "Place", "Conversation"])
 
     print(f"\n{total} leads ready to import, {len(rejects)} need a phone number, {len(excluded)} left out.")
 

@@ -23,6 +23,31 @@ report and honestly see different totals.
 | **Targets** | Progress against the month's numbers, and what the pipeline is worth |
 | **Activity** | What the team did today |
 
+### Every tab opens with a picture
+
+Each tab now draws its numbers before it lists them, and the rule is the
+same everywhere: **sorted biggest first**, so the row worth acting on is
+at the top rather than wherever the alphabet put it.
+
+| Tab | The chart shows |
+|---|---|
+| **Sources** | Leads per source, with how many of them enrolled |
+| **Segments** | Conversion per group, with a line at the institute's own rate |
+| **Timing** | One line per month, showing how fast that month's leads decided |
+| **Handovers** | Median days from confirmed to paid, slowest first |
+| **Referrals** | Who sent people who actually enrolled |
+| **Targets** | Expected admissions per stage, weighted by its chance |
+
+Two things the charts deliberately do **not** do:
+
+- **They do not invent a number.** A segment too small to have a
+  meaningful rate is left out rather than drawn at zero, and a cohort too
+  young for a 90-day figure has a gap in its line, not a drop to the
+  floor. A chart that fills in what nobody knows is worse than no chart.
+- **They do not replace the table.** Every chart shows the top twelve;
+  the table underneath still lists everything, and it is the table you
+  copy numbers out of.
+
 ### Explore
 
 The one to learn first, because it answers questions the others do not.

@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCentreScoreboard,
   buildCounsellorScoreboard,
+  buildDailySeries,
   buildTeamScoreboard,
   ratePercent,
   terminalStageIdsOf,
@@ -36,6 +37,7 @@ const BOUNDARIES: Boundaries = {
   startOfToday: new Date("2026-09-29T18:30:00Z"),
   startOfTomorrow: new Date("2026-09-30T18:30:00Z"),
   startOfMonth: new Date("2026-08-31T18:30:00Z"),
+  startOfPreviousMonth: new Date("2026-07-31T18:30:00Z"),
 };
 
 let seq = 0;
@@ -362,5 +364,82 @@ describe("buildCentreScoreboard", () => {
     expect(result.newThisMonth).toBe(2);
     expect(result.admissionsThisMonth).toBe(2);
     expect(result.admissionsPerLeadThisMonth).toBe(100);
+  });
+});
+
+describe("last month, for the comparison", () => {
+  it("counts leads and admissions inside the previous month only", () => {
+    const leads = [
+      lead({ id: "aug-1", createdAt: "2026-08-04T06:00:00Z" }),
+      lead({ id: "aug-2", createdAt: "2026-08-30T06:00:00Z" }),
+      lead({ id: "sep-1", createdAt: "2026-09-02T06:00:00Z" }),
+      // The last instant of July is not last month when "now" is September.
+      lead({ id: "jul-1", createdAt: "2026-07-31T18:29:00Z" }),
+    ];
+    const result = buildCounsellorScoreboard({
+      leads,
+      enrolments: [admission("aug-1", "2026-08-20T06:00:00Z"), admission("sep-1")],
+      stages: STAGES,
+      boundaries: BOUNDARIES,
+    });
+
+    expect(result.newLastMonth).toBe(2);
+    expect(result.newThisMonth).toBe(1);
+    expect(result.admissionsLastMonth).toBe(1);
+    expect(result.admissionsThisMonth).toBe(1);
+  });
+
+  it("does not count a dropped admission in either month", () => {
+    const result = buildCounsellorScoreboard({
+      leads: [lead({ id: "l1", createdAt: "2026-08-04T06:00:00Z" })],
+      enrolments: [
+        { leadId: "l1", salesToAccountsAt: "2026-08-20T06:00:00Z", droppedAt: "2026-09-01T06:00:00Z" },
+      ],
+      stages: STAGES,
+      boundaries: BOUNDARIES,
+    });
+
+    expect(result.admissionsLastMonth).toBe(0);
+  });
+});
+
+describe("buildDailySeries", () => {
+  const days = [
+    { date: "2026-09-28", from: new Date("2026-09-27T18:30:00Z"), to: new Date("2026-09-28T18:30:00Z") },
+    { date: "2026-09-29", from: new Date("2026-09-28T18:30:00Z"), to: new Date("2026-09-29T18:30:00Z") },
+    { date: "2026-09-30", from: new Date("2026-09-29T18:30:00Z"), to: new Date("2026-09-30T18:30:00Z") },
+  ];
+
+  it("buckets a lead into the IST day it arrived on, not the UTC one", () => {
+    // 29 September, 23:00 IST — which is 17:30 UTC on the 29th, but an
+    // evening enquiry belongs to the day it was made in Kochi.
+    const series = buildDailySeries({
+      leads: [lead({ id: "evening", createdAt: "2026-09-29T17:30:00Z" })],
+      enrolments: [],
+      days,
+    });
+
+    expect(series.map((d) => d.leads)).toEqual([0, 1, 0]);
+  });
+
+  it("keeps a day with nothing in it", () => {
+    // A series that skips empty days draws a busy month out of a quiet one.
+    const series = buildDailySeries({ leads: [], enrolments: [], days });
+    expect(series).toHaveLength(3);
+    expect(series.every((day) => day.leads === 0 && day.admissions === 0)).toBe(true);
+  });
+
+  it("counts an admission only for a lead in the set, and never a dropped one", () => {
+    const series = buildDailySeries({
+      leads: [lead({ id: "mine", createdAt: "2026-09-01T06:00:00Z" })],
+      enrolments: [
+        admission("mine", "2026-09-29T06:00:00Z"),
+        admission("somebody-elses", "2026-09-29T06:00:00Z"),
+        { leadId: "mine", salesToAccountsAt: "2026-09-28T06:00:00Z", droppedAt: "2026-09-29T06:00:00Z" },
+      ],
+      days,
+    });
+
+    expect(series.map((d) => d.admissions)).toEqual([0, 1, 0]);
   });
 });

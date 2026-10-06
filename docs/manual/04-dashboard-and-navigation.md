@@ -22,12 +22,41 @@ zeroes, which is worse than showing nothing.
 | Widget | What it shows | Needs |
 |---|---|---|
 | **Your day** | The work queue: Overdue, Due today, New, At risk | `lead.read` |
-| **Your numbers** | Assigned today, this month's new leads and admissions, admission rate | `lead.read` |
-| **Centre pipeline** | New leads this month, what is in the funnel, SLA breaches, admissions | `lead.assign` |
+| **Your numbers** | This month's leads and admissions against last month's, what needs you today, and thirty days of arrivals | `lead.read` |
+| **Centre pipeline** | The same three, for the whole centre, plus what nobody is working | `lead.assign` |
 | **Counsellor performance** | Each counsellor's active leads, new leads, admissions, overdue follow-ups | `report.center` |
 | **Accounts** | Waiting for a first payment, collected this month, overdue instalments | `payment.read` |
 | **Students** | Active students, who joined this month | `student.read` |
 | **Administration** | Users, centres, integration health, anything broken | `settings.manage` |
+
+### Your numbers, in detail
+
+**Three big figures, then the rest.** The card used to be eight numbers of
+the same size, which is a wall rather than an answer. Now three are large:
+**new leads this month**, **admissions this month** and **needs you
+today**. Under each of the first two is last month's figure and the shape
+of the last fortnight, because a number on its own cannot tell you whether
+it is a good month.
+
+- **The arrow and the sentence say the same thing.** *Up 3 on last month
+  (9)* — you never have to read the colour to know which way it went.
+- **The little chart is shape, not detail.** It has no numbers on purpose;
+  the figure beside it is the value.
+- **Needs you today** is overdue follow-ups plus leads nobody has ever
+  answered. It turns red when it is above zero, because zero is the
+  target.
+- **The 30-day chart** is new leads per day. Hover any day for the count.
+  A flat stretch is a real answer: that is a week nothing came in.
+- **Against target** appears only if somebody has set you one (Settings →
+  Targets). The line across the bar is where an even month would have you
+  today — not a judgement, just the pace.
+
+**Nothing was taken away.** The smaller row underneath carries every
+other figure the card has ever shown — active leads, assigned today,
+never contacted, overdue follow-ups, due today, admission rate, SLA
+breached — demoted rather than removed. Never contacted and overdue are
+listed separately there as well as added together in the big figure,
+because which of the two it is changes what you do about it.
 
 ### Your day, in detail
 

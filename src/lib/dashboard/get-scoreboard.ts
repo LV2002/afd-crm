@@ -2,13 +2,21 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { startOfDayIST, startOfMonthIST, startOfTomorrowIST } from "@/lib/format/date";
+import {
+  formatDateIST,
+  lastDaysIST,
+  startOfDayIST,
+  startOfMonthIST,
+  startOfTomorrowIST,
+} from "@/lib/format/date";
 
 import {
   buildCentreScoreboard,
   buildCounsellorScoreboard,
+  buildDailySeries,
   buildTeamScoreboard,
   type Boundaries,
+  type DailyCount,
   type CentreScoreboard,
   type CounsellorScoreboard,
   type ScoreboardEnrolment,
@@ -73,12 +81,20 @@ function toEnrolment(row: EnrolmentRow): ScoreboardEnrolment {
 }
 
 export function boundariesNow(now = new Date()): Boundaries {
+  const startOfMonth = startOfMonthIST(now);
   return {
     startOfToday: startOfDayIST(now),
     startOfTomorrow: startOfTomorrowIST(now),
-    startOfMonth: startOfMonthIST(now),
+    startOfMonth,
+    // One millisecond before this month began is the last instant of the
+    // previous one, whatever its length — no month arithmetic, and right
+    // in January.
+    startOfPreviousMonth: startOfMonthIST(new Date(startOfMonth.getTime() - 1)),
   };
 }
+
+/** How many days the dashboard's own chart covers. */
+export const DASHBOARD_DAYS = 30;
 
 async function loadStages(supabase: SupabaseClient): Promise<StageInfo[]> {
   const { data } = await supabase
@@ -88,46 +104,80 @@ async function loadStages(supabase: SupabaseClient): Promise<StageInfo[]> {
   return (data ?? []).map((row) => ({ id: row.id, stageType: row.stage_type }));
 }
 
+export interface MyDashboard {
+  scoreboard: CounsellorScoreboard;
+  /** One row per day for the last `DASHBOARD_DAYS`, oldest first. */
+  series: DailyCount[];
+  /** This month's admissions target for this person, or null if nobody set one. */
+  admissionsTarget: number | null;
+}
+
 /**
- * One person's own figures.
+ * One person's own figures, their last thirty days, and their target.
  *
- * The enrolment query is deliberately not filtered by lead — fetching only
- * this month's confirmed admissions in the caller's scope is one small
- * query, and `buildCounsellorScoreboard` already ignores any that belong to
- * a lead outside the set it was given.
+ * The enrolment query is deliberately not filtered by lead — fetching the
+ * confirmed admissions in the caller's scope is one small query, and
+ * `buildCounsellorScoreboard` already ignores any that belong to a lead
+ * outside the set it was given. It reaches back to the start of last
+ * month rather than this one, because the figure a person reads first is
+ * the comparison, and that needs last month's rows.
  */
-export async function getMyScoreboard(
+export async function getMyDashboard(
   supabase: SupabaseClient,
   userId: string,
-): Promise<CounsellorScoreboard> {
+): Promise<MyDashboard> {
   const boundaries = boundariesNow();
+  const days = lastDaysIST(new Date(), DASHBOARD_DAYS);
+  // Whichever is earlier: the start of last month, or the start of the
+  // chart. One query has to cover both the comparison and the series.
+  const since = new Date(
+    Math.min(boundaries.startOfPreviousMonth.getTime(), days[0].from.getTime()),
+  );
 
-  const [stages, { data: leadRows }, { data: enrolmentRows }] = await Promise.all([
-    loadStages(supabase),
-    supabase
-      .from("leads")
-      .select(LEAD_COLUMNS)
-      .eq("assigned_to", userId)
-      .is("deleted_at", null)
-      .returns<LeadRow[]>(),
-    supabase
-      .from("enrolments")
-      .select("lead_id, sales_to_accounts_at, dropped_at")
-      .is("deleted_at", null)
-      .gte("sales_to_accounts_at", boundaries.startOfMonth.toISOString())
-      .returns<EnrolmentRow[]>(),
-  ]);
+  const [stages, { data: leadRows }, { data: enrolmentRows }, { data: targetRows }] =
+    await Promise.all([
+      loadStages(supabase),
+      supabase
+        .from("leads")
+        .select(LEAD_COLUMNS)
+        .eq("assigned_to", userId)
+        .is("deleted_at", null)
+        .returns<LeadRow[]>(),
+      supabase
+        .from("enrolments")
+        .select("lead_id, sales_to_accounts_at, dropped_at")
+        .is("deleted_at", null)
+        .gte("sales_to_accounts_at", since.toISOString())
+        .returns<EnrolmentRow[]>(),
+      supabase
+        .from("targets")
+        .select("target_value")
+        .eq("owner_id", userId)
+        .eq("metric", "admissions")
+        .eq("period_month", monthStartDateIST(boundaries.startOfMonth))
+        .is("deleted_at", null)
+        .returns<Array<{ target_value: number }>>(),
+    ]);
 
-  return buildCounsellorScoreboard({
-    leads: (leadRows ?? []).map(toLead),
-    enrolments: (enrolmentRows ?? []).map(toEnrolment),
-    stages,
-    boundaries,
-  });
+  const leads = (leadRows ?? []).map(toLead);
+  const enrolments = (enrolmentRows ?? []).map(toEnrolment);
+
+  return {
+    scoreboard: buildCounsellorScoreboard({ leads, enrolments, stages, boundaries }),
+    series: buildDailySeries({ leads, enrolments, days }),
+    admissionsTarget: targetRows?.[0]?.target_value ?? null,
+  };
+}
+
+/** `targets.period_month` is a date pinned to the 1st, in IST terms. */
+function monthStartDateIST(startOfMonth: Date): string {
+  return formatDateIST(startOfMonth, "yyyy-MM-dd");
 }
 
 export interface CentreViewResult {
   centre: CentreScoreboard;
+  /** One row per day for the last `DASHBOARD_DAYS`, oldest first. */
+  series: DailyCount[];
   team: TeamMemberRow[];
 }
 
@@ -144,6 +194,10 @@ export interface CentreViewResult {
  */
 export async function getCentreView(supabase: SupabaseClient): Promise<CentreViewResult> {
   const boundaries = boundariesNow();
+  const days = lastDaysIST(new Date(), DASHBOARD_DAYS);
+  const since = new Date(
+    Math.min(boundaries.startOfPreviousMonth.getTime(), days[0].from.getTime()),
+  );
 
   const [stages, { data: leadRows }, { data: enrolmentRows }, { data: memberRows }] =
     await Promise.all([
@@ -153,7 +207,7 @@ export async function getCentreView(supabase: SupabaseClient): Promise<CentreVie
         .from("enrolments")
         .select("lead_id, sales_to_accounts_at, dropped_at")
         .is("deleted_at", null)
-        .gte("sales_to_accounts_at", boundaries.startOfMonth.toISOString())
+        .gte("sales_to_accounts_at", since.toISOString())
         .returns<EnrolmentRow[]>(),
       supabase
         .from("profiles")
@@ -176,6 +230,7 @@ export async function getCentreView(supabase: SupabaseClient): Promise<CentreVie
 
   return {
     centre: buildCentreScoreboard({ leads, enrolments, stages, boundaries }),
+    series: buildDailySeries({ leads, enrolments, days }),
     team: buildTeamScoreboard({ members, leads, enrolments, stages, boundaries }),
   };
 }
