@@ -4133,3 +4133,117 @@ The arithmetic went into `scoreboard.ts` with the rest of it — pure, boundarie
 in, tested. `buildDailySeries` keeps a day with nothing in it, because a series that
 skips empty days draws a busy month out of a quiet one, and it buckets by IST day: an
 enquiry at 11pm in Kochi is 17:30 UTC and belongs to the day it was made.
+
+## 2026-10-07 — A WhatsApp conversation can be answered before it is a lead, and the backfill still cannot
+
+Leon: *"i would like to be able to respond to the inbox even if they are not a lead. and if
+they are not a lead, just like in instagram DMs, i would like to mark them as a lead after
+exchanging some interactions nd i can define them to be a lead. same for whatsapp
+coexistence."*
+
+The rule that an inbound WhatsApp message never creates a lead (migration 0042) was right and
+is unchanged. What was wrong was the consequence: the only thing anybody could do with such a
+message was read it. A person wrote to the institute, the message arrived, and the screen
+offered a dead end — so in practice a counsellor retyped the number into Leads → New, and the
+conversation stayed orphaned behind them.
+
+This is the Instagram model (2026-10-04) applied to WhatsApp. Answer first; decide whether it
+is an enquiry afterwards, when you know. Migration 0090 lets a row with no `lead_id` be
+written by whoever can already see it, and **Convert to lead** runs `resolveOrCreateLead()`
+like every other source.
+
+Two things decided along the way.
+
+**Converting moves the history.** An Instagram conversation is a row that messages hang off,
+so linking it is enough. A WhatsApp thread is assembled from the message rows themselves, so a
+conversion that only created a lead would strand every message already said under "Not in the
+CRM" permanently. They are moved in the same action, scoped to `lead_id is null` so a
+conversion can never pull another lead's history across.
+
+**Coexistence echoes keep unmatched conversations; the 180-day backfill does not.** Both used
+to be discarded. An echo is a conversation happening now, on a number whose owner is reading
+this inbox, and it is exactly what Leon asked to see. The backfill is six months of a
+counsellor's life arriving in one burst — suppliers, family, wrong numbers — and importing all
+of it would bury the inbox and put their personal chats in front of whoever runs campaigns.
+The leads that already exist still get their history, which was always the valuable half.
+
+The visibility rule follows from that: an unmatched row is shown to whoever runs campaigns
+**or** to the counsellor whose number it arrived on. Without the second clause a counsellor
+could not see their own conversation while the marketing lead could see all of them.
+
+## 2026-10-07 — A deleted lead releases its phone number, and a duplicate is not a scope violation
+
+Two bugs from the same report: *"creating a new lead manually keeps breaking and gives a 404
+error."*
+
+**The 404.** Deleting a lead soft-deleted `leads` and left `lead_identifiers` alone. That table
+is the dedup index, and its unique constraint is partial on `deleted_at is null`, so a deleted
+lead went on holding its phone number against the whole system while being invisible in it.
+Entering that number again resolved to the deleted lead, the action redirected to
+`/leads/<id>`, and that page filters `deleted_at is null` — a 404 at the end of creating a
+lead, with the enquiry filed against a record no screen will ever show.
+
+Fixed in three places, deliberately: identity resolution joins `leads` and skips deleted ones;
+`deleteLead` releases the identifiers and `restoreLead` takes back the ones still free;
+migration 0091 catches up the rows that predate both. And `resolveOrCreateLead` releases an
+identifier held by a deleted lead before claiming it, as a backstop for every other route to a
+soft-deleted lead — an archive restore, a merge, a hand-written fix — because without it the
+match correctly skips the dead lead and the insert then dies on the unique index, which is a
+worse failure than the one being fixed.
+
+**The scope violation on the health screen.** `leadIsVisibleToCaller()` is the seatbelt on lead
+creation: write through the RLS-bypassing client, then read the row back as the caller, and
+shout if RLS refuses it. It was shouting on correct behaviour. Non-negotiable #2 says never
+reject a duplicate — so a counsellor at `own` scope entering somebody another counsellor
+already owns gets a lead id they legitimately cannot read. That is the system working, and it
+was being reported to an admin as a bug while the counsellor was told their lead had been
+"flagged for an administrator".
+
+Both callers now rule out `!isNewLead` before reaching the seatbelt and say what actually
+happened instead. On a 2,000-row import of a bought list the old behaviour would have fired a
+few hundred times.
+
+No name, no counsellor and no centre in that message: the reason they cannot see the lead is
+that it is not theirs to see (non-negotiable #6).
+
+## 2026-10-07 — The Embedded Signup button lives in the CRM, because it cannot live anywhere else
+
+Leon set Coexistence up as far as the documentation allowed and then stopped, because step 4.2
+said "onboard the number through Meta's Embedded Signup" and there was nothing anywhere to
+press. That was not a gap in his setup. Embedded Signup is a dialog an *application* opens —
+Meta supplies a JavaScript SDK and a configuration id, the application puts a button on one of
+its own screens, and that button opens the popup. There is no page in Business Settings that
+starts it. Without a button in this CRM the step was impossible, and the documentation had
+been describing it for weeks as though it were a thing you could go and find.
+
+So it is built: `embedded-signup-button.tsx` on Settings → Integrations → WhatsApp.
+
+**Both halves of the answer are waited for.** The popup reports its result twice, by two
+routes that do not arrive in a fixed order — a `postMessage` carrying the account and phone
+number ids, and an authorisation code handed to the `FB.login` callback. Each is stashed in a
+ref and the server action fires when the second lands. Refs rather than state because the
+message listener is registered once and would otherwise read the first render's values for
+ever.
+
+**The origin check is an exact allowlist.** Meta's own sample code is
+`event.origin.endsWith("facebook.com")`, which accepts `https://notfacebook.com` and is one
+typo away from `https://facebook.com.attacker.net`. What that payload decides is which
+WhatsApp account this institute connects itself to, so it is a `Set` of exact origins in
+`embedded-signup.ts`, with the lookalikes in the tests.
+
+**`response_type: "code"`, not the SDK default.** The default hands the browser a client token
+that dies with the session. The code is exchanged server-side with the app secret for a
+business integration token that does not, which is the only kind worth storing.
+
+**Subscribing the account to webhooks happens in the same action.** Embedded Signup does not
+do it, and without it the number connects and nothing is ever delivered — no error, no clue,
+the single most common way a WhatsApp setup looks broken for a week. It is one API call, so it
+is made here rather than left as a step in a document.
+
+**A failed subscription does not unwind the token.** It is kept and said plainly, because a
+token in hand with no subscription is fixable by pressing a button, while throwing it away
+means running the whole dialog again for nothing.
+
+None of this can be exercised against Meta until Advanced Access lands — under Standard Access
+the dialog opens and refuses at the end. The tests therefore cover the parsing and the origin
+allowlist, which is where the decisions are.

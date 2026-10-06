@@ -4,6 +4,7 @@ import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { reportActionFailure } from "@/lib/errors/action-failure";
 import {
+  getIntegrationCredential,
   getIntegrationCredentials,
   hasIntegrationCredential,
   setIntegrationCredential,
@@ -32,7 +33,21 @@ export interface WhatsAppFormState {
  * is the node message templates live on, so template management needs it
  * and sending does not.
  */
-const WHATSAPP_KEYS = ["app_secret", "verify_token", "access_token", "phone_number_id", "waba_id"] as const;
+const WHATSAPP_KEYS = [
+  "app_secret",
+  "verify_token",
+  "access_token",
+  "phone_number_id",
+  "waba_id",
+  // The last two are not secrets — an app id is in every page that loads
+  // the SDK, and a configuration id identifies a public signup flow. They
+  // live here anyway because they belong to this integration and this is
+  // where somebody looks for them, and they are read back in the clear
+  // (see `getEmbeddedSignupSettings`) because the browser needs both to
+  // open Meta's dialog at all.
+  "app_id",
+  "embedded_signup_config_id",
+] as const;
 type WhatsAppKey = (typeof WHATSAPP_KEYS)[number];
 
 const KEY_LABELS: Record<WhatsAppKey, string> = {
@@ -41,6 +56,8 @@ const KEY_LABELS: Record<WhatsAppKey, string> = {
   access_token: "Access Token",
   phone_number_id: "Phone Number ID",
   waba_id: "WhatsApp Business Account ID",
+  app_id: "App ID",
+  embedded_signup_config_id: "Embedded Signup Configuration ID",
 };
 
 /** Same "every field optional per submit, blank means leave as-is" contract as the Meta/Google credentials forms. */
@@ -111,6 +128,30 @@ export async function getWhatsAppConnectionStatus(): Promise<WhatsAppConnectionS
     await Promise.all(WHATSAPP_KEYS.map(async (key) => [key, await hasIntegrationCredential("whatsapp", key)] as const)),
   ) as Record<WhatsAppKey, boolean>;
   return { configured };
+}
+
+/**
+ * The two public values the Connect button needs in the browser.
+ *
+ * Deliberately a separate function from `getWhatsAppConnectionStatus`,
+ * which returns booleans and nothing else. This one returns actual
+ * values, so it is worth being able to see at a glance that it returns
+ * exactly these two and never a secret. Neither is sensitive: the app id
+ * appears in every page that loads Meta's SDK, and the configuration id
+ * names a signup flow, not an account.
+ */
+export async function getEmbeddedSignupSettings(): Promise<{
+  appId: string | null;
+  configId: string | null;
+}> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "settings.manage")) return { appId: null, configId: null };
+
+  const [appId, configId] = await Promise.all([
+    getIntegrationCredential("whatsapp", "app_id"),
+    getIntegrationCredential("whatsapp", "embedded_signup_config_id"),
+  ]);
+  return { appId: appId ?? null, configId: configId ?? null };
 }
 
 export interface TestConnectionResult {

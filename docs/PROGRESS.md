@@ -8067,3 +8067,100 @@ not a problem a component solves, and the diff to introduce one would be larger 
 everything it prevents.
 
 **1640 tests pass**, typecheck, lint and build clean.
+
+## Answering a WhatsApp conversation before it is a lead
+
+Leon's own test exposed it: he messaged the business number from his personal phone, the
+message arrived, and the thread had no box to type in. The screen said *"+91… isn't in
+the CRM"* and offered a link to Leads → New — a dead end dressed as an explanation.
+
+The rule it came from is right and is unchanged: an inbound WhatsApp message never creates
+a lead, because most replies on a broadcast number are somebody who pressed a button on a
+campaign. What was wrong was that not creating a lead had come to mean not being able to
+do anything at all.
+
+- **Migration 0090** lets a message row with no `lead_id` be written by whoever can
+  already read it, and shows an unmatched row to whoever runs campaigns **or** to the
+  counsellor whose number it arrived on. `(select auth.uid())`, not a bare call —
+  `npm run db:audit` fails the build over the per-row version, which is how that was
+  caught.
+- **A composer on the unmatched thread**, text only. Templates are billed and gated on
+  `whatsapp.campaign`; an unmatched thread exists because somebody just wrote, so the
+  24-hour window is open and free-form is what is wanted.
+- **Convert to lead**, through `resolveOrCreateLead()` like every other source — and it
+  moves the messages already said onto the new lead, which the Instagram version does not
+  need to do and this one does, because a WhatsApp thread is assembled from the message
+  rows themselves.
+- **Coexistence echoes now keep a conversation with somebody who is not a lead** instead
+  of discarding it. The 180-day backfill still does not: six months of a counsellor's
+  personal chats would bury the inbox and put their private conversations in front of
+  whoever runs campaigns.
+
+Stubbed: nothing. Not done on purpose — attachments and templates on an unmatched thread,
+and `/whatsapp/personal` is still an explainer rather than an inbox of its own
+(Coexistence conversations appear in the main inbox, which is where they belong).
+
+**1649 tests pass** (8 new on the 24-hour window boundary, one coexistence test inverted),
+typecheck, lint, `db:audit` and build clean.
+
+## Creating a lead manually: the 404, and the false alarm behind it
+
+Leon: *"creating a new lead manually keeps breaking and gives a 404 error."* Two separate
+bugs, both reproduced with tests before being touched.
+
+- **A deleted lead kept its phone number.** `deleteLead` soft-deleted the lead and left
+  `lead_identifiers` — the dedup index — alone, and its unique constraint is partial on
+  `deleted_at is null`. So the number stayed reserved by a record nobody could see:
+  entering it again attached the new enquiry to the deleted lead, and the redirect landed
+  on a page that filters deleted rows out. Resolution now skips deleted leads, deleting
+  releases the identifiers, restoring takes back the ones still free, **migration 0091**
+  catches up the rows already in that state, and the create path releases a dead
+  identifier before claiming it so no other route to a soft-deleted lead can reproduce it.
+- **An ordinary duplicate was being reported as a scope violation.** The seatbelt on lead
+  creation reads the new row back as the caller and alerts an admin if RLS refuses it. But
+  non-negotiable #2 means a repeat enquiry attaches to the person already in the CRM — who
+  may be another counsellor's lead — so at `own` scope the creator legitimately cannot read
+  it. Both manual entry and the CSV importer now rule that out before the seatbelt and say
+  what happened, without naming the lead, the counsellor or the centre.
+
+Also corrected: the Coexistence instructions told Leon to "onboard the number through
+Meta's Embedded Signup" without saying that Embedded Signup is a dialog an application
+opens, not a page in Meta's dashboard. There is no button for it in this CRM, so that step
+cannot be done today — which the settings screen and `WHATSAPP-SETUP.md` now say outright
+rather than sending somebody hunting through Business Settings.
+
+Stubbed: the Embedded Signup button itself. It needs a Configuration ID, the Facebook JS
+SDK and a code-for-token exchange, and Advanced Access on the WhatsApp permissions before
+any of it can be tested.
+
+**1651 tests pass** (2 new on deleted-lead resolution), typecheck, lint, `db:audit` and
+build clean.
+
+## The Embedded Signup button
+
+The step the Coexistence instructions had been describing for weeks and nobody could
+perform. Embedded Signup is a dialog an *application* opens — Meta gives you a JS SDK and
+a configuration id, your app puts a button on its own screen — so with no button in this
+CRM there was nowhere in the world to start it from. Leon set everything else up and
+stopped there, correctly.
+
+- **`EmbeddedSignupButton`** on Settings → Integrations → WhatsApp, under Numbers. Label
+  the number, say whose phone it is, press Connect.
+- **Two new credentials**, neither secret: **App ID** and **Embedded Signup Configuration
+  ID** (App Dashboard → WhatsApp → Configuration → Embedded Signup). Without them the
+  button is a note explaining where to get them.
+- **`completeEmbeddedSignup`** does everything after the dialog in one action, because
+  Meta's code is single-use and short-lived: exchanges it for a long-lived business token,
+  subscribes the account to this app's webhooks (Embedded Signup does not, and without it
+  the number connects and nothing is ever delivered), reads the display number, and
+  registers the row with its owner and `creates_leads` on.
+- **The origin check is an exact allowlist.** Meta's own sample is
+  `origin.endsWith("facebook.com")`, which `https://notfacebook.com` passes. Tested
+  against the lookalikes.
+
+Stubbed: nothing. **Untested against Meta**, and will stay that way until Advanced Access
+lands — under Standard Access the dialog opens and refuses at the end. The 13 new tests
+cover the parsing and the origin allowlist, which is where the decisions are; the Graph
+calls themselves are three fetches in the existing client's shape.
+
+**1665 tests pass**, typecheck, lint, `db:audit` and build clean.

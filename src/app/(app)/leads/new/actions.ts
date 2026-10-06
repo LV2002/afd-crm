@@ -133,17 +133,50 @@ export async function createLeadManually(_prevState: FormState, formData: FormDa
     return { error: result.error };
   }
 
+  /*
+    A duplicate that landed on somebody else is not a bug.
+
+    Non-negotiable #2 says never reject a duplicate: resolveOrCreateLead
+    attaches the enquiry to the person who is already in the CRM. That
+    person may belong to another counsellor, and at `own` scope the
+    creator then cannot see the lead they just added to — which is
+    correct, and used to trip the seatbelt below into reporting a scope
+    violation, alerting an admin about a bug that had not happened.
+
+    So it is answered here, before the seatbelt, and answered plainly. No
+    name, no counsellor, no centre: the whole reason they cannot see this
+    lead is that it is not theirs to see (non-negotiable #6).
+  */
+  const supabase = await createClient();
+
+  if (!result.isNewLead) {
+    const { data: reachable } = await supabase
+      .from("leads")
+      .select("id")
+      .eq("id", result.leadId)
+      .is("deleted_at", null)
+      .maybeSingle<{ id: string }>();
+
+    if (!reachable) {
+      return {
+        error:
+          "Somebody with this phone number is already in the CRM, assigned to another counsellor. " +
+          "The enquiry has been recorded against them, so nothing is lost — ask an administrator " +
+          "if it should be moved to you.",
+      };
+    }
+  }
+
   // The seatbelt. resolveOrCreateLead wrote through the RLS-bypassing
   // client (it has to — see assert-lead-visible.ts), so the scope checks
   // above were the only thing enforcing centre boundaries. Read the lead
   // back as this user: if RLS will not show it to them, those checks
   // failed and somebody needs to know.
-  const supabase = await createClient();
   const visible = await leadIsVisibleToCaller(supabase, {
     leadId: result.leadId,
     actorId: user.id,
     source: "createLeadManually",
-    context: { scope, centerId },
+    context: { scope, centerId, isNewLead: result.isNewLead },
   });
   if (!visible) return { error: SCOPE_VIOLATION_MESSAGE };
 

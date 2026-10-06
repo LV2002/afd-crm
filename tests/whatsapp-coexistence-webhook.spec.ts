@@ -255,9 +255,15 @@ describe("messages the counsellor sent from their phone", () => {
     expect(message.status).toBe("sent");
   });
 
-  it("are not stored for somebody who is not a lead", async () => {
-    // A counsellor's phone also messages their colleagues and their
-    // mother. A CRM that invented a lead for each is unusable in a week.
+  it("are stored with no lead when the other party is not in the CRM", async () => {
+    // Still no lead invented — a counsellor's phone also messages their
+    // colleagues and their mother, and a CRM that created a lead for
+    // each is unusable in a week.
+    //
+    // But the message is kept now rather than discarded. It lands with
+    // `lead_id` null, which is the same shape the API number's inbound
+    // path has always used: the thread shows under "Not in the CRM" and
+    // Convert to lead can pick it up if it turns into an enquiry.
     const messageId = `wamid.${randomUUID()}`;
     await post(
       envelope(
@@ -279,7 +285,12 @@ describe("messages the counsellor sent from their phone", () => {
     );
 
     const rows = await db.select().from(whatsappMessages).where(eq(whatsappMessages.waMessageId, messageId));
-    expect(rows).toHaveLength(0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].leadId).toBeNull();
+    // The number's owner, so migration 0090's SELECT shows this to the
+    // counsellor whose phone it is. Null here would mean only whoever
+    // runs campaigns could see a counsellor's own conversation.
+    expect(rows[0].counsellorId).toBe(counsellorId);
 
     const leadRows = await db.select().from(leads).where(eq(leads.primaryPhone, "+919847600999"));
     expect(leadRows).toHaveLength(0);

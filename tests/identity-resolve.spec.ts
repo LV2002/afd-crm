@@ -200,6 +200,58 @@ describe("resolveOrCreateLead", () => {
     expect(identifierRows.map((r) => r.kind).sort()).toEqual(["email", "phone"]);
   });
 
+  it("does not attach a new enquiry to a lead that has been deleted", async () => {
+    /*
+      The bug Leon hit: enter a number, delete the lead, enter the number
+      again, and the enquiry attached itself to the deleted row. The
+      action then redirected to a page that filters `deleted_at is null`,
+      so the answer to "I just created a lead" was a 404 — and the
+      enquiry was gone, filed against a record no screen will ever show.
+
+      `lead_identifiers` is the dedup index and it was the only table
+      consulted. Nothing asked whether the lead it pointed at was still
+      alive.
+    */
+    const first = await resolveOrCreateLead({
+      studentName: testName("deleted-a"),
+      primaryPhone: "9847100801",
+      source: "Manual",
+    });
+
+    // Soft-deleted exactly as the delete action does it.
+    await db.update(leads).set({ deletedAt: new Date() }).where(eq(leads.id, first.leadId));
+
+    const second = await resolveOrCreateLead({
+      studentName: testName("deleted-b"),
+      primaryPhone: "9847100801",
+      source: "Manual",
+    });
+
+    expect(second.leadId).not.toBe(first.leadId);
+    expect(second.isNewLead).toBe(true);
+    expect(second.wasDuplicate).toBe(false);
+
+    // And the new lead is a live one, which is the whole point.
+    const [row] = await db.select().from(leads).where(eq(leads.id, second.leadId));
+    expect(row.deletedAt).toBeNull();
+  });
+
+  it("still dedupes against a live lead after an unrelated one was deleted", async () => {
+    // The fix must not go the other way and stop deduping altogether.
+    const live = await resolveOrCreateLead({
+      studentName: testName("live"),
+      primaryPhone: "9847100802",
+      source: "Manual",
+    });
+    const again = await resolveOrCreateLead({
+      studentName: testName("live-again"),
+      primaryPhone: "9847100802",
+      source: "Website",
+    });
+    expect(again.leadId).toBe(live.leadId);
+    expect(again.wasDuplicate).toBe(true);
+  });
+
   it("rejects an unparseable phone number rather than silently creating a bad lead", async () => {
     await expect(
       resolveOrCreateLead({

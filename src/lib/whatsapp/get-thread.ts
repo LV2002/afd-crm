@@ -93,6 +93,23 @@ export async function getWhatsAppThreadByPhone(
   return (data ?? []).map(toThreadMessage);
 }
 
+const WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Meta's rule, expressed once: a free-form reply is accepted only within
+ * 24 hours of the other person's last message. Pure, so the boundary can
+ * be tested without a database and without waiting a day.
+ *
+ * Null means they have never written to us, which is not the same as the
+ * window having closed but has the same answer — no free-form send.
+ */
+export function isWithinWindow(lastInboundAt: string | Date | null, now = new Date()): boolean {
+  if (lastInboundAt === null) return false;
+  const at = lastInboundAt instanceof Date ? lastInboundAt : new Date(lastInboundAt);
+  if (Number.isNaN(at.getTime())) return false;
+  return now.getTime() - at.getTime() < WINDOW_MS;
+}
+
 /** Whether a free-form text reply is currently allowed — Meta's 24-hour customer service window, opened by the lead's most recent inbound message. Outside it, only a template send is accepted by the Cloud API. */
 export async function isWithinCustomerServiceWindow(supabase: SupabaseClient, leadId: string): Promise<boolean> {
   const { data } = await supabase
@@ -104,6 +121,31 @@ export async function isWithinCustomerServiceWindow(supabase: SupabaseClient, le
     .limit(1)
     .maybeSingle<{ occurred_at: string }>();
 
-  if (!data) return false;
-  return Date.now() - new Date(data.occurred_at).getTime() < 24 * 60 * 60 * 1000;
+  return isWithinWindow(data?.occurred_at ?? null);
+}
+
+/**
+ * The same question for a thread that has no lead.
+ *
+ * Keyed on the contact's number and `lead_id is null`, which is exactly
+ * how the unmatched thread itself is assembled — so the window the
+ * composer is told about is the window of the messages on screen. Once a
+ * thread is converted its rows carry a lead and the function above is
+ * the one that applies.
+ */
+export async function isWithinCustomerServiceWindowForPhone(
+  supabase: SupabaseClient,
+  phone: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("whatsapp_messages")
+    .select("occurred_at")
+    .is("lead_id", null)
+    .eq("from_phone", phone)
+    .eq("direction", "inbound")
+    .order("occurred_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ occurred_at: string }>();
+
+  return isWithinWindow(data?.occurred_at ?? null);
 }

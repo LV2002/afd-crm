@@ -11,9 +11,12 @@ import {
   getWhatsAppThread,
   getWhatsAppThreadByPhone,
   isWithinCustomerServiceWindow,
+  isWithinCustomerServiceWindowForPhone,
 } from "@/lib/whatsapp/get-thread";
 import { getWhatsAppThreads } from "@/lib/whatsapp/get-threads";
 import { createClient } from "@/lib/supabase/server";
+
+import { UnmatchedThread } from "./unmatched-thread";
 import { cn } from "@/lib/utils";
 
 /**
@@ -93,7 +96,14 @@ export default async function WhatsAppInboxPage({
           getWhatsAppThread(supabase, selected.leadId),
           isWithinCustomerServiceWindow(supabase, selected.leadId),
         ])
-      : [await getWhatsAppThreadByPhone(supabase, selected.phone), false]
+      : await Promise.all([
+          getWhatsAppThreadByPhone(supabase, selected.phone),
+          // Hardcoded false until now, which was true of what the screen
+          // could do rather than of the conversation: an unmatched thread
+          // exists because somebody wrote to us, so the window is usually
+          // wide open.
+          isWithinCustomerServiceWindowForPhone(supabase, selected.phone),
+        ])
     : [[], false];
 
   function href(params: Record<string, string | undefined>): string {
@@ -257,7 +267,13 @@ export default async function WhatsAppInboxPage({
                   withinWindow={withinWindow}
                 />
               ) : (
-                <UnmatchedThread phone={selected.phone} messages={messages} />
+                <UnmatchedThread
+                  phone={selected.phone}
+                  messages={messages}
+                  canSend={can(user, "whatsapp.send")}
+                  canCreateLead={can(user, "lead.create")}
+                  withinWindow={withinWindow}
+                />
               )}
             </>
           ) : (
@@ -290,53 +306,5 @@ function FilterLink({
     >
       {children}
     </Link>
-  );
-}
-
-/**
- * A reply from somebody the CRM has never heard of.
- *
- * Read-only, and deliberately so: replying would need a lead to record
- * the message against, and this system does not invent leads from
- * broadcast replies. The useful action is to add them properly, which is
- * a human decision — they may be an existing student's parent, a wrong
- * number, or a genuine enquiry.
- */
-function UnmatchedThread({
-  phone,
-  messages,
-}: {
-  phone: string;
-  messages: Awaited<ReturnType<typeof getWhatsAppThread>>;
-}) {
-  return (
-    <div className="flex flex-col gap-3 rounded-lg border p-4">
-      <div className="rounded-md border border-dashed p-3">
-        <p className="text-sm font-medium">
-          {phone} isn&apos;t in the CRM.
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          They replied to something you sent, but no lead has this number, so nobody was notified.
-          Add them from{" "}
-          <Link href="/leads/new" className="font-medium underline">
-            Leads → New
-          </Link>{" "}
-          if they&apos;re worth following up; from then on their replies reach their counsellor.
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        {messages.map((message) => (
-          <div key={message.id} className="flex flex-col gap-0.5 items-start">
-            <div className="max-w-[80%] rounded-lg bg-muted px-3 py-2 text-sm">
-              {message.body ?? <span className="italic opacity-80">(no text)</span>}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {formatDateIST(message.occurredAt, "d MMM yyyy, h:mm a")}
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }

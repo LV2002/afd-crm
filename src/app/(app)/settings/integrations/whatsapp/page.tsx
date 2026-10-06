@@ -4,7 +4,8 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { recentWebhookDeliveries } from "@/lib/integrations/recent-deliveries";
 import { createClient } from "@/lib/supabase/server";
 
-import { getWhatsAppConnectionStatus } from "./actions";
+import { getEmbeddedSignupSettings, getWhatsAppConnectionStatus } from "./actions";
+import { EmbeddedSignupButton } from "./embedded-signup-button";
 import { WhatsAppCredentialsForm } from "./whatsapp-credentials-form";
 import {
   WhatsAppNumbers,
@@ -20,6 +21,7 @@ export default async function WhatsAppIntegrationPage() {
   const deliveries = await recentWebhookDeliveries(supabase, "whatsapp");
 
   const status = await getWhatsAppConnectionStatus();
+  const embeddedSignup = await getEmbeddedSignupSettings();
 
   const [{ data: numberRows }, { data: staffRows }] = await Promise.all([
     supabase
@@ -123,6 +125,12 @@ export default async function WhatsAppIntegrationPage() {
         </p>
         <WhatsAppNumbers numbers={numbers} counsellors={counsellors} />
 
+        <EmbeddedSignupButton
+          appId={embeddedSignup.appId}
+          configId={embeddedSignup.configId}
+          counsellors={counsellors}
+        />
+
         {/*
           Said here rather than buried in the manual, because it is the
           part that needs doing in Meta and it has a queue: the three
@@ -138,18 +146,24 @@ export default async function WhatsAppIntegrationPage() {
               number — not ordinary WhatsApp. Same number, same chats.
             </li>
             <li>
-              Onboard the number through Meta&apos;s <strong>Embedded Signup</strong>, choosing
-              the WhatsApp Business app flow. The counsellor scans a QR code from their phone
-              and consents to syncing history.
-            </li>
-            <li>
               Subscribe three extra webhook fields on the WhatsApp Business Account:{" "}
               <code className="font-mono">smb_message_echoes</code>,{" "}
               <code className="font-mono">history</code> and{" "}
               <code className="font-mono">smb_app_state_sync</code>. Without them the number
-              connects and nothing mirrors.
+              connects and nothing mirrors. This is a one-off, on the app rather than on each
+              number.
             </li>
-            <li>Register the number above with its Phone number ID and its owner.</li>
+            <li>
+              Press <strong>Connect with Meta</strong> below. That opens Meta&apos;s Embedded
+              Signup dialog on the WhatsApp Business app path — there is nowhere in Meta&apos;s
+              own dashboard to start it from, which is why the button has to live here. The
+              counsellor scans the QR code and consents to syncing history.
+            </li>
+            <li>
+              Nothing to register by hand afterwards. Connecting saves the credentials,
+              subscribes the account to this app, and adds the number to the list above with
+              its owner.
+            </li>
           </ol>
           <p className="mt-2">
             Up to <strong>180 days</strong> of one-to-one chats arrive in the following minutes

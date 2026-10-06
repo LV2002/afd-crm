@@ -631,6 +631,20 @@
       "when": 1791986408000,
       "tag": "0089_lead_arrived_column",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1792072808000,
+      "tag": "0090_whatsapp_unmatched_writable",
+      "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1792159208000,
+      "tag": "0091_release_deleted_lead_identifiers",
+      "breakpoints": true
     }
   ]
 }

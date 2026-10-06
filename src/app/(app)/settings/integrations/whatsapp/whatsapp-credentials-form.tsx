@@ -48,6 +48,16 @@ const FIELDS: Array<{ key: keyof WhatsAppConnectionStatus["configured"]; label: 
     label: "WhatsApp Business Account ID",
     help: "The account the number sits under, also in WhatsApp Manager. Needed to create and check message templates; sending works without it.",
   },
+  {
+    key: "app_id",
+    label: "App ID",
+    help: "Meta App Dashboard → Settings → Basic — the number at the top, not a secret. Only used by the Connect button below, which exchanges Meta's authorisation code with it and the App Secret.",
+  },
+  {
+    key: "embedded_signup_config_id",
+    label: "Embedded Signup Configuration ID",
+    help: "Meta App Dashboard → WhatsApp → Configuration → Embedded Signup. Not a secret. Without it there is no way to onboard a counsellor's own number: Embedded Signup is a dialog an application opens, not a page you can navigate to in Meta.",
+  },
 ];
 
 export function WhatsAppCredentialsForm({ status }: { status: WhatsAppConnectionStatus }) {

@@ -18,11 +18,11 @@ You have **one Meta app**. Inside it, Meta treats WhatsApp, Instagram and your F
 Page as three separate **objects**, and each one is subscribed separately, with its own
 callback URL pointing at this CRM:
 
-| Meta object | Callback URL | Fields to subscribe | What it delivers | Status |
-|---|---|---|---|---|
-| **Page** | `https://afd-crm-one.vercel.app/api/webhooks/meta-leads` | `leadgen` | Lead Ads form submissions | **Done** |
-| **WhatsApp Business Account** | `https://afd-crm-one.vercel.app/api/webhooks/whatsapp` | `messages` (+ three more for Coexistence, Part 4) | Replies, delivery receipts, mirrored counsellor chats | To do |
-| **Instagram** | `https://afd-crm-one.vercel.app/api/webhooks/instagram` | `messages` | Instagram DMs | To do |
+| Meta object                   | Callback URL                                             | Fields to subscribe                               | What it delivers                                      | Status   |
+| ----------------------------- | -------------------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------- | -------- |
+| **Page**                      | `https://afd-crm-one.vercel.app/api/webhooks/meta-leads` | `leadgen`                                         | Lead Ads form submissions                             | **Done** |
+| **WhatsApp Business Account** | `https://afd-crm-one.vercel.app/api/webhooks/whatsapp`   | `messages` (+ three more for Coexistence, Part 4) | Replies, delivery receipts, mirrored counsellor chats | To do    |
+| **Instagram**                 | `https://afd-crm-one.vercel.app/api/webhooks/instagram`  | `messages`                                        | Instagram DMs                                         | To do    |
 
 Same App Secret, same Verify Token, three URLs. Subscribing one does nothing for the other
 two — which is exactly why WhatsApp and Instagram are silent today while leads arrive fine.
@@ -34,15 +34,15 @@ submission (Part 6); do not do three reviews.
 
 ## What you get, and what each piece needs
 
-| What it does | What it needs |
-|---|---|
-| **A lead's WhatsApp reply lands on their record**, and their counsellor is notified | WhatsApp webhook + Access Token + Phone Number ID |
-| **Counsellors reply from the CRM** — the full thread on the lead's page | Same as above |
-| **Templates** — the only thing you may send to someone who hasn't messaged in 24 hours | WhatsApp Business Account ID, plus Meta approving each template |
-| **Broadcasts** — a campaign to a filtered audience, with opt-outs honoured | Approved template + the nightly job actually running (Part 3) |
-| **Automations** — a message ladder that fires off a stage change or a missed payment | Same as above |
-| **Counsellors' own numbers mirrored in** — their phone keeps working, the CRM sees everything | Coexistence onboarding + three extra webhook fields (Part 4) |
-| **Instagram DMs answered from the CRM** | Instagram webhook + `instagram_manage_messages` + Instagram Account ID (Part 5) |
+| What it does                                                                                  | What it needs                                                                   |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **A lead's WhatsApp reply lands on their record**, and their counsellor is notified           | WhatsApp webhook + Access Token + Phone Number ID                               |
+| **Counsellors reply from the CRM** — the full thread on the lead's page                       | Same as above                                                                   |
+| **Templates** — the only thing you may send to someone who hasn't messaged in 24 hours        | WhatsApp Business Account ID, plus Meta approving each template                 |
+| **Broadcasts** — a campaign to a filtered audience, with opt-outs honoured                    | Approved template + the nightly job actually running (Part 3)                   |
+| **Automations** — a message ladder that fires off a stage change or a missed payment          | Same as above                                                                   |
+| **Counsellors' own numbers mirrored in** — their phone keeps working, the CRM sees everything | Coexistence onboarding + three extra webhook fields (Part 4)                    |
+| **Instagram DMs answered from the CRM**                                                       | Instagram webhook + `instagram_manage_messages` + Instagram Account ID (Part 5) |
 
 You do not have to do all of it at once. Part 1 is the one that matters; everything else
 builds on it.
@@ -121,13 +121,13 @@ Both are in **WhatsApp Manager**, and both are ids, not phone numbers:
 
 **Settings → Integrations → WhatsApp → Credentials:**
 
-| Field | What goes in |
-|---|---|
-| App Secret | The same App Secret as the Meta integration |
-| Verify Token | The same Verify Token as the Meta integration |
-| Access Token | The system user token from 1.3 |
-| Phone Number ID | From 1.4 |
-| WhatsApp Business Account ID | From 1.4 |
+| Field                        | What goes in                                  |
+| ---------------------------- | --------------------------------------------- |
+| App Secret                   | The same App Secret as the Meta integration   |
+| Verify Token                 | The same Verify Token as the Meta integration |
+| Access Token                 | The system user token from 1.3                |
+| Phone Number ID              | From 1.4                                      |
+| WhatsApp Business Account ID | From 1.4                                      |
 
 **Yes, the App Secret and Verify Token are entered twice** — once under Meta, once under
 WhatsApp, even though it is one app. They are stored separately on purpose: the day you
@@ -145,7 +145,7 @@ Save. Meta calls the URL immediately to check it answers; if it refuses, the Ver
 in the two places does not match — that is the only cause.
 
 Then **Manage** the fields and tick **`messages`**. That one field carries inbound messages
-*and* delivery/read receipts; Meta puts both under it.
+_and_ delivery/read receipts; Meta puts both under it.
 
 You do **not** need a template-status field: the Templates screen reads their status live
 from Meta each time it loads.
@@ -159,7 +159,7 @@ from Meta each time it loads.
 - Number: the actual number, for display
 - Whose phone: **Nobody — a shared number**
 - What this number is: **API only**
-- *A message from somebody new creates a lead*: **leave unticked**
+- _A message from somebody new creates a lead_: **leave unticked**
 
 That last box is the one to get right. On the broadcast number a reply is almost always
 someone who tapped a button on a campaign and is already in the CRM. Replies from numbers
@@ -179,14 +179,60 @@ is done with it, so an empty list is not missing data, it is the answer.
 If your number is already a lead in the CRM, the reply attaches to that lead and their
 counsellor gets a notification. That is the whole feature.
 
+### 1.8a Running the CRM on the test number
+
+Perfectly reasonable while the live number is stuck or App Review is
+open, and nothing has to be undone afterwards — the credentials are
+rows in a table, not code. Paste the test number's IDs in exactly where
+the live ones will go:
+
+**Settings → Integrations → WhatsApp → Credentials**
+
+- Phone Number ID — the test number's, from WhatsApp → API setup
+- WhatsApp Business Account ID — the test WABA's, same screen
+- Access Token — the console's token
+
+Press **Test** straight afterwards. It reads the number back from Meta,
+so "Connected — +1 555 … " means the first three are right. Then
+register it under **Numbers** with the same Phone Number ID: without
+that row the CRM still works, but the per-number settings (whose phone,
+whether a stranger's reply becomes a lead) have nothing to attach to.
+
+The App Secret and Verify Token are not part of the switch. They belong
+to the Meta app, not to a number, and they are what make inbound work at
+all — set them once and leave them.
+
+**What actually bites**
+
+- **The console's token lasts 24 hours.** Everything works, then stops
+  dead tomorrow with 401s and an inbox that goes quiet. A System User
+  token is the fix if the test WABA can be assigned to one; Meta owns
+  that account, so it may not be assignable, and then re-pasting the
+  token daily is the only option. Live with it, or treat it as one more
+  reason to get the real number working.
+- **A test number reaches five pre-verified recipients and nobody else.**
+  Fine for a demo and a screencast. Do not let a broadcast run while the
+  CRM is pointed at it — every message to anybody else fails, and you
+  get a day's worth of failures for nothing.
+
+**Switching to the live number later** is those same three credential
+fields plus the Phone Number ID on the registered number row. The
+webhook does not move: it is configured per app, not per number, so
+inbound keeps working across the switch without touching Meta.
+
+The test conversations stay in the inbox. Threads are keyed to the
+person who messaged, not to the number they messaged, so they sit there
+looking like ordinary history. Use an obviously invented lead name and
+they are easy to spot and ignore.
+
 ### 1.9 The 24-hour rule, which is Meta's and cannot be changed
 
 A free-form message is only allowed within **24 hours** of the person's last message to
 you. After that, the only thing you may send is an **approved template**. The CRM greys
 the box out and says so rather than letting a counsellor type into a void.
 
-Tell the team this plainly: *if they haven't messaged us today, you can only send a
-template.* Every WhatsApp CRM in the world works this way and it surprises everyone once.
+Tell the team this plainly: _if they haven't messaged us today, you can only send a
+template._ Every WhatsApp CRM in the world works this way and it surprises everyone once.
 
 ---
 
@@ -211,8 +257,8 @@ a body that ends on a variable.
 
 ### 2.2 What gets rejected
 
-- **Category matters.** A fee reminder is *Utility*; "20% off Foundation batch" is
-  *Marketing*. Marketing dressed as utility is the most common rejection, and repeat
+- **Category matters.** A fee reminder is _Utility_; "20% off Foundation batch" is
+  _Marketing_. Marketing dressed as utility is the most common rejection, and repeat
   offences cost you quality rating.
 - No promises about results ("guaranteed NID rank").
 - Placeholders need surrounding words. `{{1}}` on its own line is refused.
@@ -291,23 +337,47 @@ and nothing is lost.
 
 ### 4.2 Onboard the number through Embedded Signup
 
-In Meta's **Embedded Signup** flow, choose the **WhatsApp Business app** path (not "new
-number"). The counsellor scans a QR code with their phone and is asked to **consent to
-syncing message history**. They must say yes; without it the number still connects, but
-nothing from before arrives.
+Embedded Signup is **not** a page in Meta's dashboard, and that is the thing nobody tells
+you. It is a dialog that an application opens: Meta gives you a JavaScript SDK and a
+configuration id, the application puts a button on one of its own screens, and pressing that
+button opens Meta's popup. There is nowhere in Business Settings to start it from.
 
-If that path is not offered, the gate is usually one of: the app's business is not
-verified, or WhatsApp permissions are still at Standard access rather than Advanced (Part
-6). It is not something the CRM can start — this flow lives entirely in Meta.
+So the button lives in this CRM, on **Settings → Integrations → WhatsApp**, under the
+Numbers list. Two things have to be saved in Credentials above it first, and neither is a
+secret:
+
+| Field                                | Where it comes from                                            |
+| ------------------------------------ | -------------------------------------------------------------- |
+| **App ID**                           | App Dashboard → Settings → Basic, the number at the top        |
+| **Embedded Signup Configuration ID** | App Dashboard → **WhatsApp → Configuration → Embedded Signup** |
+
+Then: give the number a label, say whose phone it is, and press **Connect with Meta**.
+
+Inside the dialog, the path is **WhatsApp Business app** — the CRM asks for that one
+specifically, so you should not have to choose. The counsellor scans the QR code with their
+phone and is asked to **consent to syncing message history**. They must say yes; without it
+the number still connects but nothing from before arrives, and consent cannot be asked for
+again afterwards.
+
+When it finishes, the CRM does the rest itself: exchanges Meta's code for a long-lived
+token, subscribes the account to this app's webhooks, and adds the number to the list with
+its owner and Coexistence settings. There is nothing to copy by hand and no Phone number ID
+to paste — 4.4 below is for a number onboarded some other way.
+
+**It needs Advanced Access** on the WhatsApp permissions (Part 6). Under Standard Access the
+dialog opens and refuses at the end, so App Review has to land first.
+
+If the button says _"Loading Meta…"_ and never changes, an ad blocker is blocking
+`connect.facebook.net`. If nothing appears at all, the popup was blocked.
 
 ### 4.3 Subscribe three more webhook fields
 
 On the **WhatsApp Business Account** object, in addition to `messages`:
 
-| Field | What it carries |
-|---|---|
-| `smb_message_echoes` | Messages the counsellor sends from their own phone |
-| `history` | Up to 180 days of past one-to-one chats, in chunks |
+| Field                | What it carries                                                           |
+| -------------------- | ------------------------------------------------------------------------- |
+| `smb_message_echoes` | Messages the counsellor sends from their own phone                        |
+| `history`            | Up to 180 days of past one-to-one chats, in chunks                        |
 | `smb_app_state_sync` | The phone's address book, recorded but deliberately not imported as leads |
 
 **Without these the number connects and nothing mirrors.** No error, no clue — which is
@@ -315,12 +385,16 @@ precisely the failure this doc exists to prevent.
 
 ### 4.4 Register it in the CRM
 
+**Connecting through the button in 4.2 does this for you** — the number appears in the list
+with its owner and its Coexistence settings already set. What follows is for a number
+onboarded some other way, or for correcting one afterwards.
+
 **Settings → Integrations → WhatsApp → Numbers → Register another number:**
 
 - Phone number ID: the Coexistence number's own id
 - Whose phone: **the counsellor** — required, and it is who sent messages are attributed to
 - What this number is: **Coexistence**
-- *A message from somebody new creates a lead*: **ticked** (picking Coexistence ticks it
+- _A message from somebody new creates a lead_: **ticked** (picking Coexistence ticks it
   for you)
 
 Here the tick is right. A stranger messaging a counsellor's number about NIFT coaching is
@@ -379,26 +453,26 @@ a role on the app — which is enough to test everything above and nothing more.
 
 Put all of it on **one** submission:
 
-| Permission | What stops working without it |
-|---|---|
-| `whatsapp_business_messaging` | Sending any WhatsApp message |
-| `whatsapp_business_management` | Templates — creating and reading them |
-| `instagram_manage_messages` | Instagram DMs, in and out — **not** `instagram_business_manage_messages`, see below |
-| `pages_messaging` | Subscribing the Page to `messages`, without which no DM is delivered |
-| `instagram_basic` | Reading the linked Instagram account at all |
-| `leads_retrieval` | Fetching a submitted lead's answers (already in review for Lead Ads) |
-| `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata` | Page subscription and lead delivery |
-| `ads_read` / `ads_management` | Ad spend sync and retargeting audiences |
+| Permission                                                          | What stops working without it                                                       |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `whatsapp_business_messaging`                                       | Sending any WhatsApp message                                                        |
+| `whatsapp_business_management`                                      | Templates — creating and reading them                                               |
+| `instagram_manage_messages`                                         | Instagram DMs, in and out — **not** `instagram_business_manage_messages`, see below |
+| `pages_messaging`                                                   | Subscribing the Page to `messages`, without which no DM is delivered                |
+| `instagram_basic`                                                   | Reading the linked Instagram account at all                                         |
+| `leads_retrieval`                                                   | Fetching a submitted lead's answers (already in review for Lead Ads)                |
+| `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata` | Page subscription and lead delivery                                                 |
+| `ads_read` / `ads_management`                                       | Ad spend sync and retargeting audiences                                             |
 
 > ### Two permissions, one word apart
 >
 > Meta offers Instagram messaging through two different routes, with two
 > near-identical permission names:
 >
-> | Permission | Route | Used here? |
-> |---|---|---|
-> | `instagram_manage_messages` | Instagram API with **Facebook** Login — a Page access token against `graph.facebook.com` | **Yes** |
-> | `instagram_business_manage_messages` | Instagram API with **Instagram** Login — an Instagram user token against `graph.instagram.com` | No |
+> | Permission                           | Route                                                                                          | Used here? |
+> | ------------------------------------ | ---------------------------------------------------------------------------------------------- | ---------- |
+> | `instagram_manage_messages`          | Instagram API with **Facebook** Login — a Page access token against `graph.facebook.com`       | **Yes**    |
+> | `instagram_business_manage_messages` | Instagram API with **Instagram** Login — an Instagram user token against `graph.instagram.com` | No         |
 >
 > This CRM is on the first: `src/app/api/webhooks/instagram/route.ts` reads
 > `page_access_token`, and `lib/integrations/instagram/graph-client.ts` posts to
@@ -423,10 +497,10 @@ better than any paragraph.
 
 This is the part that confuses everybody, including people who have done it before.
 
-| | What it controls | Where |
-|---|---|---|
-| **App Mode: Live** | Whether the app works for anyone at all outside your own staff | Top of the app dashboard, next to the App ID |
-| **Advanced Access** per permission | Whether *that particular permission* works for the public | App Review → Permissions and Features |
+|                                    | What it controls                                               | Where                                        |
+| ---------------------------------- | -------------------------------------------------------------- | -------------------------------------------- |
+| **App Mode: Live**                 | Whether the app works for anyone at all outside your own staff | Top of the app dashboard, next to the App ID |
+| **Advanced Access** per permission | Whether _that particular permission_ works for the public      | App Review → Permissions and Features        |
 
 **Both.** Live mode with Standard access to `instagram_manage_messages` still delivers DMs
 only from people holding a role on the app — which looks exactly like nothing having
@@ -444,7 +518,7 @@ not always specific. Before trying, complete **App settings → Basic**:
 - **Category**
 - **Data deletion** — either a callback URL or an instructions URL. An instructions page
   saying how somebody asks AFD to delete their data is accepted and is far less work.
-- **Business verification**, if the app is a *Business* type app — which this one is.
+- **Business verification**, if the app is a _Business_ type app — which this one is.
 
 Then check **Required actions** and **Alerts** in the left sidebar. Meta puts blockers
 there rather than on the toggle, so a toggle that refuses with a vague message usually has
@@ -499,18 +573,22 @@ Blockers first:
 
 ## If something stops working
 
-| What you see | Where to look first |
-|---|---|
-| No WhatsApp messages ever arrived | **Settings → Integrations → WhatsApp → Recent deliveries.** Empty means Meta has never called us: the `messages` field is not subscribed, or the callback URL is wrong |
-| Messages arrive but a counsellor's own sends do not | The three Coexistence fields (4.3). `messages` alone does not carry echoes |
-| History never arrived for a Coexistence number | Consent was declined during onboarding. It cannot be requested again afterwards — the number has to be re-onboarded |
-| "Not in the CRM" filling up on the broadcast number | Expected. Replies from unknown numbers go there by design rather than becoming leads |
-| A reply attached to the wrong lead | Two leads share a phone number. Merge them from the lead's page; the thread follows |
-| Templates screen says it cannot reach Meta | `whatsapp_business_management` missing from the token, or the WhatsApp Business Account ID is not saved |
-| A broadcast sits at "sending" for days | Working as built — 100 per daily run (Part 3) |
-| Nothing overnight runs at all | `CRON_SECRET`. Settings → Platform health says whether a run has ever happened |
-| Instagram DMs silent | Connected tools → Allow access to messages, on the phone. It is step 1 for a reason |
-| Everything worked, then stopped two hours later | A Graph API Explorer token expired. Use a System User token (1.3) |
+| What you see                                               | Where to look first                                                                                                                                                                                                        |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No WhatsApp messages ever arrived                          | **Settings → Integrations → WhatsApp → Recent deliveries.** Empty means Meta has never called us: the `messages` field is not subscribed, or the callback URL is wrong                                                     |
+| Deliveries listed, every one badged **bad signature**      | The App Secret saved in Settings → Integrations → WhatsApp is not the one on this Meta app. Meta is calling and the CRM is rejecting it with a 401 — App Settings → Basic → App Secret → Show, and paste it again          |
+| Deliveries listed and processed, but the thread is nowhere | It is there, under **Not in the CRM** on the Chats screen — no lead holds that number, so it has nobody to attach to. That filter only appears when there is something in it                                               |
+| The thread is there but there is no box to reply in        | You lack `whatsapp.send`, or it is another counsellor's Coexistence conversation. A thread with no lead has been answerable since migration 0090 — reply from it, and press **Convert to lead** when it becomes an enquiry |
+| The reply box is there but greyed out                      | The 24-hour window has closed. Send an approved template instead (1.9)                                                                                                                                                     |
+| Messages arrive but a counsellor's own sends do not        | The three Coexistence fields (4.3). `messages` alone does not carry echoes                                                                                                                                                 |
+| History never arrived for a Coexistence number             | Consent was declined during onboarding. It cannot be requested again afterwards — the number has to be re-onboarded                                                                                                        |
+| "Not in the CRM" filling up on the broadcast number        | Expected. Replies from unknown numbers go there by design rather than becoming leads                                                                                                                                       |
+| A reply attached to the wrong lead                         | Two leads share a phone number. Merge them from the lead's page; the thread follows                                                                                                                                        |
+| Templates screen says it cannot reach Meta                 | `whatsapp_business_management` missing from the token, or the WhatsApp Business Account ID is not saved                                                                                                                    |
+| A broadcast sits at "sending" for days                     | Working as built — 100 per daily run (Part 3)                                                                                                                                                                              |
+| Nothing overnight runs at all                              | `CRON_SECRET`. Settings → Platform health says whether a run has ever happened                                                                                                                                             |
+| Instagram DMs silent                                       | Connected tools → Allow access to messages, on the phone. It is step 1 for a reason                                                                                                                                        |
+| Everything worked, then stopped two hours later            | A Graph API Explorer token expired. Use a System User token (1.3)                                                                                                                                                          |
 
 Every failure the CRM itself can see is listed on **Settings → Platform health**, and
 platform alerts can be emailed to you — see chapter 13 of the manual.
