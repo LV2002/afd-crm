@@ -165,10 +165,30 @@ when it does not already know their username, and that fetch is the
 inbox will not make it.
 
 Otherwise use the **Graph API Explorer**
-(`developers.facebook.com/tools/explorer`): select the app, get a Page
-Access Token, and run something that needs the permission — for
-`instagram_basic`, `me?fields=instagram_business_account{id,username}`.
-A successful response counts.
+(`developers.facebook.com/tools/explorer`), in this order — the order
+matters, and getting it wrong produces an error that looks like the
+integration is broken when it is only the Explorer being misconfigured:
+
+1. **Meta App** → `afd CRM`.
+2. **Permissions** → add the ones the call needs *before* generating a
+   token. A call made with a token that does not carry the permission
+   does not count toward anything. For `instagram_basic`, add
+   `instagram_basic`, `pages_show_list` and `pages_read_engagement`.
+3. **Generate Access Token**, and approve.
+4. **User or Page** → switch to the **Page**, not User Token.
+5. Run the call. For `instagram_basic`:
+   `me?fields=instagram_business_account{id,username}`
+
+> **`(#100) Tried accessing nonexisting field (instagram_business_account)
+> on node type (User)`** means step 4 was missed. `me` is whoever the
+> token speaks for — with a User token that is the person, and an
+> Instagram account hangs off the *Page*. Either switch the dropdown, or
+> keep the user token and go in two hops: `me/accounts` for the Page id,
+> then `{page-id}?fields=instagram_business_account{id,username}`.
+
+A successful response counts. Tokens from the Explorer are short-lived
+and belong nowhere but the Explorer — never paste one into the CRM, and
+regenerate it if it has been on screen in front of anybody.
 
 Do all of them in one sitting and come back the next day to request
 advanced access on everything at once.
