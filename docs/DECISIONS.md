@@ -4287,3 +4287,55 @@ conversation that followed happened somewhere this system has no record of, on t
 highest-volume channel. Two consequences worth noting: it needs no phone number, so unlike
 Call it can show before the reveal; and a lead who has never messaged now gets a panel saying
 so and explaining the 24-hour rule, rather than an inbox shrugging "pick a conversation".
+
+## 2026-10-07 — Eight things from one morning of Leon using the CRM
+
+**A dropped admission still blocked deletion.** `deleteLead` refused while any enrolment row
+existed with `deleted_at` null — but dropping an admission records a `dropped_at`, it does not
+soft-delete the row, because the enrolment is still the history of what was agreed and paid.
+So the refusal said "drop the admission first if it is not going ahead" to somebody who had
+already done exactly that. The one instruction given for getting past a block has to actually
+get them past it.
+
+**Stages had no colours because nobody fills in fourteen colour pickers.** `pipeline_stages.color`
+has been editable since Settings → Pipeline existed and every stage still rendered the same grey
+pill. Defaults now come from `stage_type` — won green, lost red, parked grey, and the two
+money-in-motion ones amber and teal. Keyed on the type rather than the name so it survives
+renaming "Admission Confirmed", and so it works in an instance with entirely different stages.
+The eight ordinary stages get nothing on purpose: colouring all fourteen makes a rainbow in
+which nothing stands out.
+
+**Filters survived the browser's Back and not the sidebar's Leads link**, which is the one
+people actually press. Remembered per tab in `sessionStorage` and restored on a bare `/leads`.
+An emptied filter bar is stored as empty rather than ignored, so clearing really clears.
+
+**Manual leads were all filed as "Manual"**, which is not a source — it is a description of the
+keyboard. A walk-in, a phone enquiry and a school seminar arrived indistinguishable, so the
+report that decides where the marketing money goes had a growing bucket in it that meant
+nothing, and it cannot be reconstructed afterwards. Now required, and validated against the
+configured options rather than taken as free text.
+
+**Dead now stops the chasing.** Only terminal stages did. A lead a counsellor had explicitly
+marked Dead went on breaching its SLA every night, escalating to whoever the ladder named, and
+sitting in the overdue list — so the one action for saying "stop chasing this person" changed
+nothing about what the system chased them about, which is how an escalation ladder stops being
+read. `isNoLongerWorked()` is the shared notion; `dead` is the single temperature value with
+behaviour attached, matched on the stored value so renaming its label changes nothing.
+
+**The counsellor can set the instalment plan until the first payment lands.** It was
+`enrolment.update` and nothing else — an accounts permission — so the counsellor who had just
+agreed three instalments with a family could not record them and had to message accounts to
+type them in. The first payment is the line because that is where the plan stops being an
+intention and becomes something a ledger is reconciled against; `payments` is append-only, so
+the question has an exact answer rather than a judgement.
+
+**The lead profile autosaves**, like the stage and temperature controls above it have all
+along. The whole form is submitted rather than the one changed field: the action is idempotent
+and already skips fields a form did not render, so autosave and the Save button take the same
+path and there is no second code path to keep in step. Success is a quiet line rather than a
+toast — thirty fields deep, a toast per blur is a screen that flickers all day.
+
+**Preferences was four fields and a screenful of nothing.** Two of them are multiselects that
+rendered as a single tall stack inside a two-column grid, so the cell beside each was four
+hundred pixels of empty. Options wrap into columns past five, and the section grid stops short
+fields stretching to match the tall one.

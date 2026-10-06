@@ -757,13 +757,30 @@ export async function deleteLead(
     return { error: "That lead is not yours." };
   }
 
-  // A confirmed admission is money and an obligation, not a lead any more.
-  // Deleting it would hide an enrolment that accounts is still collecting
-  // against, so it is refused rather than cascaded.
+  /*
+    A confirmed admission is money and an obligation, not a lead any more.
+    Deleting it would hide an enrolment accounts is still collecting
+    against, so it is refused rather than cascaded.
+
+    `droppedAt` has to be in this test as well as `deletedAt`. Dropping an
+    admission records a drop — it does not soft-delete the row, because
+    the enrolment is still the history of what was agreed and what was
+    paid. So a lead whose admission had been dropped stayed undeletable
+    for ever, while the refusal told them to "drop the admission first if
+    it is not going ahead", which they had already done. The one thing a
+    person is told to do to get past a block has to actually get them past
+    it.
+  */
   const [enrolment] = await db
     .select({ id: enrolments.id })
     .from(enrolments)
-    .where(and(eq(enrolments.leadId, leadId), isNull(enrolments.deletedAt)));
+    .where(
+      and(
+        eq(enrolments.leadId, leadId),
+        isNull(enrolments.deletedAt),
+        isNull(enrolments.droppedAt),
+      ),
+    );
   if (enrolment) {
     return {
       error:

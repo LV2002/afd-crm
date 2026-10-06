@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { canSetFeePlan } from "@/lib/enrolment/can-set-fee-plan";
+
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
 import { can, getCurrentUser } from "@/lib/auth/session";
@@ -429,7 +431,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               <FeePlanPanel
                 leadId={id}
                 values={feePlan.values}
-                canEdit={can(user, "enrolment.update")}
+                // Accounts always; the counsellor too, until the first
+                // payment lands. See lib/enrolment/can-set-fee-plan.ts.
+                canEdit={await canSetFeePlan(user, feePlan.enrolmentId)}
                 hasEnrolment={feePlan.hasEnrolment}
                 hasSignedAgreement={hasSignedAgreement}
                 printHref={`/leads/${id}/instalment-agreement`}

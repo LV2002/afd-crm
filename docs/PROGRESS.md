@@ -8192,3 +8192,32 @@ honest behaviour until a lead actually has a different one filled in.
 
 **1666 tests pass** (1 new on the phone-correction invariant, 1 updated), typecheck, lint,
 `db:audit` and build clean.
+
+## Eight fixes from one morning of Leon using the CRM
+
+- **A dropped admission still blocked deletion.** The check looked at `deleted_at` only, and
+  dropping records a `dropped_at` — so the refusal told him to do the thing he had already
+  done.
+- **Stage tags have colours now**, defaulted from `stage_type` (won green, lost red, parked
+  grey, payment amber, forms teal) because nobody fills in fourteen colour pickers. An
+  explicit colour in Settings → Pipeline still wins.
+- **Filters survive opening a lead**, including via the sidebar's Leads link, which is what
+  people actually press. Per tab, and clearing really clears.
+- **Lead source is required on manual entry.** Everything manual was filed as "Manual",
+  which is a description of the keyboard, not a source.
+- **Dead stops the chasing.** No SLA breach, no escalation, no overdue listing. Only
+  terminal stages counted before, so the one action for "stop chasing this person" changed
+  nothing.
+- **The counsellor sets the instalment plan** until the first payment lands; after that it
+  is accounts'. It was an accounts-only permission, so the person who agreed the plan could
+  not record it.
+- **The lead profile autosaves**, like stage and temperature already did.
+- **Preferences fits on a screen.** Multiselects wrap into columns past five options, and
+  short fields stop stretching to match the tall one beside them.
+
+Stubbed: nothing. Not done on purpose — autosave submits the whole form rather than the one
+changed field, which is deliberate (same path as the Save button, no second code path), and
+`isNoLongerWorked()` is not yet applied to WhatsApp automations, which have their own
+scheduling and were not what Leon described.
+
+**1666 tests pass**, typecheck, lint, `db:audit` and build clean.

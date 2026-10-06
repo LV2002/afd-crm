@@ -21,6 +21,7 @@ import {
   validatePlan,
   type InstalmentInput,
 } from "./instalment-plan";
+import { canSetFeePlan, FEE_PLAN_LOCKED_MESSAGE } from "./can-set-fee-plan";
 
 export interface FeeFormState {
   error?: string;
@@ -43,9 +44,7 @@ export interface FeeFormState {
  */
 export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Promise<FeeFormState> {
   const user = await getCurrentUser();
-  if (!user || !can(user, "enrolment.update")) {
-    return { error: "You don't have permission to set fees." };
-  }
+  if (!user) return { error: "You don't have permission to set fees." };
 
   const leadId = formData.get("leadId");
   if (typeof leadId !== "string") return { error: "Missing lead reference." };
@@ -63,7 +62,10 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
 
   // The direct db client bypasses RLS, so the scope check RLS would have
   // made is re-implemented here — same pattern as confirmAdmissionAction.
-  const scope = scopeFor(user, "enrolment.update");
+  // Scoped on whichever permission is carrying them: a counsellor setting
+  // the plan at confirmation is bounded by their own leads, not by the
+  // accounts scope they do not hold.
+  const scope = scopeFor(user, "enrolment.update") ?? scopeFor(user, "enrolment.create");
   if (scope === "own" && lead.assignedTo !== user.id) {
     return { error: "That lead isn't assigned to you." };
   }
@@ -83,6 +85,20 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
     .where(and(eq(enrolments.leadId, leadId), isNull(enrolments.deletedAt)));
   if (!enrolment) {
     return { error: "Confirm the admission first — the fee plan hangs off the enrolment." };
+  }
+
+  /*
+    Accounts may always set the plan. The counsellor may too, up until the
+    first payment lands against it — which is the window in which the plan
+    is actually agreed, sitting with the family. See canSetFeePlan for why
+    the first payment is the line.
+  */
+  if (!(await canSetFeePlan(user, enrolment.id))) {
+    return {
+      error: can(user, "enrolment.create")
+        ? FEE_PLAN_LOCKED_MESSAGE
+        : "You don't have permission to set fees.",
+    };
   }
 
   const totalFeePaise = rupeesToPaise(String(formData.get("courseFee") ?? ""));

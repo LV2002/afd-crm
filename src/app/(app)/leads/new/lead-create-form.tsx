@@ -52,11 +52,13 @@ export function LeadCreateForm({
   centers,
   examOptions,
   courseOptions,
+  sourceOptions,
   showCenterPicker,
 }: {
   centers: FieldOption[];
   examOptions: FieldOption[];
   courseOptions: FieldOption[];
+  sourceOptions: FieldOption[];
   showCenterPicker: boolean;
 }) {
   const [state, formAction, pending] = useActionState(createLeadManually, initialState);
@@ -92,6 +94,29 @@ export function LeadCreateForm({
             <Input id="email" name="email" type="email" autoComplete="off" />
           </Field>
         </div>
+
+        {/*
+          Required, and it was not even asked for before — every manually
+          entered lead was filed as "Manual", which is not a source, it is
+          a description of the keyboard. Walk-ins, phone enquiries and
+          school seminars all arrived indistinguishable, so the one report
+          that decides where the marketing money goes had a growing bucket
+          in it that meant nothing.
+        */}
+        <Field
+          label="Where did they come from?"
+          htmlFor="source"
+          required
+          hint="How this person reached the institute. It is what every source report counts, and it cannot be worked out later."
+        >
+          <Combobox
+            id="source"
+            name="source"
+            options={sourceOptions}
+            placeholder="Choose a source…"
+            required
+          />
+        </Field>
       </section>
 
       <section className="flex flex-col gap-4 rounded-lg border bg-card p-5">

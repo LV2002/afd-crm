@@ -7,6 +7,40 @@ import { INDIAN_STATES_DISTRICTS } from "@/lib/geo/indian-states-districts";
 
 import type { FieldSchemaEntry } from "./get-field-schema";
 
+/**
+ * What a stage looks like before an admin has picked anything.
+ *
+ * `pipeline_stages.color` has been editable since Settings → Pipeline
+ * existed, and in practice nobody fills in fourteen colour pickers — so
+ * every stage rendered the same grey pill and the colour support may as
+ * well not have been there. Leon asked for the won stage to be green,
+ * which is really this: a stage should arrive already looking like what
+ * it means.
+ *
+ * Keyed on `stage_type` rather than name, so it still works after
+ * "Admission Confirmed" is renamed, and in an instance for a different
+ * company with different stages entirely — the type is the thing the
+ * system actually reasons about.
+ *
+ * **An explicit colour always wins.** This is a default, not an override,
+ * and the picker in Settings → Pipeline is still the answer for an
+ * institute that wants its own.
+ *
+ * The eight ordinary stages deliberately get nothing. Colouring all
+ * fourteen would make the list a rainbow in which nothing stands out,
+ * and the ones worth spotting at a glance are the ends of the funnel:
+ * won, lost, parked, and the two that mean money is in motion.
+ */
+const STAGE_TYPE_COLOUR: Record<string, string> = {
+  new: "#2a78d6",
+  scheduled: "#7b5ea7",
+  enrolment_form: "#0e8f9e",
+  payment: "#eda100",
+  won: "#1f9d55",
+  lost: "#d64545",
+  parked: "#6b7280",
+};
+
 export interface FieldOption {
   value: string;
   label: string;
@@ -56,11 +90,15 @@ export async function resolveFieldOptions(
   if (field.key === "stage_id") {
     const { data } = await supabase
       .from("pipeline_stages")
-      .select("id, name, color")
+      .select("id, name, color, stage_type")
       .eq("is_active", true)
       .order("sort_order")
-      .returns<Array<{ id: string; name: string; color: string | null }>>();
-    return (data ?? []).map((r) => ({ value: r.id, label: r.name, color: r.color }));
+      .returns<Array<{ id: string; name: string; color: string | null; stage_type: string }>>();
+    return (data ?? []).map((r) => ({
+      value: r.id,
+      label: r.name,
+      color: r.color ?? STAGE_TYPE_COLOUR[r.stage_type] ?? null,
+    }));
   }
 
   if (field.key === "center_id") {
