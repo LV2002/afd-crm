@@ -91,9 +91,15 @@ export async function MyNumbersWidget({ userId }: { userId: string }) {
 
         <DailyLeadsChart series={series} />
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {/* Every figure this card has ever shown, each exactly once: the
+            two promoted above are not repeated here, and the two the hero
+            "Needs you today" adds together are listed separately, because
+            which of the two it is changes what you do about it. */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile label="Active leads" value={board.activeLeads} compact />
           <StatTile label="Assigned today" value={board.assignedToday} compact />
+          <StatTile label="Never contacted" value={board.neverContacted} compact />
+          <StatTile label="Overdue follow-ups" value={board.overdueFollowups} compact />
           <StatTile label="Due today" value={board.dueToday} compact />
           <StatTile label="Admission rate" value={rate} compact />
           <StatTile label="SLA breached" value={board.slaBreached} compact />

@@ -51,9 +51,12 @@ it is a good month.
   Targets). The line across the bar is where an even month would have you
   today — not a judgement, just the pace.
 
-The smaller row underneath — active leads, assigned today, due today,
-admission rate, SLA breached — is the same information as before, demoted
-rather than removed.
+**Nothing was taken away.** The smaller row underneath carries every
+other figure the card has ever shown — active leads, assigned today,
+never contacted, overdue follow-ups, due today, admission rate, SLA
+breached — demoted rather than removed. Never contacted and overdue are
+listed separately there as well as added together in the big figure,
+because which of the two it is changes what you do about it.
 
 ### Your day, in detail
 

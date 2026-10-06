@@ -66,8 +66,14 @@ export async function CentreWidget() {
 
         <DailyLeadsChart series={series} />
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {/* The same rule as the counsellor's card: every figure it used to
+            show is still here, and the two the hero adds together are
+            listed apart, because an unassigned lead and an unanswered one
+            are different problems with different fixes. */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile label="Active leads" value={centre.activeLeads} compact />
+          <StatTile label="Unassigned" value={centre.unassigned} compact />
+          <StatTile label="Never contacted" value={centre.neverContacted} compact />
           <StatTile label="Overdue follow-ups" value={centre.overdueFollowups} compact />
           <StatTile
             label="Admission rate"
@@ -79,7 +85,6 @@ export async function CentreWidget() {
             compact
           />
           <StatTile label="SLA breached" value={centre.slaBreached} compact />
-          <StatTile label="Unassigned" value={centre.unassigned} compact />
         </div>
 
         <div className="flex flex-wrap gap-4">
