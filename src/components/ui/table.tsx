@@ -10,8 +10,33 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
   );
 }
 
-function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
-  return <thead className={cn("[&_tr]:border-b", className)} {...props} />;
+/**
+ * `sticky` pins the headings while the rows scroll under them.
+ *
+ * Off by default, because a sticky head inside a short table or a card is
+ * fussier than it is useful. On for the long lists — leads, students,
+ * admissions — where a hundred rows in, nobody can remember which column
+ * is which, and the honest alternative is scrolling back up to check.
+ *
+ * `top-14` clears the app header, which is itself sticky at `h-14`.
+ * `bg-background` is not optional: a transparent sticky head lets the
+ * rows show through it as they pass underneath.
+ */
+function TableHeader({
+  className,
+  sticky = false,
+  ...props
+}: React.ComponentProps<"thead"> & { sticky?: boolean }) {
+  return (
+    <thead
+      className={cn(
+        "[&_tr]:border-b",
+        sticky && "sticky top-14 z-20 bg-background shadow-[0_1px_0_0_var(--border)]",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {

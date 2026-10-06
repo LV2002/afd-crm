@@ -147,6 +147,19 @@ head hears nothing about Kochi.
 
 ## 4.5 Finding things
 
+**The quickest way is the Search button in the top bar, or Ctrl + K.**
+Type two letters of a name or a number, and the people who match appear
+as you type — press Enter on one to open it. The same box jumps to any
+screen you can reach: type "fee" for Fee Structures, "insights" for
+Insights.
+
+It only ever finds what you are allowed to see. A counsellor searching a
+name finds their own leads and nobody else's, exactly as the list does,
+and phone numbers show masked here as they do everywhere else — the full
+number is on the lead's own page.
+
+Press **Esc** to close it without going anywhere.
+
 - **Search within leads**: the box at the top of the Leads list. Type part
   of a name or a phone number and press Enter.
 - **Search within students**: same idea, and it also matches the student
@@ -155,6 +168,17 @@ head hears nothing about Kochi.
   Meta last month?" (Chapter 11).
 - **The address bar**: every screen has a stable address, so you can
   bookmark a filtered list.
+
+### When something saves
+
+A small message appears at the bottom of the screen — *Payment recorded*,
+*Lead updated*. It fades by itself after a few seconds.
+
+It exists because the confirmation on a long form renders where you are
+not looking: you press Save at the bottom of the fee agreement and the
+message appears at the top. Errors behave the other way round and stay
+next to the field that caused them, where you have to go anyway to fix
+it.
 
 ## 4.6 Signing out
 

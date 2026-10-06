@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { GitMerge, Plus, Trash2, Upload } from "lucide-react";
+import { GitMerge, Plus, Trash2, Upload, Users } from "lucide-react";
 
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { OptionBadge } from "@/components/ui/option-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -198,6 +199,11 @@ export default async function LeadsPage({
   // lib/enrolment/dropped-leads.ts.
   const dropped = await droppedLeadIds(supabase, (rows ?? []).map((row) => String(row.id)));
 
+  // Any narrowing at all, so the empty state can tell "you filtered
+  // everything out" apart from "this CRM is new".
+  const hasAnyFilter =
+    Boolean(search) || Boolean(tagFilter) || dateFilters.active || Object.keys(filterValues).length > 0;
+
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -276,7 +282,7 @@ export default async function LeadsPage({
       />
 
       <Table>
-        <TableHeader>
+        <TableHeader sticky>
           <TableRow>
             {listFields.map((field) => (
               <TableHead key={field.id}>{field.label}</TableHead>
@@ -294,9 +300,37 @@ export default async function LeadsPage({
             </TableRow>
           ))}
           {(rows ?? []).length === 0 && (
-            <TableRow>
-              <TableCell colSpan={listFields.length} className="text-center text-muted-foreground">
-                No {leadPlural.toLowerCase()} match these filters.
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={listFields.length} className="p-0">
+                {/* Two different situations, and the difference decides
+                    what somebody does next: a filtered list with nothing
+                    in it needs the filters cleared, an empty CRM needs a
+                    first lead. */}
+                <EmptyState
+                  icon={Users}
+                  title={
+                    hasAnyFilter
+                      ? `No ${leadPlural.toLowerCase()} match these filters`
+                      : `No ${leadPlural.toLowerCase()} yet`
+                  }
+                  action={
+                    hasAnyFilter ? (
+                      <Button asChild size="sm" variant="outline">
+                        <Link href="/leads">Clear the filters</Link>
+                      </Button>
+                    ) : can(user, "lead.create") ? (
+                      <Button asChild size="sm">
+                        <Link href="/leads/new">
+                          <Plus /> Add the first one
+                        </Link>
+                      </Button>
+                    ) : undefined
+                  }
+                >
+                  {hasAnyFilter
+                    ? "Nothing here matches every filter at once. Clearing them brings the list back."
+                    : "They arrive by themselves from your ads, your website and WhatsApp. You can also add one by hand, or bring a spreadsheet in through Import."}
+                </EmptyState>
               </TableCell>
             </TableRow>
           )}

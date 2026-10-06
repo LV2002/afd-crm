@@ -7922,3 +7922,54 @@ pair of dates, the to-date including its whole day, late-evening IST landing on 
 day, rubbish input filtering nothing, and the year boundary in the month picker.
 
 **1639 tests pass**, typecheck, lint and build clean. Manual chapter 5 updated.
+
+## 2026-10-06 — The CRM answers back
+
+Fourth UI pass. The screens were correct and silent: 102 pages, one loading skeleton,
+no acknowledgement when anything saved, and no way to reach a person except the list.
+
+### Ctrl + K
+
+A command palette in the header — a visible button as well as the shortcut, because most
+of the people using this CRM have never pressed Ctrl-K in their lives and a feature
+nobody can see is a feature nobody has.
+
+Two letters finds leads and students; the same box jumps to any screen in the sidebar.
+It inherits two rules rather than inventing them: the search runs through the RLS-bound
+client, so a counsellor finds their own leads and nobody else's, and **phone numbers come
+back masked** — a search box returning full numbers per keystroke would be the most
+efficient bulk export in the building, which is exactly what non-negotiable #6 exists to
+prevent.
+
+The navigation entries are the same `navItemsFor(user, terms)` the sidebar renders, so
+the palette can never offer a screen somebody may not open, and a renamed term renames it
+here too.
+
+### A toast on every save
+
+`FormMessage` is used by 73 screens, so the toast went there rather than into each of
+them. **Success toasts; errors stay inline.** A confirmation on a long form renders where
+the person is not looking — press Save at the bottom of the fee agreement and the message
+appears at the top, so the save reads as having done nothing. An error is the opposite: it
+belongs beside the field that caused it, and throwing it into the corner as well trains
+people to dismiss the thing that matters.
+
+The inline message stays either way: it carries the `role` a screen reader announces, and
+a toast that has faded is not a record of anything.
+
+### Sticky headings and an empty state that teaches
+
+`TableHeader` takes a `sticky` prop — off by default, on for the long lists, pinned below
+the app header that is itself sticky. A hundred rows in, nobody remembers which column is
+which.
+
+`EmptyState` replaces "No results", starting with the leads list, which now tells the two
+situations apart: a filtered list with nothing in it offers to clear the filters; an empty
+CRM explains that leads arrive by themselves from ads, the website and WhatsApp, and
+offers the button to add the first one by hand.
+
+Two dependencies, both the standard choice and both tiny: `cmdk` (what shadcn's own
+Command is built on) and `sonner`.
+
+**1640 tests pass**, typecheck, lint and build clean. Manual chapter 4 covers the palette
+and the save messages.
