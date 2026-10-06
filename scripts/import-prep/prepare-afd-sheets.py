@@ -52,11 +52,11 @@ COLUMNS = [
 
 CENTRE = "Kochi"
 
-# Phone numbers of the enquiries marked green in the Kochi workbook. Green
-# means the enquiry became an admission; it is the only part of that sheet
-# that a CSV export cannot carry, because cell colour is formatting rather
-# than data. Filled by `load_admissions()` when the workbook is passed in.
-ADMITTED = set()
+# What the enquiry register's cell colours mean, phone number by phone
+# number. Colour is formatting rather than data, so a CSV export drops it
+# — and in that sheet it carries the outcome of the whole conversation.
+# Filled by `load_colours()` when the workbook is passed in.
+MARKED = {}
 
 report = Counter()
 unmapped = {"source": Counter(), "education": Counter(), "exam": Counter(), "course": Counter()}
@@ -426,9 +426,49 @@ def sheet_rows(worksheet, header_row=1):
     return out
 
 
-GREEN = "FF00FF00"
+# Confirmed with the client, colour by colour. Four greys rather than the
+# three they named: the sheet has one more shade than anybody remembers
+# applying, and all four mean the same thing.
+COLOURS = {
+    "FF00FF00": "admitted",
+    "FFFF9900": "competitor",
+    "FF999999": "negative",
+    "FFB7B7B7": "negative",
+    "FFCCCCCC": "negative",
+    "FFD9D9D9": "negative",
+    "FF00FFFF": "very hot",
+    "FFFF0000": "hot",
+    "FFFFFF00": "warm",
+}
 
-def load_admissions(path, sheet="follow up"):
+# A row can carry more than one colour, so one has to win. An outcome
+# beats a temperature: somebody who joined a competitor in March was warm
+# in February, and the February colour is not news. `admitted` is first
+# because it is the only one of these the client checked by hand.
+PRIORITY = ["admitted", "competitor", "negative", "very hot", "hot", "warm"]
+
+# What each meaning does to the lead.
+TEMPERATURE_FOR = {
+    "admitted": "Dead",
+    "competitor": "Dead",
+    "negative": "Dead",
+    "very hot": "Hot",
+    "hot": "Hot",
+    "warm": "Warm",
+}
+
+NOTE_FOR = {
+    "admitted": "ADMITTED — this enquiry became an admission (marked green in the Kochi workbook). "
+                "Imported as history, not as an open lead.",
+    "competitor": "JOINED A COMPETITOR — marked orange in the Kochi workbook.",
+    "negative": "Marked negative or wrong target in the Kochi workbook.",
+    "very hot": "Marked very hot in the Kochi workbook — the sheet's own top grade, above Hot.",
+    "hot": "Marked hot in the Kochi workbook.",
+    "warm": "Marked warm in the Kochi workbook.",
+}
+
+
+def load_colours(path, sheet="follow up"):
     """Reads the green rows out of the Excel workbook.
 
     openpyxl is imported here rather than at the top so the script still
@@ -442,17 +482,24 @@ def load_admissions(path, sheet="follow up"):
     headers = [str(c.value).strip() if c.value is not None else "" for c in next(worksheet.iter_rows(min_row=1, max_row=1))]
     phone_at = headers.index("phone")
 
-    found, stranded = set(), []
+    marked, stranded, unknown = {}, [], Counter()
     for row in worksheet.iter_rows(min_row=2):
         if not any(c.value not in (None, "") for c in row):
             continue
-        green = any(
-            c.fill and c.fill.patternType and c.fill.fgColor is not None
-            and c.fill.fgColor.type == "rgb" and c.fill.fgColor.rgb == GREEN
-            for c in row
-        )
-        if not green:
+
+        meanings = set()
+        for cell in row:
+            fill = cell.fill
+            if not (fill and fill.patternType and fill.fgColor is not None and fill.fgColor.type == "rgb"):
+                continue
+            rgb = fill.fgColor.rgb
+            if rgb in COLOURS:
+                meanings.add(COLOURS[rgb])
+            elif rgb not in ("FFFFFFFF", "00000000", None):
+                unknown[rgb] += 1
+        if not meanings:
             continue
+        meaning = min(meanings, key=PRIORITY.index)
         # Excel hands back a phone typed as a number as 9847012345.0, and
         # stripping non-digits from that leaves a trailing zero that
         # matches nobody. Drop the float tail first.
@@ -461,7 +508,13 @@ def load_admissions(path, sheet="follow up"):
             raw = raw[:-2]
         normalised = normalise_phone(raw)
         if normalised:
-            found.add(normalised)
+            # First colour wins when two rows share a number: the sheet is
+            # in date order, so that is the earlier conversation, and the
+            # later one is the row that is still open.
+            marked.setdefault(normalised, meaning)
+            continue
+
+        if meaning != "admitted":
             continue
 
         # A green row with no usable number is an admission the CRM cannot
@@ -479,9 +532,16 @@ def load_admissions(path, sheet="follow up"):
             "Conversation": clean_text(str(cells.get("Conversation Details") or ""))[:300],
         })
 
-    report["admissions_marked_green"] = len(found)
+    report["admissions_marked_green"] = sum(1 for m in marked.values() if m == "admitted")
     report["admissions_green_without_a_phone"] = len(stranded)
-    return found, stranded
+    for meaning in PRIORITY:
+        report[f"marked_{meaning.replace(' ', '_')}"] = sum(1 for m in marked.values() if m == meaning)
+    if unknown:
+        print("Colours in the sheet that nobody has explained, left alone:")
+        for rgb, n in unknown.most_common(8):
+            print(f"  #{rgb[2:]}  on {n} cells")
+        print()
+    return marked, stranded
 
 
 def blank_row():
@@ -536,7 +596,7 @@ def main_sheet(rows, rejects):
         row = blank_row()
         source, sub_source = source_for(r.get("Source"))
         city, district, state = place(r.get("Place"))
-        admitted = primary in ADMITTED
+        marked = MARKED.get(primary)
         exam_year = re.sub(r"\D", "", clean_text(r.get("exam year")))[:4]
         previous = clean_text(r.get("Previous attempt")).lower()
         competitor = clean_text(r.get("Competitor details"))
@@ -551,7 +611,10 @@ def main_sheet(rows, rejects):
             "Education Status": education_status(r.get("Current Education Status")),
             "School / College": clean_text(r.get("Name of School or College (current or last attended)")),
             "Previous Attempts": "1" if previous.startswith("yes") else ("0" if previous.startswith("no") else ""),
-            "Competitor Student?": "yes" if competitor else "",
+            # Orange means they joined a competitor, which is what this
+            # field asks — so it is true even where the sheet never named
+            # the institute.
+            "Competitor Student?": "yes" if competitor or marked == "competitor" else "",
             "Competitor Institute": competitor,
             "Interested Exams": exams(r.get("EXAM")),
             "Exam Year": exam_year if re.fullmatch(r"20\d\d", exam_year) else "",
@@ -562,14 +625,14 @@ def main_sheet(rows, rejects):
             # imported lead always enters at the New stage, so the CRM has
             # no way to say "this one converted" — this, and the first line
             # of the note, are how somebody finds them afterwards.
-            "Sub-source": f"{sub_source} — ADMITTED" if admitted else sub_source,
-            # Their own instruction for every closed row. An admission is
-            # closed: the work on it finished, and it should never surface
-            # in a follow-up queue.
-            "Temperature": "Dead" if admitted else temperature_from_status(status),
+            "Sub-source": f"{sub_source} — ADMITTED" if marked == "admitted" else sub_source,
+            # The colour wins over the status column: it is the mark
+            # somebody applied deliberately, and the status text is often
+            # a note to themselves from an earlier call.
+            "Temperature": TEMPERATURE_FOR.get(marked) or temperature_from_status(status),
             "Centre": CENTRE,
             "Notes": note_block([
-                ("", "ADMITTED — this enquiry became an admission (marked green in the Kochi workbook). Imported as history, not as an open lead." if admitted else ""),
+                ("", NOTE_FOR.get(marked, "")),
                 ("", f"Imported from the main enquiry sheet, row {index}."),
                 ("Enquiry date", r.get("24-Sep-2026")),
                 ("Status in the sheet", status),
@@ -895,9 +958,14 @@ def main():
 
     stranded_admissions = []
     if "admissions" in flags:
-        admitted, stranded_admissions = load_admissions(flags["admissions"])
-        ADMITTED.update(admitted)
-        print(f"{len(ADMITTED)} enquiries are marked green in the workbook — treated as closed admissions.\n")
+        marked, stranded_admissions = load_colours(flags["admissions"])
+        MARKED.update(marked)
+        print("Colour marks read from the workbook:")
+        for meaning in PRIORITY:
+            n = sum(1 for m in MARKED.values() if m == meaning)
+            if n:
+                print(f"  {meaning:12} {n:5} enquiries -> {TEMPERATURE_FOR[meaning]}")
+        print()
 
     files = os.listdir(source_folder)
     def find(fragment):
