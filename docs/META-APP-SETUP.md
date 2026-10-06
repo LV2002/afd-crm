@@ -164,6 +164,36 @@ when it does not already know their username, and that fetch is the
 `instagram_basic` call. A repeat message from somebody already in the
 inbox will not make it.
 
+### When the Explorer returns an empty list
+
+`me/accounts` coming back as `{"data": []}` — with the permissions
+granted and a token generated — does not mean you manage no Pages. It
+means *this token* can see none. For a **Business-type app with a
+Business-owned Page**, which is this one, a plain user token from the
+Explorer usually carries no Page selections at all.
+
+Do not keep re-generating it. Use a **System User token**, which is what
+the CRM should hold in production regardless:
+
+**business.facebook.com → Business Settings:**
+
+1. **Users → System Users → Add** — name it `AFD CRM`, role **Admin**.
+2. **Add Assets** — the step that is easy to miss, and the reason a
+   freshly made System User returns the same empty list. Assign the
+   Facebook Page (Full control), the Instagram account, the ad account
+   and the WhatsApp Business Account.
+3. **Generate New Token** → app `afd CRM` → tick every permission from
+   the table in §3.
+4. **Copy it immediately.** Meta shows it once.
+
+Paste it into the Explorer's **Access Token** field to make the test
+calls, and into the CRM's three token fields (§4).
+
+Why it is the right token rather than a workaround: it never expires, it
+is not tied to one person's account — so it survives a password change
+or that person leaving — and it carries exactly the assets assigned to
+it.
+
 Otherwise use the **Graph API Explorer**
 (`developers.facebook.com/tools/explorer`), in this order — the order
 matters, and getting it wrong produces an error that looks like the
