@@ -122,6 +122,69 @@ first. The same panel on that screen says what to check if it does not.
 
 ---
 
+## The "required API test calls" tick
+
+Three permissions ask for this as well as a description and a
+screencast: `whatsapp_business_messaging`, and anything else Meta has
+decided it can verify automatically. It means what it says — Meta wants
+to see that this app has actually called the endpoint the permission
+governs, recently, and it ticks the box itself when it finds one.
+
+For `whatsapp_business_messaging` the endpoint is
+`POST /{phone_number_id}/messages`. Two things reach it:
+
+- **WhatsApp → API setup → Send message** in the App Dashboard. The
+  green "Test message successfully sent" toast means the call went
+  through.
+- **The CRM itself.** `src/lib/integrations/whatsapp/client.ts` posts to
+  exactly that node with the saved permanent token and the real
+  Phone Number ID, so a counsellor sending one WhatsApp reply from a
+  lead's page is the same API call, made in production, by the app under
+  review.
+
+**The tick is not immediate.** It is a background check, not a response
+to the call, so a successful send and a still-grey tick at the same
+moment means nothing is wrong. Reload the submission page after a few
+hours before concluding anything.
+
+If it is still grey a day later, the suspect is the **From** number.
+Meta's `+1 555 …` test number is a shared sandbox asset, and a call on
+it is not always attributed to the app. Send the next one from AFD's own
+registered number — either by switching **From** in the API setup
+console once the number is registered on the WABA, or simply by sending
+a WhatsApp to a real lead from the CRM, which uses the production
+credentials by definition. A message to somebody who messaged you first
+needs no template and no approval.
+
+Remember that the console's token is temporary and visible on screen.
+Do not screenshot that page, and regenerate the token if you have.
+
+---
+
+## Recording the `whatsapp_business_messaging` screencast
+
+Thirty to forty-five seconds. The point to make is that every message
+goes to somebody who contacted the institute first, and that the person
+can stop it — reviewers are looking for unsolicited messaging, so show
+the opposite happening.
+
+1. **The lead** — open a lead in the CRM, one obviously invented with
+   your own number. Pause so the reviewer sees it is an enquiry record,
+   with the source it came in on.
+2. **The reply** — type a WhatsApp message in the composer on that
+   lead's page and send it. Show it appearing in the thread.
+3. **It arrives** — cut to the phone, or have it in shot from the start,
+   and show the message landing in WhatsApp.
+4. **The way out** — Chats → Opted out, pausing on the list. That is
+   the suppression list the CRM keeps, and it is the single most useful
+   thing you can show a reviewer who is screening for spam.
+
+Same file can go against `whatsapp_business_management` if shot 2 is
+done by picking an approved template from the list rather than typing
+free text — the template list being read is what that permission does.
+
+---
+
 ## Recording the `ads_management` screencast
 
 This is the one permission whose screens a counsellor cannot reach —
@@ -286,7 +349,11 @@ arriving and a counsellor replying from inside the CRM.
 > permanently.
 
 **Screencast:** a counsellor sending a WhatsApp reply from a lead's page
-in the CRM and it arriving on a phone — show both.
+in the CRM and it arriving on a phone — show both. Shot list under
+"Recording the whatsapp_business_messaging screencast" above.
+
+**API test calls:** this permission wants them too. See "The required
+API test calls tick" above.
 
 ### `whatsapp_business_management`
 
