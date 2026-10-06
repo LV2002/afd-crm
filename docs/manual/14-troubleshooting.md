@@ -107,6 +107,14 @@ Either more than 24 hours have passed since their last message — Meta's
 rule, not ours; use an approved template — or the thread is not matched
 to a lead, so there is nothing to record the message against.
 
+<!-- only: staff -->
+**A broadcast has not gone out — scheduled, or sent now**
+Both wait for the same sweep, so "send now" is not immediate either —
+give it a few minutes. If a broadcast is still sitting there much later,
+an administrator can send it at once and find out why the sweep is
+behind.
+<!-- /only -->
+<!-- only: admin -->
 **A broadcast has not gone out — scheduled, or sent now**
 Both wait for the same sweep, so "send now" is not immediate either.
 Check **Settings → Platform health → Every ten minutes**: if it shows no
@@ -120,7 +128,9 @@ Same cause, same screen. An automation's steps — including the first —
 only move when the sweep runs. Also check the automation is switched
 **On**, and read the **Only:** line under its trigger on the automations
 list: conditions narrowed too far mean it matches nobody.
+<!-- /only -->
 
+<!-- only: admin -->
 **No inbound WhatsApp message reaches the inbox**
 **Settings → Platform health → Inbound deliveries** answers this in one
 look, and it has three different answers:
@@ -136,6 +146,7 @@ look, and it has three different answers:
   filter, and at whether the number they arrived on is registered under
   **Settings → Integrations → WhatsApp numbers**.
 
+<!-- /only -->
 **My new template cannot be used yet**
 Meta reviews templates, usually within a day.
 
@@ -143,6 +154,12 @@ Meta reviews templates, usually within a day.
 Check **Chats → Opted out**. Opted-out numbers are excluded from
 everything, permanently.
 
+<!-- only: staff -->
+**Instagram shows nothing**
+It is probably not connected. The tab says exactly what is missing;
+connecting it is an administrator's job.
+<!-- /only -->
+<!-- only: admin -->
 **Instagram shows nothing**
 It is probably not connected. The tab says exactly what is missing. The
 two things people forget: the **Allow access to messages** switch in the
@@ -176,6 +193,7 @@ Review usually wants Business Verification done first.
 `docs/WHATSAPP-SETUP.md` Part 6 is the single submission that covers this
 along with everything else.
 
+<!-- /only -->
 **A message I sent from my phone is not in the CRM**
 Known and expected for Instagram. The CRM records what it sends itself.
 
@@ -207,6 +225,7 @@ At ~200 leads a month that takes several months. Nothing to fix.
 **A dash instead of a number**
 The sum has no answer yet. It is not zero.
 
+<!-- only: admin -->
 ## 14.6 Leads not arriving from ads
 
 Work through this in order:
@@ -255,6 +274,7 @@ It did not match any dropdown option, so it was kept exactly as the lead
 typed it rather than thrown away. Add that value in
 Settings → Dropdowns and it will group properly from then on.
 
+<!-- /only -->
 ## 14.8 Imports
 
 **"Couldn't find any columns or rows in that file."**

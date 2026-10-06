@@ -239,6 +239,7 @@ Each is granted at **own**, **centre** or **all**.
 | Export leads | **Leads → Export CSV** |
 | Restore a deleted lead | **Leads → Deleted** |
 | Resolve a duplicate | **Leads → Merge review** |
+<!-- only: admin -->
 | Add a user | **Settings → Users** |
 | Change what a role can do | **Settings → Roles & Permissions** |
 | Add a pipeline stage | **Settings → Pipeline Stages** |
@@ -256,6 +257,7 @@ Each is granted at **own**, **centre** or **all**.
 | See who changed something | **Settings → Audit Log** |
 | See what has broken | **Settings → Platform Health** |
 
+<!-- /only -->
 ---
 
 [Back to contents](#contents)

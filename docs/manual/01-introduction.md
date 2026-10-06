@@ -112,6 +112,27 @@ throughout:
 If you are brand new, read Chapters 1–4 and then the chapter for your job.
 If you are looking something up, use the "Where do I find X" index at the
 end of Chapter 18.
+<!-- only: staff -->
+### Which book this is
+
+This is the **staff handbook**: everything you do in the CRM, and nothing
+about setting it up. Where a procedure says an administrator does
+something — connecting WhatsApp, adding a stage, changing a fee structure
+— the steps for it are in the **administrator handbook**, which your
+administrator has.
+<!-- /only -->
+<!-- only: admin -->
+### Which book this is
+
+This is the **administrator handbook**: everything in the staff handbook,
+plus Settings chapter by chapter, the integrations, the schedules and the
+technical troubleshooting.
+
+There is a second, shorter book — the **staff handbook** — built from these
+same chapters with the administrator material left out. Give that one to
+counsellors, accounts and academics. Both are rebuilt by the same command,
+so they never disagree with each other.
+<!-- /only -->
 
 ---
 

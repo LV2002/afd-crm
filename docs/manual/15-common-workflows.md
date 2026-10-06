@@ -146,9 +146,16 @@ authority is resolved afterwards.
 
 ## 15.8 Running an ad campaign and finding out if it worked
 
+<!-- only: staff -->
+1. Before anything else, an administrator connects Meta and Google and
+   adds an assignment rule for the leads the campaign will produce, so
+   none of them land unassigned.
+<!-- /only -->
+<!-- only: admin -->
 1. Administrator: Meta and Google connected (Chapter 13.7).
 2. **Settings → Assignment Rules** — a rule for the leads it will
    produce, so none land unassigned.
+<!-- /only -->
 3. Run the campaign.
 4. Leads arrive within seconds of each form submission.
 5. **Insights → Sources** — how many, and how many converted.

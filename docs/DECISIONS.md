@@ -3993,3 +3993,42 @@ nothing for WhatsApp.
 The lesson is not "be less confident". It is that **the panel that settled this already existed**,
 and I reasoned from an architectural asymmetry instead of reading it. The first move on "X is not
 arriving" is the screen that says whether anything arrived.
+
+## 2026-10-06 — Two handbooks, one set of chapters
+
+Leon asked for two PDFs: one for staff that covers using the CRM and nothing technical, one for
+the administrator that covers everything.
+
+The obvious implementation — copy the chapters, delete the admin ones from the copy — is the one
+that fails in a month. Two files describing the same screen drift the first time a label changes,
+and the staff copy is the one nobody remembers to update.
+
+So the chapters stay single-source and declare their audience inline: `<!-- audience: admin -->`
+on a chapter's first line, `<!-- only: admin -->` … `<!-- /only -->` around a section, a
+paragraph, a table row or one bullet. `<!-- only: staff -->` is the other half of the pair, for
+the handful of places that need a short staff answer and a fuller administrator one — "ask an
+administrator" versus the Platform Health procedure.
+
+**Chapters and sections are renumbered per book.** A staff book that runs 1 … 12, 14 … 18
+advertises its own holes, and every cross-reference in it would be wrong. The build assigns
+numbers by position and rewrites `Chapter 13`, `Chapter 6.4` and a bare `(7.5)` from the same
+map. A reference to something the staff book does not contain becomes *the administrator
+handbook*, which is both true and the next thing the reader needs.
+
+Two decisions worth writing down because they cost debugging time:
+
+**A removed region leaves a seam.** The directive lines were silently doing a blank line's work.
+Cut them out and the paragraph above runs into the paragraph below and renders as one. A marker
+is left behind and becomes a blank line — except between two list items, where a blank line ends
+the list and starts a second one with a visible gap. `healSeams` is six lines and both failures
+were visible only in the rendered book.
+
+**The build is fence-aware.** Chapter 19 documents the directives, so it prints them in code
+fences; a parser that did not know about fences removed its own documentation.
+
+**Where the line falls.** Anything a person *does* in the CRM is staff material, including
+screens most of them cannot open — a counsellor reading about Ad Performance learns what the
+institute measures, which is the point of a handbook. Administrator material is Settings, the
+integrations, the schedules, anything that sends the reader to a `docs/*.md` runbook, and
+anything whose fix is "an administrator does X". A test asserts the staff book contains no
+runbook path, because that is the shape the mistake takes.

@@ -7709,3 +7709,43 @@ editing every time somebody adds an endpoint, by a person with no reason to thin
 The markup already says what the link does.
 
 **1606 tests pass**, typecheck, lint and build clean.
+
+## 2026-10-06 — The manual, split into a staff book and an administrator book
+
+Leon asked for two handbooks as PDFs: one for staff covering CRM usage only, one for the
+administrator covering everything.
+
+### What shipped
+
+**`docs/manual/build.mjs` builds two books from the same chapters.** `manual-staff.html` (17
+chapters, 80 printed pages) and `manual-admin.html` (19 chapters, 103 pages). Chapters declare
+their audience with `<!-- audience: admin -->` on the first line; smaller passages with
+`<!-- only: admin -->` … `<!-- /only -->`, down to a single table row. An unclosed region fails
+the build.
+
+Both books are renumbered from scratch, so the staff one runs 1 … 17 with no holes, and all
+cross-references are rewritten to match — a reference to something only the administrator book
+holds becomes *the administrator handbook*. See `docs/DECISIONS.md`, 2026-10-06.
+
+**What moved to the administrator book:** Chapter 13 (Settings, all of it), Chapter 19 (keeping
+the manual updated), WhatsApp Coexistence setup, Automations, config export/import, the Meta and
+ad-platform troubleshooting, the Settings rows of the *Where do I find X* index, and the admin
+FAQ. Five passages have a short staff version and a fuller administrator one.
+
+**`npm run manual:pdf`** renders both books to A4 with page numbers and a PDF outline, using the
+Chromium Playwright already installs. The PDFs are gitignored — they are a two-second rebuild
+and 3 MB of binary per commit otherwise.
+
+**`/manual` now serves the staff book to anybody signed in; `/manual/admin` serves the
+administrator book to `settings.manage`,** and redirects anybody else to `/manual` rather than
+refusing them — what they were looking for is almost certainly in the staff book.
+
+### Tests
+
+`tests/manual-editions.spec.mjs`, 14 cases: region selection, the two failure modes of a removed
+region (merged paragraphs, split lists), directives inside a code fence, unclosed and nested
+regions, renumbering including letter-suffixed sections, reference rewriting, and two assertions
+against the committed books — the staff one names no `docs/*.md` runbook, the administrator one
+does.
+
+**1620 tests pass**, typecheck, lint and build clean.
