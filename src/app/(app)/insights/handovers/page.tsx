@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { BarList } from "@/components/charts/bar-list";
+import { ChartFigure } from "@/components/charts/chart-figure";
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -226,8 +228,46 @@ export default async function HandoversPage() {
           { title: "By centre", rows: byCentre },
           { title: "By counsellor", rows: byCounsellor },
         ].map((group) => (
-          <div key={group.title} className="flex flex-col gap-3">
+          <div key={group.title} className="flex flex-col gap-4">
             <h3 className="text-sm font-semibold">{group.title}</h3>
+
+            {/* Median days from "admission confirmed" to "first payment
+                cleared", which is the lag this whole page exists to
+                measure. Longest first: the slowest row is the one worth
+                a conversation, and a chart sorted alphabetically buries
+                it. Rows with no completed handover have no median to
+                draw and are left to the table. */}
+            {group.rows.some((row) => row.confirmedToPaid) && (
+              <ChartFigure
+                title={`Confirmed → paid, ${group.title.toLowerCase()}`}
+                note="median days"
+                columns={[group.title === "By centre" ? "Centre" : "Counsellor", "Median days", "Admissions", "Waiting"]}
+                rows={group.rows.map((row) => [
+                  row.key,
+                  row.confirmedToPaid ? row.confirmedToPaid.medianDays : "—",
+                  row.confirmedToPaid?.count ?? 0,
+                  row.stuck,
+                ])}
+              >
+                <BarList
+                  rows={group.rows
+                    .filter((row) => row.confirmedToPaid)
+                    .sort(
+                      (a, b) =>
+                        (b.confirmedToPaid?.medianDays ?? 0) - (a.confirmedToPaid?.medianDays ?? 0),
+                    )
+                    .slice(0, 12)
+                    .map((row) => ({
+                      label: row.key,
+                      value: row.confirmedToPaid?.medianDays ?? 0,
+                      display: `${row.confirmedToPaid?.medianDays ?? 0}d`,
+                      hint: `${row.confirmedToPaid?.count ?? 0} admissions${
+                        row.stuck > 0 ? ` · ${row.stuck} waiting` : ""
+                      }`,
+                    }))}
+                />
+              </ChartFigure>
+            )}
             {group.rows.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nothing to show yet.</p>
             ) : (

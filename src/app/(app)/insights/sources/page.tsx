@@ -1,3 +1,5 @@
+import { BarList } from "@/components/charts/bar-list";
+import { ChartFigure } from "@/components/charts/chart-figure";
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -107,6 +109,35 @@ export default async function SourcesPage() {
               only ever differ when a second enquiry lands on a lead that already exists.
             </p>
           )}
+
+          {/* Sorted by what each source brought in, because "which is
+              biggest" is the first question and a table sorted by name
+              does not answer it. The admission count rides along as the
+              hint, so a source that brings many and converts none is
+              visible in the same glance. */}
+          <ChartFigure
+            title="Leads by first-touch source"
+            note={`${leads.length} leads · ${rows.length} sources`}
+            columns={["Source", "Leads", "Admissions"]}
+            rows={[...rows]
+              .sort((a, b) => b.firstTouchLeads - a.firstTouchLeads)
+              .map((row) => [row.source, row.firstTouchLeads, row.firstTouchAdmissions])}
+          >
+            <BarList
+              rows={[...rows]
+                .sort((a, b) => b.firstTouchLeads - a.firstTouchLeads)
+                .slice(0, 12)
+                .map((row) => ({
+                  label: row.source,
+                  value: row.firstTouchLeads,
+                  display: String(row.firstTouchLeads),
+                  hint:
+                    row.firstTouchAdmissions > 0
+                      ? `${row.firstTouchAdmissions} admitted`
+                      : "none admitted",
+                }))}
+            />
+          </ChartFigure>
 
           <section className="flex flex-col gap-3">
             <h3 className="text-sm font-semibold">Every source, both ways</h3>

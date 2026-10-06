@@ -1,3 +1,4 @@
+import { ChartFigure } from "@/components/charts/chart-figure";
 import { AccessDenied } from "@/components/layout/access-denied";
 import {
   Table,
@@ -11,6 +12,8 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { formatDateIST } from "@/lib/format/date";
 import { formatPercent } from "@/lib/reports/ad-performance";
 import { COHORT_DAYS, cohortCurves, decisionWindow } from "@/lib/reports/cohorts";
+
+import { CohortCurvesChart } from "./cohort-curves-chart";
 import { loadReportLeads } from "@/lib/reports/load-report-leads";
 
 export const dynamic = "force-dynamic";
@@ -97,8 +100,26 @@ export default async function TimingPage() {
             )}
           </section>
 
-          <section className="flex flex-col gap-3">
+          <section className="flex flex-col gap-4">
             <h3 className="text-sm font-semibold">By the month they arrived</h3>
+
+            {/* Lines that stop rather than fall: a cohort too young for a
+                90-day figure has no point at 90, which is the same
+                statement the blank cells in the table make. */}
+            <ChartFigure
+              title="Conversion by cohort age"
+              note={`the ${Math.min(rows.length, 6)} most recent months`}
+              columns={["Arrived", ...COHORT_DAYS.map((day) => `${day} days`)]}
+              rows={rows.map((row) => [
+                formatDateIST(new Date(`${row.cohort}-01T06:00:00Z`), "MMM yyyy"),
+                ...COHORT_DAYS.map((day) =>
+                  row.rates[day] === null ? "too young to say" : formatPercent(row.rates[day] ?? 0),
+                ),
+              ])}
+            >
+              <CohortCurvesChart rows={rows} />
+            </ChartFigure>
+
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>

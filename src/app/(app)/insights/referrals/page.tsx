@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { BarList } from "@/components/charts/bar-list";
+import { ChartFigure } from "@/components/charts/chart-figure";
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -129,6 +131,34 @@ export default async function ReferralsPage() {
                   : "Worth knowing before the next month of ad budget is set."}
               </span>
             </p>
+          )}
+
+          {/* Ranked by people enrolled rather than people sent — the
+              order `topReferrers` already puts them in, and the order a
+              counsellor should ring them back in. The bar is admissions;
+              the hint is how many they sent to get there. */}
+          {standings.length > 0 && (
+            <ChartFigure
+              title="Who is sending people who enrol"
+              note={`${standings.length} referrers`}
+              columns={["Referrer", "Enrolled", "Sent", "Conversion"]}
+              rows={standings.map((row) => [
+                labels.get(row.referrerId)?.label ?? "Someone not in the CRM",
+                row.admissions,
+                row.referrals,
+                formatPercent(row.conversion),
+              ])}
+            >
+              <BarList
+                rows={standings.slice(0, 12).map((row) => ({
+                  label: labels.get(row.referrerId)?.label ?? "Someone not in the CRM",
+                  value: row.admissions,
+                  display: String(row.admissions),
+                  hint: `${row.referrals} sent · ${formatPercent(row.conversion)}`,
+                  href: labels.get(row.referrerId)?.named ? `/leads/${row.referrerId}` : undefined,
+                }))}
+              />
+            </ChartFigure>
           )}
 
           <section className="flex flex-col gap-3">

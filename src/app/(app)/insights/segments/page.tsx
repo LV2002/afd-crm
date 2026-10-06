@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { BarList } from "@/components/charts/bar-list";
+import { ChartFigure } from "@/components/charts/chart-figure";
 import { AccessDenied } from "@/components/layout/access-denied";
 import {
   Table,
@@ -126,6 +128,41 @@ export default async function SegmentsPage({
               />
             </section>
           )}
+
+          {/* Rate, not volume, with the institute's own rate as the line
+              to judge each row against — "18%" is a number, "18% against
+              an overall 11%" is a decision. Segments too small for a rate
+              are left out of the chart rather than drawn at zero, which
+              would read as "nobody from here ever enrols". */}
+          <ChartFigure
+            title={`Conversion by ${dimension.label.toLowerCase()}`}
+            note={`overall ${formatPercent(overall)} · segments with at least ${MIN_FOR_RATE} leads`}
+            columns={[dimension.label, "Conversion", "Leads", "Enrolled"]}
+            rows={rows
+              .filter((row) => row.conversionRate !== null)
+              .map((row) => [
+                row.value,
+                formatPercent(row.conversionRate ?? 0),
+                row.leads,
+                row.admissions,
+              ])}
+          >
+            <BarList
+              rows={rows
+                .filter((row) => row.conversionRate !== null)
+                .sort((a, b) => (b.conversionRate ?? 0) - (a.conversionRate ?? 0))
+                .slice(0, 12)
+                .map((row) => ({
+                  label: row.value,
+                  value: row.conversionRate ?? 0,
+                  display: formatPercent(row.conversionRate ?? 0),
+                  hint: `${row.admissions} of ${row.leads}`,
+                }))}
+              reference={overall}
+              referenceLabel={`The line is the overall rate, ${formatPercent(overall)}.`}
+              emptyMessage={`No ${dimension.label.toLowerCase()} has ${MIN_FOR_RATE} leads yet, so no rate can be drawn.`}
+            />
+          </ChartFigure>
 
           <div className="overflow-x-auto">
             <Table>

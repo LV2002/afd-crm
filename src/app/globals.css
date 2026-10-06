@@ -61,6 +61,30 @@
   --border: oklch(0.898 0.008 253);
   --input: oklch(0.878 0.009 253);
   --ring: oklch(0.505 0.163 262);
+
+  /* ─────────────────────────────────────────────────────────────
+     Chart series — identity, not decoration
+
+     Used only where a chart draws more than one thing and the
+     reader has to tell them apart: the cohort curves, a stacked
+     source mix. A chart of one measure uses --primary, because
+     colour there would encode a variable that does not exist.
+
+     These are the dataviz skill's validated categorical theme,
+     in its fixed slot order, which is the CVD-safety mechanism
+     rather than a cosmetic choice — assign slot 1, then 2, never
+     cycle, never pick by taste. Validated in both modes: worst
+     adjacent CVD ΔE 9.1 light / 8.4 dark, normal-vision 19.6 /
+     19.3. On the light surface slots 3, 4 and 5 fall below 3:1
+     against white, so every chart using them ships a legend AND
+     the table underneath — the relief the validator requires.
+     ───────────────────────────────────────────────────────────── */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
 }
 
 .dark {
@@ -97,6 +121,16 @@
   --border: oklch(1 0 0 / 13%);
   --input: oklch(1 0 0 / 18%);
   --ring: oklch(0.655 0.148 262);
+
+  /* The same six hues, stepped for the dark surface rather than
+     flipped — a palette that is merely inverted lands outside the
+     dark lightness band and stops being distinguishable. */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
 }
 
 @theme inline {

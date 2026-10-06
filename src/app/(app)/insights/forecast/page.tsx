@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { BarList } from "@/components/charts/bar-list";
+import { ChartFigure } from "@/components/charts/chart-figure";
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -205,6 +207,40 @@ export default async function ForecastPage() {
         {data.pipeline.byStage.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nothing open.</p>
         ) : (
+          <div className="flex flex-col gap-4">
+            {/* Expected admissions, not lead counts: a stage holding
+                forty leads at 5% is worth less than one holding six at
+                60%, and the bar has to say which is which. Stages with
+                no chance set are left out of the chart — they have no
+                expected value to draw — and the table below still lists
+                them. */}
+            <ChartFigure
+              title="Expected admissions by stage"
+              note={`${data.pipeline.byStage.reduce((sum, stage) => sum + stage.leads, 0)} open leads`}
+              columns={["Stage", "Expected", "Leads", "Chance"]}
+              rows={data.pipeline.byStage.map((stage) => [
+                stage.stageName,
+                stage.probability === null ? "—" : stage.expected.toFixed(1),
+                stage.leads,
+                stage.probability === null ? "not set" : formatPercent(stage.probability),
+              ])}
+            >
+              <BarList
+                rows={data.pipeline.byStage
+                  .filter((stage) => stage.probability !== null)
+                  .map((stage) => ({
+                    label: stage.stageName,
+                    value: stage.expected,
+                    display: stage.expected.toFixed(1),
+                    hint: `${stage.leads} leads · ${formatPercent(stage.probability ?? 0)}`,
+                  }))}
+                emptyMessage="No stage has a chance-of-conversion set, so nothing can be weighted yet."
+              />
+            </ChartFigure>
+          </div>
+        )}
+
+        {data.pipeline.byStage.length > 0 && (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
