@@ -62,3 +62,6 @@ skills-lock.json
 # scenes are the source of truth, and a 10 MB binary does not belong in
 # a repository that already carries the script that produces it.
 /docs/video/out/
+
+# built handbooks — rendered on demand with "npm run manual:pdf"
+/docs/manual/*.pdf

@@ -28,7 +28,8 @@
     "manual": "node docs/manual/build.mjs",
     "video": "node docs/video/render.mjs",
     "video:stills": "node docs/video/render.mjs --preview",
-    "video:script": "node docs/video/script.mjs"
+    "video:script": "node docs/video/script.mjs",
+    "manual:pdf": "node docs/manual/pdf.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",

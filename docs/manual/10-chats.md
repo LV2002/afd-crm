@@ -116,6 +116,13 @@ and status, and each recipient's delivery is tracked.
 
 **Common mistakes and fixes**
 - *Not checking the count.* "Everybody" is rarely what you meant.
+<!-- only: staff -->
+- *Expecting a broadcast to go out the moment you press Send.* **It does
+  not, and "now" is no different from "scheduled"** — pressing Send
+  queues the recipients and a sweep sends them, which takes a few
+  minutes. If one has to leave this minute, ask an administrator.
+<!-- /only -->
+<!-- only: admin -->
 - *Expecting a broadcast to go out the moment you press Send.* **It does
   not, and "now" is no different from "scheduled"** — pressing Send
   queues the recipients, and a sweep does the sending. With the
@@ -124,6 +131,7 @@ and status, and each recipient's delivery is tracked.
   next morning.
   To send one immediately, whatever the schedule: **Settings → Platform
   health → Send anything that is waiting**.
+<!-- /only -->
 - *Messaging people who opted out.* You cannot — they are excluded
   automatically (10.5).
 
@@ -154,6 +162,7 @@ number running the WhatsApp Business app and the Cloud API at the same
 time, mirroring messages both ways. The counsellor keeps their phone,
 their number and their chats.
 
+<!-- only: admin -->
 ## 10.6a Coexistence — a counsellor's own number in the CRM
 
 This is the one that stops the typing. A counsellor's number joins the
@@ -219,6 +228,7 @@ business number and it is not a surprise anybody should get afterwards.
 Group chats and anything on a different number stay private — the sync is
 one-to-one business conversations only.
 
+<!-- /only -->
 ## 10.7 Instagram DMs
 
 **Chats** → **Instagram**.
@@ -261,6 +271,7 @@ follows its lead's ownership. Before that it is visible to anyone who
 works the inbox, because a DM is addressed to the institute, not to a
 counsellor, and somebody has to answer it.
 
+<!-- only: admin -->
 ## 10.8 Automations
 
 **Chats** → **Automations** (`whatsapp.campaign`). A sequence that runs
@@ -313,6 +324,7 @@ it** so you can see what the automation has actually done.
   **Only:** line under the trigger for every automation that has
   conditions — read it back and check it says what you meant.
 
+<!-- /only -->
 ---
 
 [Back to contents](#contents)

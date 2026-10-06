@@ -1,3 +1,4 @@
+<!-- audience: admin -->
 # Chapter 13 — Admin guide
 
 Everything in **Settings** (`settings.manage`). Twenty-five entries,

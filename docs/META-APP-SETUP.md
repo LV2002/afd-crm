@@ -140,6 +140,89 @@ serves only people who hold a role on the app — which is why Instagram
 DMs arrive from staff and from nobody else. The app being **Live** does
 not substitute: both switches have to be on.
 
+### "Request advanced access" is greyed out
+
+Hover it. If the tooltip says a **successful test API call** is needed,
+that is the real gate — look at the **API calls** column and it will read
+`(0)`. Meta will not widen access to a permission the app has never
+demonstrably used, and the button stays inactive for **up to 24 hours
+after the first call**.
+
+The CRM can make those calls for you; each of these buttons exercises
+the permission in the course of doing its actual job:
+
+| In the CRM | Exercises |
+|---|---|
+| Settings → Integrations → Meta → **Subscribe this Page** | `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata` |
+| An **Instagram DM from an account that has not messaged before** | `instagram_basic`, `pages_messaging`, `instagram_manage_messages` |
+| Platform health → the **hourly run** | `ads_read`, `ads_management` |
+| Chats → **Templates** | `whatsapp_business_management` |
+| A **WhatsApp reply** from a lead's page | `whatsapp_business_messaging` |
+
+The Instagram one has a catch: the CRM fetches a sender's profile only
+when it does not already know their username, and that fetch is the
+`instagram_basic` call. A repeat message from somebody already in the
+inbox will not make it.
+
+### When the Explorer returns an empty list
+
+`me/accounts` coming back as `{"data": []}` — with the permissions
+granted and a token generated — does not mean you manage no Pages. It
+means *this token* can see none. For a **Business-type app with a
+Business-owned Page**, which is this one, a plain user token from the
+Explorer usually carries no Page selections at all.
+
+Do not keep re-generating it. Use a **System User token**, which is what
+the CRM should hold in production regardless:
+
+**business.facebook.com → Business Settings:**
+
+1. **Users → System Users → Add** — name it `AFD CRM`, role **Admin**.
+2. **Add Assets** — the step that is easy to miss, and the reason a
+   freshly made System User returns the same empty list. Assign the
+   Facebook Page (Full control), the Instagram account, the ad account
+   and the WhatsApp Business Account.
+3. **Generate New Token** → app `afd CRM` → tick every permission from
+   the table in §3.
+4. **Copy it immediately.** Meta shows it once.
+
+Paste it into the Explorer's **Access Token** field to make the test
+calls, and into the CRM's three token fields (§4).
+
+Why it is the right token rather than a workaround: it never expires, it
+is not tied to one person's account — so it survives a password change
+or that person leaving — and it carries exactly the assets assigned to
+it.
+
+Otherwise use the **Graph API Explorer**
+(`developers.facebook.com/tools/explorer`), in this order — the order
+matters, and getting it wrong produces an error that looks like the
+integration is broken when it is only the Explorer being misconfigured:
+
+1. **Meta App** → `afd CRM`.
+2. **Permissions** → add the ones the call needs *before* generating a
+   token. A call made with a token that does not carry the permission
+   does not count toward anything. For `instagram_basic`, add
+   `instagram_basic`, `pages_show_list` and `pages_read_engagement`.
+3. **Generate Access Token**, and approve.
+4. **User or Page** → switch to the **Page**, not User Token.
+5. Run the call. For `instagram_basic`:
+   `me?fields=instagram_business_account{id,username}`
+
+> **`(#100) Tried accessing nonexisting field (instagram_business_account)
+> on node type (User)`** means step 4 was missed. `me` is whoever the
+> token speaks for — with a User token that is the person, and an
+> Instagram account hangs off the *Page*. Either switch the dropdown, or
+> keep the user token and go in two hops: `me/accounts` for the Page id,
+> then `{page-id}?fields=instagram_business_account{id,username}`.
+
+A successful response counts. Tokens from the Explorer are short-lived
+and belong nowhere but the Explorer — never paste one into the CRM, and
+regenerate it if it has been on screen in front of anybody.
+
+Do all of them in one sitting and come back the next day to request
+advanced access on everything at once.
+
 ### If the page renders empty
 
 It does that. In order of likelihood: an ad blocker or privacy extension

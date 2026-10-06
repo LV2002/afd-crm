@@ -113,6 +113,7 @@ If a whole batch needs reassigning — somebody leaves — an administrator
 does it by changing the assignment rules for new leads and reassigning
 the existing ones individually, or asks for help.
 
+<!-- only: admin -->
 ## 12.4 Exporting and importing configuration
 
 This is for setting up a second instance or moving settings between a
@@ -137,6 +138,7 @@ students, no payments.
 run against one that is already configured. It is a bootstrap, not a
 merge.
 
+<!-- /only -->
 ---
 
 [Back to contents](#contents)

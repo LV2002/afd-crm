@@ -9,7 +9,8 @@ const nextConfig: NextConfig = {
    * whole update.
    */
   outputFileTracingIncludes: {
-    "/manual": ["./docs/manual/manual.html"],
+    "/manual": ["./docs/manual/manual-staff.html"],
+    "/manual/admin": ["./docs/manual/manual-admin.html"],
   },
 
   async headers() {

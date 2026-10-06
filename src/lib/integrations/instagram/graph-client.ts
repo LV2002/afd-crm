@@ -98,3 +98,44 @@ export async function fetchInstagramProfile(
     return { username: null, name: null, profilePicUrl: null };
   }
 }
+
+/**
+ * Reads the institute's own Instagram account. Throws on refusal.
+ *
+ * Deliberately different from `fetchInstagramProfile` above, which reads
+ * a *sender* and swallows every error — right for a webhook mid-flight,
+ * where a missing username must not lose the message, and wrong for a
+ * button whose entire job is to report what Meta said.
+ *
+ * This is also the canonical `instagram_basic` call, which matters for a
+ * reason beyond diagnostics: Meta will not let an app request Advanced
+ * Access to a permission it has never successfully used, and the
+ * "Request advanced access" button stays greyed out with the API-calls
+ * column reading zero. Pressing a button in the CRM is a great deal
+ * easier than assembling the same call by hand in the Graph API
+ * Explorer — which for a Business-owned Page means a System User token
+ * first, because a plain user token there sees no Pages at all.
+ */
+export async function fetchInstagramAccountIdentity(
+  igUserId: string,
+  accessToken: string,
+): Promise<{ id: string; username: string | null }> {
+  const url = new URL(`${GRAPH_BASE_URL}/${igUserId}`);
+  url.searchParams.set("fields", "id,username");
+  url.searchParams.set("access_token", accessToken);
+
+  const response = await fetch(url.toString());
+  const body = (await response.json()) as {
+    id?: string;
+    username?: string;
+    error?: { message?: string; code?: number };
+  };
+
+  if (!response.ok || body.error) {
+    // Meta's own wording, unedited — it is what gets pasted into their
+    // documentation or a support thread.
+    throw new Error(body.error?.message ?? `Meta returned ${response.status}.`);
+  }
+
+  return { id: body.id ?? igUserId, username: body.username ?? null };
+}

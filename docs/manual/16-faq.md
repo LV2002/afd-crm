@@ -120,6 +120,7 @@ The sum has no answer yet. It is not zero.
 **Can Ask AI change anything?**
 No. It answers questions and nothing else, within your scope.
 
+<!-- only: admin -->
 ## About admin
 
 **Can we rename "Lead"?**
@@ -155,6 +156,7 @@ not a backup.**
 **Settings → Platform Health.** It shows a broken integration before
 anybody notices leads have stopped arriving.
 
+<!-- /only -->
 ---
 
 [Back to contents](#contents)
