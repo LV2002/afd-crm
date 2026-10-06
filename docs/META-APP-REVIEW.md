@@ -1,8 +1,10 @@
 # App Review: what to write and what to record
 
-Every permission in the submission asks the same three things — a
-description, a screencast, and an agreement tick. This has the text to
-paste for each, and what each recording has to show.
+Every permission in the submission asks for much the same things — a
+description, a screencast, an agreement tick, and for some of them a set
+of instructions a reviewer can follow themselves. This has the text to
+paste for each, what each recording has to show, and the reproduction
+steps for the one permission that asks for them.
 
 ---
 
@@ -54,6 +56,112 @@ give those credentials. A counsellor sees masked phone numbers in lists
 and only their own centre's leads, which is enough to verify every flow
 below and not enough to walk away with a database. Deactivate it when
 the review closes.
+
+---
+
+## Reproduction instructions
+
+Some permissions ask for a screencast _and_ "instructions for how to
+reproduce this feature" — a numbered path a reviewer can follow
+themselves, in the product, with the test login. It is a separate box
+from the description and a separate tick; a permission can be four
+ticks green and still be held up by this one.
+
+Two rules make the difference between a pass and a rejection:
+
+- **Name the screens by the words on them.** "Chats → Instagram" is
+  followable; "the messaging module" is not. Use the labels in the
+  left-hand navigation as they actually read.
+- **Say what should happen at each step**, so the reviewer can tell
+  whether it worked. A step that just says "click Send" leaves them
+  guessing what they were meant to see.
+
+### `pages_messaging` — paste this
+
+Replace the handle, and check the URL still matches where the CRM is
+deployed.
+
+> Our CRM is at https://afd-crm-one.vercel.app. Sign in with the test
+> credentials supplied with this submission — a counsellor account,
+> which is the role our sales staff use.
+>
+> 1. Open https://afd-crm-one.vercel.app and sign in with those
+>    credentials.
+> 2. From your own Instagram account, send a direct message to
+>    @YOUR_HANDLE — our Instagram professional account, which is linked
+>    to the Facebook Page in this submission. For example: "Hi, what are
+>    the fees for the NID foundation course?"
+> 3. In the CRM, click **Chats** in the left-hand navigation, then the
+>    **Instagram** tab. Your message appears at the top of the
+>    conversation list within a few seconds, labelled with the sender's
+>    Instagram handle and marked as awaiting a reply.
+> 4. Click that conversation. The full thread opens on the right.
+> 5. Type a reply in the box at the bottom and press **Send**. It is
+>    delivered using our Page access token, and appears in the thread
+>    marked as sent by the counsellor.
+> 6. Check the Instagram account you messaged from — the counsellor's
+>    reply has arrived there.
+>
+> Note on access level: while this app holds Standard Access, Meta only
+> delivers messages from accounts that have a role on the app, so a
+> message sent from an account without one may not arrive at step 3. If
+> you would like to reproduce this live, tell us which Instagram or
+> Facebook account you will use and we will add it as a tester the same
+> day. The screencast attached to this permission shows the whole flow
+> end to end on our own account.
+
+That last paragraph is not an excuse, it is the actual constraint, and
+saying it plainly is better than a reviewer following the steps, seeing
+nothing arrive, and rejecting the permission as not reproducible.
+
+**Before pasting this, check the webhook is live.** Settings →
+Integrations → Meta, the **Instagram DMs** panel: if "Recent deliveries"
+is empty, Meta has never called this CRM and nothing a reviewer does at
+step 2 will appear at step 3. Send yourself a DM and confirm it lands
+first. The same panel on that screen says what to check if it does not.
+
+---
+
+## Recording the `ads_management` screencast
+
+This is the one permission whose screens a counsellor cannot reach —
+Ad Performance needs organisation-wide report access and the retargeting
+settings need `settings.manage` — so record it from your own admin
+account. That is fine: the screencast is yours to make, and only the
+_login_ handed to the reviewer has to be the limited one.
+
+Forty to sixty seconds, no voice track, browser window with the URL bar
+visible. Four shots, in this order:
+
+1. **What it is for** — `/settings/integrations/meta`. Pause two seconds
+   on the heading and the paragraph beneath it, which names the Custom
+   Audience and says consent is honoured. A reviewer reading that knows
+   what they are about to watch.
+2. **The audience setting** — `/settings/integrations`, the retargeting
+   section. Show "Keep leads in the audience for 180 days", change the
+   number, press **Save**, and let the confirmation appear.
+3. **The sync having run** — `/settings/health`, the **Scheduled work**
+   panel. Scroll to **Meta retargeting audience** and pause on its
+   result line, which reads like "ok, 412 added". That is the Custom
+   Audience being written, which is the first half of what the
+   permission is for.
+4. **The conversions coming back** — `/marketing`, the **Ad Performance**
+   screen. Pause on a campaign row showing spend next to leads and
+   admissions. That is the offline-conversion upload doing its job:
+   reporting against actual admissions rather than form fills.
+
+Two things to get right:
+
+- **Do not press "Run tonight's jobs now" to make shot 3 happen.** It is
+  a real run — queued broadcasts go out and fee reminders are sent. Show
+  the result of the run that already happened this morning instead.
+- **Invented data only.** Shot 4 is a campaign report, so no student
+  names appear, but if you open anything with a person in it, use the
+  test lead with your own number.
+
+Export as MP4. Upload the same file against `ads_read` as well — it
+shows that permission doing its job too, and one clip covering both is
+expected.
 
 ---
 
@@ -132,6 +240,9 @@ in.
 **Screencast:** a DM sent to the institute's Instagram account appearing
 in the CRM's Chats → Instagram inbox, and a counsellor replying from
 there.
+
+**Reproduction instructions:** this permission asks for them as a fourth
+item. The text to paste is under "Reproduction instructions" above.
 
 ### `instagram_basic`
 
@@ -216,13 +327,15 @@ campaign next to leads and admissions.
 
 **Screencast:** the CRM's retargeting settings showing the audience being
 synced, and the Ad Performance screen showing admissions attributed to a
-campaign.
+campaign. The shot-by-shot list is under "Recording the ads_management
+screencast" above.
 
 ---
 
 ## Before pressing Submit
 
-- Every permission has its three ticks.
+- Every permission has all of its ticks — most want three, and
+  `pages_messaging` wants a fourth: reproduction instructions.
 - The screencasts show the CRM, not a diagram.
 - Test credentials are the limited counsellor account, not an admin.
 - The app is **Live**, not in Development.
