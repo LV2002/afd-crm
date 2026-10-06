@@ -7871,3 +7871,54 @@ not a fall to the floor. **They do not replace the table** — each shows the to
 and the table below lists everything.
 
 **1628 tests pass**, typecheck, lint and build clean. Manual chapter 11 updated.
+
+## 2026-10-06 — The leads list learns dates and colour
+
+Third pass on the UI, and the first one the client asked for by feature rather than by
+screen: filter by when a lead arrived, colour the stage tags, show the arrival and
+follow-up dates, and find the follow-ups a counsellor has fallen behind on.
+
+### Colour that was already there
+
+`pipeline_stages.color` and `dropdown_options.color` have been admin-editable since the
+first migration and nothing drew them. `FieldOption` now carries the colour, and a select
+whose chosen option has one renders as a coloured pill — so stage and temperature light
+up, and any dropdown an admin colours later does too, while source, centre and course
+stay as plain text rather than becoming a row of decorative badges.
+
+**The label stays in text ink.** The colour is a dot and a 14% wash behind the pill,
+never the text: an admin can pick any hex, including a pale yellow that would be
+invisible on white, and a list that becomes unreadable because somebody chose a colour is
+worse than a list with no colour.
+
+### Two dates on the row
+
+`created_at` is now a `field_definitions` row rather than a hardcoded column (migration
+0089), so it behaves like every other field — rename it, reorder it, take it off the list
+again, no deploy. `next_followup_at` was already a field; the same migration turns its
+list flag back on for any instance where it was off.
+
+### The date filters
+
+`lib/leads/date-filters.ts`, pure and tested: a month or a pair of dates for **Arrived**,
+and for **Follow-up** the same pair plus four named windows — overdue, due today, due in
+seven days, and no follow-up booked at all.
+
+Every one of these is a timezone question, which is why it is a module and not four
+`.gte()` calls in the page. "September" means midnight in Kochi to midnight in Kochi,
+which in stored UTC is 31 August 18:30 to 30 September 18:30; comparing against a plain
+date would quietly drop the first five and a half hours of every month for ever.
+
+**A test caught a real bug before it shipped**: `addMonths` on the stored instant moved
+"all of July" to end a day early, because 1 July in Kochi is stored as 30 June 18:30 UTC.
+Month arithmetic is done on the month number now, where it cannot drift.
+
+**Overdue excludes won and lost leads.** A student who enrolled in March still carries
+February's follow-up date, and a catch-up list that opens with twenty of them is not a
+catch-up list. The terminal stages are read from the admin's own rows, not assumed.
+
+`tests/lead-date-filters.spec.ts`, 11 cases, all of them boundaries: the month beating a
+pair of dates, the to-date including its whole day, late-evening IST landing on the right
+day, rubbish input filtering nothing, and the year boundary in the month picker.
+
+**1639 tests pass**, typecheck, lint and build clean. Manual chapter 5 updated.

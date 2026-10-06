@@ -10,6 +10,16 @@ import type { FieldSchemaEntry } from "./get-field-schema";
 export interface FieldOption {
   value: string;
   label: string;
+  /**
+   * The colour an admin gave this option, as stored — a hex string, or
+   * null where nobody set one.
+   *
+   * Carried through so a list can show a stage or a temperature as a
+   * coloured dot rather than another line of grey text. It is the admin's
+   * own choice from Settings, which is why it travels with the option
+   * instead of being looked up again by whoever draws it.
+   */
+  color?: string | null;
 }
 
 /** Field types whose raw stored value is an id/code that needs resolving to a human label. */
@@ -46,11 +56,11 @@ export async function resolveFieldOptions(
   if (field.key === "stage_id") {
     const { data } = await supabase
       .from("pipeline_stages")
-      .select("id, name")
+      .select("id, name, color")
       .eq("is_active", true)
       .order("sort_order")
-      .returns<Array<{ id: string; name: string }>>();
-    return (data ?? []).map((r) => ({ value: r.id, label: r.name }));
+      .returns<Array<{ id: string; name: string; color: string | null }>>();
+    return (data ?? []).map((r) => ({ value: r.id, label: r.name, color: r.color }));
   }
 
   if (field.key === "center_id") {
@@ -116,7 +126,7 @@ async function getAssignableUsers(supabase: SupabaseClient): Promise<FieldOption
 export async function getDropdownOptions(supabase: SupabaseClient, category: string): Promise<FieldOption[]> {
   const { data } = await supabase
     .from("dropdown_options")
-    .select("value, label")
+    .select("value, label, color")
     .eq("category", category)
     .eq("is_active", true)
     .order("sort_order")

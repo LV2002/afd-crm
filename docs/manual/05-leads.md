@@ -14,14 +14,50 @@ for an admin, all of them.
 The columns are **not fixed**. They are whichever lead fields an
 administrator has marked "show in list" (Settings → Custom Fields). As
 shipped that is Student Name, Primary Phone, Lead Source, Stage,
-Temperature, Assigned Counsellor, Centre and Next Follow-up.
+Temperature, Assigned Counsellor, Centre, Next Follow-up and **Arrived**.
 
-Two things to know about what you see in those columns:
+Four things to know about what you see in those columns:
 
 - **Phone numbers are masked** — `+91 98••••3456`. This is deliberate
   (Chapter 6.4).
 - **A lead whose admission was later dropped is marked**, so a name in the
   list does not silently look like a live admission.
+- **Stage and Temperature are coloured**, using the colours set in
+  Settings → Pipeline Stages and Settings → Dropdowns. Change a colour
+  there and the list follows. The label always stays in ordinary text —
+  the colour is the dot and the tint behind it — so a pale colour can
+  never make a row unreadable.
+- **Arrived** is the date the lead came in, and **Next Follow-up** is when
+  it is next due. Between them you can see at a glance whether an old lead
+  is still being worked.
+
+### Filtering by date
+
+Under the dropdowns is a second row with two halves.
+
+**Arrived** — pick a **month** from the list, or set a **from** and **to**
+date. Choosing a month clears the two dates and vice versa, so the screen
+never shows a month and a range that disagree.
+
+**Follow-up** — the same two dates, plus four windows that answer the
+questions people actually ask:
+
+| Window | Shows |
+|---|---|
+| **Overdue** | Follow-ups whose date has passed, excluding leads already won or lost |
+| **Due today** | Everything due before the day is out |
+| **Due in 7 days** | The week ahead |
+| **No follow-up booked** | Leads with no next step at all — the quiet gap |
+
+**Overdue is the one to learn.** It is how you find the leads a counsellor
+has fallen behind on: set it, add their name under Assigned Counsellor,
+and the list is exactly the catch-up queue. Won and lost leads are left
+out on purpose — a student who enrolled in March still carries February's
+follow-up date, and a catch-up list that opens with twenty of them is not
+a catch-up list.
+
+Dates are read in Indian time, so "September" means the 1st to the 30th as
+the calendar on the wall has it.
 
 ### The buttons at the top
 

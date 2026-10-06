@@ -3,6 +3,7 @@ import { GitMerge, Plus, Trash2, Upload } from "lucide-react";
 
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
+import { OptionBadge } from "@/components/ui/option-badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -23,6 +24,11 @@ import {
   type FieldOption,
 } from "@/lib/fields/resolve-field-options";
 import { applyLeadFilters, readFilterValues } from "@/lib/leads/apply-filters";
+import {
+  applyLeadDateFilters,
+  parseLeadDateFilters,
+  recentMonths,
+} from "@/lib/leads/date-filters";
 import { maskPhone } from "@/lib/leads/mask-phone";
 import { droppedLeadIds } from "@/lib/enrolment/dropped-leads";
 import { mergeUserRefLabels } from "@/lib/fields/user-ref-labels";
@@ -35,6 +41,11 @@ import { LeadFilters, type FilterFieldWithOptions } from "./lead-filters";
 import { RevealPhoneButton } from "./reveal-phone-button";
 
 const PAGE_SIZE = 25;
+
+/** A search param as a single string, since Next hands back `string | string[]`. */
+function asParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
 
 export default async function LeadsPage({
   searchParams,
@@ -77,6 +88,15 @@ export default async function LeadsPage({
     field,
     options: optionsByKey[field.key] ?? [],
   }));
+
+  const dateFilters = parseLeadDateFilters({
+    created_from: asParam(params.created_from),
+    created_to: asParam(params.created_to),
+    created_month: asParam(params.created_month),
+    followup_from: asParam(params.followup_from),
+    followup_to: asParam(params.followup_to),
+    followup: asParam(params.followup),
+  });
 
   const search = typeof params.search === "string" ? params.search : "";
   const filterValues = readFilterValues(params, filterableFields);
@@ -126,6 +146,23 @@ export default async function LeadsPage({
     .select(selectColumns, { count: "exact" })
     .is("deleted_at", null);
   query = applyLeadFilters(query, filterableFields, filterValues);
+  query = applyLeadDateFilters(query, dateFilters);
+  if (dateFilters.excludeTerminalStages) {
+    // "Overdue" means work somebody still owes a person. A student who
+    // enrolled in March still carries February's follow-up date, and a
+    // catch-up list that opens with twenty of them is not a catch-up
+    // list. Won and lost stages are the admin's own rows, read rather
+    // than assumed.
+    const { data: terminalStages } = await supabase
+      .from("pipeline_stages")
+      .select("id")
+      .in("stage_type", ["won", "lost"])
+      .returns<Array<{ id: string }>>();
+    const terminalIds = (terminalStages ?? []).map((stage) => stage.id);
+    if (terminalIds.length > 0) {
+      query = query.not("stage_id", "in", `(${terminalIds.join(",")})`);
+    }
+  }
   // Stripped before it reaches the filter expression: a comma in a search
   // box would otherwise open a second clause. See lib/db/filter-term.ts.
   const searchFilter = filterTerm(search);
@@ -235,6 +272,7 @@ export default async function LeadsPage({
         searchValue={search}
         tagOptions={tagOptions}
         tagValue={tagFilter}
+        months={recentMonths(new Date())}
       />
 
       <Table>
@@ -311,6 +349,16 @@ function renderCell(
         )}
       </div>
     );
+  }
+
+  // A select whose chosen option has a colour draws as a coloured pill.
+  // Only when the colour exists, so this turns itself on for stage and
+  // temperature — which ship with colours — and for any dropdown an
+  // admin colours later, while source, centre and course stay as plain
+  // text rather than becoming a row of decorative badges.
+  if (field.type === "select" && typeof value === "string") {
+    const option = optionsByKey[field.key]?.find((entry) => entry.value === value);
+    if (option?.color) return <OptionBadge option={option} />;
   }
 
   if (field.type === "phone") {
