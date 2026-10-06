@@ -1,11 +1,19 @@
-# Testing everything, then starting clean
+# Going live: test it, clear it, then announce it
 
-Two halves, in this order:
+Three parts, in this order:
 
 1. **Test** — the automated click-through, then your own manual pass.
 2. **Reset** — wipe everything that happened, keep everything you set up.
+3. **The launch checklist** — secrets, environment, scheduled work,
+   integrations, data and people.
 
 Do not reset until you are finished testing. It cannot be undone.
+
+Part 3 is the one to work through slowly. Every item on it is either something
+that has already gone wrong once during the build, or something whose absence
+is silent — a webhook that is configured and has never delivered, a cron that
+returns 401 every night, a link in a student's WhatsApp that points nowhere.
+None of them announces itself.
 
 ---
 
@@ -75,23 +83,54 @@ Run these yourself, because no browser test can:
 
 ## 1.5 Your manual pass
 
-Work the real thing end to end, on the live site, as a human:
+Work the real thing end to end, on the live site, as a human.
 
-1. Create a lead by hand. Check it was assigned to somebody.
-2. Submit each website form. Check the page and form name appear in the source.
-3. Send a test lead from Meta, and from Google Ads.
-4. Log a call on a lead. Set a follow-up date. Check it appears on your Dashboard.
-5. Confirm an admission, picking a batch.
-6. In Accounts, record a first payment. Check the receipt prints.
-7. Check the student appears under **Students → Onboarding**, and the red count.
-8. Mark onboarding complete. Check they move to the main list.
-9. Send a profile form link. Fill it in as the student, **attach a photo**.
-10. Check the photo prints on the profile sheet, and the red count on
+**Sales, start to finish**
+
+1. Create a lead by hand. It now makes you pick a **source** — check the one
+   you picked is what shows on the lead afterwards, not "Manual".
+2. Check it was assigned to somebody.
+3. Submit each website form. Check the page and form name appear in the source.
+4. Send a test lead from Meta, and from Google Ads.
+5. Log a call on the lead. Set a follow-up date. Check it appears on your
+   Dashboard.
+6. Confirm an admission, picking a batch.
+7. **As the counsellor who confirmed it**, set the fee and instalment plan on
+   that lead. You should be able to; it is only accounts' once a payment has
+   been recorded.
+8. In Accounts, record a first payment. Check the receipt prints.
+9. Go back to the fee plan as the counsellor. It should now be read-only.
+10. Check the student appears under **Students → Onboarding**, and the red count.
+11. Mark onboarding complete. Check they move to the main list.
+12. Send a profile form link. Fill it in as the student, **attach a photo**.
+13. Check the photo prints on the profile sheet, and the red count on
     **Student Profile Forms** clears when you mark it read.
-11. Record an expense in Finance. Check the bank balance moves.
-12. Open every report in Insights.
-13. Do steps 1, 4 and 5 again **on your phone**.
-14. Sign in as a counsellor and confirm they cannot see another centre's leads.
+14. Record an expense in Finance. Check the bank balance moves.
+15. Open every report in Insights.
+
+**The things that have bitten before**
+
+16. **Filters.** Filter the leads list, open a lead, then press **Leads** in the
+    sidebar. The filter should still be there.
+17. **Editing a phone.** Reveal a lead's number, change one digit, save. Then
+    create a new lead with the corrected number — it should find the same
+    person, not make a second one.
+18. **Deleting.** Delete a test lead, then enter its number again. You should
+    get a new lead, not a 404.
+19. **Dead.** Mark a lead with an overdue follow-up as **Dead**. It should drop
+    out of the overdue filter and stop escalating.
+20. **Chats.** Message the institute's WhatsApp number from your own phone.
+    It should appear in **Chats → Inbox** within seconds. Reply from there and
+    check it arrives. If the number is not a lead, the thread should still have
+    a reply box, and **Convert to lead** should bring the messages with it.
+21. **Autosave.** Change a field on a lead and navigate away without pressing
+    Save. Come back; the change should be there.
+
+**On a phone, and as somebody else**
+
+22. Do steps 1, 5 and 6 again **on your phone**.
+23. Sign in as a counsellor and confirm they cannot see another centre's leads.
+24. Sign in as that counsellor on a phone and open **Chats**.
 
 Write down anything that looks wrong. Then come back here for Part 2.
 
@@ -179,10 +218,94 @@ Send me the name.
 
 # Part 3 — Before you announce it
 
-- [ ] Rotate the Supabase database password, and the `CRON_SECRET`.
-- [ ] Check **Vercel → Cron Jobs** shows one entry and its last run is green.
-- [ ] Set `RESEND_API_KEY` and `EMAIL_FROM` if you want notifications by email.
-- [ ] Set `ALERT_EMAIL_TO` so you hear when the platform itself breaks.
-- [ ] Confirm the Meta and Google webhooks point at the live URL.
-- [ ] Give each person their own login. Nobody shares the admin account.
-- [ ] Walk one counsellor through the Dashboard and the red counts.
+Five groups. The first is not optional and the rest are roughly in the order
+they will bite you.
+
+## 3.1 Secrets that are already compromised
+
+Every one of these was pasted into a chat or caught in a screenshot during the
+build. None of them is a disaster on its own and all of them are five minutes
+to replace. Treat the list as a to-do, not an accusation.
+
+- [ ] **Supabase database password** — Supabase → Settings → Database → Reset.
+      Update `DATABASE_URL` in Vercel afterwards.
+- [ ] **`CRON_SECRET`** — it was a company name plus a year, in a screenshot.
+      Replace with `openssl rand -base64 32` and update it in Vercel **and** in
+      the GitHub Actions secret the schedules use, or the overnight jobs start
+      failing with a 401.
+- [ ] **`RESEND_API_KEY`** — revoke the old key in Resend, generate a new one.
+- [ ] **The WhatsApp access token** — regenerate it in the Meta App Dashboard
+      and paste the new one into Settings → Integrations → WhatsApp. The
+      console's token expires in 24 hours anyway; a System User token does not.
+- [ ] **Any Graph API Explorer token** you generated while testing. They expire
+      on their own, but not quickly enough to rely on.
+
+Nothing in this list is stored in the repository, and `INTEGRATION_ENCRYPTION_KEY`
+is the one secret that must **not** be rotated casually — every stored
+credential is encrypted under it, and changing it means re-entering all of them.
+
+## 3.2 The environment
+
+- [ ] **`NEXT_PUBLIC_APP_URL`** — set it to the live URL. Still unset at the
+      time of writing. Without it, links in emails and WhatsApp messages point
+      at nothing, and they are the links a student clicks.
+- [ ] `INTEGRATION_ENCRYPTION_KEY` is set, and you have a copy somewhere safe
+      that is not this repository.
+- [ ] `RESEND_API_KEY` and `EMAIL_FROM`, if you want notifications by email.
+- [ ] `ALERT_EMAIL_TO`, so you hear when the platform itself breaks.
+- [ ] `GEMINI_API_KEY`, if **Ask AI** is to work.
+- [ ] **Settings → Platform health** shows the database up to date and matching
+      the code, with no open problems.
+
+## 3.3 The scheduled work
+
+- [ ] **Settings → Platform health → Scheduled work** shows a run for each
+      tier, green, within its expected window.
+- [ ] GitHub → Actions shows the schedules enabled and their last run green.
+- [ ] If a tier has never run, it is almost always `CRON_SECRET` — the same
+      value has to be in Vercel and in the Actions secret.
+
+## 3.4 The integrations
+
+Each of these is "has it ever actually delivered", not "is it configured".
+**Settings → Integrations → [platform] → Recent deliveries** is the answer in
+every case: an empty list means it has never been called.
+
+- [ ] **Meta Lead Ads** — submit through Meta's Lead Ads Testing Tool and watch
+      it arrive. Needs both the app subscribed to `leadgen` *and* the Page
+      subscribed, which are two different switches.
+- [ ] **WhatsApp inbound** — message the number from your phone and watch the
+      thread appear in Chats.
+- [ ] **WhatsApp outbound** — reply from Chats and watch it arrive.
+- [ ] **Instagram DMs** — the `messages` field on the **Instagram** object, a
+      separate callback from the Page one. Its own delivery panel is on the
+      Meta screen.
+- [ ] **Google Ads** — a test lead, same as Meta.
+- [ ] **Website forms** — one submission from each live form.
+- [ ] **Meta App Review** — submitted, and Advanced Access granted on the
+      eleven permissions. Until it clears, Instagram DMs and Coexistence only
+      work for accounts with a role on the app. See `META-APP-REVIEW.md`.
+- [ ] **Coexistence**, if counsellors' own numbers are going on it: App ID and
+      Embedded Signup Configuration ID saved, then **Connect with Meta** per
+      number. Needs Advanced Access first.
+
+## 3.5 The data, and the people
+
+- [ ] **Reset the test data** (Part 2) before anybody real uses it. Do not skip
+      the backup.
+- [ ] **Add the dropdown options** the historic import needs — the sources,
+      courses and exams that are not seeded — *before* importing, or 2,000 rows
+      land with blank fields.
+- [ ] **Set up the assignment rule** for the historic import, so the imported
+      leads land on the right counsellor rather than nobody.
+- [ ] **Import the historic leads**, and spot-check twenty of them against the
+      spreadsheet they came from.
+- [ ] **Give each person their own login.** Nobody shares the admin account.
+- [ ] **Deactivate the `Meta Reviewer` account** once App Review closes.
+- [ ] **Hand out the handbooks** — the staff edition for counsellors, the
+      administrator edition for whoever runs the system.
+- [ ] **Walk one counsellor through** the Dashboard and the red counts, and
+      watch them do one lead end to end without help. What they get stuck on is
+      the only usability test that counts.
+- [ ] **Agree who watches Platform health**, and how often. A system nobody
+      checks tells nobody when it breaks.
