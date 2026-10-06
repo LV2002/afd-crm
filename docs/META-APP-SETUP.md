@@ -140,6 +140,39 @@ serves only people who hold a role on the app — which is why Instagram
 DMs arrive from staff and from nobody else. The app being **Live** does
 not substitute: both switches have to be on.
 
+### "Request advanced access" is greyed out
+
+Hover it. If the tooltip says a **successful test API call** is needed,
+that is the real gate — look at the **API calls** column and it will read
+`(0)`. Meta will not widen access to a permission the app has never
+demonstrably used, and the button stays inactive for **up to 24 hours
+after the first call**.
+
+The CRM can make those calls for you; each of these buttons exercises
+the permission in the course of doing its actual job:
+
+| In the CRM | Exercises |
+|---|---|
+| Settings → Integrations → Meta → **Subscribe this Page** | `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata` |
+| An **Instagram DM from an account that has not messaged before** | `instagram_basic`, `pages_messaging`, `instagram_manage_messages` |
+| Platform health → the **hourly run** | `ads_read`, `ads_management` |
+| Chats → **Templates** | `whatsapp_business_management` |
+| A **WhatsApp reply** from a lead's page | `whatsapp_business_messaging` |
+
+The Instagram one has a catch: the CRM fetches a sender's profile only
+when it does not already know their username, and that fetch is the
+`instagram_basic` call. A repeat message from somebody already in the
+inbox will not make it.
+
+Otherwise use the **Graph API Explorer**
+(`developers.facebook.com/tools/explorer`): select the app, get a Page
+Access Token, and run something that needs the permission — for
+`instagram_basic`, `me?fields=instagram_business_account{id,username}`.
+A successful response counts.
+
+Do all of them in one sitting and come back the next day to request
+advanced access on everything at once.
+
 ### If the page renders empty
 
 It does that. In order of likelihood: an ad blocker or privacy extension
