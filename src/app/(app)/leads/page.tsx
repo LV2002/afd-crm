@@ -204,6 +204,14 @@ export default async function LeadsPage({
   const hasAnyFilter =
     Boolean(search) || Boolean(tagFilter) || dateFilters.active || Object.keys(filterValues).length > 0;
 
+  // The name leads the card and the stage sits opposite it; everything
+  // else the admin has put on the list follows as label-and-value pairs.
+  const nameField = listFields.find((field) => field.key === "student_name");
+  const stageField = listFields.find((field) => field.key === "stage_id");
+  const cardFields = listFields.filter(
+    (field) => field.key !== "student_name" && field.key !== "stage_id",
+  );
+
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -215,6 +223,38 @@ export default async function LeadsPage({
     next.set("page", String(target));
     return `/leads?${next.toString()}`;
   }
+
+  {/* One empty state, drawn by both the cards and the table. Two
+      different situations, and the difference decides what somebody does
+      next: a filtered list with nothing in it needs the filters cleared,
+      an empty CRM needs a first lead. */}
+  const emptyState = (
+    <EmptyState
+      icon={Users}
+      title={
+        hasAnyFilter
+          ? `No ${leadPlural.toLowerCase()} match these filters`
+          : `No ${leadPlural.toLowerCase()} yet`
+      }
+      action={
+        hasAnyFilter ? (
+          <Button asChild size="sm" variant="outline">
+            <Link href="/leads">Clear the filters</Link>
+          </Button>
+        ) : can(user, "lead.create") ? (
+          <Button asChild size="sm">
+            <Link href="/leads/new">
+              <Plus /> Add the first one
+            </Link>
+          </Button>
+        ) : undefined
+      }
+    >
+      {hasAnyFilter
+        ? "Nothing here matches every filter at once. Clearing them brings the list back."
+        : "They arrive by themselves from your ads, your website and WhatsApp. You can also add one by hand, or bring a spreadsheet in through Import."}
+    </EmptyState>
+  );
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -281,7 +321,52 @@ export default async function LeadsPage({
         months={recentMonths(new Date())}
       />
 
-      <Table>
+      {/*
+        Below `md` the same rows are cards, not a table.
+
+        A counsellor works from a phone, and nine columns on a 412px
+        screen is a horizontal scroll with three characters of each
+        column visible — technically all the data, practically none of
+        it. Cards show the same fields, in the same admin-configured
+        order, stacked where they can be read.
+
+        Driven by `listFields` like the table is, so an admin who adds a
+        column gets it in both and neither can drift from the other.
+      */}
+      <ul className="flex flex-col gap-2 md:hidden">
+        {(rows ?? []).map((row) => {
+          const isDropped = dropped.has(String(row.id));
+          return (
+            <li key={String(row.id)} className="rounded-lg border p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  {nameField
+                    ? renderCell(nameField, row, optionsWithUsers, canRevealPhone, isDropped)
+                    : null}
+                </div>
+                {stageField
+                  ? renderCell(stageField, row, optionsWithUsers, canRevealPhone, isDropped)
+                  : null}
+              </div>
+              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2">
+                {cardFields.map((field) => (
+                  <div key={field.id} className="min-w-0">
+                    <dt className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground">
+                      {field.label}
+                    </dt>
+                    <dd className="truncate text-sm">
+                      {renderCell(field, row, optionsWithUsers, canRevealPhone, isDropped)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </li>
+          );
+        })}
+        {(rows ?? []).length === 0 && <li>{emptyState}</li>}
+      </ul>
+
+      <Table className="hidden md:table">
         <TableHeader sticky>
           <TableRow>
             {listFields.map((field) => (
@@ -302,35 +387,7 @@ export default async function LeadsPage({
           {(rows ?? []).length === 0 && (
             <TableRow className="hover:bg-transparent">
               <TableCell colSpan={listFields.length} className="p-0">
-                {/* Two different situations, and the difference decides
-                    what somebody does next: a filtered list with nothing
-                    in it needs the filters cleared, an empty CRM needs a
-                    first lead. */}
-                <EmptyState
-                  icon={Users}
-                  title={
-                    hasAnyFilter
-                      ? `No ${leadPlural.toLowerCase()} match these filters`
-                      : `No ${leadPlural.toLowerCase()} yet`
-                  }
-                  action={
-                    hasAnyFilter ? (
-                      <Button asChild size="sm" variant="outline">
-                        <Link href="/leads">Clear the filters</Link>
-                      </Button>
-                    ) : can(user, "lead.create") ? (
-                      <Button asChild size="sm">
-                        <Link href="/leads/new">
-                          <Plus /> Add the first one
-                        </Link>
-                      </Button>
-                    ) : undefined
-                  }
-                >
-                  {hasAnyFilter
-                    ? "Nothing here matches every filter at once. Clearing them brings the list back."
-                    : "They arrive by themselves from your ads, your website and WhatsApp. You can also add one by hand, or bring a spreadsheet in through Import."}
-                </EmptyState>
+                {emptyState}
               </TableCell>
             </TableRow>
           )}

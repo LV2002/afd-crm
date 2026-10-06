@@ -119,7 +119,7 @@ export default async function TargetsSettingsPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-lg font-semibold">Targets</h2>
+        <h1 className="text-2xl font-semibold">Targets</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           What you are aiming for this month. Leave a box empty for &ldquo;no target&rdquo; — the
           reports then show the count without pretending to judge it. Nothing carries forward on

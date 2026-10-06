@@ -7973,3 +7973,97 @@ Command is built on) and `sonner`.
 
 **1640 tests pass**, typecheck, lint and build clean. Manual chapter 4 covers the palette
 and the save messages.
+
+## 2026-10-06 — The two lists that were hardest to read
+
+Fifth UI pass: the leads list on a phone, and the pipeline board.
+
+### The leads list is cards on a phone
+
+Below `md` the same rows render as cards — name and stage at the top, the rest as labelled
+pairs underneath. Nine columns on a 412px screen is a horizontal scroll showing three
+characters of each column: technically all the data, practically none of it, on the device
+a counsellor actually works from.
+
+Driven by the same `listFields` the table uses, so an admin who adds a column gets it in
+both and the two cannot drift apart. The empty state is shared between them as well.
+
+### The board answers "who is being forgotten"
+
+A kanban of names says who is where. It never said who is slipping, which is the question
+a centre head opens it with. Each card now carries:
+
+- **The follow-up** — today, tomorrow, a date, or **overdue** in red, measured against
+  midnight in Kochi so a follow-up booked for today is not late at nine in the morning.
+- **Quiet for N days**, once a week has passed with nothing happening at all.
+- **Temperature in its own colour**, from the admin's dropdown, rather than another
+  outline badge indistinguishable from the centre tag.
+
+"Days in this stage" would be the textbook signal and is deliberately **not** here: no
+column records when a lead entered its stage, and adding one would show *0 days* for every
+lead in the system on the day it shipped. Silence since the last activity says the same
+thing honestly, for leads that are already in the CRM.
+
+**1640 tests pass**, typecheck, lint and build clean. Manual chapter 5 covers both.
+
+## 2026-10-06 — The lead page, reordered around the call
+
+Sixth UI pass, on the screen counsellors spend the day in.
+
+### A number you can ring
+
+There was no `tel:` link anywhere in this CRM. A counsellor on a phone revealed the
+number and then typed it into their dialler by hand, digit by digit, dozens of times a
+day. **Call** and **WhatsApp** now appear beside a revealed number.
+
+They cannot come first: a dial link has to carry the real number in its href, so
+rendering one unrevealed would put every number on the page in plain HTML and make the
+masking decorative — which is what non-negotiable #6 exists to stop. Revealing is the
+audited moment and the buttons sit on the other side of it.
+
+A refused reveal falls back to the masked string, and a dial link built from
+`+91 98••••3456` is a call to a number that does not exist, so the buttons appear only
+for a genuinely revealed number. That was a bug in the first draft, caught by re-reading
+the diff rather than by a test.
+
+### The timeline moved three screens up
+
+It was the last thing on the page, below the fee agreement and the documents. It is what
+a counsellor reads before they ring — *what did we say last time* — so it sat three
+screens below the question it answers. It is now directly under the box where the next
+line gets written, which is the order the work actually happens in: read what was said,
+ring, write what was said. Long histories scroll inside their own box, newest first,
+rather than pushing the rest of the page away.
+
+### The phone order is reversed
+
+The details form is thirty fields. Putting it first meant scrolling past all of them to
+reach "log what was said" and the history, on the device a counsellor holds while the
+call is happening. Below `lg` the work column comes first; on a wide screen both are
+visible at once and the details read better on the left, so only the small-screen order
+changes.
+
+**1640 tests pass**, typecheck, lint and build clean. Manual chapter 6 updated.
+
+## 2026-10-06 — Every screen has a name
+
+The last item on the UI list was "25 Settings screens with no shared page header". Having
+measured it rather than eyeballed it, that was wrong: **47 of the 51 Settings pages
+already use the same `h1`**. The real gap was elsewhere and smaller.
+
+- **Insights had no `h1` at all.** Eight screens behind a tab row, every one opening with
+  a sub-heading — a page with no name to anybody navigating by headings, and eight
+  chances to word the same title differently. The section is titled in its layout now, the
+  shape Finance already used.
+- **Four Settings screens** (Targets, Platform health, Offers, Custom webhooks) opened
+  with an `h2` at `text-lg` where the other 47 use an `h1` at `text-2xl`.
+
+Everything else that lacked an `h1` turned out to be correct: Finance and Chats title
+themselves in their layouts, `/handovers` and `/my-day` are redirects, and the print pages
+carry a letterhead instead.
+
+No shared `PageHeader` component: 47 copies of two lines of markup that already agree is
+not a problem a component solves, and the diff to introduce one would be larger than
+everything it prevents.
+
+**1640 tests pass**, typecheck, lint and build clean.

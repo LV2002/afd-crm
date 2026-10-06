@@ -31,6 +31,15 @@ Four things to know about what you see in those columns:
   it is next due. Between them you can see at a glance whether an old lead
   is still being worked.
 
+### On a phone
+
+Below tablet width the same rows are **cards** rather than a table: the
+name and stage at the top, everything else underneath as labelled pairs.
+It is the same information in the same order an administrator configured
+— nine columns on a phone screen is a sideways scroll with three
+characters of each column showing, which is technically all the data and
+practically none of it.
+
 ### Filtering by date
 
 Under the dropdowns is a second row with two halves.
@@ -115,6 +124,25 @@ colleague (they will still only see what their own scope allows).
 **Related** — Chapter 12 for exporting a filtered list.
 
 ## 5.2 The Pipeline board
+
+
+### What a card tells you
+
+Each card carries the name and lead number, the masked phone, and then
+the two lines a centre head is actually scanning for:
+
+- **The follow-up.** *Follow-up today*, *Follow-up tomorrow*, a date, or
+  **Follow-up overdue** in red. Overdue is measured against midnight in
+  Kochi, so a follow-up booked for today is not late at nine in the
+  morning.
+- **Quiet for N days**, once nothing has happened on a lead for a week.
+  This is the "being forgotten" signal: a board of names says who is
+  where, never who is slipping.
+
+Temperature shows in its own colour, from Settings → Dropdowns, and the
+centre as a plain tag. A student who took the admission and later left is
+marked **Dropped out** — they stay in the stage they reached, because
+they did reach it.
 
 **Pipeline** shows the same leads as columns, one per stage.
 

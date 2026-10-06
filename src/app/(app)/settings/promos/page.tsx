@@ -52,7 +52,7 @@ export default async function PromosSettingsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h2 className="text-lg font-semibold">Offers</h2>
+        <h1 className="text-2xl font-semibold">Offers</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           Named discounts the institute is running — &ldquo;Early Bird 10% until 30 June&rdquo;,
           &ldquo;Sibling ₹5,000&rdquo;. Because you decided on these in advance, a counsellor

@@ -119,6 +119,13 @@ same as follow-ups.
 
 ## 6.4 Revealing a phone number
 
+
+**Once it is revealed, two buttons appear beside it: Call and WhatsApp.**
+Call opens your phone's dialler with the number in it; WhatsApp opens a
+chat with them. They only appear after revealing, because a link has to
+carry the real number to work — showing them before would put every
+number on the screen in plain text and make the masking decorative.
+
 ### Goal
 See a lead's full number so you can ring them.
 
@@ -267,6 +274,17 @@ The **signed instalment agreement** is an ordinary document with a
 special marker, so the fees panel can tell whether a signed copy exists.
 
 ## 6.10 The Timeline
+
+
+The timeline sits **under the box where you log an interaction**, on the
+right of the lead page — it used to be the last thing on the page, below
+the fee agreement and the documents, which is three screens away from the
+question it answers. It is what you read before you ring: what did we say
+last time. On a phone it comes before the details form for the same
+reason.
+
+A long history scrolls inside its own box rather than pushing everything
+else off the screen, newest first.
 
 Everything that has happened, newest first: interactions, stage changes,
 assignment changes, messages. It is the handover document when somebody
