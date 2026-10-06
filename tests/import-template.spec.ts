@@ -13,13 +13,15 @@ import type { FieldSchemaEntry } from "../src/lib/fields/get-field-schema";
 import { buildImportTemplate } from "../src/lib/leads/import-template";
 
 function field(partial: Partial<FieldSchemaEntry> & { key: string }): FieldSchemaEntry {
+  // Defaults first, caller's values second. Writing `key: partial.key`
+  // above a `...partial` spread is a TS2783 — the spread overwrites it,
+  // so the explicit line is both redundant and an error.
   return {
-    key: partial.key,
-    label: partial.label ?? partial.key,
-    type: partial.type ?? "text",
-    section: partial.section ?? "Personal",
-    isCore: partial.isCore ?? true,
-    isRequired: partial.isRequired ?? false,
+    label: partial.key,
+    type: "text",
+    section: "Personal",
+    isCore: true,
+    isRequired: false,
     ...partial,
   } as FieldSchemaEntry;
 }
