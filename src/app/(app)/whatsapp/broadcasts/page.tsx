@@ -15,6 +15,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { formatDateIST } from "@/lib/format/date";
 import { describeSchedule } from "@/lib/whatsapp/schedule";
 import { createClient } from "@/lib/supabase/server";
+import { broadcastFailureReasons } from "@/lib/whatsapp/broadcast-failures";
 
 import { CancelBroadcastButton } from "./cancel-button";
 
@@ -56,6 +57,15 @@ export default async function WhatsAppBroadcastsPage() {
     .order("created_at", { ascending: false })
     .returns<BroadcastRow[]>();
 
+  // Why the failures failed. Recorded on every recipient since broadcasts
+  // shipped, and shown on no screen until now — so a red "(1 failed)" was
+  // the end of what anybody could learn, while Meta's own refusal sat in
+  // the database.
+  const failures = await broadcastFailureReasons(
+    supabase,
+    (broadcasts ?? []).filter((b) => b.failed_count > 0).map((b) => b.id),
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
@@ -96,6 +106,21 @@ export default async function WhatsAppBroadcastsPage() {
                   {b.failed_count > 0 && (
                     <span className="text-destructive"> ({b.failed_count} failed)</span>
                   )}
+                  {/*
+                    Meta's wording, unedited. Paraphrasing a platform's
+                    refusal is how a searchable error becomes an
+                    unsearchable one, and this is the string somebody will
+                    paste into Meta's own documentation.
+                  */}
+                  {(failures.get(b.id) ?? []).map((failure) => (
+                    <p
+                      key={failure.reason}
+                      className="mt-1 max-w-md text-xs font-normal text-muted-foreground"
+                    >
+                      {failure.reason}
+                      {failure.count > 1 && ` (${failure.count})`}
+                    </p>
+                  ))}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {b.status === "scheduled" && b.scheduled_for

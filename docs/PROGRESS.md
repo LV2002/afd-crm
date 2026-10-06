@@ -7625,3 +7625,28 @@ the app. It is a rewrite of the integration that lands in the same place.
 adds the ways Meta's own page fails to load.
 
 **1594 tests pass** (6 new), lint, typecheck and the build clean.
+
+## Session 76 — Why the broadcast failed, in writing
+
+Two WhatsApp faults, and the CRM already knew the answer to one of them.
+
+**Outbound.** A broadcast showed `1 / 1 (1 failed)` and nothing else. The sweep has recorded
+Meta's verbatim refusal on every failed recipient since broadcasts shipped, in
+`whatsapp_broadcast_recipients.error_message`, and no screen had ever shown it — there is no
+broadcast detail page, the list was all there was.
+
+The list now prints the reasons under the progress figure, grouped with a count and commonest
+first. Meta's wording passes through unedited, because that string is what gets pasted into
+Meta's documentation; paraphrasing turns a searchable error into an unsearchable one.
+
+**Inbound — and a correction.** I had diagnosed this twice as a mismatched `app_secret`, reasoning
+that WhatsApp keeps its own copy separate from the Meta one and that Instagram verifying while
+WhatsApp did not was the tell. Wrong. The WhatsApp page's Recent deliveries panel says **"Nothing
+has ever arrived here"**, that panel counts rejected deliveries too, and the handler persists
+before it refuses. Zero rows means Meta has never called — the Callback URL, verify token or
+`messages` subscription under App Dashboard → WhatsApp → Configuration. The Instagram object's
+`messages` subscription, which Leon had set correctly, is a different subscription entirely.
+
+The panel that settled it already existed and I reasoned past it.
+
+**1599 tests pass** (5 new), lint, typecheck and the build clean.

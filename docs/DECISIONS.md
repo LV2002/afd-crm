@@ -3942,3 +3942,54 @@ Fifth entry on this theme. The cron refused silently, the webhook deliveries rec
 nowhere, the escalation rung that did nothing, the bare "Unauthorized", and now this: **the
 platform said, and the tool did not pass it on.** The recurring fix is never clever — it is
 printing something that was already in hand.
+
+## 2026-10-06 — Meta's refusal, stored and never shown
+
+Leon's broadcasts report `1 / 1 (1 failed)` in red, and that was the entire extent of what the
+CRM would tell him. The sweep records Meta's own refusal on every recipient it cannot send to,
+`whatsapp_broadcast_recipients.error_message`, and **no screen had ever displayed it**. There is
+no broadcast detail page; the list was all there was.
+
+The reasons are almost always actionable and almost never about this code — a template name that
+does not exist in the language asked for, a recipient outside the test allow-list while the
+business is unverified, a closed 24-hour window, a token missing `whatsapp_business_messaging`.
+Every one of those is a five-minute fix *if you can read it*.
+
+Grouped by reason with a count, not listed per recipient: four hundred failures for one cause is
+one fact, not four hundred, and a per-recipient list would also put four hundred phone numbers on
+a screen that has no need of them. The commonest reason sorts first, because with several it is
+the one worth fixing first.
+
+**Meta's wording is passed through unedited.** The temptation is to translate it into friendlier
+English, and that would be a mistake: this string is what somebody pastes into Meta's
+documentation or a support thread. Paraphrasing turns a searchable error into an unsearchable one.
+
+Sixth instance of this shape in one project. The list now reads: a cron refused silently, webhook
+deliveries recorded and shown nowhere, an escalation rung that did nothing, a bare
+"Unauthorized", `debug_token`'s scopes discarded, and this. Every fix was printing something
+already in hand. **The recurring bug in this codebase is not computing the wrong answer — it is
+having the right one and not saying it.**
+
+## 2026-10-06 — Corrected: WhatsApp inbound was never a signature problem
+
+Recorded because I asserted the wrong cause twice and it shaped two sessions of advice.
+
+I diagnosed Leon's missing inbound WhatsApp as a mismatched `app_secret`, reasoning that WhatsApp
+keeps its own copy under `provider = 'whatsapp'` while Instagram and Lead Ads share the one under
+`provider = 'meta'` — and that Instagram verifying while WhatsApp did not was the tell. The
+reasoning was sound and the conclusion was wrong.
+
+The WhatsApp settings page's own Recent deliveries panel reads **"Nothing has ever arrived
+here."** That panel selects every `webhook_events` row for the source with no filter on
+`signature_ok`, and the handler persists a row *before* returning 401 — non-negotiable #9, "verify,
+persist, then process", applied to rejected requests too. So a signature failure would have left
+evidence. Zero rows means Meta never called.
+
+The real cause is upstream: the Callback URL, verify token, or `messages` field subscription in
+App Dashboard → WhatsApp → Configuration. Note that the Instagram object's `messages` subscription
+— which Leon had correctly set — is a different subscription on a different object and does
+nothing for WhatsApp.
+
+The lesson is not "be less confident". It is that **the panel that settled this already existed**,
+and I reasoned from an architectural asymmetry instead of reading it. The first move on "X is not
+arriving" is the screen that says whether anything arrived.
