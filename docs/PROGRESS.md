@@ -7676,3 +7676,36 @@ through `applyAssignment()` and enters at the `new` stage (non-negotiable #8). A
 them would invite a spreadsheet that quietly bypasses the rules engine.
 
 **1606 tests pass** (7 new), lint, typecheck and the build clean.
+
+## Session 78 — A runbook for the Meta app, and a crawler that trips on downloads
+
+**`docs/META-APP-SETUP.md`.** Leon wants to rebuild his Meta app from scratch now that business
+verification is through. The two existing guides are organised by feature — WhatsApp+Instagram in
+one, Ads in the other — and neither covers the layer underneath: the app itself, its products, its
+three webhook objects and its eleven permissions, in the order that wastes least time.
+
+Written against the code rather than from memory: the callback paths from the three route
+handlers, the credential keys from both settings forms, and which verify token each webhook reads
+(Lead Ads and Instagram share the Meta one; WhatsApp has its own).
+
+The three things it leads with are the three that have each cost a session: the **app-level field
+subscription versus the Page-to-app subscription** are different switches and the second is
+invisible when missing; **two app secrets** exist and setting one does not set the other;
+`instagram_manage_messages` and `instagram_business_manage_messages` are **one word apart and
+belong to different integration routes**.
+
+Also flagged: Leon listed four products and WhatsApp was not among them, though an earlier
+screenshot showed it. If it has been removed that alone explains inbound WhatsApp never arriving
+— no WhatsApp Business Account to subscribe means nothing to call.
+
+### The crawler failure
+
+`browser` failed on the import-template link. `e2e/crawl.spec.ts` walks every link a role can
+reach, and `page.goto` on a link that downloads a file throws *"Download is starting"* rather
+than navigating — so a link working exactly as intended failed the suite.
+
+Fixed by selecting `a[href]:not([download])`. The existing SKIP list would have worked and needs
+editing every time somebody adds an endpoint, by a person with no reason to think about that file.
+The markup already says what the link does.
+
+**1606 tests pass**, typecheck, lint and build clean.
