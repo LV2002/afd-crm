@@ -1,12 +1,14 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { CommandPalette } from "@/components/layout/command-palette";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { MobileNavWithBadges, SidebarWithBadges } from "@/components/layout/nav-with-badges";
 import { NotificationBell } from "@/components/layout/notification-bell";
 import { Sidebar } from "@/components/layout/sidebar";
 import { UserMenu } from "@/components/layout/user-menu";
 import { DocumentFooter, Letterhead } from "@/components/print/letterhead";
+import { Toaster } from "@/components/ui/toaster";
 import { navItemsFor } from "@/lib/auth/nav";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getBrand } from "@/lib/brand/get-brand";
@@ -80,6 +82,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </Suspense>
           <span className="truncate text-[0.9375rem] font-semibold md:hidden">{brand.name}</span>
           <div className="ml-auto flex items-center gap-1">
+            {/* The same nav items the sidebar gets, so the palette can
+                never offer a screen this person may not open, and a
+                renamed term renames it here too. */}
+            <CommandPalette items={navItems} />
             {/* Suspended so its unread count never delays the rest of
                 the page. The bell is the least urgent thing on screen and
                 it was blocking the header — and therefore everything
@@ -105,6 +111,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
 
           {children}
+
+          {/*
+            Every save in this CRM used to be silent unless the form
+            happened to render its own message. A toast is the smallest
+            honest acknowledgement: something happened, here is what.
+          */}
+          <Toaster />
 
           <div className="app-print-letterhead hidden text-black print:block">
             <DocumentFooter
