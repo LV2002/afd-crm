@@ -59,6 +59,71 @@ the review closes.
 
 ---
 
+## What to record: five clips, eleven permissions
+
+One recording can carry several permissions, and uploading the same file
+against each is expected rather than a shortcut. Eleven permissions come
+down to five clips.
+
+Two of them can be made today. Three cannot be made until Meta is
+actually calling the CRM's webhook — there is no way to film a message
+arriving if no message arrives, and no amount of re-recording gets round
+it. Check **Settings → Integrations → WhatsApp → Recent deliveries** and
+the same panel on the Meta screen before planning a recording session:
+empty means the `messages` and `leadgen` field subscriptions are not on,
+and clips C, D and E are all blocked on that one setting.
+
+### Clip A — the Page connection · today
+
+Covers `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata`.
+
+Settings → Integrations → Meta. Scroll to **Page subscription**, press
+**Subscribe this Page**, and hold on the result:
+`"AFD India" is subscribed and will send leads here. Instagram DMs
+linked to this Page will arrive too.`
+
+That one sentence is all three permissions — the Page list read, the
+Page's own name read back, the subscription written. Twenty seconds.
+
+### Clip B — the ad account · today
+
+Covers `ads_read`, `ads_management`. Four shots, in the order under
+"Recording the ads_management screencast" below.
+
+### Clip C — WhatsApp · needs inbound working
+
+Covers `whatsapp_business_messaging`, `whatsapp_business_management`.
+Four shots, under "Recording the whatsapp_business_messaging
+screencast" below. The test number is fine for this.
+
+### Clip D — Instagram · needs inbound working
+
+Covers `pages_messaging`, `instagram_basic`, `instagram_manage_messages`.
+
+1. On the phone, DM the institute's Instagram account.
+2. CRM → Chats → **Instagram**. The conversation appears, labelled with
+   the sender's handle — that handle is `instagram_basic` doing its job,
+   so pause on it rather than clicking straight through.
+3. Open it, reply, show the reply in the thread.
+4. Cut to the phone showing the reply arrive.
+
+### Clip E — a lead arriving · needs inbound working
+
+Covers `leads_retrieval`.
+
+Submit a test lead through Meta's **Lead Ads Testing Tool**, then cut to
+the CRM's Leads list with the new row at the top, and open it so the
+answers from the form are visible on the lead's page. The point to make
+is that the CRM holds the student's actual answers, not just a
+notification that somebody enquired.
+
+### What you do not have to record
+
+Nothing for `whatsapp_business_management` beyond picking a template in
+clip C, and nothing separate for `ads_read`. Both ride other clips.
+
+---
+
 ## Reproduction instructions
 
 Some permissions ask for a screencast _and_ "instructions for how to
@@ -270,13 +335,25 @@ Paste into "Describe how your app uses this permission or feature".
 > with two centres in Kerala. This app is our own internal CRM, used only
 > by our employees, and it works only with our own business assets.
 >
-> We use pages_show_list so an administrator setting up the integration
-> can pick our institute's Facebook Page from a list of the Pages they
-> manage, instead of typing a Page ID by hand. It is used once during
-> setup, on a settings screen only administrators can open.
+> Setting the integration up means saving a Page Access Token. Meta's own
+> interface makes it easy to copy a User token by mistake instead, and
+> the two are indistinguishable once pasted. We use pages_show_list so
+> that when the administrator presses "Subscribe this Page", the CRM can
+> read the list of Pages that token manages, tell them plainly that they
+> have saved the wrong kind of token, and name our Page so they can
+> correct it. It is used during setup only, on a settings screen only
+> administrators can open.
 
-**Screencast:** Settings → Integrations → Meta, pressing the button that
-lists the Pages, and the Page being selected.
+**Screencast:** Settings → Integrations → Meta, pressing **Subscribe this
+Page**, and the result naming the Page.
+
+This description was rewritten in October 2026. The earlier one said an
+administrator "can pick our institute's Facebook Page from a list" —
+there is no such picker, and never was. `fetchMetaPagesForUser()` is
+called from one place only (`settings/integrations/meta/actions.ts`), as
+the recovery path when `debug_token` reports the saved token is a USER
+token. Describing a screen that does not exist is the surest rejection
+there is.
 
 ### `pages_read_engagement`
 
@@ -288,8 +365,13 @@ lists the Pages, and the Page being selected.
 > show that to the administrator, and so the lead and messaging
 > integrations know which Page they are working with.
 
-**Screencast:** the same setup screen, showing the connected Page's name
-read back after connecting.
+**Screencast:** the same **Subscribe this Page** press — its success
+message reads `"AFD India" is subscribed and will send leads here`, and
+that name came from reading the Page node with this permission. One clip
+covers this, `pages_show_list` and `pages_manage_metadata`.
+
+Note that **Test connection** is not the clip: it calls `debug_token`,
+which is about the token, not the Page.
 
 ### `pages_manage_metadata`
 
