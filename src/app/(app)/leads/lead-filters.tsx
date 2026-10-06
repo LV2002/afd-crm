@@ -25,23 +25,32 @@ export function LeadFilters({
   searchValue,
   tagOptions,
   tagValue,
+  months,
 }: {
   filterFields: FilterFieldWithOptions[];
   searchValue: string;
   tagOptions?: FieldOption[];
   tagValue?: string;
+  /** The last twelve months, newest first, computed on the server so the list is IST. */
+  months: FieldOption[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  function updateParam(key: string, value: string) {
+  function updateParams(changes: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
-    if (value) params.set(key, value);
-    else params.delete(key);
+    for (const [key, value] of Object.entries(changes)) {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    }
     params.delete("page"); // any filter change resets pagination
     startTransition(() => router.push(`${pathname}?${params.toString()}`));
+  }
+
+  function updateParam(key: string, value: string) {
+    updateParams({ [key]: value });
   }
 
   // Text inputs commit on blur/Enter, not per keystroke — a router.push on
@@ -104,6 +113,102 @@ export function LeadFilters({
           clearable
         />
       )}
+
+      {/*
+        The date filters, on their own line with labels, because a bare
+        date box beside nine dropdowns says nothing about which date it
+        means — and getting "arrived" and "due" the wrong way round is
+        the one mistake that makes this screen lie to you.
+      */}
+      <div className="flex w-full flex-wrap items-center gap-2 border-t pt-2">
+        <span className="text-xs font-medium text-muted-foreground">Arrived</span>
+        <Combobox
+          className="w-40"
+          size="sm"
+          value={searchParams.get("created_month") ?? ""}
+          /* Choosing a month clears the two dates, so the screen never
+             shows a month and a range that disagree with each other. */
+          onChange={(value) => updateParams({ created_month: value, created_from: "", created_to: "" })}
+          options={months}
+          placeholder="Any month"
+          searchPlaceholder="Type a month…"
+          clearable
+        />
+        <DateInput
+          label="from"
+          value={searchParams.get("created_from") ?? ""}
+          onChange={(value) => updateParams({ created_from: value, created_month: "" })}
+        />
+        <DateInput
+          label="to"
+          value={searchParams.get("created_to") ?? ""}
+          onChange={(value) => updateParams({ created_to: value, created_month: "" })}
+        />
+
+        <span className="ml-2 text-xs font-medium text-muted-foreground">Follow-up</span>
+        <Combobox
+          className="w-44"
+          size="sm"
+          value={searchParams.get("followup") ?? ""}
+          onChange={(value) => updateParams({ followup: value, followup_from: "", followup_to: "" })}
+          options={FOLLOWUP_WINDOWS}
+          placeholder="Any time"
+          searchPlaceholder="Type…"
+          clearable
+        />
+        <DateInput
+          label="from"
+          value={searchParams.get("followup_from") ?? ""}
+          onChange={(value) => updateParams({ followup_from: value, followup: "" })}
+        />
+        <DateInput
+          label="to"
+          value={searchParams.get("followup_to") ?? ""}
+          onChange={(value) => updateParams({ followup_to: value, followup: "" })}
+        />
+      </div>
     </div>
+  );
+}
+
+/**
+ * The named windows people ask for constantly. "Overdue" is the reason
+ * this whole row exists: it is how a centre head finds the leads a
+ * counsellor has fallen behind on, and it excludes anybody already won
+ * or lost — a student who enrolled in March still carries February's
+ * follow-up date.
+ */
+const FOLLOWUP_WINDOWS: FieldOption[] = [
+  { value: "overdue", label: "Overdue" },
+  { value: "today", label: "Due today" },
+  { value: "week", label: "Due in 7 days" },
+  { value: "none", label: "No follow-up booked" },
+];
+
+/**
+ * A native date picker. `type="date"` gives every platform its own
+ * calendar — including the one on a counsellor's phone, which is better
+ * than anything worth building here — and commits on change rather than
+ * on blur, because a date is chosen in one gesture rather than typed.
+ */
+function DateInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="flex items-center gap-1 text-xs text-muted-foreground">
+      {label}
+      <Input
+        type="date"
+        value={value}
+        className="h-8 w-[9.5rem]"
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
   );
 }

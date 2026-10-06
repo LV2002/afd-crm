@@ -628,12 +628,28 @@
 <h2 id="5-1-the-leads-list">5.1 The Leads list</h2>
 <p><strong>Leads</strong> in the sidebar. It shows every lead you are allowed to see — for a counsellor, the ones assigned to you; for a centre head, their centre's; for an admin, all of them.</p>
 <h3 id="what-the-columns-are">What the columns are</h3>
-<p>The columns are <strong>not fixed</strong>. They are whichever lead fields an administrator has marked "show in list" (Settings → Custom Fields). As shipped that is Student Name, Primary Phone, Lead Source, Stage, Temperature, Assigned Counsellor, Centre and Next Follow-up.</p>
-<p>Two things to know about what you see in those columns:</p>
+<p>The columns are <strong>not fixed</strong>. They are whichever lead fields an administrator has marked "show in list" (Settings → Custom Fields). As shipped that is Student Name, Primary Phone, Lead Source, Stage, Temperature, Assigned Counsellor, Centre, Next Follow-up and <strong>Arrived</strong>.</p>
+<p>Four things to know about what you see in those columns:</p>
 <ul>
 <li><strong>Phone numbers are masked</strong> — <code>+91 98••••3456</code>. This is deliberate (Chapter 6.4).</li>
 <li><strong>A lead whose admission was later dropped is marked</strong>, so a name in the list does not silently look like a live admission.</li>
+<li><strong>Stage and Temperature are coloured</strong>, using the colours set in Settings → Pipeline Stages and Settings → Dropdowns. Change a colour there and the list follows. The label always stays in ordinary text — the colour is the dot and the tint behind it — so a pale colour can never make a row unreadable.</li>
+<li><strong>Arrived</strong> is the date the lead came in, and <strong>Next Follow-up</strong> is when it is next due. Between them you can see at a glance whether an old lead is still being worked.</li>
 </ul>
+<h3 id="filtering-by-date">Filtering by date</h3>
+<p>Under the dropdowns is a second row with two halves.</p>
+<p><strong>Arrived</strong> — pick a <strong>month</strong> from the list, or set a <strong>from</strong> and <strong>to</strong> date. Choosing a month clears the two dates and vice versa, so the screen never shows a month and a range that disagree.</p>
+<p><strong>Follow-up</strong> — the same two dates, plus four windows that answer the questions people actually ask:</p>
+<table><thead>
+<tr><th>Window</th><th>Shows</th></tr>
+</thead><tbody>
+<tr><td><strong>Overdue</strong></td><td>Follow-ups whose date has passed, excluding leads already won or lost</td></tr>
+<tr><td><strong>Due today</strong></td><td>Everything due before the day is out</td></tr>
+<tr><td><strong>Due in 7 days</strong></td><td>The week ahead</td></tr>
+<tr><td><strong>No follow-up booked</strong></td><td>Leads with no next step at all — the quiet gap</td></tr>
+</tbody></table>
+<p><strong>Overdue is the one to learn.</strong> It is how you find the leads a counsellor has fallen behind on: set it, add their name under Assigned Counsellor, and the list is exactly the catch-up queue. Won and lost leads are left out on purpose — a student who enrolled in March still carries February's follow-up date, and a catch-up list that opens with twenty of them is not a catch-up list.</p>
+<p>Dates are read in Indian time, so "September" means the 1st to the 30th as the calendar on the wall has it.</p>
 <h3 id="the-buttons-at-the-top">The buttons at the top</h3>
 <table><thead>
 <tr><th>Button</th><th>Who sees it</th><th>What it does</th></tr>

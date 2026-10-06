@@ -669,6 +669,10 @@ const LEAD_FIELD_SEEDS: FieldSeed[] = [
   { key: "assigned_to", label: "Assigned Counsellor", type: "user_ref", section: "Tracking", showInList: true, showInFilters: true },
   { key: "center_id", label: "Centre", type: "select", section: "Tracking", showInList: true, showInFilters: true },
   { key: "next_followup_at", label: "Next Follow-up", type: "datetime", section: "Tracking", showInList: true },
+  // Written by the database, never typed, and on the list because a
+  // counsellor scanning two hundred rows has to be able to tell last
+  // week's enquiry from last year's.
+  { key: "created_at", label: "Arrived", type: "datetime", section: "Tracking", showInList: true },
   // Word of mouth from past students is a top source for a 25-year-old
   // institute and was the one source the CRM could not see: the column
   // existed with nothing able to write it. `lead_ref` searches rather than
