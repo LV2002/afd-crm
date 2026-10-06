@@ -8164,3 +8164,31 @@ cover the parsing and the origin allowlist, which is where the decisions are; th
 calls themselves are three fetches in the existing client's shape.
 
 **1665 tests pass**, typecheck, lint, `db:audit` and build clean.
+
+## Editable phone numbers, a WhatsApp number of its own, and a Chat button that stays home
+
+Three asks from Leon, and the first turned out to be a gap rather than a feature.
+
+- **No phone on a lead could be edited at all.** The edit form rendered every `phone` field
+  as a read-only reveal button and `updateLead` skipped them outright, so a wrong digit
+  meant deleting the lead and starting again. They are editable now, behind
+  `lead.reveal_phone` — you cannot sensibly overwrite a number you are not allowed to read,
+  and an unrevealed field renders no input, so saving a form without touching the numbers
+  leaves them alone.
+- **Changing the primary phone moves `lead_identifiers` with it**, or the old number goes on
+  claiming the person while the corrected one matches nothing and the next enquiry creates a
+  duplicate. A number already held by another live lead is refused with a pointer to merge,
+  rather than silently folding two people together because somebody retyped a digit.
+- **`whatsapp_phone`** (migration 0092), null meaning "same as the primary". The CRM had
+  been assuming the form number and the WhatsApp number were one and the same.
+- **The WhatsApp button goes to `/whatsapp?thread=lead:<id>`** instead of opening `wa.me` in
+  a new tab. It carries no number, so unlike Call it shows without revealing first; and a
+  lead who has never messaged gets a panel explaining the 24-hour rule rather than an inbox
+  saying "pick a conversation".
+
+Stubbed: nothing. Not done on purpose — the `whatsapp_phone` column is not yet used to route
+outbound sends; the inbox still keys on the number a message arrived from, which is the
+honest behaviour until a lead actually has a different one filled in.
+
+**1666 tests pass** (1 new on the phone-correction invariant, 1 updated), typecheck, lint,
+`db:audit` and build clean.

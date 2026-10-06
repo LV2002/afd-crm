@@ -157,8 +157,13 @@ describe("revealLeadPhone", () => {
     expect(recorded.inserts).toEqual([]);
   });
 
-  it("asks for only the three phone columns, not the whole lead", async () => {
+  it("asks for only the phone columns, not the whole lead", async () => {
+    // The point is the narrowness, not the count: a reveal must not drag
+    // the rest of the lead back with it. The list grew by one when
+    // whatsapp_phone was added (migration 0092) and the rule is unchanged.
     await revealLeadPhone(LEAD_ID);
-    expect(recorded.selects).toEqual(["leads:id, primary_phone, alternate_phone, parent_phone"]);
+    expect(recorded.selects).toEqual([
+      "leads:id, primary_phone, alternate_phone, parent_phone, whatsapp_phone",
+    ]);
   });
 });

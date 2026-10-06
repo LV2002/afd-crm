@@ -10,7 +10,7 @@
  * tests/rls.spec.ts's job.
  */
 import { config as loadEnv } from "dotenv";
-import { eq, like } from "drizzle-orm";
+import { and, eq, like } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 loadEnv({ path: ".env" });
@@ -250,6 +250,63 @@ describe("resolveOrCreateLead", () => {
     });
     expect(again.leadId).toBe(live.leadId);
     expect(again.wasDuplicate).toBe(true);
+  });
+
+  it("follows a corrected primary phone, and releases the old one", async () => {
+    /*
+      The invariant `updateLead` depends on when somebody fixes a typo in
+      a lead's number.
+
+      `lead_identifiers` is what every ingestion path is matched against,
+      so changing `leads.primary_phone` without moving the identifier
+      would leave the wrong number claiming this person while the right
+      one matched nothing — and the next enquiry from the corrected
+      number would create a second lead for somebody already in the CRM.
+      That is the duplicate non-negotiable #2 exists to prevent, produced
+      by correcting a digit.
+
+      Simulated here as the action does it: the lead row and the
+      identifier move together.
+    */
+    const created = await resolveOrCreateLead({
+      studentName: testName("typo"),
+      primaryPhone: "9847100901",
+      source: "Manual",
+    });
+
+    await db
+      .update(leads)
+      .set({ primaryPhone: "+919847100902" })
+      .where(eq(leads.id, created.leadId));
+    await db
+      .update(leadIdentifiers)
+      .set({ valueNormalised: "+919847100902" })
+      .where(
+        and(
+          eq(leadIdentifiers.leadId, created.leadId),
+          eq(leadIdentifiers.kind, "phone"),
+          eq(leadIdentifiers.valueNormalised, "+919847100901"),
+        ),
+      );
+
+    // The corrected number now finds them.
+    const corrected = await resolveOrCreateLead({
+      studentName: testName("typo-again"),
+      primaryPhone: "9847100902",
+      source: "Website",
+    });
+    expect(corrected.leadId).toBe(created.leadId);
+    expect(corrected.wasDuplicate).toBe(true);
+
+    // And the number that was never theirs is free, rather than still
+    // pointing at them.
+    const stranger = await resolveOrCreateLead({
+      studentName: testName("stranger"),
+      primaryPhone: "9847100901",
+      source: "Website",
+    });
+    expect(stranger.leadId).not.toBe(created.leadId);
+    expect(stranger.isNewLead).toBe(true);
   });
 
   it("rejects an unparseable phone number rather than silently creating a bad lead", async () => {

@@ -4247,3 +4247,43 @@ means running the whole dialog again for nothing.
 None of this can be exercised against Meta until Advanced Access lands — under Standard Access
 the dialog opens and refuses at the end. The tests therefore cover the parsing and the origin
 allowlist, which is where the decisions are.
+
+## 2026-10-07 — Phone numbers are editable, and the WhatsApp button stays inside the CRM
+
+Leon: *"I should be able to change a leads WhatsApp number and I should be able to add a
+leads alternate phone number as well in the leads profile. Also the WhatsApp button should
+open that leads chat from the assigned counsellors WhatsApp coexistence in the chat section.
+Not WhatsApp web in a new browser."*
+
+**No phone on a lead could be edited at all.** Not the alternate, not the primary. The edit
+form rendered every `phone` field as a read-only reveal button, and `updateLead` skipped them
+outright. So a counsellor who took one digit down wrong had to delete the lead and enter it
+again, and an alternate or parent number could be captured at intake and never afterwards. It
+read as a deliberate rule and was really the absence of one.
+
+They are editable now, gated on `lead.reveal_phone` rather than `lead.update` alone. Not an
+extra hurdle: the form shows a masked number until it is revealed, and letting somebody
+overwrite a value they are not allowed to see is how a number gets replaced with nobody able
+to say what it used to be. Revealing is already the audited moment; editing lives on the other
+side of it. An unrevealed field renders no input at all, so it is absent from the form data
+and `NOT_PROVIDED` skips it — the safety comes from the absence rather than a sentinel.
+
+**Changing the primary phone moves `lead_identifiers` with it.** That table is what every
+webhook, the importer and manual entry are matched against, so updating `leads` alone would
+leave the old number claiming the person while the corrected one matched nothing — and the
+next enquiry from it would create a second lead. The duplicate non-negotiable #2 exists to
+prevent, produced by fixing a typo. If the new number already belongs to a live lead the save
+is refused and the merge flow is named: non-negotiable #2 is about never rejecting an incoming
+*enquiry*, and silently folding two leads together because somebody retyped a number in an
+edit box would be the most surprising thing this CRM could do.
+
+**`whatsapp_phone` is a column of its own** (migration 0092), null meaning "same as the
+primary". Students fill in forms with one number and do their talking on another, and the CRM
+had been assuming they were the same.
+
+**The WhatsApp button now points at `/whatsapp?thread=lead:<id>`.** It used to be a `wa.me`
+link that opened WhatsApp Web in a new tab, which took the counsellor out of the CRM — so the
+conversation that followed happened somewhere this system has no record of, on the institute's
+highest-volume channel. Two consequences worth noting: it needs no phone number, so unlike
+Call it can show before the reveal; and a lead who has never messaged now gets a panel saying
+so and explaining the 24-hour rule, rather than an inbox shrugging "pick a conversation".

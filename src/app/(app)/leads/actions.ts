@@ -20,6 +20,7 @@ interface RevealPhoneResult {
   primaryPhone: string | null;
   alternatePhone: string | null;
   parentPhone: string | null;
+  whatsappPhone: string | null;
   error?: string;
 }
 
@@ -31,26 +32,27 @@ interface RevealPhoneResult {
 export async function revealLeadPhone(leadId: string): Promise<RevealPhoneResult> {
   const user = await getCurrentUser();
   if (!user || !can(user, "lead.reveal_phone")) {
-    return { primaryPhone: null, alternatePhone: null, parentPhone: null, error: "Not permitted" };
+    return { primaryPhone: null, alternatePhone: null, parentPhone: null, whatsappPhone: null, error: "Not permitted" };
   }
 
   const supabase = await createClient();
   const { data: lead, error } = await supabase
     .from("leads")
-    .select("id, primary_phone, alternate_phone, parent_phone")
+    .select("id, primary_phone, alternate_phone, parent_phone, whatsapp_phone")
     .eq("id", leadId)
     .maybeSingle<{
       id: string;
       primary_phone: string;
       alternate_phone: string | null;
       parent_phone: string | null;
+      whatsapp_phone: string | null;
     }>();
 
   // A miss here means RLS didn't let the query see the row (out of the
   // caller's own/center/all scope) or the id is bad — either way, nothing
   // to reveal and nothing to audit.
   if (error || !lead) {
-    return { primaryPhone: null, alternatePhone: null, parentPhone: null, error: "Lead not found" };
+    return { primaryPhone: null, alternatePhone: null, parentPhone: null, whatsappPhone: null, error: "Lead not found" };
   }
 
   await writeAuditLog(supabase, {
@@ -64,6 +66,7 @@ export async function revealLeadPhone(leadId: string): Promise<RevealPhoneResult
     primaryPhone: lead.primary_phone,
     alternatePhone: lead.alternate_phone,
     parentPhone: lead.parent_phone,
+    whatsappPhone: lead.whatsapp_phone,
   };
 }
 

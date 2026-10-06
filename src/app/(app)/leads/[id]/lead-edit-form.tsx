@@ -12,7 +12,7 @@ import type { FieldOption } from "@/lib/fields/resolve-field-options";
 import { DynamicFieldInput } from "@/components/fields/dynamic-field-input";
 
 import { updateLead, type FormState } from "./actions";
-import { RevealPhoneButton } from "../reveal-phone-button";
+import { PhoneField } from "./phone-field";
 import { StateDistrictFields } from "./state-district-fields";
 
 const initialState: FormState = {};
@@ -84,10 +84,21 @@ export function LeadEditForm({
                 <div key={field.id} className="flex flex-col gap-2">
                   <Label>{field.label}</Label>
                   {field.type === "phone" ? (
-                    <RevealPhoneButton
+                    <PhoneField
                       leadId={leadId}
+                      name={field.key}
                       masked={values[field.key] as string | null}
                       canReveal={canRevealPhone}
+                      // Editing a number you may not reveal would mean
+                      // overwriting a value you cannot see, so the two
+                      // permissions travel together — `updateLead`
+                      // enforces the same pairing server-side.
+                      canEdit={field.isEditable && canRevealPhone}
+                      chatHref={
+                        field.key === "whatsapp_phone" || field.key === "primary_phone"
+                          ? `/whatsapp?thread=${encodeURIComponent(`lead:${leadId}`)}`
+                          : undefined
+                      }
                     />
                   ) : field.isEditable ? (
                     <DynamicFieldInput
