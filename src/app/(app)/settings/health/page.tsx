@@ -90,7 +90,7 @@ export default async function HealthPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-lg font-semibold">Platform health</h2>
+        <h1 className="text-2xl font-semibold">Platform health</h1>
         <p className="max-w-2xl text-muted-foreground">
           Everything that has failed — a cron that threw, a webhook that errored, a screen that
           crashed for somebody. Grouped by fault, because the same bug firing four hundred times

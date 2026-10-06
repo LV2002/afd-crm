@@ -121,7 +121,7 @@ export default async function CustomWebhooksPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Custom webhooks</h2>
+          <h1 className="text-2xl font-semibold">Custom webhooks</h1>
           <p className="max-w-2xl text-muted-foreground">
             An endpoint for any service that can post JSON — a course platform, a form builder, a
             Zapier step, a landing page. Each one gets its own URL and its own source name, so the

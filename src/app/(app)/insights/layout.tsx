@@ -29,6 +29,20 @@ const TABS: SectionTab[] = [
 export default function InsightsLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-6">
+      {/*
+        The section's own title, here rather than in each of the eight
+        pages — the same shape Finance uses. Without it these screens had
+        no `h1` at all: every one opened with a sub-heading, which is a
+        page with no name to anybody navigating by headings, and eight
+        chances for the eight pages to word their title differently.
+      */}
+      <div>
+        <h1 className="text-2xl font-semibold">Insights</h1>
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          Who is coming in, where from, how fast they decide and how many enrol. Every tab
+          draws its numbers before it lists them, and every chart has the table behind it.
+        </p>
+      </div>
       <SectionTabs tabs={TABS} />
       {children}
     </div>

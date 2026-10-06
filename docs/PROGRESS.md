@@ -8044,3 +8044,26 @@ visible at once and the details read better on the left, so only the small-scree
 changes.
 
 **1640 tests pass**, typecheck, lint and build clean. Manual chapter 6 updated.
+
+## 2026-10-06 — Every screen has a name
+
+The last item on the UI list was "25 Settings screens with no shared page header". Having
+measured it rather than eyeballed it, that was wrong: **47 of the 51 Settings pages
+already use the same `h1`**. The real gap was elsewhere and smaller.
+
+- **Insights had no `h1` at all.** Eight screens behind a tab row, every one opening with
+  a sub-heading — a page with no name to anybody navigating by headings, and eight
+  chances to word the same title differently. The section is titled in its layout now, the
+  shape Finance already used.
+- **Four Settings screens** (Targets, Platform health, Offers, Custom webhooks) opened
+  with an `h2` at `text-lg` where the other 47 use an `h1` at `text-2xl`.
+
+Everything else that lacked an `h1` turned out to be correct: Finance and Chats title
+themselves in their layouts, `/handovers` and `/my-day` are redirects, and the print pages
+carry a letterhead instead.
+
+No shared `PageHeader` component: 47 copies of two lines of markup that already agree is
+not a problem a component solves, and the diff to introduce one would be larger than
+everything it prevents.
+
+**1640 tests pass**, typecheck, lint and build clean.
