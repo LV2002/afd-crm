@@ -10,6 +10,7 @@ import { getMetaConnectionStatus, importPastMetaAdSpend } from "./actions";
 import { MetaCredentialsForm } from "./meta-credentials-form";
 import { SubscribePageButton } from "./subscribe-page-button";
 import { TestConnectionButton } from "./test-connection-button";
+import { TestInstagramButton } from "./test-instagram-button";
 
 /**
  * A ninety-day spend import is one paginated API call plus a few hundred
@@ -63,6 +64,7 @@ export default async function MetaIntegrationPage() {
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">Connection</h2>
         <TestConnectionButton />
+        <TestInstagramButton />
       </section>
 
       {/*
