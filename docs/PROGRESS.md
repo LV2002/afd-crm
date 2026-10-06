@@ -7749,3 +7749,38 @@ against the committed books — the staff one names no `docs/*.md` runbook, the 
 does.
 
 **1620 tests pass**, typecheck, lint and build clean.
+
+## 2026-10-06 — Import a spreadsheet's comments as notes, and AFD's four historic sheets
+
+### The importer learned the one column it was missing
+
+A **Notes** column is now offered as a mapping target. Map the column of whatever was
+said and each row's text becomes an interaction of type `note` on that lead's timeline,
+`source = 'system'` so the schema's "every human-logged interaction names a next action"
+check does not fire. The key is `__note`, deliberately outside the namespace an admin can
+add custom fields to. Written for matched leads as well as new ones; the manual warns that
+importing the same file twice logs the note twice. See `docs/DECISIONS.md`, 2026-10-06.
+
+`importLeads` now reads its field list through `importableFields()` — the same list the
+column mapper offers — so `assigned_to` and `stage_id` are unreachable from the action by
+construction rather than by a second check that could drift from the first.
+
+### AFD's four sheets, prepared
+
+`scripts/import-prep/prepare-afd-sheets.py` turns the client's main enquiry register,
+Google Ads export, Meta Lead Ads export and website forms log into the import format;
+`check-import-files.py` then proves every value in the output is one the CRM will accept,
+because the importer drops an unrecognised dropdown value with a warning rather than
+failing.
+
+**1,280 leads ready**, 185 held back for having no usable phone number, 24 left out as
+test pings and error rows. Every comment and conversation log carried across as a note.
+170 spellings of education status became 7; sources, exams, courses and 740 districts
+normalised, with the original wording kept in Sub-source and in the note.
+
+Client decisions recorded in `docs/DECISIONS.md`: five new lead sources (Shiksha,
+JustDial, School Seminar, Event, Brochure), four new courses (DWH, DAH, ARH, AWO), six new
+exams (NID MDes, NIFT PG, BFA, B.Arch, KS DAT, KEAM), and assignment to one counsellor via
+a temporary rule rather than an owner column — assignment stays the rules engine's job.
+
+**1623 tests pass**, typecheck, lint and build clean.

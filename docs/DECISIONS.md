@@ -4032,3 +4032,62 @@ institute measures, which is the point of a handbook. Administrator material is 
 integrations, the schedules, anything that sends the reader to a `docs/*.md` runbook, and
 anything whose fix is "an administrator does X". A test asserts the staff book contains no
 runbook path, because that is the shape the mistake takes.
+
+## 2026-10-06 — A spreadsheet's comments column belongs on the timeline
+
+Preparing AFD's four historic sheets for import turned up the obvious gap: the
+importer could carry every field and none of the conversation. The main enquiry
+register's most valuable column is `Conversation Details` — *"22-jan- visited office
+and attended aptitude test. sent review. will join for summer"* — and there was
+nowhere for it to go.
+
+**It is logged as an interaction, not written to a field.** A field holds what somebody
+is; this is what happened. A counsellor opening a lead reads the timeline, so that is
+where two years of history has to land, and the alternative — a long_text field nobody
+scrolls to — is the kind of place data goes to be forgotten.
+
+Three details that are not arbitrary:
+
+- **`source = 'system'`.** The schema requires every human-logged interaction to name a
+  next action and a date (`interactions_next_action_required`). An imported note has
+  neither, and inventing one would put false work in somebody's morning queue. A system
+  row is also the truth: nobody logged this call today.
+- **The key is `__note`, not `note`.** `field_definitions.key` is admin-editable at
+  runtime; a custom field somebody calls "note" must not collide with the one target
+  that is not a field.
+- **It is written for a matched lead too**, not only a newly created one. The
+  conversation happened with the person, and which spreadsheet row they arrived on does
+  not change that. The cost is that importing the same file twice logs the note twice,
+  which the manual now warns about — the alternative is dropping history the second
+  file might be the only copy of.
+
+## 2026-10-06 — Cleaning 1,490 rows of two years of hand-kept data
+
+`scripts/import-prep/` holds the transform and a checker, committed rather than run and
+thrown away, because what matters about a migration like this is being able to answer
+"why does this lead say Graduate" in a year's time.
+
+Four sheets that agree about nothing: a main enquiry register kept by hand since 2025, a
+Google Ads export, a Meta Lead Ads export, and a website forms log. 170 spellings of
+education status, 171 of exam, 119 of source.
+
+**Every mapping was confirmed with the client before it was applied, and anything not
+confirmed stays in the note rather than being guessed into a field.** Shiksha at 161
+leads is a source worth counting, so it became one; `situation test` and `synopsis` are
+products nobody could confirm were courses, so they stayed in the note. The original
+wording of every source is kept in Sub-source, which means any decision here can be
+unpicked from the data itself later.
+
+Two bugs worth remembering:
+
+- **A trailing space in a column heading cost every row of the first run.** The main
+  sheet's name column is headed `"Name "`. Invisible in a spreadsheet, matches nothing in
+  code, and the failure looked like 1,153 rows with no name. Headings are stripped on
+  the way in now.
+- **Free-text answers are not the thing they are labelled.** Meta's city question is
+  answered with the lead's own name often enough to matter, and `place()` happily filed
+  "Niranjan Kumar" as a city. A city sharing a word with the lead's name is dropped.
+
+The checker exists because `coerceImportValue` drops an unrecognised dropdown value with
+a warning and carries on — right at import time, and the wrong thing to discover
+afterwards across 1,280 leads. It fails the file while the file can still be regenerated.

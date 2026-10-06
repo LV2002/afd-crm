@@ -10,7 +10,7 @@ import { fieldColumn } from "@/lib/fields/field-column";
 import { getFieldSchema, type FieldSchemaEntry } from "@/lib/fields/get-field-schema";
 import { OPTION_BEARING_TYPES, resolveFieldOptions, type FieldOption } from "@/lib/fields/resolve-field-options";
 import { coerceImportValue } from "@/lib/leads/coerce-import-value";
-import { RESOLVE_INPUT_KEYS } from "@/lib/leads/importable-fields";
+import { importableFields, IMPORT_NOTE_KEY, RESOLVE_INPUT_KEYS } from "@/lib/leads/importable-fields";
 import {
   leadIsVisibleToCaller,
   SCOPE_VIOLATION_MESSAGE,
@@ -88,7 +88,11 @@ export async function importLeads(
   }
 
   const supabase = await createClient();
-  const fields = await getFieldSchema(supabase, "lead", user);
+  // The same list the column mapper offers, so a key this action can see
+  // is one the mapper could have produced — `assigned_to` and `stage_id`
+  // are unreachable from here by construction, not by a second check
+  // that could drift from the first.
+  const fields = importableFields(await getFieldSchema(supabase, "lead", user));
   const fieldByKey = new Map(fields.map((f) => [f.key, f]));
 
   // header -> fieldKey, dropping unmapped ("") columns.
@@ -129,6 +133,10 @@ export async function importLeads(
       if (value !== undefined) values[key] = value;
       if (warning) warnings.push(warning);
     }
+
+    // Not a field: pulled out before anything tries to write it to a column.
+    const note = typeof values[IMPORT_NOTE_KEY] === "string" ? (values[IMPORT_NOTE_KEY] as string) : "";
+    delete values[IMPORT_NOTE_KEY];
 
     const studentName = typeof values.student_name === "string" ? values.student_name : "";
     const primaryPhone = typeof values.primary_phone === "string" ? values.primary_phone : "";
@@ -207,6 +215,26 @@ export async function importLeads(
       await writeExtraFields(supabase, outcome.leadId, values, fieldByKey);
     } else {
       matched++;
+    }
+
+    // Written for a matched lead too: the conversation in that column
+    // happened with the person, and which spreadsheet row they arrived
+    // on does not change that. Importing the same file twice therefore
+    // logs the note twice — the honest trade, since the alternative is
+    // dropping history the second file might be the only copy of.
+    if (note) {
+      const { error } = await supabase.from("interactions").insert({
+        lead_id: outcome.leadId,
+        type: "note",
+        notes: note,
+        // `system`, not `manual`: nobody logged this just now, and a
+        // human-logged interaction is required to name a next action and
+        // a date (see schema/activity.ts). An imported note has neither
+        // and inventing one would put false work in somebody's queue.
+        source: "system",
+        created_by: user.id,
+      });
+      if (error) warnings.push("The note could not be saved on the timeline");
     }
 
     rowResults.push({

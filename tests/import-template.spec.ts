@@ -95,7 +95,14 @@ describe("the import template", () => {
 
   it("writes yes/no for a boolean, which is what the parser reads", () => {
     const csv = buildImportTemplate({ fields: BASE, optionsByKey: {} });
-    expect(rows(csv)[1].at(-1)).toBe("no");
+    const header = rows(csv)[0];
+    expect(rows(csv)[1][header.indexOf("Brochure Sent")]).toBe("no");
+  });
+
+  it("ends with the Notes column, which is activity rather than a field", () => {
+    const csv = buildImportTemplate({ fields: BASE, optionsByKey: {} });
+    expect(rows(csv)[0].at(-1)).toBe("Notes");
+    expect(rows(csv)[1].at(-1)).toContain("NID foundation batch");
   });
 
   it("quotes a value containing a comma so the file still parses", () => {
