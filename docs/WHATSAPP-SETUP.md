@@ -179,6 +179,52 @@ is done with it, so an empty list is not missing data, it is the answer.
 If your number is already a lead in the CRM, the reply attaches to that lead and their
 counsellor gets a notification. That is the whole feature.
 
+### 1.8a Running the CRM on the test number
+
+Perfectly reasonable while the live number is stuck or App Review is
+open, and nothing has to be undone afterwards — the credentials are
+rows in a table, not code. Paste the test number's IDs in exactly where
+the live ones will go:
+
+**Settings → Integrations → WhatsApp → Credentials**
+
+- Phone Number ID — the test number's, from WhatsApp → API setup
+- WhatsApp Business Account ID — the test WABA's, same screen
+- Access Token — the console's token
+
+Press **Test** straight afterwards. It reads the number back from Meta,
+so "Connected — +1 555 … " means the first three are right. Then
+register it under **Numbers** with the same Phone Number ID: without
+that row the CRM still works, but the per-number settings (whose phone,
+whether a stranger's reply becomes a lead) have nothing to attach to.
+
+The App Secret and Verify Token are not part of the switch. They belong
+to the Meta app, not to a number, and they are what make inbound work at
+all — set them once and leave them.
+
+**What actually bites**
+
+- **The console's token lasts 24 hours.** Everything works, then stops
+  dead tomorrow with 401s and an inbox that goes quiet. A System User
+  token is the fix if the test WABA can be assigned to one; Meta owns
+  that account, so it may not be assignable, and then re-pasting the
+  token daily is the only option. Live with it, or treat it as one more
+  reason to get the real number working.
+- **A test number reaches five pre-verified recipients and nobody else.**
+  Fine for a demo and a screencast. Do not let a broadcast run while the
+  CRM is pointed at it — every message to anybody else fails, and you
+  get a day's worth of failures for nothing.
+
+**Switching to the live number later** is those same three credential
+fields plus the Phone Number ID on the registered number row. The
+webhook does not move: it is configured per app, not per number, so
+inbound keeps working across the switch without touching Meta.
+
+The test conversations stay in the inbox. Threads are keyed to the
+person who messaged, not to the number they messaged, so they sit there
+looking like ordinary history. Use an obviously invented lead name and
+they are easy to spot and ignore.
+
 ### 1.9 The 24-hour rule, which is Meta's and cannot be changed
 
 A free-form message is only allowed within **24 hours** of the person's last message to
