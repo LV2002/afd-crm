@@ -137,24 +137,25 @@ For `whatsapp_business_messaging` the endpoint is
   green "Test message successfully sent" toast means the call went
   through.
 - **The CRM itself.** `src/lib/integrations/whatsapp/client.ts` posts to
-  exactly that node with the saved permanent token and the real
-  Phone Number ID, so a counsellor sending one WhatsApp reply from a
-  lead's page is the same API call, made in production, by the app under
-  review.
+  exactly that node with whatever Phone Number ID and token are saved in
+  Settings → Integrations → WhatsApp, so a counsellor replying from
+  Chats → Inbox is the same API call made by the same app. A test
+  number's credentials count here as much as a live number's.
 
 **The tick is not immediate.** It is a background check, not a response
 to the call, so a successful send and a still-grey tick at the same
 moment means nothing is wrong. Reload the submission page after a few
 hours before concluding anything.
 
-If it is still grey a day later, the suspect is the **From** number.
+If it is still grey a day later, one suspect is the **From** number:
 Meta's `+1 555 …` test number is a shared sandbox asset, and a call on
-it is not always attributed to the app. Send the next one from AFD's own
-registered number — either by switching **From** in the API setup
-console once the number is registered on the WABA, or simply by sending
-a WhatsApp to a real lead from the CRM, which uses the production
-credentials by definition. A message to somebody who messaged you first
-needs no template and no approval.
+it is not always attributed back to the app. The other is that one call
+is simply not enough to be noticed. Both have the same answer — make the
+call from the CRM instead of the console, by saving the same Phone
+Number ID in Settings → Integrations → WhatsApp and replying to a thread
+in Chats. A reply to somebody who messaged first needs no template and
+no approval, and it is the app itself calling the endpoint rather than
+Meta's own console doing it on the app's behalf.
 
 Remember that the console's token is temporary and visible on screen.
 Do not screenshot that page, and regenerate the token if you have.
@@ -163,23 +164,54 @@ Do not screenshot that page, and regenerate the token if you have.
 
 ## Recording the `whatsapp_business_messaging` screencast
 
+**There is no WhatsApp composer on a lead's page.** It was removed in
+September 2026; messaging lives in **Chats → Inbox**, and that inbox is
+reactive — a thread exists because somebody messaged the number. So the
+clip has to start on the phone, not in the CRM.
+
+**A test number is fine for this.** Meta expects an app in review to
+demonstrate with the access it has, and nothing in the CRM's screens
+names the WhatsApp number, so the clip claims nothing it is not. Do not
+film the WhatsApp → API setup console: it shows the test number and the
+access token in plain text.
+
+### Setting up before you record
+
+1. **Credentials** — Settings → Integrations → WhatsApp: the test
+   number's Phone Number ID and a token. The console's token lasts 24
+   hours, so record the same day you paste it.
+2. **The webhook** — the inbound half has to work or nothing reaches the
+   inbox. Same screen, **Recent deliveries**: it must not be empty. If
+   it is, the callback URL and verify token under WhatsApp →
+   Configuration are not set, or the `messages` field is not subscribed.
+3. **A lead holding your number** — Leads → New, an obviously invented
+   name, your own phone number. This is not optional: a reply from a
+   number with no lead lands in **Not in the CRM**, which has no send box
+   at all, and the clip stops dead at shot 2. A test number can only
+   exchange messages with its pre-verified recipients, so use one of
+   those.
+
+### The four shots
+
 Thirty to forty-five seconds. The point to make is that every message
 goes to somebody who contacted the institute first, and that the person
-can stop it — reviewers are looking for unsolicited messaging, so show
+can stop it — reviewers are screening for unsolicited messaging, so show
 the opposite happening.
 
-1. **The lead** — open a lead in the CRM, one obviously invented with
-   your own number. Pause so the reviewer sees it is an enquiry record,
-   with the source it came in on.
-2. **The reply** — type a WhatsApp message in the composer on that
-   lead's page and send it. Show it appearing in the thread.
-3. **It arrives** — cut to the phone, or have it in shot from the start,
-   and show the message landing in WhatsApp.
-4. **The way out** — Chats → Opted out, pausing on the list. That is
-   the suppression list the CRM keeps, and it is the single most useful
-   thing you can show a reviewer who is screening for spam.
+1. **They message first** — on the phone, send a WhatsApp to the
+   business number: "Hi, what are the fees for the NID foundation
+   course?" This shot is the whole argument; without it a reviewer is
+   watching an outbound message to a stranger.
+2. **It arrives** — CRM, Chats → Inbox. The thread appears under the
+   invented lead's name, marked as awaiting a reply. Pause on it.
+3. **The counsellor replies** — open the thread, type, send, and show it
+   in the thread. This is the free-form reply inside the 24-hour window
+   that shot 1 opened.
+4. **The way out** — Chats → Opted out, pausing on the list. That is the
+   suppression list the CRM keeps and honours, and it is the single most
+   useful thing to put in front of someone checking for spam.
 
-Same file can go against `whatsapp_business_management` if shot 2 is
+Same file can go against `whatsapp_business_management` if shot 3 is
 done by picking an approved template from the list rather than typing
 free text — the template list being read is what that permission does.
 
@@ -348,9 +380,9 @@ arriving and a counsellor replying from inside the CRM.
 > includes a way to opt out, which the CRM records and honours
 > permanently.
 
-**Screencast:** a counsellor sending a WhatsApp reply from a lead's page
-in the CRM and it arriving on a phone — show both. Shot list under
-"Recording the whatsapp_business_messaging screencast" above.
+**Screencast:** a counsellor replying from Chats → Inbox and the message
+arriving on a phone — show both. Shot list under "Recording the
+whatsapp_business_messaging screencast" above.
 
 **API test calls:** this permission wants them too. See "The required
 API test calls tick" above.
