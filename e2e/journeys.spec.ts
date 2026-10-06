@@ -85,6 +85,24 @@ test.describe("a counsellor's day", () => {
     await page.locator("#studentName").fill(name);
     await page.locator("#primaryPhone").fill(uniquePhone());
 
+    /*
+      Source is required now, and this test did not fill it — so the
+      browser's own validation blocked the submit, the POST never
+      happened, and the page sat on `/leads/new` until the 45s timeout.
+      That is the failure, and it is the feature working.
+
+      Driven through the combobox rather than by setting the hidden input,
+      because the hidden input is what the browser validates and a test
+      that writes to it directly would pass while the real control was
+      broken. Any configured source will do: which one is the office's
+      business, and this only needs one to exist.
+    */
+    await page.locator("#source").click();
+    await page.getByRole("option").first().click();
+    // Proves the pick landed. Without this the test would go on to blame
+    // the server for a click that quietly selected nothing.
+    await expect(page.locator("input[name='source']")).not.toHaveValue("");
+
     // Armed before the click, or a fast action could answer first.
     const actionAnswered = page
       .waitForResponse(
