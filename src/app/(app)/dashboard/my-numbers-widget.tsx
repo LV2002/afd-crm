@@ -1,10 +1,14 @@
 import Link from "next/link";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getMyScoreboard } from "@/lib/dashboard/get-scoreboard";
+import { getMyDashboard } from "@/lib/dashboard/get-scoreboard";
+import { formatDateIST } from "@/lib/format/date";
 import { createClient } from "@/lib/supabase/server";
 
+import { DailyLeadsChart } from "./daily-leads-chart";
+import { HeroStat } from "./hero-stat";
 import { StatTile } from "./stat-tile";
+import { TargetProgress } from "./target-progress";
 
 /**
  * A counsellor's own numbers, above their queue.
@@ -14,6 +18,16 @@ import { StatTile } from "./stat-tile";
  * screen was Leon's ask, and the order matters: the numbers set the context
  * and the queue is the work, so numbers first, then the list.
  *
+ * ## Why three figures are bigger than the others
+ *
+ * This card used to be eight tiles of identical weight in two rows of
+ * four. Eight equal numbers is a wall, not an answer — nothing said which
+ * one to read first, and none of them said whether it was good. So the
+ * three that answer "how is my month going" are promoted, each with last
+ * month beside it and the shape of the last fortnight under it, and the
+ * other five are demoted to a compact row. Same figures, same queries; the
+ * difference is that the card now has a point of view.
+ *
  * `assignedToday` is the one figure that needed a schema change. Until
  * migration 0071 there was no record of *when* a lead was handed to
  * somebody, so the nearest answer was "created today" — a different number
@@ -22,12 +36,17 @@ import { StatTile } from "./stat-tile";
  */
 export async function MyNumbersWidget({ userId }: { userId: string }) {
   const supabase = await createClient();
-  const board = await getMyScoreboard(supabase, userId);
+  const { scoreboard: board, series, admissionsTarget } = await getMyDashboard(supabase, userId);
 
   const rate =
-    board.admissionsPerLeadThisMonth === null
-      ? "—"
-      : `${board.admissionsPerLeadThisMonth}%`;
+    board.admissionsPerLeadThisMonth === null ? "—" : `${board.admissionsPerLeadThisMonth}%`;
+
+  // The last fortnight of the thirty days already fetched — enough for a
+  // shape, short enough that a busy week still reads as one.
+  const fortnight = series.slice(-14);
+  const now = new Date();
+  const dayOfMonth = Number(formatDateIST(now, "d"));
+  const daysInMonth = Number(formatDateIST(new Date(now.getFullYear(), now.getMonth() + 1, 0), "d"));
 
   return (
     <Card className="lg:col-span-2">
@@ -36,31 +55,48 @@ export async function MyNumbersWidget({ userId }: { userId: string }) {
         <CardDescription>This month so far, and what landed on your desk today.</CardDescription>
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatTile label="Active leads" value={board.activeLeads} hint="Not yet won or lost" />
-          <StatTile label="Assigned today" value={board.assignedToday} />
-          <StatTile label="New this month" value={board.newThisMonth} />
-          <StatTile
-            label="Never contacted"
-            value={board.neverContacted}
-            hint={board.neverContacted > 0 ? "Start here" : "All answered"}
+      <CardContent className="flex flex-col gap-5">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <HeroStat
+            label="New leads this month"
+            value={board.newThisMonth}
+            previous={board.newLastMonth}
+            series={fortnight.map((day) => day.leads)}
+          />
+          <HeroStat
+            label="Admissions this month"
+            value={board.admissionsThisMonth}
+            previous={board.admissionsLastMonth}
+            series={fortnight.map((day) => day.admissions)}
+          />
+          <HeroStat
+            label="Needs you today"
+            value={board.overdueFollowups + board.neverContacted}
+            tone="attention"
+            hint={
+              board.overdueFollowups + board.neverContacted > 0
+                ? `${board.overdueFollowups} overdue · ${board.neverContacted} never answered`
+                : "Nothing overdue, nothing unanswered"
+            }
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatTile label="Admissions this month" value={board.admissionsThisMonth} />
-          <StatTile
-            label="Admission rate"
-            value={rate}
-            hint={
-              board.admissionsPerLeadThisMonth === null
-                ? "No new leads yet this month"
-                : "This month's admissions ÷ new leads"
-            }
+        {admissionsTarget !== null && (
+          <TargetProgress
+            achieved={board.admissionsThisMonth}
+            target={admissionsTarget}
+            paceFraction={dayOfMonth / daysInMonth}
           />
-          <StatTile label="Overdue follow-ups" value={board.overdueFollowups} />
-          <StatTile label="SLA breached" value={board.slaBreached} />
+        )}
+
+        <DailyLeadsChart series={series} />
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <StatTile label="Active leads" value={board.activeLeads} compact />
+          <StatTile label="Assigned today" value={board.assignedToday} compact />
+          <StatTile label="Due today" value={board.dueToday} compact />
+          <StatTile label="Admission rate" value={rate} compact />
+          <StatTile label="SLA breached" value={board.slaBreached} compact />
         </div>
 
         <p className="text-xs text-muted-foreground">

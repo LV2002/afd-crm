@@ -52,3 +52,31 @@ export function dateStringIST(instant: Date, daysAgo: number): string {
   const todayStart = startOfDayIST(instant);
   return formatInTimeZone(addDays(todayStart, -daysAgo), DISPLAY_TIMEZONE, "yyyy-MM-dd");
 }
+
+/** One day of a series: its IST date, and the half-open instant range that is that day. */
+export interface DayWindow {
+  /** `yyyy-MM-dd` in IST — the label, and a stable key. */
+  date: string;
+  from: Date;
+  to: Date;
+}
+
+/**
+ * The last N days as instant ranges, oldest first, ending with today.
+ *
+ * Here rather than in the dashboard so the timezone question is answered
+ * once, in the file that owns it: a day on this dashboard is a day in
+ * Kochi, and bucketing by the server's UTC date would move every evening
+ * enquiry after 6:30pm into tomorrow.
+ */
+export function lastDaysIST(instant: Date, days: number): DayWindow[] {
+  const todayStart = startOfDayIST(instant);
+  return Array.from({ length: days }, (_, i) => {
+    const from = addDays(todayStart, i - (days - 1));
+    return {
+      date: formatInTimeZone(from, DISPLAY_TIMEZONE, "yyyy-MM-dd"),
+      from,
+      to: addDays(from, 1),
+    };
+  });
+}

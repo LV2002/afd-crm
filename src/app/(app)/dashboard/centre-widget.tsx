@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getCentreView } from "@/lib/dashboard/get-scoreboard";
 import { createClient } from "@/lib/supabase/server";
 
+import { DailyLeadsChart } from "./daily-leads-chart";
+import { HeroStat } from "./hero-stat";
 import { StatTile } from "./stat-tile";
 
 /**
@@ -23,7 +25,8 @@ import { StatTile } from "./stat-tile";
  */
 export async function CentreWidget() {
   const supabase = await createClient();
-  const { centre } = await getCentreView(supabase);
+  const { centre, series } = await getCentreView(supabase);
+  const fortnight = series.slice(-14);
 
   return (
     <Card>
@@ -32,21 +35,40 @@ export async function CentreWidget() {
         <CardDescription>Everything open at your centre(s).</CardDescription>
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatTile label="Active leads" value={centre.activeLeads} />
-          <StatTile
-            label="Unassigned"
-            value={centre.unassigned}
-            hint={centre.unassigned > 0 ? "Nobody is working these" : "All owned"}
+      <CardContent className="flex flex-col gap-5">
+        {/* The same three questions a counsellor's card answers, asked of
+            the whole centre: what came in, what closed, and who is being
+            let down right now. */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <HeroStat
+            label="New leads this month"
+            value={centre.newThisMonth}
+            previous={centre.newLastMonth}
+            series={fortnight.map((day) => day.leads)}
           />
-          <StatTile label="Never contacted" value={centre.neverContacted} />
-          <StatTile label="Overdue follow-ups" value={centre.overdueFollowups} />
+          <HeroStat
+            label="Admissions this month"
+            value={centre.admissionsThisMonth}
+            previous={centre.admissionsLastMonth}
+            series={fortnight.map((day) => day.admissions)}
+          />
+          <HeroStat
+            label="Nobody is on these"
+            value={centre.unassigned + centre.neverContacted}
+            tone="attention"
+            hint={
+              centre.unassigned + centre.neverContacted > 0
+                ? `${centre.unassigned} unassigned · ${centre.neverContacted} never answered`
+                : "Every lead is owned and answered"
+            }
+          />
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatTile label="New this month" value={centre.newThisMonth} />
-          <StatTile label="Admissions this month" value={centre.admissionsThisMonth} />
+        <DailyLeadsChart series={series} />
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <StatTile label="Active leads" value={centre.activeLeads} compact />
+          <StatTile label="Overdue follow-ups" value={centre.overdueFollowups} compact />
           <StatTile
             label="Admission rate"
             value={
@@ -54,9 +76,10 @@ export async function CentreWidget() {
                 ? "—"
                 : `${centre.admissionsPerLeadThisMonth}%`
             }
-            hint="This month's admissions ÷ new leads"
+            compact
           />
-          <StatTile label="SLA breached" value={centre.slaBreached} />
+          <StatTile label="SLA breached" value={centre.slaBreached} compact />
+          <StatTile label="Unassigned" value={centre.unassigned} compact />
         </div>
 
         <div className="flex flex-wrap gap-4">

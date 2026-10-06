@@ -537,13 +537,23 @@
 <tr><th>Widget</th><th>What it shows</th><th>Needs</th></tr>
 </thead><tbody>
 <tr><td><strong>Your day</strong></td><td>The work queue: Overdue, Due today, New, At risk</td><td><code>lead.read</code></td></tr>
-<tr><td><strong>Your numbers</strong></td><td>Assigned today, this month's new leads and admissions, admission rate</td><td><code>lead.read</code></td></tr>
-<tr><td><strong>Centre pipeline</strong></td><td>New leads this month, what is in the funnel, SLA breaches, admissions</td><td><code>lead.assign</code></td></tr>
+<tr><td><strong>Your numbers</strong></td><td>This month's leads and admissions against last month's, what needs you today, and thirty days of arrivals</td><td><code>lead.read</code></td></tr>
+<tr><td><strong>Centre pipeline</strong></td><td>The same three, for the whole centre, plus what nobody is working</td><td><code>lead.assign</code></td></tr>
 <tr><td><strong>Counsellor performance</strong></td><td>Each counsellor's active leads, new leads, admissions, overdue follow-ups</td><td><code>report.center</code></td></tr>
 <tr><td><strong>Accounts</strong></td><td>Waiting for a first payment, collected this month, overdue instalments</td><td><code>payment.read</code></td></tr>
 <tr><td><strong>Students</strong></td><td>Active students, who joined this month</td><td><code>student.read</code></td></tr>
 <tr><td><strong>Administration</strong></td><td>Users, centres, integration health, anything broken</td><td><code>settings.manage</code></td></tr>
 </tbody></table>
+<h3 id="your-numbers-in-detail">Your numbers, in detail</h3>
+<p><strong>Three big figures, then the rest.</strong> The card used to be eight numbers of the same size, which is a wall rather than an answer. Now three are large: <strong>new leads this month</strong>, <strong>admissions this month</strong> and <strong>needs you today</strong>. Under each of the first two is last month's figure and the shape of the last fortnight, because a number on its own cannot tell you whether it is a good month.</p>
+<ul>
+<li><strong>The arrow and the sentence say the same thing.</strong> <em>Up 3 on last month (9)</em> — you never have to read the colour to know which way it went.</li>
+<li><strong>The little chart is shape, not detail.</strong> It has no numbers on purpose; the figure beside it is the value.</li>
+<li><strong>Needs you today</strong> is overdue follow-ups plus leads nobody has ever answered. It turns red when it is above zero, because zero is the target.</li>
+<li><strong>The 30-day chart</strong> is new leads per day. Hover any day for the count. A flat stretch is a real answer: that is a week nothing came in.</li>
+<li><strong>Against target</strong> appears only if somebody has set you one (Settings → Targets). The line across the bar is where an even month would have you today — not a judgement, just the pace.</li>
+</ul>
+<p>The smaller row underneath — active leads, assigned today, due today, admission rate, SLA breached — is the same information as before, demoted rather than removed.</p>
 <h3 id="your-day-in-detail">Your day, in detail</h3>
 <p>Four buckets, in the order you should work them:</p>
 <table><thead>

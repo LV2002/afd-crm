@@ -56,6 +56,13 @@ export interface Boundaries {
   startOfTomorrow: Date;
   /** Start of the current month, Asia/Kolkata. */
   startOfMonth: Date;
+  /**
+   * Start of the month before it — so this month has something to be
+   * compared against. A number on its own says nothing: 7 admissions is
+   * a good month or a bad one depending on what last month was, and the
+   * person reading the dashboard should not have to remember.
+   */
+  startOfPreviousMonth: Date;
 }
 
 export interface CounsellorScoreboard {
@@ -82,6 +89,9 @@ export interface CounsellorScoreboard {
   admissionsPerLeadThisMonth: number | null;
   /** How many of this month's leads they answered at all, for a response-rate read. */
   respondedThisMonth: number;
+  /** The same two figures for the whole of last month, for the comparison. */
+  newLastMonth: number;
+  admissionsLastMonth: number;
 }
 
 function isActive(lead: ScoreboardLead, terminalStageIds: Set<string>): boolean {
@@ -121,7 +131,7 @@ export function buildCounsellorScoreboard(input: {
   stages: readonly StageInfo[];
   boundaries: Boundaries;
 }): CounsellorScoreboard {
-  const { startOfToday, startOfTomorrow, startOfMonth } = input.boundaries;
+  const { startOfToday, startOfTomorrow, startOfMonth, startOfPreviousMonth } = input.boundaries;
   const terminal = terminalStageIdsOf(input.stages);
 
   const active = input.leads.filter((lead) => isActive(lead, terminal));
@@ -136,6 +146,17 @@ export function buildCounsellorScoreboard(input: {
       leadIds.has(enrolment.leadId) &&
       !enrolment.droppedAt &&
       onOrAfter(enrolment.salesToAccountsAt, startOfMonth),
+  ).length;
+
+  const newLastMonth = input.leads.filter((lead) =>
+    within(lead.createdAt, startOfPreviousMonth, startOfMonth),
+  ).length;
+
+  const admissionsLastMonth = input.enrolments.filter(
+    (enrolment) =>
+      leadIds.has(enrolment.leadId) &&
+      !enrolment.droppedAt &&
+      within(enrolment.salesToAccountsAt, startOfPreviousMonth, startOfMonth),
   ).length;
 
   return {
@@ -158,7 +179,44 @@ export function buildCounsellorScoreboard(input: {
     respondedThisMonth: input.leads.filter(
       (lead) => onOrAfter(lead.createdAt, startOfMonth) && lead.firstResponseAt !== null,
     ).length,
+    newLastMonth,
+    admissionsLastMonth,
   };
+}
+
+export interface DailyCount {
+  /** `yyyy-MM-dd`, IST. */
+  date: string;
+  leads: number;
+  admissions: number;
+}
+
+/**
+ * Leads and admissions per day, for the sparklines and the 30-day chart.
+ *
+ * The day windows are passed in, like the boundaries, because which
+ * instant a day starts at is a timezone question and this file does not
+ * answer those. A day with nothing in it is still a row with a zero: a
+ * line chart that silently skips empty days draws a busy month out of a
+ * quiet one.
+ */
+export function buildDailySeries(input: {
+  leads: readonly ScoreboardLead[];
+  enrolments: readonly ScoreboardEnrolment[];
+  days: ReadonlyArray<{ date: string; from: Date; to: Date }>;
+}): DailyCount[] {
+  const leadIds = new Set(input.leads.map((lead) => lead.id));
+  const admissions = input.enrolments.filter(
+    (enrolment) => leadIds.has(enrolment.leadId) && !enrolment.droppedAt,
+  );
+
+  return input.days.map((day) => ({
+    date: day.date,
+    leads: input.leads.filter((lead) => within(lead.createdAt, day.from, day.to)).length,
+    admissions: admissions.filter((enrolment) =>
+      within(enrolment.salesToAccountsAt, day.from, day.to),
+    ).length,
+  }));
 }
 
 export interface TeamMemberRow {
@@ -233,6 +291,9 @@ export interface CentreScoreboard {
   slaBreached: number;
   neverContacted: number;
   overdueFollowups: number;
+  /** Last month's intake and admissions, for the same comparison a counsellor gets. */
+  newLastMonth: number;
+  admissionsLastMonth: number;
 }
 
 export function buildCentreScoreboard(input: {
@@ -255,5 +316,7 @@ export function buildCentreScoreboard(input: {
     slaBreached: whole.slaBreached,
     neverContacted: whole.neverContacted,
     overdueFollowups: whole.overdueFollowups,
+    newLastMonth: whole.newLastMonth,
+    admissionsLastMonth: whole.admissionsLastMonth,
   };
 }

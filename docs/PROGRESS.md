@@ -7784,3 +7784,42 @@ exams (NID MDes, NIFT PG, BFA, B.Arch, KS DAT, KEAM), and assignment to one coun
 a temporary rule rather than an owner column — assignment stays the rules engine's job.
 
 **1623 tests pass**, typecheck, lint and build clean.
+
+## 2026-10-06 — The dashboard gets a shape
+
+Leon asked for better UI and more visual data, starting with the dashboard, polishing
+rather than redesigning. `docs/DESIGN-REFERENCES.md` holds the research — what is weak,
+which repos fix which part, and the order to do it in.
+
+### What shipped
+
+**Three hero figures** on both the counsellor's card and the centre head's: new leads
+this month, admissions this month, and what needs somebody today. Each of the first two
+carries last month's figure, the direction of travel in words as well as colour, and a
+14-day sparkline. The other five figures are demoted to a compact row — same data, less
+weight.
+
+**A 30-day chart of arrivals** on both cards, with a crosshair, a hover tooltip, an empty
+state that explains itself, and a screen-reader table of the same numbers.
+
+**Progress against target**, when somebody has set one, with a pace marker for where an
+even month would have you today.
+
+New pure functions in `lib/dashboard/scoreboard.ts`: last month's leads and admissions
+for the comparison, and `buildDailySeries` for the chart. `Boundaries` gained
+`startOfPreviousMonth`, derived as one millisecond before this month began, so it is
+right in January without month arithmetic.
+
+`getMyDashboard` replaces `getMyScoreboard` and returns the figures, the series and the
+target in one pass; the enrolment query reaches back to whichever is earlier, the start
+of last month or the start of the chart.
+
+### Tests
+
+`tests/dashboard-scoreboard.spec.ts` gains 6 cases: the previous-month window excludes
+the last instant of the month before it, a dropped admission counts in neither month, the
+daily series buckets an 11pm Kochi enquiry into the right IST day, keeps empty days, and
+ignores an admission belonging to somebody else's lead.
+
+Chapter 4 of the manual now describes the card as it is, including what the arrow, the
+sparkline and the pace line mean.

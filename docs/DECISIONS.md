@@ -4091,3 +4091,45 @@ Two bugs worth remembering:
 The checker exists because `coerceImportValue` drops an unrecognised dropdown value with
 a warning and carries on — right at import time, and the wrong thing to discover
 afterwards across 1,280 leads. It fails the file while the file can still be regenerated.
+
+## 2026-10-06 — Three numbers, not eight
+
+The client said the CRM looks plain. The colours were not the problem — they were
+worked over in September. The dashboard was: `my-numbers-widget` rendered eight
+`StatTile`s in two rows of four, and a `StatTile` is a bordered box with a label and a
+number.
+
+Eight figures of identical weight is a wall, not an answer. Nothing said which one to
+read first, and none of them said whether it was *good* — 7 admissions is a fine month
+or a bad one depending on what last month was, and the person reading the screen should
+not have to remember.
+
+So three figures are promoted and the other five demoted. Same queries, same numbers;
+what changed is that the card now has a point of view: **what came in**, **what closed**,
+and **who is being let down right now**.
+
+Four decisions inside that:
+
+**A delta is never colour alone.** The arrow, the colour and the sentence all say the
+same thing — *Up 3 on last month (9)* — so it reads identically in greyscale, in a
+screenshot, and to somebody who does not see the green.
+
+**The sparkline has no numbers and no axes.** It answers "which way is this going" and
+nothing else; the figure beside it is the value. A flat line at zero is not drawn at all,
+because a straight line across an empty fortnight is noise pretending to be information.
+
+**Leads and admissions are not drawn on the same chart.** Leads run in tens and
+admissions in ones. Two scales on one axis is the chart mistake that makes a good month
+look flat, so admissions live in the hero figure and the screen-reader table, not as a
+second line.
+
+**The target's pace line says what it is.** On the 10th of a 30-day month, a third of the
+target is where "on course" sits — but admissions do not arrive evenly, so the label
+reads *where an even month would have you today* rather than passing judgement. The whole
+block is absent when nobody has set a target: a bar at 0% of a number nobody agreed to is
+an accusation, and a bar at 100% of an invented one is a lie.
+
+The arithmetic went into `scoreboard.ts` with the rest of it — pure, boundaries passed
+in, tested. `buildDailySeries` keeps a day with nothing in it, because a series that
+skips empty days draws a busy month out of a quiet one, and it buckets by IST day: an
+enquiry at 11pm in Kochi is 17:30 UTC and belongs to the day it was made.
