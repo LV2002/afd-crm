@@ -4205,3 +4205,45 @@ few hundred times.
 
 No name, no counsellor and no centre in that message: the reason they cannot see the lead is
 that it is not theirs to see (non-negotiable #6).
+
+## 2026-10-07 — The Embedded Signup button lives in the CRM, because it cannot live anywhere else
+
+Leon set Coexistence up as far as the documentation allowed and then stopped, because step 4.2
+said "onboard the number through Meta's Embedded Signup" and there was nothing anywhere to
+press. That was not a gap in his setup. Embedded Signup is a dialog an *application* opens —
+Meta supplies a JavaScript SDK and a configuration id, the application puts a button on one of
+its own screens, and that button opens the popup. There is no page in Business Settings that
+starts it. Without a button in this CRM the step was impossible, and the documentation had
+been describing it for weeks as though it were a thing you could go and find.
+
+So it is built: `embedded-signup-button.tsx` on Settings → Integrations → WhatsApp.
+
+**Both halves of the answer are waited for.** The popup reports its result twice, by two
+routes that do not arrive in a fixed order — a `postMessage` carrying the account and phone
+number ids, and an authorisation code handed to the `FB.login` callback. Each is stashed in a
+ref and the server action fires when the second lands. Refs rather than state because the
+message listener is registered once and would otherwise read the first render's values for
+ever.
+
+**The origin check is an exact allowlist.** Meta's own sample code is
+`event.origin.endsWith("facebook.com")`, which accepts `https://notfacebook.com` and is one
+typo away from `https://facebook.com.attacker.net`. What that payload decides is which
+WhatsApp account this institute connects itself to, so it is a `Set` of exact origins in
+`embedded-signup.ts`, with the lookalikes in the tests.
+
+**`response_type: "code"`, not the SDK default.** The default hands the browser a client token
+that dies with the session. The code is exchanged server-side with the app secret for a
+business integration token that does not, which is the only kind worth storing.
+
+**Subscribing the account to webhooks happens in the same action.** Embedded Signup does not
+do it, and without it the number connects and nothing is ever delivered — no error, no clue,
+the single most common way a WhatsApp setup looks broken for a week. It is one API call, so it
+is made here rather than left as a step in a document.
+
+**A failed subscription does not unwind the token.** It is kept and said plainly, because a
+token in hand with no subscription is fixable by pressing a button, while throwing it away
+means running the whole dialog again for nothing.
+
+None of this can be exercised against Meta until Advanced Access lands — under Standard Access
+the dialog opens and refuses at the end. The tests therefore cover the parsing and the origin
+allowlist, which is where the decisions are.

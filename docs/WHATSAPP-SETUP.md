@@ -337,28 +337,38 @@ and nothing is lost.
 
 ### 4.2 Onboard the number through Embedded Signup
 
-**Read this before going looking for it: there is nothing to click yet.**
+Embedded Signup is **not** a page in Meta's dashboard, and that is the thing nobody tells
+you. It is a dialog that an application opens: Meta gives you a JavaScript SDK and a
+configuration id, the application puts a button on one of its own screens, and pressing that
+button opens Meta's popup. There is nowhere in Business Settings to start it from.
 
-Embedded Signup is not a page in Meta's dashboard, and it is not a screen in this CRM.
-It is a dialog that **an application opens** — Meta hands you a JavaScript SDK and a
-configuration id, your app puts a "Connect WhatsApp" button on one of its own screens, and
-pressing that button opens Meta's popup. No app button, no flow. This CRM does not have
-that button, so this step cannot be completed today, and no amount of hunting through
-Business Settings will turn it up. That is a gap in what has been built, not something
-missed in the setup.
+So the button lives in this CRM, on **Settings → Integrations → WhatsApp**, under the
+Numbers list. Two things have to be saved in Credentials above it first, and neither is a
+secret:
 
-What it would involve, when it is built: a Configuration ID created under **WhatsApp →
-Configuration → Embedded Signup** in the App Dashboard, the Facebook JS SDK loaded on
-Settings → Integrations → WhatsApp, and the code the dialog returns exchanged for a
-long-lived token. It also needs **Advanced Access** on the WhatsApp permissions (Part 6),
-so App Review has to land first either way.
+| Field                                | Where it comes from                                            |
+| ------------------------------------ | -------------------------------------------------------------- |
+| **App ID**                           | App Dashboard → Settings → Basic, the number at the top        |
+| **Embedded Signup Configuration ID** | App Dashboard → **WhatsApp → Configuration → Embedded Signup** |
 
-When the dialog does open, the path to take inside it is **WhatsApp Business app** (not
-"new number"). The counsellor scans a QR code with their phone and is asked to **consent
-to syncing message history** — they must say yes. Without it the number still connects,
-but nothing from before arrives, and consent cannot be asked for again afterwards.
+Then: give the number a label, say whose phone it is, and press **Connect with Meta**.
 
-Everything else in Part 4 can be done now. Only this one step is blocked.
+Inside the dialog, the path is **WhatsApp Business app** — the CRM asks for that one
+specifically, so you should not have to choose. The counsellor scans the QR code with their
+phone and is asked to **consent to syncing message history**. They must say yes; without it
+the number still connects but nothing from before arrives, and consent cannot be asked for
+again afterwards.
+
+When it finishes, the CRM does the rest itself: exchanges Meta's code for a long-lived
+token, subscribes the account to this app's webhooks, and adds the number to the list with
+its owner and Coexistence settings. There is nothing to copy by hand and no Phone number ID
+to paste — 4.4 below is for a number onboarded some other way.
+
+**It needs Advanced Access** on the WhatsApp permissions (Part 6). Under Standard Access the
+dialog opens and refuses at the end, so App Review has to land first.
+
+If the button says _"Loading Meta…"_ and never changes, an ad blocker is blocking
+`connect.facebook.net`. If nothing appears at all, the popup was blocked.
 
 ### 4.3 Subscribe three more webhook fields
 
@@ -374,6 +384,10 @@ On the **WhatsApp Business Account** object, in addition to `messages`:
 precisely the failure this doc exists to prevent.
 
 ### 4.4 Register it in the CRM
+
+**Connecting through the button in 4.2 does this for you** — the number appears in the list
+with its owner and its Coexistence settings already set. What follows is for a number
+onboarded some other way, or for correcting one afterwards.
 
 **Settings → Integrations → WhatsApp → Numbers → Register another number:**
 

@@ -8135,3 +8135,32 @@ any of it can be tested.
 
 **1651 tests pass** (2 new on deleted-lead resolution), typecheck, lint, `db:audit` and
 build clean.
+
+## The Embedded Signup button
+
+The step the Coexistence instructions had been describing for weeks and nobody could
+perform. Embedded Signup is a dialog an *application* opens — Meta gives you a JS SDK and
+a configuration id, your app puts a button on its own screen — so with no button in this
+CRM there was nowhere in the world to start it from. Leon set everything else up and
+stopped there, correctly.
+
+- **`EmbeddedSignupButton`** on Settings → Integrations → WhatsApp, under Numbers. Label
+  the number, say whose phone it is, press Connect.
+- **Two new credentials**, neither secret: **App ID** and **Embedded Signup Configuration
+  ID** (App Dashboard → WhatsApp → Configuration → Embedded Signup). Without them the
+  button is a note explaining where to get them.
+- **`completeEmbeddedSignup`** does everything after the dialog in one action, because
+  Meta's code is single-use and short-lived: exchanges it for a long-lived business token,
+  subscribes the account to this app's webhooks (Embedded Signup does not, and without it
+  the number connects and nothing is ever delivered), reads the display number, and
+  registers the row with its owner and `creates_leads` on.
+- **The origin check is an exact allowlist.** Meta's own sample is
+  `origin.endsWith("facebook.com")`, which `https://notfacebook.com` passes. Tested
+  against the lookalikes.
+
+Stubbed: nothing. **Untested against Meta**, and will stay that way until Advanced Access
+lands — under Standard Access the dialog opens and refuses at the end. The 13 new tests
+cover the parsing and the origin allowlist, which is where the decisions are; the Graph
+calls themselves are three fetches in the existing client's shape.
+
+**1665 tests pass**, typecheck, lint, `db:audit` and build clean.

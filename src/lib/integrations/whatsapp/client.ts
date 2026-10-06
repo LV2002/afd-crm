@@ -186,3 +186,68 @@ export async function sendTemplateMessage(
     },
   });
 }
+
+/**
+ * Turns the authorisation code Embedded Signup returns into a token.
+ *
+ * The dialog hands the browser a short code; this swaps it, server-side
+ * with the app secret, for a **business integration system user access
+ * token**. That token does not expire with a browser session — it is the
+ * only kind worth storing, and the reason the flow asks for a code rather
+ * than letting the SDK hand back a client token.
+ *
+ * The code is single-use and short-lived. A second attempt with the same
+ * one fails, which is why the action that calls this does everything else
+ * afterwards.
+ */
+export async function exchangeSignupCode(
+  appId: string,
+  appSecret: string,
+  code: string,
+): Promise<string> {
+  const url = new URL(`${GRAPH_BASE_URL}/oauth/access_token`);
+  url.searchParams.set("client_id", appId);
+  url.searchParams.set("client_secret", appSecret);
+  url.searchParams.set("code", code);
+
+  const response = await fetch(url.toString(), { method: "GET" });
+  const body = await response.json();
+
+  if (!response.ok || typeof body?.access_token !== "string") {
+    throw new MetaGraphApiError(
+      `Meta Graph API returned ${response.status} exchanging the Embedded Signup code`,
+      response.status,
+      body,
+    );
+  }
+
+  return body.access_token as string;
+}
+
+/**
+ * Subscribes this app to a WhatsApp Business Account's webhooks.
+ *
+ * Without it the number connects and nothing is ever delivered — no
+ * error, no clue, which is the single most common way a WhatsApp setup
+ * ends up looking broken for a week. Embedded Signup does not do it for
+ * you; it is a separate call, and this is why the onboarding action makes
+ * it rather than leaving a step in a document.
+ *
+ * Which *fields* are delivered is configured on the app, not here: this
+ * call only says "this app, that account".
+ */
+export async function subscribeAppToWaba(wabaId: string, accessToken: string): Promise<void> {
+  const response = await fetch(`${GRAPH_BASE_URL}/${wabaId}/subscribed_apps`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const body = await response.json();
+
+  if (!response.ok || body?.success === false) {
+    throw new MetaGraphApiError(
+      `Meta Graph API returned ${response.status} subscribing the app to WhatsApp Business Account ${wabaId}`,
+      response.status,
+      body,
+    );
+  }
+}
