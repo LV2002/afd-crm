@@ -33,25 +33,35 @@ empty sheet.
    **Next: Preview** button stays disabled until both are mapped.
 6. If your file has no centre column, set a default centre. It is used
    only for rows where Centre does not map.
-7. Press **Next: Preview**. (**Start over** throws the file away.)
+7. **Notes** is the one target that is not a field. Map the column of
+   whatever was said — *"no ans // visited 3-mar // wants the weekend
+   batch"* — to it and each row's text is logged as a note on that lead's
+   timeline, where a counsellor reads it before ringing. Every spreadsheet
+   of leads has that column, and it is the part worth most.
+8. Press **Next: Preview**. (**Start over** throws the file away.)
 
 **Step 3 — preview**
 
-8. Check the first rows under your chosen headings. This is the moment to
+9. Check the first rows under your chosen headings. This is the moment to
    catch a column mapped one place to the left.
-9. **Back to mapping** to fix anything, or **Import N rows** to proceed.
+10. **Back to mapping** to fix anything, or **Import N rows** to proceed.
 
 **Step 4 — the summary**
 
-10. You get four counts: **total**, **new leads created**, **matched an
+11. You get four counts: **total**, **new leads created**, **matched an
     existing lead**, and **skipped** (only if any were).
-11. Any row with a problem is listed with its **Row**, **Status** and
+12. Any row with a problem is listed with its **Row**, **Status** and
     **Note**.
-12. **Import another file** starts again.
+13. **Import another file** starts again.
 
 ### What you should see
 New leads in the list, assigned by your assignment rules exactly as if
 they had arrived one at a time.
+
+### A note on the same file imported twice
+Leads are matched, not duplicated — but a mapped **Notes** column is
+logged again, because the CRM cannot tell a re-import from a genuine
+second conversation. Import each file once.
 
 ### What "matched an existing lead" means
 That phone number was already in the system. **The row was not rejected
