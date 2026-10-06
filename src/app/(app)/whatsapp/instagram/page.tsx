@@ -96,6 +96,32 @@ export default async function InstagramPage({
         of the person&apos;s last message.
       </p>
 
+      {/*
+        Always shown when connected, deliberately, and phrased as a
+        question rather than a warning.
+
+        Nothing here can detect whether the Meta app is in Development
+        mode — the Graph API does not report it — so the alternative to a
+        standing note is somebody staring at an inbox containing only
+        their own colleagues and concluding the integration is broken.
+        That is exactly what happened. It costs one sentence when it is
+        irrelevant and saves an afternoon when it is not.
+      */}
+      {connected && (
+        <div className="max-w-3xl rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+          <strong className="text-foreground">
+            Only seeing messages from people who manage the Page?
+          </strong>{" "}
+          That is Meta, not this CRM. A Meta app starts in <strong>Development mode</strong>, and
+          in that state Instagram delivers messages only from people who hold a role on the app —
+          which is why your own DMs arrive and a student&apos;s does not. It needs{" "}
+          <code>instagram_manage_messages</code> through App Review and the app switched to{" "}
+          <strong>Live</strong>. Until then a member of the public&apos;s DM is{" "}
+          <strong>not queued anywhere</strong> — it is never delivered, so there is nothing to
+          catch up on afterwards. See docs/WHATSAPP-SETUP.md Part 6.
+        </div>
+      )}
+
       {!connected && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
           <p>

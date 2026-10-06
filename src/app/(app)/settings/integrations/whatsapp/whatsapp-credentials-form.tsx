@@ -21,7 +21,12 @@ const FIELDS: Array<{ key: keyof WhatsAppConnectionStatus["configured"]; label: 
   {
     key: "app_secret",
     label: "App Secret",
-    help: "The Meta App's secret — used to verify webhook signatures, same mechanism as the Meta Lead Ads integration.",
+    // The failure this wording exists to prevent: WhatsApp keeps its own
+    // copy of the secret, and filling in the Meta integration's does not
+    // fill in this one. When it is wrong every inbound delivery is
+    // refused with a 401 — correct behaviour, invisible from the inbox,
+    // and indistinguishable from Meta never having called at all.
+    help: "The Meta App's secret, from App Dashboard → Settings → Basic. This is a SEPARATE copy from the one on Settings → Integrations → Meta — setting that one does not set this one, and it is usually the same value because it is the same Meta app. If it is wrong every incoming message is rejected and the inbox stays empty; Settings → Platform health → Inbound deliveries shows that as rejected.",
   },
   {
     key: "verify_token",

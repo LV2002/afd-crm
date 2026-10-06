@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db/client";
 import { webhookEvents } from "@/lib/db/schema";
+import { adIdentifiersFrom } from "@/lib/integrations/form-payload/ad-identifiers";
 import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { verifyMetaSignature } from "@/lib/integrations/meta/verify-signature";
@@ -120,6 +121,10 @@ export async function POST(request: Request) {
         : null,
       gclid: mapped.lead.utm?.gclid ?? null,
       fbclid: mapped.lead.utm?.fbclid ?? null,
+      // The join key for the Ad Performance report. Without it a lead
+      // from a Google Ads landing page can never be shown against what
+      // that campaign cost — see lib/integrations/form-payload/ad-identifiers.ts.
+      ...adIdentifiersFrom(mapped.lead.utm),
       raw: mapped.lead.raw,
       dedupeKey: externalId,
     });

@@ -161,6 +161,15 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage"],
   },
   {
+    href: "/settings/backup",
+    label: "Archive",
+    description: "Download the whole institute as one file, or put one back",
+    // Both halves of each pair, because an archive is configuration AND
+    // every lead and payment — see the page for why neither permission
+    // should widen into the other.
+    permissions: ["config.export", "lead.export", "config.import", "lead.import"],
+  },
+  {
     href: "/settings/config",
     label: "Config Export/Import",
     description: "Export configuration as a bundle, or bootstrap a fresh instance from one",

@@ -7455,3 +7455,224 @@ scheduler loosens it again rather than leaving a warning that is usually wrong.
 
 Still Leon's to do, and now the only step: create the two jobs on cron-job.org. No merge needed
 first, unlike the GitHub route.
+
+## Session 71 — Explaining the two failures that look like bugs
+
+The cron tiers are live and running on cron-job.org. Two inbound problems remain, and neither is
+fixable in this codebase — so the work was making the CRM say so, where it happens.
+
+**Instagram, Development mode.** Meta delivers DMs only from people holding a role on the app, so
+Leon sees his own and not a student's. The Graph API does not report an app's mode, so the CRM
+cannot detect this and show the banner conditionally. A permanent note on the Instagram tab,
+phrased as a question, was the honest option — including the counter-intuitive part: a public DM
+during Development mode is **not queued anywhere** and nothing catches up when the app goes Live.
+
+**WhatsApp inbound.** The App Secret field's help text now says the thing that matters: it is a
+**separate copy** from the Meta integration's, setting one does not set the other, it is usually
+the same value, and when it is wrong every delivery is refused with a 401 while the inbox stays
+empty. Settings → Platform health → Inbound deliveries — shipped in #70 — is what distinguishes
+that from Meta never calling.
+
+Both are instances of the same rule, now in DECISIONS.md: when a platform hides the state that
+explains a symptom, write the explanation into the screen where the symptom appears.
+
+**1560 tests pass**, lint, typecheck and the build clean. (A full-suite run mid-session showed 38
+files failing; the container's Postgres had stopped, not the change.)
+
+## Session 72 — The whole institute as one file
+
+Leon wants a year-end habit: download everything, keep it on a hard disk, start the next year
+clean, upload it again if he ever needs it.
+
+### Settings → Archive
+
+**Download** streams a gzipped NDJSON file of every setting, lead, admission, payment and message.
+Streaming matters: year three of this archive will not fit in a serverless function's memory, and
+`.cursor()` plus a line-at-a-time response keeps peak memory at a page of rows regardless of size.
+
+**Restore** only runs into an **empty** database. If any table has a row it stops before writing
+anything and names what it found. A merge would silently overwrite everything that has happened
+since the archive was taken — dressed up as helpfulness, at the moment somebody can least afford
+to reason about it. One transaction, so a failure leaves nothing behind.
+
+Sequences are reset past the highest restored value, `receipts.receipt_no` included — the ledger's
+gaplessness depends on the next receipt not reusing a number already on somebody's receipt.
+
+### Two things computed rather than listed
+
+**The restore order.** 69 tables, foreign keys, parents first. A hand-written list is right the day
+it is written and silently wrong the first time somebody adds a table — and it fails *a year later,
+during a restore*. It is a topological sort of `pg_constraint`, deterministic, and it throws on a
+cycle at export time rather than emitting an order that cannot work.
+
+**Which columns are JSON**, because of the driver quirk below.
+
+### The probe that saved a silent corruption
+
+A `jsonb` value makes the trip out as an object and back as an object, and postgres.js refuses it.
+`sql.json()` — which reads exactly like the fix — fails identically. A ten-line probe of nine
+cases settled in two minutes what reading would not have: `JSON.stringify` is accepted and
+Postgres casts it. Everything else (text[], bigint, numeric, timestamptz, date, null) passes
+through untouched.
+
+Worth the trouble because the failure is the nasty kind: a restore that writes `"[object Object]"`
+into a jsonb column **succeeds**, and is found when somebody opens a restored lead a year later.
+`tests/backup-roundtrip.spec.ts` puts real rows through the real helpers and compares.
+
+### What it deliberately does not contain
+
+Sign-in accounts (Supabase Auth; no API exposes password hashes), uploaded files (Storage, not
+Postgres), and the operational logs (`webhook_events` alone is usually bigger than everything
+else). All three are written into the file's own header, so a disk copy carries its own caveats,
+and all three are on the screen where somebody is deciding to rely on it.
+
+The screen also says plainly that **this is an archive, not a backup** — one file, one disk, one
+day — and points at Supabase's own continuous backups for the "something was deleted on a Tuesday"
+question.
+
+### Flagged, not decided
+
+`docs/BACKUP.md` records the tax-retention problem with the *emptying* half of the habit: Indian
+income-tax rules generally want books kept six years and the Companies Act eight, and one hard
+disk is a fragile place for eight years of receipts. The safer shape for the same goal is keeping
+the ledger and filtering the screens by academic year. Raised as a recommendation; archives are
+worth taking either way.
+
+Permissions: both `config.export` + `lead.export` to take one, both `config.import` +
+`lead.import` to restore. An archive is configuration *and* every phone number and payment, so
+neither primitive should widen into the other.
+
+**1576 tests pass** (16 new), lint, typecheck, `db:audit` and the build clean. No migration.
+
+## Session 73 — Google Ads form submissions, joined to spend
+
+Leon's Google Ads traffic goes to a landing page with its own custom form; submissions are marked
+as a conversion in Google Ads. He wanted them in the CRM and lined up with ad spend in reports.
+
+**Nearly all of it was already built** — GCLID capture on enquiries, per-campaign spend sync,
+cost-per-lead and cost-per-admission on Ad Performance, and offline conversion upload of paid
+admissions keyed on the first-touch GCLID.
+
+**One field was missing, and it was the join key.** The report matches leads to spend on
+`enquiries.campaign_id`. Meta Lead Ads supply it; the website and custom webhooks never set it, so
+every Google search lead was invisible against its own campaign's spend.
+
+`lib/integrations/form-payload/ad-identifiers.ts` now derives `campaign_id` and `ad_id` from the
+form payload, wired into both webhook routes. The subtle part is what it **refuses**: a campaign
+*name* in `utm_campaign` is not accepted as an id, because it matches no spend row and would put a
+leads-without-spend campaign next to a spend-without-leads one — the same money counted twice. A
+blank is obviously missing; a wrong row looks like an answer. Only an explicit `campaign_id` or a
+numeric `utm_campaign` (Google's `{campaignid}`, Meta's `{{campaign.id}}`) is taken.
+
+**`docs/GOOGLE-ADS-SETUP.md`** covers the half that is not in this codebase: auto-tagging on, the
+Final URL suffix with ValueTrack parameters, the hidden fields and the `sessionStorage` script
+that survives somebody browsing away and back, and — the part worth the most — setting the CRM's
+paid-admission upload as a **separate, primary** conversion action with the form fill observed
+only. Smart Bidding optimises toward whatever you report, so that one setting decides whether
+Google chases form fillers or students.
+
+It also names the discrepancy people read as a bug: Google dates a conversion by the click, the
+CRM by the payment, so a June click paying in August lands in different months on each side.
+
+**1583 tests pass** (7 new), lint, typecheck, `db:audit` and the build clean. No migration — both
+columns already existed and were simply never populated from a form.
+
+## Session 74 — The 401 now says which 401
+
+Leon's hourly schedule failed every hour with 401 while the ten-minute one ran fine. Both routes
+are identical in their auth and both are deployed, so the cause was that job's configuration — the
+`Authorization` header missing from the second cron-job.org job, which is the Advanced tab rather
+than the one he was last editing.
+
+The diagnosis took a round trip it should not have. `requireCronSecret` returned a bare
+`{"error":"Unauthorized"}` for all four of its refusals, and "no header was sent" versus "the
+secret is stale after a rotation" are different mistakes in different places.
+
+Each refusal now carries a `reason` naming which, and where to fix it. Nothing leaks — the caller
+already knows what it sent, the expected value is never named, the comparison stays constant-time,
+and a test asserts the secret appears in none of the four messages.
+
+`docs/CRON-SETUP.md`'s troubleshooting table now points at that `reason`, and at turning on **Save
+responses in job history** so it can be read.
+
+**1588 tests pass** (5 new), lint, typecheck and the build clean.
+
+## Session 75 — Reading Meta's permissions out of the CRM
+
+Leon's app is Live (I misread the toggle and said otherwise — corrected), the Instagram `messages`
+webhook field is subscribed, and DMs still arrive only from people who manage the Page. With
+Meta's Permissions and Features page rendering empty, there was nowhere he could look to find out
+whether the app actually holds `instagram_manage_messages`.
+
+`debug_token` returns exactly that, the Test connection button has been calling it all along, and
+`checkToken` was discarding the `scopes` field.
+
+**Settings → Integrations → Meta → Test connection** now names what is missing, in consequences
+first: *"Receiving Instagram DMs and Messenger messages (pages_messaging)"*. The Page token and
+the Ads token are held to different lists, because a Page token never carries `ads_read` and
+checking both against one list would report a fault on every correct instance.
+
+Two limits are built in rather than papered over: an empty `scopes` list reports nothing (a System
+User token can omit it, and seven false alarms is worse than silence), and a granted permission
+still does not say whether it has Standard or Advanced access — which is the whole difference
+between staff DMs and student DMs.
+
+Also answered: **no, switching to "Instagram API with Instagram login" does not help.** Both routes
+require Advanced Access on their messaging permission for messages from people without a role on
+the app. It is a rewrite of the integration that lands in the same place.
+
+`docs/WHATSAPP-SETUP.md` § 6a gained the two-switches explanation in the previous session; this
+adds the ways Meta's own page fails to load.
+
+**1594 tests pass** (6 new), lint, typecheck and the build clean.
+
+## Session 76 — Why the broadcast failed, in writing
+
+Two WhatsApp faults, and the CRM already knew the answer to one of them.
+
+**Outbound.** A broadcast showed `1 / 1 (1 failed)` and nothing else. The sweep has recorded
+Meta's verbatim refusal on every failed recipient since broadcasts shipped, in
+`whatsapp_broadcast_recipients.error_message`, and no screen had ever shown it — there is no
+broadcast detail page, the list was all there was.
+
+The list now prints the reasons under the progress figure, grouped with a count and commonest
+first. Meta's wording passes through unedited, because that string is what gets pasted into
+Meta's documentation; paraphrasing turns a searchable error into an unsearchable one.
+
+**Inbound — and a correction.** I had diagnosed this twice as a mismatched `app_secret`, reasoning
+that WhatsApp keeps its own copy separate from the Meta one and that Instagram verifying while
+WhatsApp did not was the tell. Wrong. The WhatsApp page's Recent deliveries panel says **"Nothing
+has ever arrived here"**, that panel counts rejected deliveries too, and the handler persists
+before it refuses. Zero rows means Meta has never called — the Callback URL, verify token or
+`messages` subscription under App Dashboard → WhatsApp → Configuration. The Instagram object's
+`messages` subscription, which Leon had set correctly, is a different subscription entirely.
+
+The panel that settled it already existed and I reasoned past it.
+
+**1599 tests pass** (5 new), lint, typecheck and the build clean.
+
+## Session 77 — A template for the import, generated not written
+
+Leon is about to structure years of existing leads into a spreadsheet and wanted a template.
+
+**Settings is not where it lives — the import page is**, and it is generated on demand from
+`field_definitions` rather than committed as a file. A static template is correct the day it is
+written and wrong the first time somebody adds a custom field, and the person it misleads is
+exactly the one doing a one-off bulk import with no way to know the file is stale. Generating it
+from the same `importableFields()` the column mapper uses makes the two incapable of disagreeing.
+
+The example row answers the questions people actually have rather than saying `string`:
+
+- **Dates in ISO** (`2009-04-15`). `05/06/2026` is June 5th to half the world and May 6th to the
+  other half, and the importer hands the string to `new Date()`, which picks one silently.
+- **Multiselects as real option labels**, comma separated — `"NID, NIFT UG"`. A real option both
+  shows the format and imports cleanly; an invented one would warn.
+- **Booleans as `yes`/`no`**, which is what the parser reads.
+- **Every column filled**, including optional ones. A blank sample teaches nothing, and deleting
+  a column is easier than inventing one.
+
+`assigned_to` and `stage_id` are absent, as they are from the mapper: every ingestion path goes
+through `applyAssignment()` and enters at the `new` stage (non-negotiable #8). A template offering
+them would invite a spreadsheet that quietly bypasses the rules engine.
+
+**1606 tests pass** (7 new), lint, typecheck and the build clean.

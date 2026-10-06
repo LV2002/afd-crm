@@ -383,12 +383,30 @@ Put all of it on **one** submission:
 |---|---|
 | `whatsapp_business_messaging` | Sending any WhatsApp message |
 | `whatsapp_business_management` | Templates — creating and reading them |
-| `instagram_manage_messages` | Instagram DMs, in and out |
+| `instagram_manage_messages` | Instagram DMs, in and out — **not** `instagram_business_manage_messages`, see below |
 | `pages_messaging` | Subscribing the Page to `messages`, without which no DM is delivered |
 | `instagram_basic` | Reading the linked Instagram account at all |
 | `leads_retrieval` | Fetching a submitted lead's answers (already in review for Lead Ads) |
 | `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata` | Page subscription and lead delivery |
 | `ads_read` / `ads_management` | Ad spend sync and retargeting audiences |
+
+> ### Two permissions, one word apart
+>
+> Meta offers Instagram messaging through two different routes, with two
+> near-identical permission names:
+>
+> | Permission | Route | Used here? |
+> |---|---|---|
+> | `instagram_manage_messages` | Instagram API with **Facebook** Login — a Page access token against `graph.facebook.com` | **Yes** |
+> | `instagram_business_manage_messages` | Instagram API with **Instagram** Login — an Instagram user token against `graph.instagram.com` | No |
+>
+> This CRM is on the first: `src/app/api/webhooks/instagram/route.ts` reads
+> `page_access_token`, and `lib/integrations/instagram/graph-client.ts` posts to
+> `graph.facebook.com`. Requesting advanced access on the second one grants a permission
+> nothing here uses, and costs a review cycle — days — to find out.
+>
+> The Permissions and Features page lists both, alphabetically adjacent. Use its search
+> box and read the whole name.
 
 Also required, and worth starting first because it is the slowest: **Business
 verification** in Business Settings → Security Centre. Meta wants documents proving AFD
@@ -400,6 +418,59 @@ recording of the CRM actually using the permission is the single most effective 
 attach: Meta's reviewers are looking for "a real product uses this for a real reason", and
 a twenty-second clip of a counsellor answering a WhatsApp reply on a lead's page says it
 better than any paragraph.
+
+## 6a — Two separate switches, and both have to be on
+
+This is the part that confuses everybody, including people who have done it before.
+
+| | What it controls | Where |
+|---|---|---|
+| **App Mode: Live** | Whether the app works for anyone at all outside your own staff | Top of the app dashboard, next to the App ID |
+| **Advanced Access** per permission | Whether *that particular permission* works for the public | App Review → Permissions and Features |
+
+**Both.** Live mode with Standard access to `instagram_manage_messages` still delivers DMs
+only from people holding a role on the app — which looks exactly like nothing having
+changed, and is the usual reason somebody flips to Live, sees no difference, and assumes
+it did not work.
+
+### Getting the Live toggle to flip
+
+Meta refuses the toggle until the app's basics are filled in, and the error it gives is
+not always specific. Before trying, complete **App settings → Basic**:
+
+- **Privacy Policy URL** — a real page on afd.co.in. Meta checks it loads.
+- **Terms of Service URL** — same.
+- **App icon**, 1024×1024
+- **Category**
+- **Data deletion** — either a callback URL or an instructions URL. An instructions page
+  saying how somebody asks AFD to delete their data is accepted and is far less work.
+- **Business verification**, if the app is a *Business* type app — which this one is.
+
+Then check **Required actions** and **Alerts** in the left sidebar. Meta puts blockers
+there rather than on the toggle, so a toggle that refuses with a vague message usually has
+its real reason sitting in one of those two.
+
+### Getting Advanced Access
+
+**App Review → Permissions and Features**, find each permission from the table above, and
+press **Request advanced access**. Some are granted on the spot once business verification
+is done; the rest go into a review submission.
+
+> **If that page looks empty**, it is usually one of three things: it is still loading
+> (it is slow); the product that owns the permission has not been added to the app yet
+> (Add Product → WhatsApp / Instagram / Facebook Login for Business); or business
+> verification is incomplete and Meta is hiding what it will not yet grant. Check
+> **Required actions** first.
+
+### The order that wastes least time
+
+1. **Business verification** — slowest, and gates much of the rest. Start it today.
+2. **App settings → Basic** — the URLs and the icon. An hour.
+3. **Request advanced access** on every permission in the table, in one go.
+4. **Submit one review** with a screen recording and test credentials.
+5. **Switch App Mode to Live** once review comes back.
+
+Steps 1 and 2 can run while nothing else is happening, and neither needs the CRM.
 
 ---
 

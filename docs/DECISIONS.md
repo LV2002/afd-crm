@@ -3728,3 +3728,268 @@ than 15, because a panel that cries wolf every afternoon is ignored by the time 
 
 cron-job.org stays documented as the upgrade for anybody who wants the ten-minute tier to be
 genuinely ten minutes. It cannot be committed to a repository, which is exactly why it is second.
+
+## 2026-10-05 — Say the thing the Graph API will not tell you
+
+Leon, with the cron work done: Instagram still shows only his own DMs, because he is an admin of
+the Page. He had already been told why — Development mode — and still ended up back here, which
+makes it a product problem rather than a support problem.
+
+The CRM cannot detect it. Meta's Graph API does not report an app's mode or its review status in
+any form this code can read, so there is no honest way to show the banner only when it applies.
+The options were a standing note or nothing, and "nothing" has now cost two rounds of
+conversation and an afternoon of doubting an integration that was working correctly.
+
+So the Instagram tab carries a permanent note, phrased as a question — *"Only seeing messages
+from people who manage the Page?"* — which reads as useful when it applies and as ignorable
+context when it does not. It also states the part that is counter-intuitive and expensive to
+assume wrong: a member of the public's DM during Development mode is **not queued**. Nothing
+catches up when the app goes Live.
+
+The general rule, which has come up twice now: **when a platform hides the state that explains a
+symptom, write the explanation into the screen where the symptom appears.** The alternative is a
+setup document nobody rereads at the moment they are confused.
+
+Same move on the WhatsApp credentials form. Its App Secret field said the secret was "the same
+mechanism as the Meta Lead Ads integration", which is true and useless — the thing worth saying
+is that it is a **separate copy**, that filling in the Meta one does not fill in this one, that
+it is usually the same value, and that when it is wrong every inbound message is refused with a
+401 while the inbox simply stays empty. That is the live suspicion for this instance: Instagram
+verifies, WhatsApp does not, and the two read their secret from different places.
+
+## 2026-10-05 — The archive restores only into an empty database
+
+Leon asked for a one-file download and upload of the whole system, for a yearly archive habit.
+The download is unambiguous. The upload needed a decision, because "put this file back" has three
+possible meanings and two of them are traps.
+
+**Merge** — insert what is missing, keep what is there. Sounds helpful. Two archives from the same
+instance share every id, so in practice this is an overwrite of everything that has happened since
+the archive was taken, dressed up as a merge.
+
+**Overwrite by key** — replace rows that collide. Worse: it is the same overwrite, now explicit,
+and performed on a database somebody is in the middle of recovering and cannot reason about.
+
+**Empty only** — refuse if any archivable table has a row, naming what was found, before writing
+anything. Chosen. It fits in a sentence, it cannot be misunderstood at the worst possible moment,
+and it makes the destructive case impossible rather than merely discouraged. Everything lands in
+one transaction, because a half-restored database looks populated — so nobody runs it again — and
+its missing rows surface later as broken references.
+
+Seeded configuration counts as data for this test, and the error says so. A fresh instance that
+has been seeded would otherwise end up with two of every pipeline stage.
+
+## 2026-10-05 — Ask the database what it contains
+
+Two things in the archive could have been lists in a file and are computed instead.
+
+**The restore order.** 69 tables joined by foreign keys must be inserted parents-first. A
+hand-maintained order is correct the day it is written and silently wrong the first time somebody
+adds a table — and the failure surfaces *a year later, during a restore*, which is the worst
+moment in the system's life to discover a bug. It is a topological sort of `pg_constraint`
+instead, deterministic so two archives differ only where the data differs, and it throws on a
+cycle at export time rather than emitting an order that cannot work.
+
+**Which columns are JSON.** Needed because of a measured driver quirk, below.
+
+Same instinct as CLAUDE.md § "Configuration is data", applied to the schema: a second copy of the
+truth is a copy that drifts. `select *` is used for the same reason — naming columns would produce
+an archive that silently drops the newest field, the one most likely to matter and least likely to
+be missed.
+
+## 2026-10-05 — `sql.json()` does not do what it looks like it does
+
+A `jsonb` value comes out of `select *` as a plain JavaScript object, survives the file as JSON,
+and arrives back as a plain object — at which point postgres.js refuses it outright: *"the string
+argument must be of type string… received an instance of Object"*.
+
+The obvious fix is `sql.json(value)`, which reads exactly like the tool for this. It fails
+identically. Probed all nine cases against the real driver and connection settings rather than
+reasoning about it:
+
+```
+plain object jsonb   → rejected
+sql.json(…)          → rejected, identically
+JSON.stringify(…)    → accepted, Postgres casts the text to jsonb
+text[] as JS array   → accepted
+bigint/numeric/timestamptz/date as strings → accepted
+null                 → stays null
+```
+
+Worth recording for two reasons. The narrow one: `JSON.stringify` is the answer here, and the
+comment in `import.ts` says so with the evidence, so nobody "fixes" it back to the helper that
+looks right. The broad one: **a ten-line probe settled in two minutes what an hour of reading
+would not have.** The failure mode it protects against is the nasty kind — a restore that writes
+`"[object Object]"` into a jsonb column *succeeds*, and is discovered when somebody opens a
+restored lead a year later.
+
+## 2026-10-05 — Both halves of two permissions, rather than a new one
+
+An archive is every lead's phone number and every payment ever taken, plus the configuration.
+Gating it on `config.export` alone would quietly turn a configuration permission into a full data
+export; `lead.export` alone would not cover the configuration.
+
+So it requires both, and the restore requires both `config.import` and `lead.import`. No new
+primitive, no seed change, and each existing primitive goes on meaning exactly what its name says
+— which is the entire reason CLAUDE.md fixes the primitive list in code while leaving roles as
+editable rows.
+
+## 2026-10-05 — A campaign name is not a campaign id
+
+Leon's Google Ads leads arrive through a landing-page form, and he wanted them to line up with
+what Google charged. Almost all of that was already built — GCLID capture, campaign-level spend
+sync, offline conversion upload on paid admissions — and one field was missing.
+
+`ad_spend_daily` records spend against the platforms' **numeric** campaign ids, and the Ad
+Performance report joins leads to it on `enquiries.campaign_id`. Meta Lead Ads supply that id
+themselves, so Meta has always reported correctly. The website and custom webhooks recorded the
+UTM blob and the GCLID and **never set `campaign_id` at all**, so every lead a Google search
+campaign produced was invisible against its spend. Cost per lead for Google was unanswerable, with
+nothing on screen saying why.
+
+The obvious fix is to put `utm_campaign` into `campaign_id`, and it is wrong. A landing page URL
+usually carries a human name — `brand-search-oct` — which matches no row in `ad_spend_daily`. The
+report would then show a campaign with leads and zero spend beside a campaign with spend and zero
+leads: the same money and the same leads, counted as two things.
+
+**A blank is obviously missing. A wrong row looks like an answer.** So an id is accepted only when
+it is plausibly one — an explicit `campaign_id` field, or a `utm_campaign` of three or more
+digits, which is what Google's ValueTrack `{campaignid}` and Meta's `{{campaign.id}}` substitute.
+A campaign name stays visible on the lead's `utm` and in the sources report; it simply does not
+pretend to be a join key.
+
+Same family as the SLA ladder's dead `flag_breach` key and the webhook deliveries nobody could
+see: the system should not quietly produce a plausible-looking number it cannot stand behind.
+
+## 2026-10-05 — Three different things called "conversion"
+
+Written down because the conversation kept sliding between them, and they have different owners.
+
+1. **The conversion tag** on the landing page, firing on form submit. Google's, client-side, fast.
+2. **Attribution** — the lead reaching the CRM knowing its campaign and click. The form POST.
+3. **The offline conversion** — the CRM telling Google which of those leads became a *paying
+   student*, and for how much. Already built, nightly, keyed on the first-touch GCLID.
+
+The third is the one that changes where the money goes, and the one institutes usually never
+reach. Smart Bidding optimises toward whatever you report: with only the form tag, Google chases
+form fillers; with paid admissions reported back at their real fee value, it chases students.
+`docs/GOOGLE-ADS-SETUP.md` says to keep all three, as two distinct conversion actions in Google
+Ads so they cannot double-count, with the admission primary and the form fill observed-only.
+
+Also recorded there, because it will otherwise be read as a bug: Google counts a conversion on the
+**click's** date, the CRM on the **day it was paid**. A June click that pays in August appears in
+June on one side and August on the other. Compare trends between them, never totals.
+
+## 2026-10-05 — "Unauthorized" is not a diagnosis
+
+The hourly schedule failed 401 every hour while the ten-minute one succeeded. The cause turned out
+to be an `Authorization` header never added to the second job — but from outside, that is
+indistinguishable from a secret gone stale after a rotation, which is a different fix in a
+different place.
+
+`requireCronSecret` answered a bare `{"error":"Unauthorized"}` to all four of its refusals:
+
+- no `CRON_SECRET` on the deployment → set it in the hosting environment **and redeploy**
+- no `Authorization` header at all → the scheduler's Advanced tab
+- a header that is not a bearer token → the `Bearer ` prefix
+- a secret that does not match → repaste it, and check for a trailing newline
+
+Each now says which, in a `reason` field. It leaks nothing: a caller already knows whether it sent
+a header and what was in it, the expected value is never named, and the comparison stays
+constant-time. A test asserts the secret never appears in any of the four.
+
+Worth recording because the instinct that produced the bare message is a good one — say as little
+as possible at a security boundary — and it was applied one step too far. The thing to protect is
+the *secret*, not the *shape of the mistake*. The audience for these sentences is an administrator
+reading a failed run in a scheduler's history, which is exactly where the fix has to be made, and
+giving them nothing there buys no security at all.
+
+Fourth entry on this theme now: the cron that was turned away silently, the webhook deliveries
+recorded but shown on no screen, the escalation rung that did nothing, and this. The shape is
+always the same — **the system knows why, and does not say.**
+
+## 2026-10-05 — Meta told us the permissions all along
+
+Leon's Instagram DMs arrive from staff and nobody else, his app is Live, and Meta's own Permissions
+and Features page renders empty. So there was no way, from anywhere he could reach, to find out
+whether the app actually holds `instagram_manage_messages`.
+
+Except there was. `debug_token` returns the token's exact permission list, the Test connection
+button has been calling it since it was built, and `checkToken` read `is_valid`, `app_id`, `type`
+and `expires_at` and **dropped `scopes` on the floor**.
+
+The answer to the most expensive question on this integration was arriving in an API response the
+CRM already made, on a screen the administrator was already looking at.
+
+It now compares the token's permissions against what each feature needs and names what is missing
+in consequences first — *"Receiving Instagram DMs and Messenger messages (pages_messaging)"* —
+because a permission name means nothing to somebody running a coaching institute, while the name
+is still what gets typed into Meta's request form.
+
+Two honesty constraints in the implementation:
+
+**An empty list is unknown, not empty.** A System User token can come back without `scopes`.
+Reporting seven missing permissions for a token that demonstrably works would send somebody to fix
+what is not broken, so that case reports nothing at all.
+
+**A granted permission is not a working one.** `debug_token` says the app *holds* a permission; it
+does not say whether that permission has Standard or Advanced access — which is the entire
+difference between DMs from staff and DMs from students. So a *missing* permission here is
+definitive and a *present* one is not, and the copy says so rather than letting a clean result
+imply everything works.
+
+Fifth entry on this theme. The cron refused silently, the webhook deliveries recorded and shown
+nowhere, the escalation rung that did nothing, the bare "Unauthorized", and now this: **the
+platform said, and the tool did not pass it on.** The recurring fix is never clever — it is
+printing something that was already in hand.
+
+## 2026-10-06 — Meta's refusal, stored and never shown
+
+Leon's broadcasts report `1 / 1 (1 failed)` in red, and that was the entire extent of what the
+CRM would tell him. The sweep records Meta's own refusal on every recipient it cannot send to,
+`whatsapp_broadcast_recipients.error_message`, and **no screen had ever displayed it**. There is
+no broadcast detail page; the list was all there was.
+
+The reasons are almost always actionable and almost never about this code — a template name that
+does not exist in the language asked for, a recipient outside the test allow-list while the
+business is unverified, a closed 24-hour window, a token missing `whatsapp_business_messaging`.
+Every one of those is a five-minute fix *if you can read it*.
+
+Grouped by reason with a count, not listed per recipient: four hundred failures for one cause is
+one fact, not four hundred, and a per-recipient list would also put four hundred phone numbers on
+a screen that has no need of them. The commonest reason sorts first, because with several it is
+the one worth fixing first.
+
+**Meta's wording is passed through unedited.** The temptation is to translate it into friendlier
+English, and that would be a mistake: this string is what somebody pastes into Meta's
+documentation or a support thread. Paraphrasing turns a searchable error into an unsearchable one.
+
+Sixth instance of this shape in one project. The list now reads: a cron refused silently, webhook
+deliveries recorded and shown nowhere, an escalation rung that did nothing, a bare
+"Unauthorized", `debug_token`'s scopes discarded, and this. Every fix was printing something
+already in hand. **The recurring bug in this codebase is not computing the wrong answer — it is
+having the right one and not saying it.**
+
+## 2026-10-06 — Corrected: WhatsApp inbound was never a signature problem
+
+Recorded because I asserted the wrong cause twice and it shaped two sessions of advice.
+
+I diagnosed Leon's missing inbound WhatsApp as a mismatched `app_secret`, reasoning that WhatsApp
+keeps its own copy under `provider = 'whatsapp'` while Instagram and Lead Ads share the one under
+`provider = 'meta'` — and that Instagram verifying while WhatsApp did not was the tell. The
+reasoning was sound and the conclusion was wrong.
+
+The WhatsApp settings page's own Recent deliveries panel reads **"Nothing has ever arrived
+here."** That panel selects every `webhook_events` row for the source with no filter on
+`signature_ok`, and the handler persists a row *before* returning 401 — non-negotiable #9, "verify,
+persist, then process", applied to rejected requests too. So a signature failure would have left
+evidence. Zero rows means Meta never called.
+
+The real cause is upstream: the Callback URL, verify token, or `messages` field subscription in
+App Dashboard → WhatsApp → Configuration. Note that the Instagram object's `messages` subscription
+— which Leon had correctly set — is a different subscription on a different object and does
+nothing for WhatsApp.
+
+The lesson is not "be less confident". It is that **the panel that settled this already existed**,
+and I reasoned from an architectural asymmetry instead of reading it. The first move on "X is not
+arriving" is the screen that says whether anything arrived.

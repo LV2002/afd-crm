@@ -152,7 +152,7 @@ wrong, and you want to hear about both.
 
 | What you see | What it means |
 |---|---|
-| **401** | The `Authorization` header is wrong or missing. Check the word `Bearer`, the single space, and that the secret matches Vercel exactly — no quotes, no trailing newline. |
+| **401** | **Open the run's Details and read the `reason` in the response body — it names which of four it was**: no `CRON_SECRET` on the deployment, no `Authorization` header at all, a header that is not a bearer token, or a secret that does not match. A missing header is the scheduler's Advanced tab; a mismatch is usually a value left stale after rotating the secret, or a trailing space from pasting. |
 | **404** | The URL is wrong. It must end `/api/cron/frequent` or `/api/cron/hourly`, on your own domain. |
 | **500** | The call got in and a job inside it failed. **Settings → Platform health** names which one and why. |
 | **Timeout** | The run took longer than cron-job.org waits. Raise the job's timeout in its advanced settings to 60 seconds. |
@@ -208,7 +208,9 @@ In this order, all on **Settings → Platform health**:
 1. **The relevant schedule's panel.** No run recorded means nothing is
    calling it. A run much older than its interval means it has stopped —
    check the job is still enabled on cron-job.org and that its last runs
-   there are 200s.
+   there are 200s. A 401 there is answered by the `reason` in the
+   response body; turn on **Save responses in job history** so you can
+   read it.
 2. **That panel's job list.** A job listed `failed` names its own error.
 3. **Press "Send anything that is waiting."** It does the frequent
    tier's work immediately, which both unblocks whatever you were waiting
