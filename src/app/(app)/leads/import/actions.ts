@@ -195,14 +195,47 @@ export async function importLeads(
       continue;
     }
 
-    // Same seatbelt as manual entry: the write went through the
-    // RLS-bypassing client, so read the row back as this user before
-    // counting it. See lib/identity/assert-lead-visible.ts.
+    /*
+      Same seatbelt as manual entry — and the same exception.
+
+      A row that matched somebody already in the CRM may have matched
+      another counsellor's lead, and at `own` scope this user cannot read
+      it. That is non-negotiable #2 working, not a scope-check failure, so
+      it must not reach `leadIsVisibleToCaller` and be reported to an
+      admin as a bug. On a 2,000-row import of a bought list it would have
+      been reported a few hundred times.
+
+      The row still counts as matched, because it was: the enquiry is on
+      the person it belongs to. There is nothing for the importer to show
+      afterwards, which the message says rather than leaving them
+      wondering why the lead is not in their list.
+    */
+    const invisibleDuplicate =
+      !outcome.isNewLead &&
+      !(
+        await supabase
+          .from("leads")
+          .select("id")
+          .eq("id", outcome.leadId)
+          .is("deleted_at", null)
+          .maybeSingle<{ id: string }>()
+      ).data;
+
+    if (invisibleDuplicate) {
+      rowResults.push({
+        rowIndex,
+        status: "matched",
+        message: "Already in the CRM, assigned to another counsellor — the enquiry was added to them.",
+      });
+      matched++;
+      continue;
+    }
+
     const visible = await leadIsVisibleToCaller(supabase, {
       leadId: outcome.leadId,
       actorId: user.id,
       source: "importLeads",
-      context: { rowIndex, scope, centerId: rowCenterId, batchId },
+      context: { rowIndex, scope, centerId: rowCenterId, batchId, isNewLead: outcome.isNewLead },
     });
     if (!visible) {
       rowResults.push({ rowIndex, status: "skipped", message: SCOPE_VIOLATION_MESSAGE });

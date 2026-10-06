@@ -8102,3 +8102,36 @@ and `/whatsapp/personal` is still an explainer rather than an inbox of its own
 
 **1649 tests pass** (8 new on the 24-hour window boundary, one coexistence test inverted),
 typecheck, lint, `db:audit` and build clean.
+
+## Creating a lead manually: the 404, and the false alarm behind it
+
+Leon: *"creating a new lead manually keeps breaking and gives a 404 error."* Two separate
+bugs, both reproduced with tests before being touched.
+
+- **A deleted lead kept its phone number.** `deleteLead` soft-deleted the lead and left
+  `lead_identifiers` — the dedup index — alone, and its unique constraint is partial on
+  `deleted_at is null`. So the number stayed reserved by a record nobody could see:
+  entering it again attached the new enquiry to the deleted lead, and the redirect landed
+  on a page that filters deleted rows out. Resolution now skips deleted leads, deleting
+  releases the identifiers, restoring takes back the ones still free, **migration 0091**
+  catches up the rows already in that state, and the create path releases a dead
+  identifier before claiming it so no other route to a soft-deleted lead can reproduce it.
+- **An ordinary duplicate was being reported as a scope violation.** The seatbelt on lead
+  creation reads the new row back as the caller and alerts an admin if RLS refuses it. But
+  non-negotiable #2 means a repeat enquiry attaches to the person already in the CRM — who
+  may be another counsellor's lead — so at `own` scope the creator legitimately cannot read
+  it. Both manual entry and the CSV importer now rule that out before the seatbelt and say
+  what happened, without naming the lead, the counsellor or the centre.
+
+Also corrected: the Coexistence instructions told Leon to "onboard the number through
+Meta's Embedded Signup" without saying that Embedded Signup is a dialog an application
+opens, not a page in Meta's dashboard. There is no button for it in this CRM, so that step
+cannot be done today — which the settings screen and `WHATSAPP-SETUP.md` now say outright
+rather than sending somebody hunting through Business Settings.
+
+Stubbed: the Embedded Signup button itself. It needs a Configuration ID, the Facebook JS
+SDK and a code-for-token exchange, and Advanced Access on the WhatsApp permissions before
+any of it can be tested.
+
+**1651 tests pass** (2 new on deleted-lead resolution), typecheck, lint, `db:audit` and
+build clean.

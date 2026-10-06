@@ -140,7 +140,15 @@ export default async function WhatsAppIntegrationPage() {
             <li>
               Onboard the number through Meta&apos;s <strong>Embedded Signup</strong>, choosing
               the WhatsApp Business app flow. The counsellor scans a QR code from their phone
-              and consents to syncing history.
+              and consents to syncing history.{" "}
+              <strong className="text-foreground">
+                This step cannot be done yet, and not for anything you have missed.
+              </strong>{" "}
+              Embedded Signup is not a page in Meta&apos;s dashboard — it is a dialog an
+              application opens, and this CRM has no button that opens it. Building one is a
+              real piece of work and it needs Advanced Access on the WhatsApp permissions
+              first. Until then the three steps either side of this can all be done, and this
+              one cannot.
             </li>
             <li>
               Subscribe three extra webhook fields on the WhatsApp Business Account:{" "}

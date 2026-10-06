@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { applyAssignment } from "@/lib/assignment/apply-assignment";
 import { db } from "@/lib/db/client";
@@ -216,14 +216,30 @@ async function resolveOrCreateLeadInTransaction(
   const receivedAt = input.receivedAt ?? new Date();
 
   return db.transaction(async (tx) => {
+    /*
+      Joined to `leads`, not read from `lead_identifiers` alone.
+
+      Deleting a lead soft-deletes the lead and leaves its identifiers
+      behind, so the dedup index went on pointing at a dead row. Entering
+      that number again attached the new enquiry to the deleted lead and
+      returned its id — and the caller redirected to a page that filters
+      `deleted_at is null`, so creating a lead answered with a 404 and the
+      enquiry was filed against a record no screen will ever show.
+
+      A deleted lead is deleted. Somebody enquiring again gets a new lead,
+      which is the only honest reading of both soft deletion and
+      non-negotiable #2.
+    */
     const phoneMatch = await tx
       .select({ leadId: leadIdentifiers.leadId })
       .from(leadIdentifiers)
+      .innerJoin(leads, eq(leads.id, leadIdentifiers.leadId))
       .where(
         and(
           eq(leadIdentifiers.kind, "phone"),
           eq(leadIdentifiers.valueNormalised, normalizedPhone),
           isNull(leadIdentifiers.deletedAt),
+          isNull(leads.deletedAt),
         ),
       )
       .limit(1);
@@ -232,11 +248,13 @@ async function resolveOrCreateLeadInTransaction(
       ? await tx
           .select({ leadId: leadIdentifiers.leadId })
           .from(leadIdentifiers)
+          .innerJoin(leads, eq(leads.id, leadIdentifiers.leadId))
           .where(
             and(
               eq(leadIdentifiers.kind, "email"),
               eq(leadIdentifiers.valueNormalised, normalizedEmail),
               isNull(leadIdentifiers.deletedAt),
+              isNull(leads.deletedAt),
             ),
           )
           .limit(1)
@@ -404,6 +422,36 @@ async function resolveOrCreateLeadInTransaction(
         ...consentOnEntry(input.source, receivedAt),
       })
       .returning({ id: leads.id, leadNumber: leads.leadNumber });
+
+    /*
+      Release any identifier still held by a deleted lead before claiming
+      it.
+
+      The delete action does this itself, and migration 0091 caught up the
+      rows that predate it. This is the backstop for every other way a
+      lead can end up soft-deleted — a restore from archive, a merge, a
+      hand-written fix — because the symptom is so bad: the match above
+      correctly skips the deleted lead, and then the insert fails on
+      `lead_identifiers_kind_value_uq` and takes the whole transaction
+      with it. The number would be unusable for ever and the error would
+      name an index rather than the problem.
+
+      Scoped to identifiers whose lead is deleted. A value a live lead
+      holds is never touched here — that is a genuine duplicate, and it
+      was already resolved above.
+    */
+    await tx.execute(sql`
+      update lead_identifiers i
+         set deleted_at = now(), updated_at = now()
+        from leads l
+       where l.id = i.lead_id
+         and l.deleted_at is not null
+         and i.deleted_at is null
+         and (
+           (i.kind = 'phone' and i.value_normalised = ${normalizedPhone})
+           ${normalizedEmail ? sql`or (i.kind = 'email' and i.value_normalised = ${normalizedEmail})` : sql``}
+         )
+    `);
 
     await tx
       .insert(leadIdentifiers)

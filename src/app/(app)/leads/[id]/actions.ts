@@ -1,13 +1,13 @@
 "use server";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { batches, enrolments, leads } from "@/lib/db/schema";
+import { batches, enrolments, leadIdentifiers, leads } from "@/lib/db/schema";
 import { confirmAdmission } from "@/lib/enrolment/confirm-admission";
 import { resolveDiscount } from "@/lib/enrolment/discount-authority";
 import { getDiscountLimit } from "@/lib/enrolment/get-discount-limit";
@@ -685,15 +685,33 @@ export async function deleteLead(
     };
   }
 
+  const deletedAt = new Date();
+
   await db
     .update(leads)
     .set({
-      deletedAt: new Date(),
+      deletedAt,
       deletedBy: user.id,
       deletedReason: reason,
-      updatedAt: new Date(),
+      updatedAt: deletedAt,
     })
     .where(eq(leads.id, leadId));
+
+  /*
+    The dedup index has to go with it.
+
+    `lead_identifiers_kind_value_uq` is partial on `deleted_at is null`,
+    so a surviving identifier keeps that phone number reserved by a lead
+    nobody can see. Entering the number again then resolved to the deleted
+    lead and the new enquiry vanished into it — or, once resolution learnt
+    to skip deleted leads, collided with the orphaned identifier instead.
+    Either way the number was unusable for ever, which is not what anybody
+    means by deleting a lead.
+  */
+  await db
+    .update(leadIdentifiers)
+    .set({ deletedAt, updatedAt: deletedAt })
+    .where(and(eq(leadIdentifiers.leadId, leadId), isNull(leadIdentifiers.deletedAt)));
 
   const supabase = await createClient();
   await writeAuditLog(supabase, {
@@ -755,10 +773,37 @@ export async function restoreLead(_prev: FormState, formData: FormData): Promise
     .set({ deletedAt: null, deletedBy: null, deletedReason: null, updatedAt: new Date() })
     .where(eq(leads.id, leadId));
 
+  /*
+    Bring the dedup identifiers back with it — but only the ones still
+    free.
+
+    While this lead was deleted its number was released, so somebody may
+    have entered that person again and be working them now. Restoring the
+    old identifier would collide with
+    `lead_identifiers_kind_value_uq` and fail the whole restore with a
+    constraint error nobody can read. Skipping the taken ones puts the
+    lead back without the clash; the duplicate is then two leads sharing a
+    number, which is an ordinary situation the merge flow exists for.
+  */
+  const restored = await db.execute(sql`
+    update lead_identifiers i
+       set deleted_at = null, updated_at = now()
+     where i.lead_id = ${leadId}
+       and i.deleted_at is not null
+       and not exists (
+         select 1 from lead_identifiers live
+          where live.kind = i.kind
+            and live.value_normalised = i.value_normalised
+            and live.deleted_at is null
+       )
+    returning i.id
+  `);
+
   const supabase = await createClient();
   await writeAuditLog(supabase, {
     actorId: user.id,
     action: "lead.restore",
+    after: { identifiersRestored: restored.length },
     entityType: "leads",
     entityId: leadId,
     before: { deletedAt: lead.deletedAt.toISOString(), deletedReason: lead.deletedReason },

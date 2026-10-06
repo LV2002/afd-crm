@@ -337,14 +337,28 @@ and nothing is lost.
 
 ### 4.2 Onboard the number through Embedded Signup
 
-In Meta's **Embedded Signup** flow, choose the **WhatsApp Business app** path (not "new
-number"). The counsellor scans a QR code with their phone and is asked to **consent to
-syncing message history**. They must say yes; without it the number still connects, but
-nothing from before arrives.
+**Read this before going looking for it: there is nothing to click yet.**
 
-If that path is not offered, the gate is usually one of: the app's business is not
-verified, or WhatsApp permissions are still at Standard access rather than Advanced (Part
-6). It is not something the CRM can start — this flow lives entirely in Meta.
+Embedded Signup is not a page in Meta's dashboard, and it is not a screen in this CRM.
+It is a dialog that **an application opens** — Meta hands you a JavaScript SDK and a
+configuration id, your app puts a "Connect WhatsApp" button on one of its own screens, and
+pressing that button opens Meta's popup. No app button, no flow. This CRM does not have
+that button, so this step cannot be completed today, and no amount of hunting through
+Business Settings will turn it up. That is a gap in what has been built, not something
+missed in the setup.
+
+What it would involve, when it is built: a Configuration ID created under **WhatsApp →
+Configuration → Embedded Signup** in the App Dashboard, the Facebook JS SDK loaded on
+Settings → Integrations → WhatsApp, and the code the dialog returns exchanged for a
+long-lived token. It also needs **Advanced Access** on the WhatsApp permissions (Part 6),
+so App Review has to land first either way.
+
+When the dialog does open, the path to take inside it is **WhatsApp Business app** (not
+"new number"). The counsellor scans a QR code with their phone and is asked to **consent
+to syncing message history** — they must say yes. Without it the number still connects,
+but nothing from before arrives, and consent cannot be asked for again afterwards.
+
+Everything else in Part 4 can be done now. Only this one step is blocked.
 
 ### 4.3 Subscribe three more webhook fields
 

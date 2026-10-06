@@ -28,6 +28,18 @@ import { captureError } from "@/lib/errors/capture";
  * to create it — the app-level check has failed, and this says so loudly
  * rather than leaving a lead sitting in a centre nobody expected.
  *
+ * ## One thing it must not be used for
+ *
+ * A duplicate. `resolveOrCreateLead()` attaches a repeat enquiry to the
+ * person already in the CRM (non-negotiable #2), and that person may
+ * belong to another counsellor — so a counsellor at `own` scope entering
+ * a number somebody else owns legitimately ends up with a lead id they
+ * cannot read. That is the system working. Callers rule it out by
+ * checking `isNewLead` before reaching this, which `createLeadManually`
+ * does; without that, every ordinary duplicate woke an admin with a bug
+ * report about a bug that had not happened, and the counsellor was told
+ * their lead had been "flagged for an administrator".
+ *
  * ## Why it does not delete the lead
  *
  * Tempting, and wrong. This fires on a bug, and on a bug the safest thing

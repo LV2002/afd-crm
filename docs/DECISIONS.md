@@ -4170,3 +4170,38 @@ The leads that already exist still get their history, which was always the valua
 The visibility rule follows from that: an unmatched row is shown to whoever runs campaigns
 **or** to the counsellor whose number it arrived on. Without the second clause a counsellor
 could not see their own conversation while the marketing lead could see all of them.
+
+## 2026-10-07 — A deleted lead releases its phone number, and a duplicate is not a scope violation
+
+Two bugs from the same report: *"creating a new lead manually keeps breaking and gives a 404
+error."*
+
+**The 404.** Deleting a lead soft-deleted `leads` and left `lead_identifiers` alone. That table
+is the dedup index, and its unique constraint is partial on `deleted_at is null`, so a deleted
+lead went on holding its phone number against the whole system while being invisible in it.
+Entering that number again resolved to the deleted lead, the action redirected to
+`/leads/<id>`, and that page filters `deleted_at is null` — a 404 at the end of creating a
+lead, with the enquiry filed against a record no screen will ever show.
+
+Fixed in three places, deliberately: identity resolution joins `leads` and skips deleted ones;
+`deleteLead` releases the identifiers and `restoreLead` takes back the ones still free;
+migration 0091 catches up the rows that predate both. And `resolveOrCreateLead` releases an
+identifier held by a deleted lead before claiming it, as a backstop for every other route to a
+soft-deleted lead — an archive restore, a merge, a hand-written fix — because without it the
+match correctly skips the dead lead and the insert then dies on the unique index, which is a
+worse failure than the one being fixed.
+
+**The scope violation on the health screen.** `leadIsVisibleToCaller()` is the seatbelt on lead
+creation: write through the RLS-bypassing client, then read the row back as the caller, and
+shout if RLS refuses it. It was shouting on correct behaviour. Non-negotiable #2 says never
+reject a duplicate — so a counsellor at `own` scope entering somebody another counsellor
+already owns gets a lead id they legitimately cannot read. That is the system working, and it
+was being reported to an admin as a bug while the counsellor was told their lead had been
+"flagged for an administrator".
+
+Both callers now rule out `!isNewLead` before reaching the seatbelt and say what actually
+happened instead. On a 2,000-row import of a bought list the old behaviour would have fired a
+few hundred times.
+
+No name, no counsellor and no centre in that message: the reason they cannot see the lead is
+that it is not theirs to see (non-negotiable #6).
