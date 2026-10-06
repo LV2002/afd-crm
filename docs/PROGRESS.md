@@ -7973,3 +7973,35 @@ Command is built on) and `sonner`.
 
 **1640 tests pass**, typecheck, lint and build clean. Manual chapter 4 covers the palette
 and the save messages.
+
+## 2026-10-06 — The two lists that were hardest to read
+
+Fifth UI pass: the leads list on a phone, and the pipeline board.
+
+### The leads list is cards on a phone
+
+Below `md` the same rows render as cards — name and stage at the top, the rest as labelled
+pairs underneath. Nine columns on a 412px screen is a horizontal scroll showing three
+characters of each column: technically all the data, practically none of it, on the device
+a counsellor actually works from.
+
+Driven by the same `listFields` the table uses, so an admin who adds a column gets it in
+both and the two cannot drift apart. The empty state is shared between them as well.
+
+### The board answers "who is being forgotten"
+
+A kanban of names says who is where. It never said who is slipping, which is the question
+a centre head opens it with. Each card now carries:
+
+- **The follow-up** — today, tomorrow, a date, or **overdue** in red, measured against
+  midnight in Kochi so a follow-up booked for today is not late at nine in the morning.
+- **Quiet for N days**, once a week has passed with nothing happening at all.
+- **Temperature in its own colour**, from the admin's dropdown, rather than another
+  outline badge indistinguishable from the centre tag.
+
+"Days in this stage" would be the textbook signal and is deliberately **not** here: no
+column records when a lead entered its stage, and adding one would show *0 days* for every
+lead in the system on the day it shipped. Silence since the last activity says the same
+thing honestly, for leads that are already in the CRM.
+
+**1640 tests pass**, typecheck, lint and build clean. Manual chapter 5 covers both.

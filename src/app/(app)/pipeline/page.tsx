@@ -27,6 +27,8 @@ interface LeadRow {
   center_id: string | null;
   assigned_to: string | null;
   lost_reason: string | null;
+  next_followup_at: string | null;
+  last_activity_at: string | null;
 }
 
 export default async function PipelinePage() {
@@ -49,13 +51,18 @@ export default async function PipelinePage() {
     supabase
       .from("leads")
       .select(
-        "id, lead_number, student_name, primary_phone, stage_id, temperature, center_id, assigned_to, lost_reason",
+        "id, lead_number, student_name, primary_phone, stage_id, temperature, center_id, assigned_to, lost_reason, next_followup_at, last_activity_at",
       )
       .is("deleted_at", null)
       .order("updated_at", { ascending: false })
       .returns<LeadRow[]>(),
     getDropdownOptions(supabase, "lost_reason"),
   ]);
+
+  // The admin's own temperature colours, so Hot reads as hot on the board
+  // rather than as another outline badge indistinguishable from Centre.
+  const temperatureOptions = await getDropdownOptions(supabase, "temperature");
+  const temperatureByValue = new Map(temperatureOptions.map((option) => [option.value, option]));
 
   const stages: KanbanStage[] = (stageRows ?? []).map((s) => ({
     id: s.id,
@@ -89,6 +96,10 @@ export default async function PipelinePage() {
     assignedToName: l.assigned_to ? (assigneeNameById.get(l.assigned_to) ?? null) : null,
     lostReasonLabel: l.lost_reason ? (lostReasonLabelByValue.get(l.lost_reason) ?? l.lost_reason) : null,
     isDropped: dropped.has(l.id),
+    temperatureLabel: l.temperature ? (temperatureByValue.get(l.temperature)?.label ?? l.temperature) : null,
+    temperatureColor: l.temperature ? (temperatureByValue.get(l.temperature)?.color ?? null) : null,
+    nextFollowupAt: l.next_followup_at,
+    lastActivityAt: l.last_activity_at,
   }));
 
   return (

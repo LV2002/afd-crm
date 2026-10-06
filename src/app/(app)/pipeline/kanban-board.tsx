@@ -7,6 +7,7 @@ import {
   LostReasonDialog,
   type LostReasonOption,
 } from "@/components/leads/lost-reason-dialog";
+import { formatDateIST, startOfDayIST } from "@/lib/format/date";
 import { maskPhone } from "@/lib/leads/mask-phone";
 
 import { moveLeadStage } from "./actions";
@@ -28,6 +29,13 @@ export interface KanbanLead {
   centerName: string | null;
   assignedToName: string | null;
   lostReasonLabel: string | null;
+  /** The admin's own label and colour for this temperature. */
+  temperatureLabel: string | null;
+  temperatureColor: string | null;
+  /** When somebody said they would come back to this. */
+  nextFollowupAt: string | null;
+  /** The last time anything at all happened on it. */
+  lastActivityAt: string | null;
   /**
    * The student took the admission and then left.
    *
@@ -190,6 +198,9 @@ function LeadCard({
   onDragStart: () => void;
   onDragEnd: () => void;
 }) {
+  const followUp = describeFollowUp(lead.nextFollowupAt);
+  const quietDays = daysSince(lead.lastActivityAt);
+
   return (
     <a
       href={`/leads/${lead.id}`}
@@ -209,11 +220,51 @@ function LeadCard({
       <span className="font-mono text-xs text-muted-foreground">
         {maskPhone(lead.primaryPhone)}
       </span>
-      <div className="flex flex-wrap gap-1">
-        {lead.temperature && (
-          <Badge variant="outline" className="text-xs">
-            {lead.temperature}
-          </Badge>
+      {/*
+        The two lines a centre head is actually scanning for. A board of
+        names answers "who is where"; it never answered "who is being
+        forgotten", which is the question somebody opens this screen with.
+
+        Deliberately computed from what already exists. "Days in this
+        stage" would be the textbook kanban signal and the column to
+        support it does not exist — adding one would show 0 days for
+        every lead in the system on the day it shipped, which is worse
+        than not answering. Silence since the last activity says the same
+        thing, honestly, for every lead that is already here.
+      */}
+      {followUp ? (
+        <span
+          className={`text-xs ${followUp.overdue ? "font-medium text-destructive" : "text-muted-foreground"}`}
+        >
+          {followUp.text}
+        </span>
+      ) : null}
+      {quietDays !== null && quietDays >= 7 ? (
+        <span className="text-xs text-muted-foreground">Quiet for {quietDays} days</span>
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-1">
+        {lead.temperatureLabel && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[0.6875rem] font-medium"
+            style={
+              lead.temperatureColor
+                ? {
+                    backgroundColor: `color-mix(in oklab, ${lead.temperatureColor} 14%, transparent)`,
+                    borderColor: `color-mix(in oklab, ${lead.temperatureColor} 38%, transparent)`,
+                  }
+                : undefined
+            }
+          >
+            {lead.temperatureColor ? (
+              <span
+                aria-hidden
+                className="size-1.5 rounded-full"
+                style={{ backgroundColor: lead.temperatureColor }}
+              />
+            ) : null}
+            {lead.temperatureLabel}
+          </span>
         )}
         {lead.centerName && (
           <Badge variant="outline" className="text-xs">
@@ -245,4 +296,42 @@ function LeadCard({
       )}
     </a>
   );
+}
+
+/**
+ * How many whole days since something last happened, in IST.
+ *
+ * Returns null rather than 0 for a lead nothing has ever happened to:
+ * "Quiet for 0 days" would be a lie about a lead that arrived an hour
+ * ago, and about one nobody has ever touched.
+ */
+function daysSince(at: string | null): number | null {
+  if (!at) return null;
+  const then = new Date(at).getTime();
+  if (Number.isNaN(then)) return null;
+  return Math.floor((Date.now() - then) / 86_400_000);
+}
+
+/**
+ * The follow-up line: overdue, today, tomorrow, or the date.
+ *
+ * "Overdue" is measured against midnight in Kochi, not against this
+ * moment — a follow-up booked for today is not late at nine in the
+ * morning, and one booked for yesterday is late from midnight.
+ */
+function describeFollowUp(at: string | null): { text: string; overdue: boolean } | null {
+  if (!at) return null;
+  const due = new Date(at);
+  if (Number.isNaN(due.getTime())) return null;
+
+  const startOfToday = startOfDayIST(new Date());
+  const startOfTomorrow = new Date(startOfToday.getTime() + 86_400_000);
+  const startOfDayAfter = new Date(startOfTomorrow.getTime() + 86_400_000);
+
+  if (due < startOfToday) {
+    return { text: `Follow-up overdue · ${formatDateIST(due, "d MMM")}`, overdue: true };
+  }
+  if (due < startOfTomorrow) return { text: "Follow-up today", overdue: false };
+  if (due < startOfDayAfter) return { text: "Follow-up tomorrow", overdue: false };
+  return { text: `Follow-up ${formatDateIST(due, "d MMM")}`, overdue: false };
 }
