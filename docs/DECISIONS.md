@@ -4339,3 +4339,32 @@ toast — thirty fields deep, a toast per blur is a screen that flickers all day
 rendered as a single tall stack inside a two-column grid, so the cell beside each was four
 hundred pixels of empty. Options wrap into columns past five, and the section grid stops short
 fields stretching to match the tall one.
+
+## 2026-10-07 — The sticky table header never worked, and the reveal on the lead page was theatre
+
+Two from one screenshot of the leads list.
+
+**The first lead was covered by the heading row**, and not only while scrolling —
+permanently. `TableHeader`'s `sticky` prop pinned the headings with `top-14` to clear the app
+header, which is correct arithmetic and the wrong frame of reference: the table's wrapper sets
+`overflow-x-auto` so a wide table can scroll sideways, CSS makes that a **scroll container on
+both axes**, and a sticky element resolves its offsets against the nearest scroll container
+rather than the viewport. That container never scrolls vertically, so the heading row's
+position inside it is permanently zero — below the 56px threshold — and sticky pushed it down
+56px, straight over the first row, leaving a gap where it had been.
+
+Making it work means giving up either the sideways scroll or page scrolling (a fixed-height,
+inner-scrolling table). Neither is worth a convenience, so the prop is gone rather than left
+as something that reads as working. This is a correction to 2026-10-06, which shipped it.
+
+**The reveal step on the lead's own page was protecting nothing.** The page is a server
+component that passes every field's value to the edit form, so the real number was already in
+the page's HTML; the masking happened in the browser, on a value the browser had been handed.
+Anybody who could open the lead could read the number out of the page source, and the button
+only made the honest route slower. Leon asked for the numbers to be boxes; non-negotiable #6
+asks for the same thing in its own words — *masked in list view, **full on the detail page***.
+
+So they are boxes. What changed with them is the part that matters: masking for somebody
+without `lead.reveal_phone` now happens on the server, before the value is sent, which is the
+first time it has withheld anything. The list's audited reveal is untouched — that is where
+bulk exposure lives and where the rule was always aimed.

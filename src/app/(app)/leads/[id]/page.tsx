@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { canSetFeePlan } from "@/lib/enrolment/can-set-fee-plan";
+import { maskPhone } from "@/lib/leads/mask-phone";
 
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
@@ -87,9 +88,21 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     }
   }
 
+  /*
+    Masked here, on the server, for anybody without `lead.reveal_phone`.
+
+    This used to be done in the browser by the phone field, on a value
+    this loop had already handed it — so the real number sat in the page's
+    HTML and the mask was decorative. Doing it before the value is sent is
+    the first time it has actually withheld anything.
+  */
   const values: Record<string, unknown> = {};
   for (const field of fields) {
-    values[field.key] = field.isCore ? row[field.key] : (row.custom ?? {})[field.key];
+    const raw = field.isCore ? row[field.key] : (row.custom ?? {})[field.key];
+    values[field.key] =
+      field.type === "phone" && !canRevealPhone && typeof raw === "string"
+        ? maskPhone(raw)
+        : raw;
   }
 
   /*

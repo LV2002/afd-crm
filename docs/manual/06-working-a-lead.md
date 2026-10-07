@@ -120,17 +120,20 @@ same as follow-ups.
 ## 6.4 Revealing a phone number
 
 
-**Chat is always there. Call appears once the number is revealed.**
+**On the lead's own page the numbers are simply there**, in boxes you can
+type in. Revealing is for the **list**, where two hundred numbers on one
+screen is the thing worth being careful about. One lead you are working
+is not.
 
 **Chat** opens that lead's conversation in **Chats**, inside the CRM —
 not WhatsApp Web in another tab. Everything said there is on the lead's
-record and the rest of the office can see it. It needs no number of its
-own, which is why it does not wait for the reveal.
+record and the rest of the office can see it.
 
-**Call** opens your phone's dialler with the number in it. It only
-appears after revealing, because a dial link has to carry the real
-number to work, and showing one before would put every number on the
-screen in plain text and make the masking pointless.
+**Call** opens your phone's dialler with the number in it.
+
+Somebody **without** permission to see full numbers sees `+91 98••••3456`
+on the lead's page too, and cannot type in it. That is done before the
+page is sent, so the number is not in the page at all.
 
 If a lead has never messaged the institute's WhatsApp number, Chat says
 so and offers the way back. You cannot write to them first from here —
@@ -189,11 +192,9 @@ The values update, and the change is written to the audit log.
   deliberate (Chapter 7).
 - **Some fields you cannot set.** Stage, temperature, owner and centre are
   changed through their own actions, not as free text.
-- **Phone numbers are edited after revealing them.** A number shows as
-  `+91 98••••3456` with a reveal button; press it and the masked text
-  becomes a box you can correct. That is not an obstacle course — you
-  cannot sensibly overwrite a number you are not allowed to read, so the
-  permission that reveals is the permission that edits.
+- **Phone numbers are ordinary boxes** on the lead's page. The permission
+  that lets you see a full number is the one that lets you change it —
+  you cannot sensibly overwrite a value you are not allowed to read.
 - **Changing the primary phone moves the lead's identity with it.** That
   number is what every form, ad and import is matched against, so
   correcting a typo also corrects what future enquiries from that person
