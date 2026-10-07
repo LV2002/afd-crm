@@ -11,32 +11,28 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
 }
 
 /**
- * `sticky` pins the headings while the rows scroll under them.
+ * ## There is no sticky header, and there cannot be one here
  *
- * Off by default, because a sticky head inside a short table or a card is
- * fussier than it is useful. On for the long lists — leads, students,
- * admissions — where a hundred rows in, nobody can remember which column
- * is which, and the honest alternative is scrolling back up to check.
+ * There was a `sticky` prop. It pinned the headings with `top-14` to clear
+ * the app header, it looked right in isolation, and on the leads list it
+ * covered the first lead — permanently, not only while scrolling.
  *
- * `top-14` clears the app header, which is itself sticky at `h-14`.
- * `bg-background` is not optional: a transparent sticky head lets the
- * rows show through it as they pass underneath.
+ * The wrapper above sets `overflow-x-auto` so a wide table can be scrolled
+ * sideways. CSS turns that into a **scroll container** on both axes, and a
+ * `position: sticky` element resolves its offsets against the nearest
+ * scroll container rather than the viewport. That container never scrolls
+ * vertically, so the heading row's position inside it is always zero —
+ * below the `top: 56px` threshold — and sticky duly pushed it down 56px,
+ * straight over the first row, leaving a gap where it used to be.
+ *
+ * Making it work means giving up either the sideways scroll (the wrapper)
+ * or page scrolling (a fixed-height, inner-scrolling table). Neither is
+ * worth a convenience, so the prop is gone rather than left as something
+ * that reads as working and is not. If pinned headings are wanted later,
+ * the inner-scroll version is the one to build, deliberately.
  */
-function TableHeader({
-  className,
-  sticky = false,
-  ...props
-}: React.ComponentProps<"thead"> & { sticky?: boolean }) {
-  return (
-    <thead
-      className={cn(
-        "[&_tr]:border-b",
-        sticky && "sticky top-14 z-20 bg-background shadow-[0_1px_0_0_var(--border)]",
-        className,
-      )}
-      {...props}
-    />
-  );
+function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
+  return <thead className={cn("[&_tr]:border-b", className)} {...props} />;
 }
 
 function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {

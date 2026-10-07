@@ -156,18 +156,16 @@ export function LeadEditForm({
                     <PhoneField
                       leadId={leadId}
                       name={field.key}
-                      masked={values[field.key] as string | null}
-                      canReveal={canRevealPhone}
-                      // Editing a number you may not reveal would mean
-                      // overwriting a value you cannot see, so the two
-                      // permissions travel together — `updateLead`
+                      // Already masked by the page when this user may not
+                      // reveal, so what arrives here is either the real
+                      // number or a stand-in, and `isReal` says which.
+                      value={values[field.key] as string | null}
+                      isReal={canRevealPhone}
+                      // Editing a number you may not read would mean
+                      // overwriting a value you cannot see; `updateLead`
                       // enforces the same pairing server-side.
                       canEdit={field.isEditable && canRevealPhone}
-                      chatHref={
-                        field.key === "whatsapp_phone" || field.key === "primary_phone"
-                          ? `/whatsapp?thread=${encodeURIComponent(`lead:${leadId}`)}`
-                          : undefined
-                      }
+                      showChat={field.key === "whatsapp_phone" || field.key === "primary_phone"}
                     />
                   ) : field.isEditable ? (
                     <DynamicFieldInput

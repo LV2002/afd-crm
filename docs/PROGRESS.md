@@ -8221,3 +8221,23 @@ changed field, which is deliberate (same path as the Save button, no second code
 scheduling and were not what Leon described.
 
 **1666 tests pass**, typecheck, lint, `db:audit` and build clean.
+
+## The first lead was hidden, and the reveal on the lead page was theatre
+
+- **`TableHeader sticky` is gone.** It pinned the headings 56px down from the top of the
+  table's own scroll wrapper rather than from the viewport — because `overflow-x-auto` makes
+  that wrapper a scroll container and sticky resolves against it — so the first lead sat
+  under the heading row permanently, with a gap above it where the row had been. Keeping it
+  would mean giving up either sideways scrolling or page scrolling. Reverts part of the
+  ⌘K/sticky-headers change.
+- **Phone numbers on a lead are plain boxes now**, no reveal step. The page already sent the
+  real number to the browser, so the mask was drawn client-side over a value the browser
+  had — anybody who could open the lead could read it out of the page source.
+- **Masking is real for the first time.** Somebody without `lead.reveal_phone` now gets the
+  masked string from the **server**, so the number is not in the page at all. The list's
+  audited reveal is untouched; that is where bulk exposure lives.
+
+Stubbed: nothing. Not done on purpose — no pinned headings at all rather than a version that
+only looks pinned; the inner-scrolling table is the way to build it if it is ever wanted.
+
+**1666 tests pass**, typecheck, lint and build clean.

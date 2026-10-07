@@ -376,7 +376,7 @@ export default async function LeadsPage({
       </ul>
 
       <Table className="hidden md:table">
-        <TableHeader sticky>
+        <TableHeader>
           <TableRow>
             {listFields.map((field) => (
               <TableHead key={field.id}>{field.label}</TableHead>
