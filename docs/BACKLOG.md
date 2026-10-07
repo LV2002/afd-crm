@@ -78,10 +78,84 @@ than a column on `leads`, which means the evaluator's `Lead` shape has to carry 
 Small, and worth doing before anybody builds a workflow around a tag. Noticed while answering
 Leon's question about whether tags could be dropped (DECISIONS.md, 2026-10-05).
 
-### 3. Telephony — **blocked**
-Click-to-call, auto-logged direction/duration/disposition, recordings, missed-call → lead,
-Malayalam transcription, call scoring, QA dashboard. All of Phase 6 sits behind one decision:
-**Exotel or Ozonetel**. Nothing can start until Leon picks.
+### 3. Telephony — **unblocked, waiting on one answer from Exotel**
+
+Researched with Leon on 2026-10-07. The old entry said this was blocked on "Exotel or
+Ozonetel, nothing can start until Leon picks". It is Exotel, for a specific reason, and what
+is left is one question for their sales team rather than a decision of ours.
+
+**Why Exotel.** Live call monitoring is the requirement that eliminates the field. Most Indian
+providers have listen/whisper/barge only inside their own supervisor dashboard, which would
+mean Leon tapping into calls on somebody else's website. Exotel exposes it as a REST API, so
+it can be a button in this CRM:
+
+- `GET /v1/Accounts/{sid}/Calls/{CallSid}/ActiveLegs` — the legs of a call in progress
+- `POST /v1/Accounts/{sid}/Calls/{CallSid}/Legs` with `Action=listen|whisper|barge` and
+  `PhoneNumber` — creates a monitor leg that rings the supervisor and joins them
+
+Use the **Mumbai cluster** (`api.in.exotel.com`); data residency matters under DPDP.
+
+**What Leon asked for, and what answers it.**
+
+| Requirement | Mechanism |
+| --- | --- |
+| Call from the lead's page, never touching a handset | WebRTC Web SDK — a softphone embedded in this CRM, bridged to PSTN. Official reference: `exotel/exotel_websdk_crm` |
+| Calls logged automatically | `StatusCallback` webhook → an `interactions` row through the one ingestion path |
+| Recording on the lead's timeline | Recording URL arrives on the same webhook |
+| Tap into a live call | The LWB API above |
+| Every inbound call becomes a lead | Inbound `StatusCallback`; `no-answer` is a terminal status, so a missed call is as capturable as an answered one. Exotel also has a dedicated missed-call product |
+
+**The one open question, and it decides the shape of the project.** Can Exotel port AFD's
+existing number? Porting is subject to the operator's policies and regulatory approval, takes
+7–15 business days, and not every number type is eligible. Ask with the actual number in hand,
+and do not accept "yes, porting is supported" in general.
+
+Three outcomes, and it is a business decision rather than a technical one:
+
+- **Ported.** One number, inbound and outbound, branding intact. Best, if allowed.
+- **Forwarded.** Keep the number where it is, forward unconditionally to the ExoPhone. No
+  porting risk, works immediately — but outbound shows the ExoPhone, so students are called
+  from one number and see another on the hoardings, and save the wrong one.
+- **Adopt the ExoPhone** as the public number. Clean technically, throws away years of
+  branding. Not recommended.
+
+**Design notes for when this is built.**
+
+- **Voice creates leads; the WhatsApp broadcast number does not.** That inversion is correct
+  and deliberate: somebody who dials the institute chose to, where a reply to a broadcast is
+  often just a button press. `whatsapp_numbers.creates_leads` already carries this concept
+  per number; voice defaults the other way. Leon was explicit — *always* a lead, missed calls
+  included.
+- **The cost of "always"** is wrong numbers, vendors and current students in the pipeline.
+  `resolveOrCreateLead()` dedupes on phone so a repeat caller is one lead, and a distinct
+  source value keeps them filterable. If it gets noisy, the cheap fix is skipping numbers
+  already attached to a student. Build it as asked first and see.
+- **DPDP consent is a build requirement, not a footnote.** The rules were notified in
+  November 2025: commercial call recording needs explicit informed consent — an announcement
+  in the first 15 seconds stating the purpose specifically ("quality assurance and training",
+  not "this call is recorded"), a genuine opt-out, and **a logged consent event with a
+  timestamp**. That last part is a table here, not a telephony feature. Confirm with a lawyer
+  before go-live; the sources are vendor guidance, not statute.
+- **The webhook must answer 200 within 15 seconds**, and Exotel retries twice. That suits
+  non-negotiable #9 (verify, persist, then process) exactly.
+- **Browser calling is only as good as the office internet.** Wired connections at each desk,
+  and a backup line. A counsellor who cannot be heard loses the admission.
+
+**Ruled out, with reasons.** *Number masking* — it solves "the counsellor's personal handset
+accumulates the database", and AFD's counsellors use company phones and company numbers, so
+it buys nothing and adds a moving part. *Auto-dialers and predictive dialing* — a call-centre
+feature for a consultative sale at ~200 leads a month; it would make counsellors worse at
+their job. *Transcription and AI call summaries* — wanted eventually, and the Gemini client is
+already here, but Malayalam–English code-switching is where transcription quality falls over.
+Test on twenty real recordings before building anything.
+
+**Costs, indicative only.** Roughly ₹0.60–1.50 per minute outbound on top of a platform plan;
+published India tiers run about ₹9,999 / ₹19,999 / ₹49,499, with per-minute, number rental and
+DLT charges separate. Confirm which tier carries the LWB API and WebRTC.
+
+Still to write when this starts: `docs/TELEPHONY-SETUP.md` — the `calls` schema, the webhook
+handler, the consent log, where the softphone sits on the lead page, and the porting decision
+above written down rather than left in a chat.
 
 ---
 
