@@ -8241,3 +8241,32 @@ Stubbed: nothing. Not done on purpose — no pinned headings at all rather than 
 only looks pinned; the inner-scrolling table is the way to build it if it is ever wanted.
 
 **1666 tests pass**, typecheck, lint and build clean.
+
+## Chats split in two: the counsellor's number, and the institute's
+
+- **The tabs are WhatsApp, Instagram, WhatsApp API**, in that order. The first is the
+  counsellors' own numbers and the daily work; the last is the broadcast number with the
+  campaign tooling, after Instagram because it is administrative.
+- **"Personal WhatsApp" became a real inbox.** It was a page explaining Coexistence; it now
+  lists the conversations on counsellors' own numbers. The explanation moved to the setup
+  screen, beside the steps that act on it.
+- **A counsellor's message always leaves from their own number, never the API number** —
+  Leon's rule, resolved from the session so no form can choose a different one. Templates
+  and broadcasts still go out on the API number; those are the institute speaking.
+- **The 24-hour window is now checked against the sending number**, because Meta scopes it
+  per number pair. Somebody who messaged the broadcast number has not opened a window on the
+  counsellor's handset, so the composer closes rather than letting a message be typed and
+  then rejected.
+- **The lead page's Chat button opens the WhatsApp tab**, not the API one.
+- **Migration 0093** adds `whatsapp_messages.number_id`. Null reads as the API number, which
+  is true of every row written before it.
+
+One inbox renders both tabs — same screen, different scope — so the filters and the
+counsellor switcher cannot drift apart.
+
+Stubbed: nothing. **Empty by design today**: Coexistence onboarding needs Advanced Access and
+App Review has not cleared, so the WhatsApp tab has no numbers to show and replies cannot be
+sent from the CRM at all. Leon chose this knowing it; the empty state says what unlocks it.
+
+**1666 tests pass** (1 assertion added on the new column), typecheck, lint, `db:audit` and
+build clean.

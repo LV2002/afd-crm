@@ -258,6 +258,11 @@ export async function POST(request: Request) {
             .insert(whatsappMessages)
             .values({
               leadId: matched?.id ?? null,
+              // Which number this arrived on, so the two inboxes can tell
+              // a counsellor's own conversation from a reply to a
+              // broadcast. Null when the number is not registered, which
+              // reads as the API number — see migration 0093.
+              numberId: number?.id ?? null,
               // Falls back to the number's owner so an unmatched message
               // on a counsellor's coexistence number is visible to that
               // counsellor: migration 0090's SELECT shows a lead-less row

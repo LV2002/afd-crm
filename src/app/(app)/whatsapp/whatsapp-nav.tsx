@@ -22,10 +22,21 @@ interface Tab {
   needs?: "campaign";
 }
 
+/*
+  Order is the point, not just the labels.
+
+  **WhatsApp** is a counsellor's own number — where the one-to-one
+  conversations happen and where every reply leaves from. It comes first
+  because it is the daily work.
+
+  **WhatsApp API** is the institute's broadcast number: campaign replies,
+  templates, automations. It is administrative, so it sits last, after
+  Instagram.
+*/
 const CHANNELS: Tab[] = [
-  { href: "/whatsapp", label: "WhatsApp Business" },
-  { href: "/whatsapp/personal", label: "Personal WhatsApp" },
+  { href: "/whatsapp/personal", label: "WhatsApp" },
   { href: "/whatsapp/instagram", label: "Instagram" },
+  { href: "/whatsapp", label: "WhatsApp API" },
 ];
 
 const BUSINESS_TABS: Tab[] = [

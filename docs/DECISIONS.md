@@ -4368,3 +4368,41 @@ So they are boxes. What changed with them is the part that matters: masking for 
 without `lead.reveal_phone` now happens on the server, before the value is sent, which is the
 first time it has withheld anything. The list's audited reveal is untouched — that is where
 bulk exposure lives and where the rule was always aimed.
+
+## 2026-10-07 — A counsellor's message never leaves from the broadcast number
+
+Leon, twice and unprompted: *"if the counsellor wants to send a message it should go out from
+their number"* and *"never from the API"*.
+
+That is now the rule, and it is resolved from the session rather than from the screen or from
+anything a form sends. `senderNumberFor(userId)` finds the Coexistence number registered to
+the person typing, and every free-form reply and every attachment leaves from it. If a number
+id came from the browser, a counsellor could send as a colleague by editing one field and the
+whole thread would carry the wrong person's name. Templates and broadcasts keep going out on
+the API number, because those are the institute speaking rather than a person.
+
+**The consequence worth stating plainly: WhatsApp's 24-hour window is per number pair.** A
+student who messaged the institute's broadcast number has opened a window *there* and nowhere
+else, so a reply from the counsellor's own handset is a first contact as far as Meta is
+concerned and gets refused. The window check therefore takes the sending number, and the
+composer closes rather than letting somebody type a message the API will reject after they
+press Send. This is not a limitation of the implementation; it is what Leon's rule costs, and
+it is better paid at the keyboard than at the send.
+
+**The tabs follow the same logic.** WhatsApp (counsellors' own numbers) first because it is
+the daily work, Instagram, then WhatsApp API last with the campaign tooling. The lead page's
+Chat button points at the first of those. The old "Personal WhatsApp" explainer became a real
+inbox; what it explained now lives beside the steps that act on it.
+
+**One inbox, rendered twice.** The two tabs are the same 340-line screen with a different
+`scope` and different words at the top. Copying it would have let the filters, the counsellor
+switcher and the unmatched-thread handling drift apart by the second change.
+
+**Migration 0093 adds `whatsapp_messages.number_id`**, which the table has never had — it did
+not need it while there was one number. Null means the API number, and that is true rather
+than merely convenient: every row written before the migration arrived on it. No backfill is
+attempted because there is nothing to look up; the fact was never recorded.
+
+Known and accepted: the WhatsApp tab is **empty today**, because Coexistence onboarding needs
+Advanced Access and App Review has not cleared. Leon chose this knowing that. The empty state
+says what unlocks it rather than rendering a blank list.

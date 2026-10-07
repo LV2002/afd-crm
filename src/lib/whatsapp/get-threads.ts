@@ -44,6 +44,7 @@ export interface WhatsAppThreadSummary {
 
 interface MessageRow {
   lead_id: string | null;
+  number_id: string | null;
   from_phone: string;
   direction: "inbound" | "outbound";
   message_type: "text" | "template" | "media";
@@ -61,13 +62,58 @@ function preview(row: MessageRow): string {
   return (row.body ?? "").replace(/\s+/g, " ").trim() || "(empty message)";
 }
 
+/**
+ * Which inbox is asking.
+ *
+ * `api` is the institute's broadcast number — campaign replies, and
+ * every message written before migration 0093, when it was the only
+ * number there was. `coexistence` is a counsellor's own handset.
+ *
+ * Passed as the set of number ids rather than a mode string so the caller
+ * does the one configuration read and this stays a single query. An
+ * empty set with `includeUnassigned` is the API inbox before any
+ * Coexistence number exists, which is where AFD is today.
+ */
+export interface ThreadScope {
+  numberIds: string[];
+  /** True for the API inbox: rows with no number are its by definition. */
+  includeUnassigned: boolean;
+}
+
 export async function getWhatsAppThreads(
   supabase: SupabaseClient,
+  scope?: ThreadScope,
 ): Promise<WhatsAppThreadSummary[]> {
-  const { data: messageRows } = await supabase
+  let query = supabase
     .from("whatsapp_messages")
-    .select("lead_id, from_phone, direction, message_type, body, template_name, media_mime_type, occurred_at")
-    .is("deleted_at", null)
+    .select("lead_id, number_id, from_phone, direction, message_type, body, template_name, media_mime_type, occurred_at")
+    .is("deleted_at", null);
+
+  /*
+    No scope means every thread, which is what the dashboard counts and
+    what this did before there were two inboxes.
+
+    With one, the filter is "these numbers" plus, for the API inbox, the
+    rows that name no number at all. PostgREST cannot express "in this
+    list OR null" in a single `.in()`, so it goes through `.or()` — and
+    an empty list would make `in.()` a syntax error, hence the branch.
+  */
+  if (scope) {
+    const quoted = scope.numberIds.join(",");
+    if (scope.numberIds.length > 0 && scope.includeUnassigned) {
+      query = query.or(`number_id.in.(${quoted}),number_id.is.null`);
+    } else if (scope.numberIds.length > 0) {
+      query = query.in("number_id", scope.numberIds);
+    } else if (scope.includeUnassigned) {
+      query = query.is("number_id", null);
+    } else {
+      // A Coexistence inbox with no Coexistence numbers. Nothing can
+      // match, and asking the database to prove it is a wasted round trip.
+      return [];
+    }
+  }
+
+  const { data: messageRows } = await query
     .order("occurred_at", { ascending: false })
     .limit(MESSAGE_SCAN_LIMIT)
     .returns<MessageRow[]>();

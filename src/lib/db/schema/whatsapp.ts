@@ -79,6 +79,20 @@ export const whatsappMessages = pgTable(
      */
     leadId: uuid("lead_id").references(() => leads.id, { onDelete: "cascade" }),
     counsellorId: uuid("counsellor_id").references(() => profiles.id, { onDelete: "set null" }),
+    /**
+     * Which of the institute's numbers this was sent from or received on.
+     *
+     * Null means the broadcast API number, which is true of every row
+     * written before migration 0093 — it was the only number there was.
+     * Coexistence made the distinction matter: a counsellor's own handset
+     * has a different owner, a different rule about creating leads, and
+     * from now on its own inbox.
+     *
+     * A forward reference to `whatsappNumbers`, declared below. Drizzle
+     * takes a thunk, so the lookup happens when the schema is read rather
+     * than when this line is evaluated.
+     */
+    numberId: uuid("number_id").references(() => whatsappNumbers.id, { onDelete: "set null" }),
     direction: interactionDirectionEnum("direction").notNull(),
     waMessageId: text("wa_message_id"),
     fromPhone: text("from_phone").notNull(),

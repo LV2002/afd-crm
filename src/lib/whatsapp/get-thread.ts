@@ -110,13 +110,45 @@ export function isWithinWindow(lastInboundAt: string | Date | null, now = new Da
   return now.getTime() - at.getTime() < WINDOW_MS;
 }
 
-/** Whether a free-form text reply is currently allowed — Meta's 24-hour customer service window, opened by the lead's most recent inbound message. Outside it, only a template send is accepted by the Cloud API. */
-export async function isWithinCustomerServiceWindow(supabase: SupabaseClient, leadId: string): Promise<boolean> {
-  const { data } = await supabase
+/**
+ * Whether a free-form text reply is currently allowed — Meta's 24-hour
+ * customer service window, opened by the lead's most recent inbound
+ * message. Outside it, only a template send is accepted by the Cloud API.
+ *
+ * ## The window belongs to a number pair, not to a person
+ *
+ * This is the part that is easy to get wrong and expensive to discover.
+ * A student messaging the institute's broadcast number opens a window
+ * **on that number**. It does not open one on the counsellor's own
+ * handset number — as far as Meta is concerned those are two different
+ * conversations with two different businesses.
+ *
+ * Since a counsellor's reply now always leaves from their own number
+ * (see `sender-number.ts`), the question this has to answer is "has this
+ * person written to *that* number in the last 24 hours", and `numberId`
+ * is how the caller says which. Answering the looser question would mean
+ * the composer invites somebody to type a reply that Meta then refuses —
+ * the one failure worth paying a query to avoid.
+ *
+ * `undefined` keeps the old behaviour of asking about any number, which
+ * is what a read-only view of the whole thread wants.
+ */
+export async function isWithinCustomerServiceWindow(
+  supabase: SupabaseClient,
+  leadId: string,
+  numberId?: string | null,
+): Promise<boolean> {
+  let query = supabase
     .from("whatsapp_messages")
     .select("occurred_at")
     .eq("lead_id", leadId)
-    .eq("direction", "inbound")
+    .eq("direction", "inbound");
+
+  if (numberId !== undefined) {
+    query = numberId === null ? query.is("number_id", null) : query.eq("number_id", numberId);
+  }
+
+  const { data } = await query
     .order("occurred_at", { ascending: false })
     .limit(1)
     .maybeSingle<{ occurred_at: string }>();
@@ -136,13 +168,20 @@ export async function isWithinCustomerServiceWindow(supabase: SupabaseClient, le
 export async function isWithinCustomerServiceWindowForPhone(
   supabase: SupabaseClient,
   phone: string,
+  numberId?: string | null,
 ): Promise<boolean> {
-  const { data } = await supabase
+  let query = supabase
     .from("whatsapp_messages")
     .select("occurred_at")
     .is("lead_id", null)
     .eq("from_phone", phone)
-    .eq("direction", "inbound")
+    .eq("direction", "inbound");
+
+  if (numberId !== undefined) {
+    query = numberId === null ? query.is("number_id", null) : query.eq("number_id", numberId);
+  }
+
+  const { data } = await query
     .order("occurred_at", { ascending: false })
     .limit(1)
     .maybeSingle<{ occurred_at: string }>();
