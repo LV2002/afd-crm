@@ -119,11 +119,16 @@ export function RevealPhoneButton({
  * `lead:<id>` is the thread key the inbox builds for a matched
  * conversation (`get-threads.ts`), so this lands on the right thread
  * without the caller knowing anything about phone numbers.
+ *
+ * It points at **WhatsApp** — the counsellors' own numbers — and not at
+ * WhatsApp API. Talking to a student happens on the counsellor's number;
+ * the broadcast number's inbox is a record of campaign replies, and
+ * nobody answers from it.
  */
 function ChatLink({ leadId }: { leadId: string }) {
   return (
     <Link
-      href={`/whatsapp?thread=${encodeURIComponent(`lead:${leadId}`)}`}
+      href={`/whatsapp/personal?thread=${encodeURIComponent(`lead:${leadId}`)}`}
       className="inline-flex min-h-8 items-center gap-1 rounded-md border px-2 text-xs font-medium transition-colors hover:bg-accent"
     >
       <MessageCircle className="size-3.5" /> Chat

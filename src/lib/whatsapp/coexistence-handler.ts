@@ -164,6 +164,10 @@ export async function recordKnownMessages(
 
     await db.insert(whatsappMessages).values({
       leadId: lead?.id ?? null,
+      // Always set here: every message on this path belongs to the
+      // counsellor's own number by definition, which is what puts it in
+      // the WhatsApp inbox rather than the API one.
+      numberId: number.id,
       // The phone's owner, not whoever is signed in: nobody is signed in
       // when a webhook arrives, and the conversation belongs to them.
       //

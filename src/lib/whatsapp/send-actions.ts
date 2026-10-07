@@ -13,6 +13,7 @@ import {
 } from "@/lib/integrations/whatsapp/client";
 import { MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
 import { createClient } from "@/lib/supabase/server";
+import { NO_SENDER_NUMBER_MESSAGE, senderNumberFor } from "@/lib/whatsapp/sender-number";
 import {
   isWithinCustomerServiceWindow,
   isWithinCustomerServiceWindowForPhone,
@@ -40,6 +41,17 @@ export interface WhatsAppSendState {
 async function recordAndSend(
   leadId: string | null,
   toPhone: string,
+  /**
+   * How this message leaves.
+   *
+   * `"own"` — from the sending counsellor's own Coexistence number, which
+   * is every free-form reply. Leon's rule: a counsellor's message never
+   * goes out on the institute's broadcast number.
+   *
+   * `"api"` — from the broadcast number, which is templates and
+   * campaigns: the institute speaking rather than a person.
+   */
+  via: "own" | "api",
   insertFields: {
     messageType: "text" | "template" | "media";
     body: string | null;
@@ -54,13 +66,28 @@ async function recordAndSend(
     return { error: "You don't have permission to do that." };
   }
 
-  // One number for the whole institute, not one per counsellor. A number
-  // registered to the Cloud API can no longer be used in the WhatsApp
-  // Business app, and AFD's counsellors keep those apps on their own
-  // phones — so the CRM owns exactly one number, and who sent what is
-  // recorded here rather than implied by which number it left from.
-  const phoneNumberId = await getIntegrationCredential("whatsapp", "phone_number_id");
+  /*
+    Which number this leaves from.
+
+    One WABA access token covers every number on the account; only the
+    sending `phone_number_id` differs. So the whole decision is which id
+    to use, and it is made from the session rather than from anything a
+    form sent.
+  */
   const accessToken = await getIntegrationCredential("whatsapp", "access_token");
+
+  let numberId: string | null = null;
+  let phoneNumberId: string | null;
+
+  if (via === "own") {
+    const sender = await senderNumberFor(user.id);
+    if (!sender) return { error: NO_SENDER_NUMBER_MESSAGE };
+    numberId = sender.id;
+    phoneNumberId = sender.phoneNumberId;
+  } else {
+    phoneNumberId = await getIntegrationCredential("whatsapp", "phone_number_id");
+  }
+
   if (!phoneNumberId || !accessToken) {
     return { error: "WhatsApp isn't connected yet — an admin sets it up in Settings → Integrations → WhatsApp." };
   }
@@ -70,6 +97,7 @@ async function recordAndSend(
     .from("whatsapp_messages")
     .insert({
       lead_id: leadId,
+      number_id: numberId,
       counsellor_id: user.id,
       sent_by: user.id,
       direction: "outbound",
@@ -139,22 +167,39 @@ export async function sendWhatsAppMessage(
 ): Promise<WhatsAppSendState> {
   if (!body.trim()) return { error: "Message can't be empty." };
 
+  const user = await getCurrentUser();
+  if (!user) return { error: "You don't have permission to do that." };
+
+  /*
+    The window is checked against the number this will actually leave
+    from, which is the counsellor's own.
+
+    Meta scopes the 24-hour window to a number pair. A student who
+    messaged the institute's broadcast number has opened a window *there*
+    and nowhere else — so a reply from the counsellor's handset is a
+    first contact as far as Meta is concerned, and gets refused. Checking
+    the looser "have they messaged us at all" would mean inviting
+    somebody to type a reply that is then rejected, which is the one
+    failure worth a query to avoid.
+  */
+  const sender = await senderNumberFor(user.id);
+  if (!sender) return { error: NO_SENDER_NUMBER_MESSAGE };
+
   const supabase = await createClient();
   const withinWindow = leadId
-    ? await isWithinCustomerServiceWindow(supabase, leadId)
-    : await isWithinCustomerServiceWindowForPhone(supabase, toPhone);
+    ? await isWithinCustomerServiceWindow(supabase, leadId, sender.id)
+    : await isWithinCustomerServiceWindowForPhone(supabase, toPhone, sender.id);
   if (!withinWindow) {
-    // Meta only accepts a free-form reply inside the 24-hour window the
-    // lead's own message opens. Outside it the only API route is a paid
-    // template, which is deliberately not a counsellor's decision (see
-    // sendWhatsAppTemplate) — so the honest instruction is the one Leon
-    // gave: message them from your own phone.
+    // Outside the window the only API route is a paid template, which is
+    // deliberately not a counsellor's decision (see sendWhatsAppTemplate)
+    // — so the honest instruction is the one Leon gave: use your phone.
     return {
-      error: `${leadId ? "This lead hasn't" : "They haven't"} messaged in the last 24 hours, so WhatsApp won't accept a reply from here. Message them from the WhatsApp Business app on your phone — the window reopens as soon as they write back.`,
+      error: `${leadId ? "This lead hasn't" : "They haven't"} messaged ${sender.label} in the last 24 hours, so WhatsApp won't accept a reply from here. Message them from the WhatsApp Business app on your phone — the window reopens as soon as they write back.`,
     };
   }
 
-  return recordAndSend(leadId, toPhone, { messageType: "text", body: body.trim(), templateName: null }, (phoneNumberId, accessToken) =>
+  // "own": a counsellor's reply always leaves from their own number.
+  return recordAndSend(leadId, toPhone, "own", { messageType: "text", body: body.trim(), templateName: null }, (phoneNumberId, accessToken) =>
     sendTextMessage(phoneNumberId, accessToken, toPhone, body.trim()),
   );
 }
@@ -186,7 +231,9 @@ export async function sendWhatsAppTemplate(
   }
   if (!templateName.trim()) return { error: "Template name is required." };
 
-  return recordAndSend(leadId, toPhone, { messageType: "template", body: null, templateName: templateName.trim() }, (phoneNumberId, accessToken) =>
+  // "api": a template is the institute speaking, is billed to the
+  // institute, and is gated on whatsapp.campaign above.
+  return recordAndSend(leadId, toPhone, "api", { messageType: "template", body: null, templateName: templateName.trim() }, (phoneNumberId, accessToken) =>
     sendTemplateMessage(phoneNumberId, accessToken, toPhone, templateName.trim(), languageCode.trim() || "en_US", bodyParam.trim() ? [bodyParam.trim()] : undefined),
   );
 }
@@ -255,6 +302,9 @@ export async function sendWhatsAppMedia(
   return recordAndSend(
     leadId,
     toPhone,
+    // A photo of a campus or a fee receipt is a counsellor sending
+    // something, so it follows the same rule as the text beside it.
+    "own",
     {
       messageType: "media",
       // The caption is the message's readable content, so it goes in the

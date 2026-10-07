@@ -291,6 +291,9 @@ describe("messages the counsellor sent from their phone", () => {
     // counsellor whose phone it is. Null here would mean only whoever
     // runs campaigns could see a counsellor's own conversation.
     expect(rows[0].counsellorId).toBe(counsellorId);
+    // And the number it arrived on, which is what puts this thread in the
+    // WhatsApp inbox rather than the broadcast number's (migration 0093).
+    expect(rows[0].numberId).toBe(coexNumberId);
 
     const leadRows = await db.select().from(leads).where(eq(leads.primaryPhone, "+919847600999"));
     expect(leadRows).toHaveLength(0);

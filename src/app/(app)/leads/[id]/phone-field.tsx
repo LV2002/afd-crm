@@ -53,7 +53,7 @@ export function PhoneField({
 }) {
   const chat = showChat ? (
     <Link
-      href={`/whatsapp?thread=${encodeURIComponent(`lead:${leadId}`)}`}
+      href={`/whatsapp/personal?thread=${encodeURIComponent(`lead:${leadId}`)}`}
       className="inline-flex min-h-8 items-center gap-1 rounded-md border px-2 text-xs font-medium transition-colors hover:bg-accent"
     >
       <MessageCircle className="size-3.5" /> Chat

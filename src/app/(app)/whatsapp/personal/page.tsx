@@ -1,107 +1,79 @@
 import Link from "next/link";
+import { and, eq, isNull } from "drizzle-orm";
 
-import { AccessDenied } from "@/components/layout/access-denied";
-import { can, getCurrentUser } from "@/lib/auth/session";
+import { db } from "@/lib/db/client";
+import { whatsappNumbers } from "@/lib/db/schema";
+
+import { WhatsAppInbox, type InboxParams } from "../inbox";
 
 /**
- * Counsellors' own WhatsApp.
+ * **WhatsApp** — the counsellors' own numbers, and the conversations on
+ * them.
  *
- * Two things people reach for here, and a third that actually works.
+ * This is the one-to-one channel: a counsellor's handset running the
+ * WhatsApp Business app and Meta's Cloud API at the same time
+ * (Coexistence), mirrored here. Every reply a counsellor types anywhere
+ * in this CRM leaves from the number registered to them — Leon's rule,
+ * enforced in `lib/whatsapp/sender-number.ts` rather than by which screen
+ * it was typed on.
  *
- * **An unofficial library** (whatsapp-web.js, Baileys) drives WhatsApp Web
- * through a reverse-engineered protocol. It breaks WhatsApp's terms, and
- * what gets banned is the number a counsellor answers enquiries on.
+ * It is the first tab because it is the daily work. The broadcast
+ * number's inbox sits last, after Instagram, with the rest of the
+ * campaign tooling.
  *
- * **An iframe of web.whatsapp.com** cannot render at all: WhatsApp sends
- * `X-Frame-Options`, and the browser refuses to display the page inside
- * another site. Nothing in this application can override a header another
- * domain sends — that is the whole point of it. Stripping it would mean
- * proxying WhatsApp Web through our own server, which is the
- * reverse-engineering problem again wearing a different hat.
+ * ## While no number is connected
  *
- * **Coexistence** is the real answer, and Meta shipped it in May 2025: one
- * number running the WhatsApp Business app AND the Cloud API at the same
- * time. The counsellor keeps their phone and their number; the CRM sees
- * and sends on it officially.
- *
- * It is built now. This page used to end by saying Coexistence was the
- * supported answer and stop there, which read as a recommendation nobody
- * had acted on — so it points at the screen that does it.
+ * Coexistence onboarding needs Advanced Access on the WhatsApp
+ * permissions, which is still in App Review. Until one is connected this
+ * inbox is empty — and says so, with what unlocks it, rather than
+ * rendering a blank list and leaving somebody to guess whether it is
+ * broken. The explainer that used to be this whole page now lives on the
+ * setup screen, where the person who can act on it is.
  */
-export default async function PersonalWhatsAppPage() {
-  const user = await getCurrentUser();
-  if (!user || !can(user, "whatsapp.read")) return <AccessDenied />;
+export default async function PersonalWhatsAppPage({
+  searchParams,
+}: {
+  searchParams: Promise<InboxParams>;
+}) {
+  const ownNumbers = await db
+    .select({ id: whatsappNumbers.id })
+    .from(whatsappNumbers)
+    .where(and(eq(whatsappNumbers.mode, "coexistence"), isNull(whatsappNumbers.deletedAt)));
 
   return (
-    <div className="flex max-w-3xl flex-col gap-5">
-      <div className="rounded-lg border border-success/40 bg-success-subtle p-4">
-        <p className="text-[0.9375rem]">
-          <strong>There is a supported way to do this, called Coexistence.</strong> One number
-          runs the WhatsApp Business app and Meta&apos;s Cloud API at the same time. The
-          counsellor keeps their phone, their number and their chats; the CRM sees and sends
-          on that number officially, through the same webhook the institute&apos;s number
-          already uses.
-        </p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Meta shipped it in May 2025. No ban risk, no reverse engineering, and nothing for a
-          counsellor to change about how they work day to day.
-        </p>
-        <p className="mt-3 text-[0.9375rem]">
-          <strong>This CRM supports it.</strong> Set a number up under{" "}
-          <Link href="/settings/integrations/whatsapp" className="underline">
-            Settings → Integrations → WhatsApp
-          </Link>
-          , which lists the four steps — three of them in Meta, one here.
-        </p>
-      </div>
-
-      <div>
-        <h2 className="font-medium">What Coexistence gives you, and what it does not</h2>
-        <ul className="mt-2 flex list-disc flex-col gap-2 pl-5 text-sm">
-          <li>Messages sent or received on either side mirror to the other in real time.</li>
-          <li>
-            A message from somebody not yet in the CRM <strong>creates a lead</strong> on that
-            number, assigned to whoever owns the phone — which is the opposite of what the
-            institute&apos;s broadcast number does, and deliberately so.
-          </li>
-          <li>
-            On approval, up to <strong>180 days</strong> of one-to-one history syncs across.
-            Anything older stays in the app only.
-          </li>
-          <li>
-            <strong>Group chats do not sync</strong>, disappearing messages and live location
-            are turned off, and broadcast lists become read-only.
-          </li>
-          <li>
-            It applies to the <strong>WhatsApp Business app</strong>, not consumer WhatsApp. A
-            counsellor on the ordinary app would move to the free Business one, same number.
-          </li>
-        </ul>
-      </div>
-
-      <div className="rounded-lg border p-4">
-        <h2 className="font-medium">Why not just embed WhatsApp Web in a frame</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          It cannot render. WhatsApp sends an <code>X-Frame-Options</code> header and the
-          browser refuses to display the page inside another site — a protection against
-          exactly the kind of framing that lets one site read another&apos;s session. Nothing
-          in this CRM can override a header a different domain sends. Routing it through our
-          own server to strip that header would mean proxying WhatsApp Web, which is the
-          reverse-engineering problem again under another name.
-        </p>
-      </div>
-
-      <div className="rounded-lg border p-4">
-        <h2 className="font-medium">One thing to decide before switching it on</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Supervisors being able to read a counsellor&apos;s conversations is reasonable for
-          work on a business number and is not reasonable for someone&apos;s private messages.
-          Coexistence keeps that line in the right place — it syncs the business number&apos;s
-          one-to-one chats and not group chats — but the counsellors should be told plainly
-          that admissions conversations on that number are visible to their centre head, in
-          the same way a shared inbox is.
-        </p>
-      </div>
-    </div>
+    <WhatsAppInbox
+      searchParams={searchParams}
+      // Never `includeUnassigned`: a row with no number is a broadcast-era
+      // message, and belongs to the other tab.
+      scope={{ numberIds: ownNumbers.map((n) => n.id), includeUnassigned: false }}
+      basePath="/whatsapp/personal"
+      intro={
+        <>
+          Conversations on the counsellors&apos; own numbers. A message from somebody not yet in
+          the CRM <strong>creates a lead</strong> here, assigned to whoever owns the phone —
+          the opposite of the broadcast number, and deliberately so. Replies leave from the
+          counsellor&apos;s own number; a free-form one only reaches somebody who has messaged
+          that number in the last 24 hours.
+        </>
+      }
+      emptyNotice={
+        ownNumbers.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-4">
+            <p className="text-sm font-medium">No counsellor&apos;s number is connected yet.</p>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              This inbox fills once a counsellor&apos;s own WhatsApp number is onboarded through
+              Coexistence, which needs Advanced Access on the WhatsApp permissions — still in App
+              Review. Until then their conversations stay on the phone, and replies cannot be
+              sent from the CRM: a counsellor&apos;s message never goes out on the institute&apos;s
+              broadcast number.{" "}
+              <Link href="/settings/integrations/whatsapp" className="font-medium underline">
+                Settings → Integrations → WhatsApp
+              </Link>{" "}
+              has the steps.
+            </p>
+          </div>
+        ) : null
+      }
+    />
   );
 }

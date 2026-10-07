@@ -7,13 +7,19 @@ Across the top are three **channels**:
 
 | Channel | What it is |
 |---|---|
-| **WhatsApp Business** | The institute's one WhatsApp Business API number |
-| **Personal WhatsApp** | An explanation, and how to put a counsellor's own number in the CRM — see 10.6 |
+| **WhatsApp** | The counsellors' own numbers, and the conversations on them. This is the daily work, and it is where every reply goes out from |
 | **Instagram** | DMs to the institute's Instagram account |
+| **WhatsApp API** | The institute's broadcast number: replies to campaigns, and the campaign tooling |
 
-Under the WhatsApp Business channel there is a second row of tabs —
-**Inbox**, **Templates**, **Broadcasts**, **Automations**, **Opted out** —
-which apply only to that channel.
+Under **WhatsApp API** there is a second row of tabs — **Inbox**,
+**Templates**, **Broadcasts**, **Automations**, **Opted out** — which
+apply only to that number.
+
+**A counsellor's reply always leaves from their own number, never from
+the broadcast one.** That is true wherever you type it, including the
+Chat button on a lead, which opens the conversation on the **WhatsApp**
+tab. It is also why answering is not offered on the WhatsApp API tab at
+all: that number is the institute speaking, not a person.
 
 ## 10.1 What the WhatsApp number is for
 
@@ -177,9 +183,22 @@ An opted-out number is excluded from every broadcast and automation, and
 from retargeting audiences. This is not a preference — treat it as
 absolute.
 
-## 10.6 Personal WhatsApp — why it is not an inbox
+## 10.6 The WhatsApp tab — counsellors' own numbers
 
-This tab explains, rather than showing conversations. The short version:
+This tab is a real inbox now. Until a counsellor's number is connected it
+is empty and says so; the explanation of why it works the way it does is
+below, and the steps are on **Settings → Integrations → WhatsApp**.
+
+**There is a catch worth knowing before you ask why a reply was
+refused.** WhatsApp's 24-hour rule is per *number pair*, not per person.
+Somebody who messaged the institute's broadcast number has opened a
+window on that number and nowhere else — so a reply from a counsellor's
+own number is a first contact as far as WhatsApp is concerned, and is
+refused. The CRM checks this before letting you type, so the box is
+simply closed rather than the message bouncing after you send it. To
+write first, message them from the WhatsApp Business app on the phone.
+
+The short version of why personal WhatsApp cannot simply be embedded:
 
 **There is no legal way to put a counsellor's personal WhatsApp inside
 the CRM.** Every tool that claims to drives WhatsApp Web through a
@@ -191,7 +210,8 @@ either: WhatsApp sends a header that forbids it.
 The supported answer is **Coexistence**, and the CRM now does it: one
 number running the WhatsApp Business app and the Cloud API at the same
 time, mirroring messages both ways. The counsellor keeps their phone,
-their number and their chats.
+their number and their chats — and those conversations appear on this
+tab.
 
 <!-- only: admin -->
 ## 10.6a Coexistence — a counsellor's own number in the CRM
