@@ -59,33 +59,16 @@ export function pagePathOf(value: string | null): string | null {
 }
 
 /**
- * The UTM parameters on the page the form was submitted from.
+ * Re-exported, not defined here any more.
  *
- * A website form is exactly where these are worth capturing: Leon runs ads
- * to landing pages, so `utm_campaign` on the form fill is the only thing
- * connecting a website enquiry back to the ad that paid for it. Anything
- * beginning `utm_` is kept, plus the two click ids the platforms add
- * themselves.
+ * Reading campaign parameters out of a URL stopped being a website
+ * concern when custom webhooks started carrying page URLs too, so the
+ * implementation moved to `form-payload/utm.ts` and the generic mapper
+ * now applies it to every source. Kept exported from here because this
+ * is where callers and tests have always looked for it, and two copies
+ * of a parser is how the two paths drifted apart in the first place.
  */
-export function utmFromQuery(value: string | null): Record<string, string> | null {
-  if (!value) return null;
-
-  const query = value.includes("?") ? value.slice(value.indexOf("?") + 1) : value;
-  const cleaned = query.split("#")[0];
-  if (!cleaned) return null;
-
-  const out: Record<string, string> = {};
-  for (const [key, raw] of new URLSearchParams(cleaned)) {
-    const name = key.toLowerCase();
-    if (name.startsWith("utm_") || name === "gclid" || name === "fbclid") {
-      const trimmed = raw.trim();
-      // A parameter present but empty tells you nothing and would show up
-      // as a blank row in a report.
-      if (trimmed) out[name] = trimmed;
-    }
-  }
-  return Object.keys(out).length > 0 ? out : null;
-}
+export { utmFromQuery } from "@/lib/integrations/form-payload/utm";
 
 /**
  * The label that lands in `sub_source`, and therefore in every report and

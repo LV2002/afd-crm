@@ -172,6 +172,14 @@ Usually the script runs before the fields exist — put it at the end of the
 body — or the person navigated away and back, which the `sessionStorage`
 above is there to survive.
 
+There is a second route if the hidden fields are more trouble than they
+are worth: have the form post the **page address it was submitted from**,
+query string included, under any of `page`, `page_url`, `url` or
+`referrer`. The CRM reads `utm_*`, `gclid` and `fbclid` out of it, and
+merges them with any hidden fields that did arrive — field wins where
+both have the same parameter. That is often the quicker fix for a form
+builder or course platform with no way to run a script at all.
+
 **No offline conversions are uploading.** *Settings → Platform health →
 Daily* lists the job and its reason. `nothing to do: not-configured` means
 the Google Ads credentials are missing, not that the job is broken. The

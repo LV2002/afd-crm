@@ -512,6 +512,15 @@ The sample payload is generated from what the CRM actually understands
 rather than written out by hand, so it cannot drift out of date. Paste it
 as-is to test, then map the service's own fields onto those names.
 
+**Campaign attribution comes through either way.** `utm_source`,
+`utm_campaign`, `gclid` and `fbclid` are read out of the page URL the
+sender posts *and* from fields of their own, merged together — so a
+service that only forwards the address the form was on is attributed
+just as well as one with hidden inputs. Where the two disagree, the
+field wins, since somebody set that up deliberately. This matters most
+for `gclid`: Google Ads adds it to the URL by itself through
+auto-tagging, so it is the one parameter nobody has to remember.
+
 Under **Every reply it can get** the card lists every other response and
 what it means. Two of them are worth knowing before you configure
 retries: a duplicate delivery and a payload with no usable name or phone
@@ -546,10 +555,15 @@ names** on the card, one per line, like `phone: mob, contact_no`.
   into your CRM. The card says so under the tickbox while both are off.
   Try the key before settling for that, and if you do settle for it,
   treat the URL like a password.
-- *Expecting UTM parameters inside a page URL to be read.* They are not.
-  For a lead to be attributed to a campaign the sender has to post
-  `utm_source`, `utm_campaign` and the rest as **their own fields** —
-  which is why they are in the sample payload.
+- *Sending a campaign **name** where Google Ads sends an id.* Campaign
+  parameters are read both ways now — out of a page URL's query string
+  and from fields of their own — so a sender that posts either is
+  attributed. What still does not work is `utm_campaign=Brand-Search`:
+  Ad Performance joins leads to spend on the platform's own numeric
+  campaign id, so a name is kept on the lead and shown in the sources
+  report but cannot be matched to what the campaign cost. Use the Final
+  URL suffix in `docs/GOOGLE-ADS-SETUP.md`, which sends
+  `utm_campaign={campaignid}`.
 - *Reusing one endpoint for two services.* They would share a source name
   and the reports could not separate them. Make two.
 - *Deleting an endpoint to stop it.* **Switch off** is what you want —
