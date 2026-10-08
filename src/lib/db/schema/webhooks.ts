@@ -142,6 +142,24 @@ export const customWebhooks = pgTable(
     /** Shared secret for the `X-AFD-Signature` HMAC. Always generated. */
     signingSecret: text("signing_secret").notNull(),
     /**
+     * A fixed key the sender sends in a header, for platforms whose idea
+     * of authentication is one value you paste into a box.
+     *
+     * HMAC signing is stronger and stays the default, but a great many
+     * form builders and course platforms cannot compute a signature at
+     * all. Before this their only option was `require_signature` off,
+     * which left the URL as the whole credential. A static key is weaker
+     * than a signature and far stronger than nothing, and it is what
+     * those platforms' own setup screens ask for.
+     *
+     * **Null means no key is expected.** That is deliberate rather than
+     * tidy: generating one for every endpoint and enforcing it on deploy
+     * would have broken every sender already configured. An admin turns
+     * it on, the key is generated then, and from that moment a request
+     * without it is refused.
+     */
+    authToken: text("auth_token"),
+    /**
      * Whether a valid signature is required.
      *
      * True by default and the right answer. Turned off for a sender that

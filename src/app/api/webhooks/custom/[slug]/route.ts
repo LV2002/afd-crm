@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
 import { customWebhooks, webhookEvents } from "@/lib/db/schema";
 import { adIdentifiersFrom } from "@/lib/integrations/form-payload/ad-identifiers";
+import { authKeyMatches, presentedAuthKey } from "@/lib/integrations/custom-webhook/auth-key";
 import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
 import {
   mapFormPayload,
@@ -47,6 +48,12 @@ export const dynamic = "force-dynamic";
  * why it is 32 random bytes and never derived from the name. The Settings
  * screen says what that trade costs rather than offering it as a neutral
  * checkbox.
+ *
+ * Between those two there is now a third: an `auth_token`, a fixed key
+ * the sender puts in a header. It is checked independently of the
+ * signature, so an endpoint may require either, both or neither, and the
+ * common case — a platform that cannot sign but can set one header — is
+ * no longer forced down to an unauthenticated URL.
  *
  * ## Why an unknown token writes nothing
  *
@@ -112,6 +119,23 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
       lastError: "Invalid or missing X-AFD-Signature",
     });
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  }
+
+  // The authentication key, when this endpoint has one. Recorded the same
+  // way a bad signature is: a rejected delivery is the single most useful
+  // thing on screen while somebody is setting a new sender up, and the
+  // reason has to name the header so they know which box to look in.
+  if (webhook.authToken && !authKeyMatches(webhook.authToken, presentedAuthKey(request.headers))) {
+    await db.insert(webhookEvents).values({
+      source: "custom",
+      customWebhookId: webhook.id,
+      externalId: `${webhook.id}:invalid:${randomUUID()}`,
+      signatureOk,
+      raw: payload,
+      status: "failed",
+      lastError: "Invalid or missing authentication key (Authorization: Bearer, or X-AFD-Key)",
+    });
+    return NextResponse.json({ error: "Invalid authentication key" }, { status: 401 });
   }
 
   // Prefixed with the endpoint's id: two feeds that both number their
@@ -212,7 +236,11 @@ export async function GET(_request: Request, context: { params: Promise<{ slug: 
   const { slug } = await context.params;
 
   const [webhook] = await db
-    .select({ name: customWebhooks.name, requireSignature: customWebhooks.requireSignature })
+    .select({
+      name: customWebhooks.name,
+      requireSignature: customWebhooks.requireSignature,
+      authToken: customWebhooks.authToken,
+    })
     .from(customWebhooks)
     .where(
       and(eq(customWebhooks.slug, slug), eq(customWebhooks.isActive, true), isNull(customWebhooks.deletedAt)),
@@ -220,10 +248,19 @@ export async function GET(_request: Request, context: { params: Promise<{ slug: 
 
   if (!webhook) return NextResponse.json({ error: "Unknown endpoint" }, { status: 404 });
 
+  // Never the key itself, only whether one is wanted. This reply is
+  // reachable by anybody holding the URL, which for an unsigned endpoint
+  // is precisely the population the key exists to keep out.
+  const expects = [
+    "JSON body",
+    webhook.requireSignature ? "signed with X-AFD-Signature" : null,
+    webhook.authToken ? "an authentication key in Authorization or X-AFD-Key" : null,
+  ].filter(Boolean);
+
   return NextResponse.json({
     ok: true,
     endpoint: webhook.name,
     method: "POST",
-    expects: webhook.requireSignature ? "JSON body signed with X-AFD-Signature" : "JSON body",
+    expects: expects.join(", plus "),
   });
 }

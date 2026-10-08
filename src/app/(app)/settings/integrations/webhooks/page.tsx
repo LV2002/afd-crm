@@ -20,6 +20,7 @@ interface WebhookRow {
   sub_source: string | null;
   center_id: string | null;
   signing_secret: string;
+  auth_token: string | null;
   require_signature: boolean;
   field_aliases: Record<string, string[]> | null;
   is_active: boolean;
@@ -54,7 +55,7 @@ export default async function CustomWebhooksPage() {
     supabase
       .from("custom_webhooks")
       .select(
-        "id, name, slug, source, sub_source, center_id, signing_secret, require_signature, field_aliases, is_active",
+        "id, name, slug, source, sub_source, center_id, signing_secret, auth_token, require_signature, field_aliases, is_active",
       )
       .is("deleted_at", null)
       .order("created_at", { ascending: true })
@@ -105,6 +106,7 @@ export default async function CustomWebhooksPage() {
       subSource: row.sub_source,
       centerId: row.center_id,
       signingSecret: row.signing_secret,
+      authToken: row.auth_token,
       requireSignature: row.require_signature,
       aliasText: await formatAliases(row.field_aliases),
       isActive: row.is_active,
