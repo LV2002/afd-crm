@@ -34,14 +34,17 @@ let signedSlug: string;
 let signedSecret: string;
 let openId: string;
 let openSlug: string;
+let keyedId: string;
+let keyedSlug: string;
+let keyedKey: string;
 let centerId: string;
 
 function token(): string {
   return randomBytes(32).toString("hex");
 }
 
-function request(slug: string, body: string, secret?: string): Request {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+function request(slug: string, body: string, secret?: string, extraHeaders?: Record<string, string>): Request {
+  const headers: Record<string, string> = { "content-type": "application/json", ...extraHeaders };
   if (secret) {
     headers["x-afd-signature"] = `sha256=${createHmac("sha256", secret).update(body, "utf8").digest("hex")}`;
   }
@@ -110,6 +113,23 @@ beforeAll(async () => {
     })
     .returning({ id: customWebhooks.id });
   openId = open.id;
+
+  // The shape this exists for: a sender that cannot sign a request but
+  // can set one header. Signature off, key on.
+  keyedSlug = token();
+  keyedKey = token();
+  const [keyed] = await db
+    .insert(customWebhooks)
+    .values({
+      name: `${MARKER} keyed`,
+      slug: keyedSlug,
+      source: `${MARKER} Course platform`,
+      signingSecret: token(),
+      requireSignature: false,
+      authToken: keyedKey,
+    })
+    .returning({ id: customWebhooks.id });
+  keyedId = keyed.id;
 });
 
 afterAll(async () => {
@@ -289,5 +309,94 @@ describe("the GET probe", () => {
   it("is a 404 for an unknown token", async () => {
     const response = await GET(new Request("https://example.com"), context("nope"));
     expect(response.status).toBe(404);
+  });
+});
+
+describe("an endpoint with an authentication key", () => {
+  async function failuresFor(id: string) {
+    return db
+      .select({ lastError: webhookEvents.lastError })
+      .from(webhookEvents)
+      .where(and(eq(webhookEvents.customWebhookId, id), eq(webhookEvents.status, "failed")));
+  }
+
+  it("refuses a request that carries no key, and records why", async () => {
+    const before = await failuresFor(keyedId);
+    const body = JSON.stringify({ name: `${MARKER} NoKey`, phone: "9847099301" });
+
+    const response = await POST(request(keyedSlug, body), context(keyedSlug));
+    expect(response.status).toBe(401);
+
+    // Refused deliveries are kept: while somebody is wiring a new sender
+    // up, the list of what was rejected and why is the only thing on
+    // screen that tells them which box they filled in wrong.
+    const after = await failuresFor(keyedId);
+    expect(after.length).toBe(before.length + 1);
+    expect(after[after.length - 1].lastError).toContain("authentication key");
+
+    expect(await leadByPhone("+919847099301")).toBeUndefined();
+  });
+
+  it("refuses a wrong key", async () => {
+    const body = JSON.stringify({ name: `${MARKER} WrongKey`, phone: "9847099302" });
+    const response = await POST(
+      request(keyedSlug, body, undefined, { authorization: `Bearer ${token()}` }),
+      context(keyedSlug),
+    );
+
+    expect(response.status).toBe(401);
+    expect(await leadByPhone("+919847099302")).toBeUndefined();
+  });
+
+  it("accepts a bearer token", async () => {
+    const body = JSON.stringify({ name: `${MARKER} Bearer`, phone: "9847099303" });
+    const response = await POST(
+      request(keyedSlug, body, undefined, { authorization: `Bearer ${keyedKey}` }),
+      context(keyedSlug),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+
+    const lead = await leadByPhone("+919847099303");
+    expect(lead).toBeDefined();
+    // The whole point of the feature: the admin's own source name, kept
+    // as first touch so the sources report can tell one feed from another.
+    expect(lead.firstTouchSource).toBe(`${MARKER} Course platform`);
+  });
+
+  it("accepts the key in X-AFD-Key, for a sender that cannot set Authorization", async () => {
+    const body = JSON.stringify({ name: `${MARKER} XKey`, phone: "9847099304" });
+    const response = await POST(
+      request(keyedSlug, body, undefined, { "x-afd-key": keyedKey }),
+      context(keyedSlug),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await leadByPhone("+919847099304")).toBeDefined();
+  });
+
+  /*
+    The regression that would make this feature a liability rather than a
+    safeguard: a key configured on one endpoint must not let anything
+    through on an endpoint that has none, and an endpoint with no key must
+    go on working exactly as it did before this column existed.
+  */
+  it("leaves an endpoint without a key alone", async () => {
+    const body = JSON.stringify({ buyer: `${MARKER} NoKeyNeeded`, mob: "9847099305" });
+
+    const response = await POST(request(openSlug, body), context(openSlug));
+    expect(response.status).toBe(200);
+    expect(await leadByPhone("+919847099305")).toBeDefined();
+  });
+
+  it("says a key is expected without ever naming it", async () => {
+    const response = await GET(request(keyedSlug, ""), context(keyedSlug));
+    const probe = (await response.json()) as { expects: string };
+
+    expect(probe.expects).toContain("authentication key");
+    // This reply is reachable by anybody holding the URL — which, on an
+    // unsigned endpoint, is exactly who the key exists to keep out.
+    expect(JSON.stringify(probe)).not.toContain(keyedKey);
   });
 });

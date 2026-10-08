@@ -8270,3 +8270,40 @@ sent from the CRM at all. Leon chose this knowing it; the empty state says what 
 
 **1666 tests pass** (1 assertion added on the new column), typecheck, lint, `db:audit` and
 build clean.
+
+## Session 60 — the four boxes a sender's setup screen asks for
+
+Leon asked for four things on a custom webhook so he can fill in whatever a third-party
+service wants: **URL, payload, authentication key, expected response**. He had one of them.
+
+- **Authentication key** (migration 0094, `custom_webhooks.auth_token`). A fixed value the
+  sender presents as `Authorization: Bearer <key>` or `X-AFD-Key: <key>` — both accepted,
+  because plenty of platforms will set any header except Authorization. Until now the only
+  choices were HMAC signing or nothing, and the many senders that cannot sign were being
+  pushed to "nothing", leaving the URL as the whole credential.
+  - **Null means no key**, deliberately: every endpoint already configured keeps working
+    untouched on deploy. A key exists only once somebody asks for one.
+  - Independent of `require_signature`, so an endpoint may demand both, either or neither.
+  - Checked in constant time, like every other credential in this codebase. A refused
+    delivery is recorded with a reason that names the header, because that list is what
+    somebody wiring up a new sender is actually looking at.
+  - **New URL & secret** rotates the key too — but only if there is one. A button labelled
+    "new URL & secret" must not give an endpoint a requirement it never had.
+- **Sample payload and expected response**, both copyable, both on the card. The sample is
+  *derived from `ALIASES`* rather than written out, and a test asserts the mapper accepts
+  it. A hand-written sample drifts the moment an alias changes, and a sample that no longer
+  maps is worse than none — it sends somebody hunting for a fault in their own platform.
+- **Every reply the endpoint can give** is listed with what it means, because two of them
+  are 200s that a sender set to "retry unless 200" would otherwise re-post forever: a
+  duplicate, and a payload with no usable name or phone.
+- The **Unsigned** badge now reads **Key only** when a key is configured — it was warning
+  about an open door that is no longer open — and the tickbox says plainly when both
+  credentials are off.
+
+**Found while verifying the sample, not fixed:** `mapFormPayload()` never parses UTM
+parameters out of a page URL. `ALIASES.query` exists and is documented as the place they
+come from, and nothing reads it — a dead switch of exactly the kind this project keeps
+finding. Attribution works only from explicit `utm_*` fields, so that is what the sample
+sends, and the admin guide says so. Raised with Leon rather than widened into this change.
+
+Stubbed: nothing. **1688 tests pass** (22 added), typecheck, lint and `db:audit` clean.

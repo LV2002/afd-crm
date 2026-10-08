@@ -487,12 +487,48 @@ service's "post to a URL" setting open in another tab.
 6. If that service can sign its requests, copy the **Signing secret** too
    and have it send `X-AFD-Signature: sha256=<hex>` — an HMAC SHA-256 of
    the exact request body.
-7. If it cannot sign, open the card and untick **Require a signature**.
-   Read the next paragraph before you do.
+7. If it cannot sign but will let you set one header, untick **Require a
+   signature** and tick **Require an authentication key** instead. Save,
+   and a key appears on the card to copy across.
+8. If it can do neither, untick both. Read the next paragraph before you
+   do.
 
 **What you should see** — the card counts deliveries as they arrive, and
 names the last error if one failed. Opening the URL in a browser confirms
 the endpoint is live.
+
+**The four things a sender's setup screen asks for.** Almost every
+service that posts leads somewhere has the same four boxes, and the card
+has all four ready to copy:
+
+| Their box | On the card |
+|---|---|
+| URL / endpoint | **POST this URL** |
+| Payload / body / sample request | **Sample payload** |
+| API key / auth key / header value | **Authentication key** (after step 7) |
+| Expected response / success condition | **Expected response** — `{"ok": true}` with HTTP 200 |
+
+The sample payload is generated from what the CRM actually understands
+rather than written out by hand, so it cannot drift out of date. Paste it
+as-is to test, then map the service's own fields onto those names.
+
+Under **Every reply it can get** the card lists every other response and
+what it means. Two of them are worth knowing before you configure
+retries: a duplicate delivery and a payload with no usable name or phone
+both answer **200**, not an error. Sending either again produces exactly
+the same answer, so a sender set to retry on anything but 200 would
+otherwise keep re-posting something that can never succeed.
+
+**About the authentication key.** It is a fixed value the sender puts in
+a header — either `Authorization: Bearer <key>` or `X-AFD-Key: <key>`,
+whichever that service lets you set. Both are accepted, because a
+surprising number of them will set any header except Authorization.
+
+It is weaker than a signature and far stronger than nothing, so the order
+of preference is: signature, then key, then neither. Saving does not
+change a key that already exists — only unticking the box removes it, and
+anything still sending it starts being refused from that moment. **New
+URL & secret** replaces the key as well, when the endpoint has one.
 
 **Field names do not have to match anything.** `name`, `Full Name` and
 `student_name` are all understood, and so are most spellings of phone,
@@ -504,10 +540,16 @@ field the sender actually posted — put the unusual one into **Extra field
 names** on the card, one per line, like `phone: mob, contact_no`.
 
 **Common mistakes**
-- *Turning off the signature without thinking about it.* Then the random
-  token in the URL is the only credential, and anyone who ever sees that
-  URL can post leads into your CRM. Only do it for a service that cannot
-  sign at all, and treat the URL like a password.
+- *Turning off the signature without thinking about it.* With no
+  signature **and** no authentication key, the random token in the URL is
+  the only credential, and anyone who ever sees that URL can post leads
+  into your CRM. The card says so under the tickbox while both are off.
+  Try the key before settling for that, and if you do settle for it,
+  treat the URL like a password.
+- *Expecting UTM parameters inside a page URL to be read.* They are not.
+  For a lead to be attributed to a campaign the sender has to post
+  `utm_source`, `utm_campaign` and the rest as **their own fields** —
+  which is why they are in the sample payload.
 - *Reusing one endpoint for two services.* They would share a source name
   and the reports could not separate them. Make two.
 - *Deleting an endpoint to stop it.* **Switch off** is what you want —

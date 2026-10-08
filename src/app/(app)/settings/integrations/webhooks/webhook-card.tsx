@@ -11,6 +11,11 @@ import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  RESPONSE_CASES,
+  SUCCESS_RESPONSE,
+  samplePayload,
+} from "@/lib/integrations/custom-webhook/setup-guide";
 
 import {
   deleteCustomWebhook,
@@ -30,6 +35,7 @@ export interface CustomWebhookView {
   subSource: string | null;
   centerId: string | null;
   signingSecret: string;
+  authToken: string | null;
   requireSignature: boolean;
   aliasText: string;
   isActive: boolean;
@@ -77,6 +83,44 @@ function CopyRow({ label, value, secret = false }: { label: string; value: strin
   );
 }
 
+/**
+ * The same copy affordance for something several lines long.
+ *
+ * `CopyRow` keeps its value on one line with a horizontal scroll, which
+ * is right for a URL or a key and wrong for a JSON body — the thing a
+ * sender's setup screen wants pasted whole, and the thing somebody needs
+ * to read to see which fields are on offer.
+ */
+function CopyBlock({ label, value, note }: { label: string; value: string; note?: React.ReactNode }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Nothing to reveal — the value is already on screen in full.
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        <Button type="button" size="sm" variant="outline" onClick={copy}>
+          {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+          <span className="sr-only">Copy {label}</span>
+        </Button>
+      </div>
+      <pre className="overflow-x-auto rounded bg-muted px-3 py-2 font-mono text-xs leading-relaxed">
+        {value}
+      </pre>
+      {note && <p className="text-xs text-muted-foreground">{note}</p>}
+    </div>
+  );
+}
+
 export function WebhookCard({
   webhook,
   centers,
@@ -89,6 +133,7 @@ export function WebhookCard({
   const [state, action, pending] = useActionState(saveCustomWebhook, initialState);
   const [open, setOpen] = useState(false);
   const [requireSignature, setRequireSignature] = useState(webhook.requireSignature);
+  const [requireAuthToken, setRequireAuthToken] = useState(webhook.authToken !== null);
 
   // Built in the browser: the server has no reliable idea whether this
   // admin is on production, a preview deployment or localhost, and the
@@ -109,7 +154,19 @@ export function WebhookCard({
             ) : (
               <Badge variant="secondary">Off</Badge>
             )}
-            {!webhook.requireSignature && <Badge variant="destructive">Unsigned</Badge>}
+            {/*
+              "Unsigned" is about whether anything authenticates the
+              sender, not about HMAC specifically. An endpoint with an
+              authentication key is not the open door this badge warns
+              about, so it says the weaker thing instead of the alarming
+              one.
+            */}
+            {!webhook.requireSignature &&
+              (webhook.authToken ? (
+                <Badge variant="secondary">Key only</Badge>
+              ) : (
+                <Badge variant="destructive">Unsigned</Badge>
+              ))}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Leads arrive as <strong>{webhook.source}</strong>
@@ -135,20 +192,44 @@ export function WebhookCard({
         <>
           <CopyRow label="Signing secret" value={webhook.signingSecret} secret />
 
+          {webhook.authToken && (
+            <CopyRow label="Authentication key" value={webhook.authToken} secret />
+          )}
+
+          <CopyBlock
+            label="Sample payload"
+            value={samplePayload()}
+            note={
+              <>
+                Only <code className="font-mono">name</code> and{" "}
+                <code className="font-mono">phone</code> are required. Field names do not have to
+                match these — <code className="font-mono">Full Name</code> and{" "}
+                <code className="font-mono">student_name</code> are understood too, and anything not
+                recognised is still kept on the enquiry.
+              </>
+            }
+          />
+
+          <CopyBlock
+            label="Expected response"
+            value={SUCCESS_RESPONSE}
+            note="Sent with HTTP 200 once the lead is recorded. The other replies are listed below."
+          />
+
           <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
             <p className="font-medium text-foreground">What the sender has to do</p>
             <p className="mt-1">
-              POST a JSON object to that URL. Field names do not have to match anything —{" "}
-              <code className="font-mono">name</code>, <code className="font-mono">Full Name</code>{" "}
-              and <code className="font-mono">student_name</code> are all understood, and anything
-              not recognised is still kept on the enquiry.
+              POST that JSON to the URL above. A name and a phone number are the only required
+              fields, and opening the URL in a browser confirms it is live.
             </p>
             <p className="mt-1.5">
               {webhook.requireSignature ? (
                 <>
-                  Sign the exact request body with the secret above (HMAC SHA-256) and send it as{" "}
+                  Sign the exact request body with the signing secret (HMAC SHA-256) and send it as{" "}
                   <code className="font-mono">X-AFD-Signature: sha256=&lt;hex&gt;</code>.
                 </>
+              ) : webhook.authToken ? (
+                <>No signature needed — the authentication key below takes its place.</>
               ) : (
                 <>
                   No signature needed. The random token in the URL is the only credential, so treat
@@ -156,10 +237,24 @@ export function WebhookCard({
                 </>
               )}
             </p>
-            <p className="mt-1.5">
-              A name and a phone number are the only required fields. Opening the URL in a browser
-              confirms it is live.
-            </p>
+            {webhook.authToken && (
+              <p className="mt-1.5">
+                Send the authentication key as{" "}
+                <code className="font-mono">Authorization: Bearer &lt;key&gt;</code>, or as{" "}
+                <code className="font-mono">X-AFD-Key: &lt;key&gt;</code> if the sender will not let
+                you set the Authorization header. Either is accepted.
+              </p>
+            )}
+
+            <p className="mt-3 font-medium text-foreground">Every reply it can get</p>
+            <ul className="mt-1 flex flex-col gap-1">
+              {RESPONSE_CASES.map((reply) => (
+                <li key={`${reply.status}-${reply.body}`}>
+                  <code className="font-mono">{reply.status}</code>{" "}
+                  <code className="font-mono">{reply.body}</code> — {reply.meaning}
+                </li>
+              ))}
+            </ul>
           </div>
 
           <form action={action} className="flex flex-col gap-3 border-t pt-4">
@@ -241,6 +336,27 @@ export function WebhookCard({
                   Leave this on wherever the sender supports it. Turning it off means anyone who
                   ever sees the URL can post leads into your CRM — only do it for a service that
                   cannot sign requests at all.
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                name="requireAuthToken"
+                checked={requireAuthToken}
+                onCheckedChange={(next) => setRequireAuthToken(next === true)}
+              />
+              <span>
+                Require an authentication key
+                <span className="block text-xs text-muted-foreground">
+                  {webhook.authToken
+                    ? "A key exists for this endpoint. Saving does not change it — unticking this deletes it, and anything still sending it starts getting 401s."
+                    : "For a sender that cannot sign requests but can set one header. A key is generated when you save, and from then on a request without it is refused."}
+                  {!requireSignature && !requireAuthToken && (
+                    <strong className="mt-1 block text-destructive">
+                      With both of these off, the URL is the only thing protecting this endpoint.
+                    </strong>
+                  )}
                 </span>
               </span>
             </label>

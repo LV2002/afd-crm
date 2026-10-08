@@ -99,6 +99,7 @@ export async function saveCustomWebhook(
   const subSource = String(formData.get("subSource") ?? "").trim() || null;
   const centerId = String(formData.get("centerId") ?? "").trim() || null;
   const requireSignature = formData.get("requireSignature") === "on";
+  const wantsAuthToken = formData.get("requireAuthToken") === "on";
 
   if (!name) return { error: "Give it a name you will recognise in six months." };
   if (!source) return { error: "Give it a source name — it is what the reports group by." };
@@ -108,7 +109,7 @@ export async function saveCustomWebhook(
 
   if (id) {
     const [existing] = await db
-      .select({ id: customWebhooks.id })
+      .select({ id: customWebhooks.id, authToken: customWebhooks.authToken })
       .from(customWebhooks)
       .where(and(eq(customWebhooks.id, id), isNull(customWebhooks.deletedAt)));
     if (!existing) return { error: "That webhook no longer exists." };
@@ -121,6 +122,17 @@ export async function saveCustomWebhook(
         subSource,
         centerId,
         requireSignature,
+        /*
+          Generated on the save that first asks for one, and kept
+          untouched by every save afterwards.
+
+          The alternative — regenerate whenever the box is ticked — would
+          silently invalidate a key already pasted into a sender's
+          settings every time somebody edited the source name. Clearing it
+          is the only destructive direction, and that is what unticking
+          the box means.
+        */
+        authToken: wantsAuthToken ? (existing.authToken ?? token()) : null,
         fieldAliases: aliases.value,
         updatedAt: new Date(),
       })
@@ -134,6 +146,7 @@ export async function saveCustomWebhook(
       centerId,
       signingSecret: token(),
       requireSignature,
+      authToken: wantsAuthToken ? token() : null,
       fieldAliases: aliases.value,
       createdBy: user.id,
     });
@@ -153,7 +166,9 @@ export async function saveCustomWebhook(
     action: id ? "custom_webhook.update" : "custom_webhook.create",
     entityType: "custom_webhooks",
     entityId: id ?? undefined,
-    after: { name, source, subSource, centerId, requireSignature },
+    // Whether a key is expected, never the key. An audit row is read by
+    // people and kept for ever.
+    after: { name, source, subSource, centerId, requireSignature, hasAuthToken: wantsAuthToken },
   });
 
   revalidatePath("/settings/integrations/webhooks");
@@ -213,14 +228,23 @@ export async function rotateCustomWebhookCredentials(id: string): Promise<Webhoo
   }
 
   const [row] = await db
-    .select({ name: customWebhooks.name })
+    .select({ name: customWebhooks.name, authToken: customWebhooks.authToken })
     .from(customWebhooks)
     .where(and(eq(customWebhooks.id, id), isNull(customWebhooks.deletedAt)));
   if (!row) return { error: "That webhook no longer exists." };
 
   await db
     .update(customWebhooks)
-    .set({ slug: token(), signingSecret: token(), updatedAt: new Date() })
+    .set({
+      slug: token(),
+      signingSecret: token(),
+      // Replaced only if there is one. Rotating is "assume everything
+      // this endpoint ever handed out is compromised", and the key is
+      // part of that — but an endpoint that never had one must not
+      // acquire a requirement from a button labelled "new URL & secret".
+      ...(row.authToken ? { authToken: token() } : {}),
+      updatedAt: new Date(),
+    })
     .where(eq(customWebhooks.id, id));
 
   const supabase = await createClient();
@@ -236,7 +260,11 @@ export async function rotateCustomWebhookCredentials(id: string): Promise<Webhoo
   });
 
   revalidatePath("/settings/integrations/webhooks");
-  return { success: `New URL and secret for ${row.name}. Update the sender before its next send.` };
+  return {
+    success: row.authToken
+      ? `New URL, secret and authentication key for ${row.name}. Update the sender before its next send.`
+      : `New URL and secret for ${row.name}. Update the sender before its next send.`,
+  };
 }
 
 /**
