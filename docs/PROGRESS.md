@@ -8300,10 +8300,111 @@ service wants: **URL, payload, authentication key, expected response**. He had o
   about an open door that is no longer open — and the tickbox says plainly when both
   credentials are off.
 
-**Found while verifying the sample, not fixed:** `mapFormPayload()` never parses UTM
-parameters out of a page URL. `ALIASES.query` exists and is documented as the place they
-come from, and nothing reads it — a dead switch of exactly the kind this project keeps
-finding. Attribution works only from explicit `utm_*` fields, so that is what the sample
-sends, and the admin guide says so. Raised with Leon rather than widened into this change.
+**Found while verifying the sample, fixed in the next change:** `mapFormPayload()` never
+parsed UTM parameters out of a page URL, so attribution worked only from explicit `utm_*`
+fields. Raised with Leon rather than widened into this one. (The claim made here at the
+time — that *nothing* read `ALIASES.query` — was wrong: the website mapper read it. The
+generic mapper did not, which is why the same submission was attributed through one route
+and not the other.)
 
 Stubbed: nothing. **1688 tests pass** (22 added), typecheck, lint and `db:audit` clean.
+
+## Session 61 — a lead with no campaign on it
+
+Leon is about to run several Google Ads campaigns at once and wants to know which campaign
+produced which lead. The mapper could not answer that for most senders.
+
+- **Campaign parameters are read out of a page URL now, for every source.** `utmFromQuery()`
+  moved from `website/page-identity.ts` to `form-payload/utm.ts` and the generic mapper
+  applies it, so a custom webhook posting `?gclid=…&utm_campaign=22334455` is attributed
+  like a website form. Before, that submission produced a lead attributed to nothing.
+- **Three sources, merged weakest first**: the page field, then an explicit query field,
+  then `utm_*` fields of their own. A deliberate hidden input still beats a query string
+  that may be whatever page somebody landed on first.
+- **Merged key by key, not wholesale** — the real bug behind the real bug. The website
+  mapper read `generic.lead.utm ?? utmFromQuery(...)`, taking the explicit set *instead of*
+  the URL's whenever it had one. A form posting a single `utm_source` hidden input threw
+  away the `gclid` in the URL beside it, and `gclid` is the one parameter Google Ads adds
+  by itself through auto-tagging — the one nobody has to configure and therefore the one
+  most likely to be the only one there.
+- **A URL under the key `page` is read too.** `ALIASES.page` and `ALIASES.query` overlap on
+  `pageurl`, `url` and `location` but not on `page`, `pagepath`, `sourceurl` or `referrer`,
+  so the commonest key of all had its path taken and its query string dropped. Found by a
+  test written against what the feature is *for* rather than against the code.
+- One implementation, not two: `page-identity.ts` re-exports rather than keeping a copy,
+  and a test asserts the two imports are the same function.
+
+Unchanged on purpose: `adIdentifiersFrom()` still accepts a campaign id only when it is
+numeric, so `utm_campaign=Brand-Search` stays on the lead and out of the spend join. A name
+matched against platform ids would put leads-with-no-spend beside spend-with-no-leads and
+call it a report. Its `utm.campaign_id` / `utm.ad_id` branch is dead — nothing populates
+those keys — but the documented Google setup sends `utm_campaign={campaignid}`, which works,
+so it is noted rather than widened into this change.
+
+Stubbed: nothing. **1699 tests pass** (11 added), typecheck, lint, `db:audit` and build clean.
+
+## Session 62 — who am I behind on this morning
+
+Leon does not use the Pipeline board, so its tab is now **Follow-ups**: everybody with a call
+booked, soonest first.
+
+- **`/follow-ups`** lists leads by `next_followup_at` ascending, cut into five piles —
+  overdue, today, tomorrow, later this week, later — with the overdue one first. The boundaries
+  are midnight IST, in a pure module (`lib/leads/followup-buckets.ts`) so they can be tested
+  without waiting until midnight.
+- **Defaults to the signed-in person's own leads.** Anybody holding `lead.assign` gets a
+  Mine/Everyone switch and an extra Owner column; counsellors do not see it, because RLS already
+  makes both sides identical for them.
+- **Filters are the leads list's own**, component and query helpers alike — `LeadFilters`,
+  `applyLeadFilters`, `readFilterValues`. A second set of filter controls would have drifted.
+- **A personal nav badge**, the first one: your own overdue count. `COUNTERS` now takes the
+  caller as well as the client, because a badge reading 40 over a screen showing 2 teaches people
+  to ignore badges.
+- **The board is deleted; `/pipeline` redirects** rather than 404ing — the dashboard widget,
+  bookmarks and four `revalidatePath()` calls pointed at it. `moveLeadStage` moved to
+  `app/(app)/leads/stage-actions.ts`, since the lead's status bar is what calls it and a live
+  Server Action in a deleted route's folder is a trap.
+- Stages are untouched: still a separate column from temperature, still on every lead, still
+  filterable, still what the reports group by. Only the board went.
+- Manual chapter 5.2 rewritten, plus the six other places that said "drag the card".
+
+Deliberately absent: leads with no follow-up booked (the empty state links to the leads list's
+`followup=none`), won/lost/dead leads, and tasks.
+
+Stubbed: nothing. **1710 tests pass** (11 added, 2 pinned lists updated), typecheck, lint and
+build clean. No migration.
+
+## Session 63 — the counsellor dashboard, rearranged
+
+Leon, after a week of using it: the month figures are nearly right, the bottom row answers the
+wrong questions, and the right-hand column is the wrong thing entirely.
+
+- **Two relabels.** "New leads this month" → **Total leads this month**; "Needs you today" →
+  **Follow-ups due**. Text only; the figures behind them are unchanged.
+- **The bottom row is the cycle year now**, not a row of leftovers each answering a different
+  window: active leads, new leads, contacted, never contacted, overdue follow-ups, interested,
+  enrolments. One rule makes it a row — every tile but Enrolments is about leads that *arrived*
+  this cycle year, so contacted and never contacted always add up to new leads. Enrolments count
+  by confirmation date, because an admission confirmed in June on a February lead is June's work.
+- **"Year" is the admissions cycle, Leon's choice when asked.** It runs from
+  `org_settings.fiscal_year_start_month`, which has existed since the finance work and was never
+  editable — now a month picker in Settings → Organisation, so an institute with a June intake
+  can say so. One setting, not a second one meaning nearly the same thing.
+- **"Interested" is Very Hot, Hot or Warm**, his second choice when asked — the explicit list
+  rather than an inference. Matched on a normalised value, so `very_hot`, `very-hot`, `veryhot`
+  and `Very Hot` are one thing. The card names the temperatures it counted, so a fifth one nobody
+  added to the list shows up as a visible gap rather than a quietly low number.
+- **Your day left the dashboard for Follow-ups**, above the dated list, with a `your-day` anchor.
+  It was the right content in the wrong column: a long queue in the narrow half, squeezing the
+  numbers card into a ladder.
+- **Quick links took its place** — add a lead, today's follow-ups, log an interaction, view all
+  leads — each permission-gated, so a counsellor who cannot create a lead gets a shorter list
+  rather than a button that refuses them.
+- **The grid is six columns, not two.** `narrow` (2) beside `wide` (4) is the counsellor's
+  dashboard; `half` is still 3 and still pairs, so every other role's layout is untouched.
+- **Migration 0095** gives `quick_links` the hiding row `my_day` had for admin and co-admin.
+  Without it the next deploy would have put a card on the admin dashboard Leon asked not to have,
+  because a widget with no layout row is visible by default.
+
+Stubbed: nothing. **1724 tests pass** (14 added, one layout spec updated), typecheck, lint,
+`db:audit` and build clean.

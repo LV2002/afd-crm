@@ -4406,3 +4406,54 @@ attempted because there is nothing to look up; the fact was never recorded.
 Known and accepted: the WhatsApp tab is **empty today**, because Coexistence onboarding needs
 Advanced Access and App Review has not cleared. Leon chose this knowing that. The empty state
 says what unlocks it rather than rendering a blank list.
+
+---
+
+## 2026-10-09 · The Pipeline board is gone; Follow-ups took its place
+
+Leon: *"i dont think i need the pipeline so lets turn the pipeline tab into a follow up tab so
+that my counsellor can go into it and see what are the people that they need to follow up with
+on a datewise order."*
+
+**The board answered the wrong question.** A kanban answers "where is everybody in the funnel",
+which is a manager's question asked occasionally. What a counsellor opens a CRM to ask is "who
+am I behind on this morning", and the board answered that worst of all — the follow-up date was
+a line of small text on a card in whichever column the lead happened to sit. Eleven months of
+`/pipeline` and Leon never used it.
+
+**Stages are untouched.** Only the board went. `stage_id` is still funnel position and still a
+separate column from `temperature` (non-negotiable #1), still on every lead, still filterable,
+still what the reports group by. `moveLeadStage` moved from `app/(app)/pipeline/actions.ts` to
+`app/(app)/leads/stage-actions.ts` because the lead's own status bar calls it and always did —
+leaving a live Server Action inside a deleted route's folder would have been a trap for whoever
+came next.
+
+**`/pipeline` redirects rather than 404s.** Bookmarks, the dashboard's centre widget and four
+`revalidatePath()` calls all pointed at it. A redirect costs one file; a 404 costs somebody an
+afternoon.
+
+**Not the leads list with a different sort.** The leads list can already filter to overdue
+follow-ups. What it cannot be is *about* them: it sorts newest-first because the question it
+answers is "what has come in", and re-sorting it by a date nobody can see would make it worse at
+its own job. So Follow-ups is a second view of the same rows with the opposite ordering and its
+own shape — sharing `LeadFilters` and `applyLeadFilters` rather than growing a parallel set of
+controls.
+
+**Five piles, not a flat list.** Overdue / today / tomorrow / later this week / later. A flat
+list in date order makes somebody read names to find out whether they are behind. The boundaries
+are midnight in Asia/Kolkata, which is why `followup-buckets.ts` is pure: a boundary that can
+only be tested by waiting until midnight is a boundary that gets tested in production.
+
+**Defaults to "mine".** A counsellor wants their morning, not the institute's. Anybody holding
+`lead.assign` gets a Mine/Everyone switch; counsellors do not see it, because for them both
+sides return the same rows and a switch that changes nothing is worse than no switch.
+
+**The badge is personal, which no other badge is.** Every other nav count is an org-wide queue
+— the unassigned pile is the same pile whoever is looking. This one counts *your* overdue calls,
+so `COUNTERS` now takes the caller as well as the client. A badge reading 40 above a screen
+showing 2 would train people to ignore the number.
+
+**Leads with no follow-up booked are deliberately absent**, and so are won, lost and dead ones.
+A dated queue swamped by rows with no date stops being a queue, and a catch-up list that opens
+with twenty students who enrolled in March is not a catch-up list. The empty state links to the
+leads list's own `followup=none` filter for the first case.

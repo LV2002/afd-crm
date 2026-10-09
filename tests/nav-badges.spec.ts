@@ -22,11 +22,12 @@ function holding(...codes: PermissionCode[]) {
 }
 
 describe("navBadgesFor", () => {
-  it("gives a counsellor only the two queues that are theirs", () => {
+  it("gives a counsellor only the queues that are theirs", () => {
     // They cannot assign and cannot see payments or students, so those
-    // three would be dead links. Their own conversations and the profile
-    // forms their students send are exactly their work.
+    // would be dead links. Their own overdue calls, their conversations
+    // and the profile forms their students send are exactly their work.
     expect(navBadgesFor(holding("lead.read", "lead.update", "whatsapp.read"))).toEqual([
+      "followUps",
       "profileForms",
       "whatsapp",
     ]);
@@ -36,7 +37,9 @@ describe("navBadgesFor", () => {
     // Leon's reason for asking: a student submitting a form is something
     // the office should find out about without going to look. So it is
     // gated on the same permission as the screen, not on a narrower one.
-    expect(navBadgesFor(holding("lead.read"))).toEqual(["profileForms"]);
+    // Follow-ups rides on the same permission, so reading leads earns
+    // both — the overdue count is each person's own, not the office's.
+    expect(navBadgesFor(holding("lead.read"))).toEqual(["followUps", "profileForms"]);
     expect(navBadgesFor(holding("payment.read"))).not.toContain("profileForms");
   });
 

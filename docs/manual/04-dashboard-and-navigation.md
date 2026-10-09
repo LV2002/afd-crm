@@ -7,10 +7,11 @@ The **Dashboard** is your landing page and it is two things at once: your
 It is assembled from widgets, and which widgets you see depends on your
 role.
 
-`/my-day` is an old address for the work queue. It now redirects to the
-Dashboard, where the queue lives.
+`/my-day` is an old address for the work queue. It redirects to the
+Dashboard; the queue itself moved to **Follow-ups** in October 2026, at
+the top of the screen, above the dated list.
 
-[Screenshot: The Dashboard for a counsellor, showing Your day and Your numbers]
+[Screenshot: The Dashboard for a counsellor, showing Your numbers and Quick links]
 
 ## 4.2 The widgets
 
@@ -21,8 +22,8 @@ zeroes, which is worse than showing nothing.
 
 | Widget | What it shows | Needs |
 |---|---|---|
-| **Your day** | The work queue: Overdue, Due today, New, At risk | `lead.read` |
-| **Your numbers** | This month's leads and admissions against last month's, what needs you today, and thirty days of arrivals | `lead.read` |
+| **Quick links** | Add a lead, today's follow-ups, log an interaction, view all leads | `lead.read` |
+| **Your numbers** | This month's leads, admissions and follow-ups due, then the whole cycle year to date | `lead.read` |
 | **Centre pipeline** | The same three, for the whole centre, plus what nobody is working | `lead.assign` |
 | **Counsellor performance** | Each counsellor's active leads, new leads, admissions, overdue follow-ups | `report.center` |
 | **Accounts** | Waiting for a first payment, collected this month, overdue instalments | `payment.read` |
@@ -31,18 +32,16 @@ zeroes, which is worse than showing nothing.
 
 ### Your numbers, in detail
 
-**Three big figures, then the rest.** The card used to be eight numbers of
-the same size, which is a wall rather than an answer. Now three are large:
-**new leads this month**, **admissions this month** and **needs you
-today**. Under each of the first two is last month's figure and the shape
-of the last fortnight, because a number on its own cannot tell you whether
-it is a good month.
+**Three big figures, then the year.** Three are large: **total leads this
+month**, **admissions this month** and **follow-ups due**. Under each of
+the first two is last month's figure and the shape of the last fortnight,
+because a number on its own cannot tell you whether it is a good month.
 
 - **The arrow and the sentence say the same thing.** *Up 3 on last month
   (9)* — you never have to read the colour to know which way it went.
 - **The little chart is shape, not detail.** It has no numbers on purpose;
   the figure beside it is the value.
-- **Needs you today** is overdue follow-ups plus leads nobody has ever
+- **Follow-ups due** is overdue follow-ups plus leads nobody has ever
   answered. It turns red when it is above zero, because zero is the
   target.
 - **The 30-day chart** is new leads per day. Hover any day for the count.
@@ -51,14 +50,46 @@ it is a good month.
   Targets). The line across the bar is where an even month would have you
   today — not a judgement, just the pace.
 
-**Nothing was taken away.** The smaller row underneath carries every
-other figure the card has ever shown — active leads, assigned today,
-never contacted, overdue follow-ups, due today, admission rate, SLA
-breached — demoted rather than removed. Never contacted and overdue are
-listed separately there as well as added together in the big figure,
-because which of the two it is changes what you do about it.
+#### Your year so far
 
-### Your day, in detail
+The row underneath is the **admissions cycle year to date**, not the
+month. It starts in the month set under Settings → Organisation →
+**Year starts in** (April by default; set it to your intake month if
+that is what you count by), and the card prints the date it started
+from.
+
+| Tile | What it counts |
+|---|---|
+| **Active leads** | Arrived this year and still being worked — not won, not lost |
+| **New leads** | Everybody who arrived this year |
+| **Contacted** | Of those, the ones answered at least once |
+| **Never contacted** | Of those, the ones never once answered |
+| **Overdue follow-ups** | Of those still active, a follow-up date that has passed |
+| **Interested** | Of those still active, temperature Very Hot, Hot or Warm |
+| **Enrolments** | Admissions confirmed this year |
+| **Admission rate** | This month's running rate — the one tile that is not about the year |
+
+Two things worth knowing about these:
+
+- **Contacted and never contacted always add up to new leads.** Every
+  tile but Enrolments is about leads that *arrived* this year, which is
+  what lets the row be read as one population rather than seven
+  unrelated numbers.
+- **Enrolments count by the date the admission was confirmed**, not by
+  when the lead arrived. An admission confirmed in June on a lead from
+  February is June's work, and it counts here.
+
+**Interested** is Very Hot, Hot or Warm. If you add a new temperature
+meaning something similar, tell whoever maintains the CRM — it will not
+be counted until it is added to the list in the code.
+
+### Your day — now on Follow-ups
+
+The work queue moved to the top of **Follow-ups** in October 2026. It was
+the right content in the wrong column: a long list in the Dashboard's
+narrow right-hand side, squeezing the numbers beside it. It now sits
+above the dated follow-up list, which is the same question asked over a
+longer horizon. The **Today's follow-ups** quick link goes straight to it.
 
 Four buckets, in the order you should work them:
 

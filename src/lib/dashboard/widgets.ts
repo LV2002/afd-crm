@@ -42,8 +42,14 @@ export interface WidgetDefinition {
    *
    * Nothing changes below `lg`, where the grid is a single column
    * regardless.
+   *
+   * The grid is six columns from `lg` up, not two, so that a pair can be
+   * uneven: `wide` (four) beside `narrow` (two) is the counsellor's
+   * dashboard, numbers given the room and the links kept to a column.
+   * `half` is still three and still pairs with another half, so every
+   * other role's layout is exactly what it was.
    */
-  width?: "half" | "full";
+  width?: "narrow" | "half" | "wide" | "full";
 }
 
 export const DASHBOARD_WIDGETS: WidgetDefinition[] = [
@@ -51,20 +57,29 @@ export const DASHBOARD_WIDGETS: WidgetDefinition[] = [
     key: "my_numbers",
     name: "Your numbers",
     description:
-      "Leads assigned today, this month's new leads and admissions, and the running admission rate.",
+      "This month's leads, admissions and follow-ups due, then the whole cycle year to date.",
     permission: "lead.read",
+    // Two thirds, with Quick links in the remaining third. It carries a
+    // chart, three hero figures and eight tiles; at half width the tiles
+    // wrapped to two columns and the card became a ladder.
+    width: "wide",
   },
   {
-    // No `requireScope: "own"` any more. It used to be here on the grounds
-    // that nothing is assigned to a centre head directly — which is wrong:
-    // heads carry their own leads, and Leon asked for their day too. The
-    // query filters on `assigned_to = me`, so it is correct at any scope,
-    // and an admin with nothing assigned is handled by hiding the widget in
-    // their layout rather than by a rule in code.
-    key: "my_day",
-    name: "Your day",
-    description: "The work queue: overdue, due today, new and at-risk leads assigned to you.",
+    /*
+      Your day moved to the Follow-ups screen in October 2026.
+
+      It was the right content in the wrong column: a long queue in the
+      dashboard's narrow half, squeezing the numbers card beside it into
+      a ladder. It now sits at the top of Follow-ups, above the dated
+      list it belongs with, and this slot holds something actually
+      narrow. A saved layout still naming `my_day` is ignored rather
+      than breaking — the resolver works from this registry.
+    */
+    key: "quick_links",
+    name: "Quick links",
+    description: "Add a lead, today's follow-ups, log an interaction, view all leads.",
     permission: "lead.read",
+    width: "narrow",
   },
   {
     key: "centre",

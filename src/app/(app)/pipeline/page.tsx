@@ -1,124 +1,21 @@
-import { AccessDenied } from "@/components/layout/access-denied";
-import { can, getCurrentUser } from "@/lib/auth/session";
-import { droppedLeadIds } from "@/lib/enrolment/dropped-leads";
-import { getDropdownOptions } from "@/lib/fields/resolve-field-options";
-import { batchNameLookup } from "@/lib/leads/batch-name-lookup";
-import { createClient } from "@/lib/supabase/server";
-import { formatTerm } from "@/lib/terminology/terms";
-import { getTerminologyMap } from "@/lib/terminology/get-terminology";
+import { redirect } from "next/navigation";
 
-import { KanbanBoard, type KanbanLead, type KanbanStage } from "./kanban-board";
-
-interface StageRow {
-  id: string;
-  name: string;
-  color: string | null;
-  sort_order: number;
-  requires_reason: boolean;
-}
-
-interface LeadRow {
-  id: string;
-  lead_number: number;
-  student_name: string;
-  primary_phone: string;
-  stage_id: string | null;
-  temperature: string | null;
-  center_id: string | null;
-  assigned_to: string | null;
-  lost_reason: string | null;
-  next_followup_at: string | null;
-  last_activity_at: string | null;
-}
-
-export default async function PipelinePage() {
-  const user = await getCurrentUser();
-  if (!user || !can(user, "lead.read")) return <AccessDenied />;
-
-  const terms = await getTerminologyMap();
-  const leadPlural = formatTerm(terms, "lead", "plural");
-  const canMove = can(user, "lead.update");
-
-  const supabase = await createClient();
-
-  const [{ data: stageRows }, { data: leadRows }, lostReasonOptions] = await Promise.all([
-    supabase
-      .from("pipeline_stages")
-      .select("id, name, color, sort_order, requires_reason")
-      .eq("is_active", true)
-      .order("sort_order")
-      .returns<StageRow[]>(),
-    supabase
-      .from("leads")
-      .select(
-        "id, lead_number, student_name, primary_phone, stage_id, temperature, center_id, assigned_to, lost_reason, next_followup_at, last_activity_at",
-      )
-      .is("deleted_at", null)
-      .order("updated_at", { ascending: false })
-      .returns<LeadRow[]>(),
-    getDropdownOptions(supabase, "lost_reason"),
-  ]);
-
-  // The admin's own temperature colours, so Hot reads as hot on the board
-  // rather than as another outline badge indistinguishable from Centre.
-  const temperatureOptions = await getDropdownOptions(supabase, "temperature");
-  const temperatureByValue = new Map(temperatureOptions.map((option) => [option.value, option]));
-
-  const stages: KanbanStage[] = (stageRows ?? []).map((s) => ({
-    id: s.id,
-    name: s.name,
-    color: s.color,
-    requiresReason: s.requires_reason,
-  }));
-
-  const centerIds = Array.from(new Set((leadRows ?? []).map((l) => l.center_id).filter(Boolean))) as string[];
-  const assignedIds = Array.from(new Set((leadRows ?? []).map((l) => l.assigned_to).filter(Boolean))) as string[];
-
-  const [centerNameById, assigneeNameById, dropped] = await Promise.all([
-    batchNameLookup(supabase, "centers", "name", centerIds),
-    batchNameLookup(supabase, "profiles", "full_name", assignedIds),
-    // A drop lives on the enrolment and is never written back to the
-    // lead, so without this the board shows a student who left sitting in
-    // Won, indistinguishable from one still attending.
-    droppedLeadIds(supabase, (leadRows ?? []).map((l) => l.id)),
-  ]);
-
-  const lostReasonLabelByValue = new Map(lostReasonOptions.map((o) => [o.value, o.label]));
-
-  const leads: KanbanLead[] = (leadRows ?? []).map((l) => ({
-    id: l.id,
-    leadNumber: l.lead_number,
-    studentName: l.student_name,
-    primaryPhone: l.primary_phone,
-    stageId: l.stage_id,
-    temperature: l.temperature,
-    centerName: l.center_id ? (centerNameById.get(l.center_id) ?? null) : null,
-    assignedToName: l.assigned_to ? (assigneeNameById.get(l.assigned_to) ?? null) : null,
-    lostReasonLabel: l.lost_reason ? (lostReasonLabelByValue.get(l.lost_reason) ?? l.lost_reason) : null,
-    isDropped: dropped.has(l.id),
-    temperatureLabel: l.temperature ? (temperatureByValue.get(l.temperature)?.label ?? l.temperature) : null,
-    temperatureColor: l.temperature ? (temperatureByValue.get(l.temperature)?.color ?? null) : null,
-    nextFollowupAt: l.next_followup_at,
-    lastActivityAt: l.last_activity_at,
-  }));
-
-  return (
-    <div className="flex h-full flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Pipeline</h1>
-        <p className="text-sm text-muted-foreground">
-          {leads.length} {leads.length === 1 ? leadPlural.toLowerCase().replace(/s$/, "") : leadPlural.toLowerCase()}
-          {" across "}
-          {stages.length} stages
-        </p>
-      </div>
-
-      <KanbanBoard
-        stages={stages}
-        initialLeads={leads}
-        lostReasonOptions={lostReasonOptions}
-        canMove={canMove}
-      />
-    </div>
-  );
+/**
+ * The Pipeline board is gone; this is what its URL does now.
+ *
+ * Leon did not use it. A kanban answers "where is everybody in the
+ * funnel", which is a manager's question asked occasionally, and the
+ * counsellors' actual question — "who am I behind on this morning" — it
+ * answered worst of all: the follow-up date was a line of small text on
+ * a card in whichever column the lead happened to sit. `/follow-ups`
+ * replaced it in the sidebar, and this redirect keeps every bookmark,
+ * stale link and revalidate path working rather than turning them into
+ * a 404 nobody can explain.
+ *
+ * Stages themselves are untouched. They are still on every lead, still
+ * filterable, still what the reports group by — only the board is gone.
+ * The lead's own page is where a stage gets changed, and always was.
+ */
+export default function PipelineRedirect() {
+  redirect("/follow-ups");
 }

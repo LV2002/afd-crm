@@ -666,6 +666,13 @@
       "when": 1792418408000,
       "tag": "0094_custom_webhook_auth_token",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1792504808000,
+      "tag": "0095_hide_quick_links_for_admins",
+      "breakpoints": true
     }
   ]
 }

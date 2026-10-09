@@ -210,7 +210,7 @@ Each is granted at **own**, **centre** or **all**.
 | Add a walk-in | **Leads → New lead** |
 | Log a call | Lead page → **Log an interaction** |
 | See a full phone number | Lead page → click the masked number |
-| Move a lead's stage | **Pipeline**, drag the card |
+| Move a lead's stage | The stage control at the top of the lead |
 | Mark a lead lost | Drag to **Lost**, give a reason |
 | Confirm an admission | Lead page → **Confirm admission** |
 | Set up instalments | Lead page → **Fees & instalment agreement** |

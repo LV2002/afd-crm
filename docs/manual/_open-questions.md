@@ -119,6 +119,6 @@ Current placeholders:
 | 2.2 | The main layout with the sidebar and a leads list |
 | 4.1 | The Dashboard for a counsellor |
 | 5.1 | The Leads list with the filter bar and buttons |
-| 5.2 | The Pipeline board mid-drag |
+| 5.2 | The Follow-ups screen, overdue pile first |
 | 6.1 | A lead detail page with all panels visible |
 | 7.2 | The printed instalment agreement |

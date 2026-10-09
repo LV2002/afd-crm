@@ -1,6 +1,8 @@
 import "server-only";
 
 import { can, type SessionUser } from "@/lib/auth/session";
+import { startOfDayIST } from "@/lib/format/date";
+import { DEAD_TEMPERATURE } from "@/lib/leads/no-longer-worked";
 import { createClient } from "@/lib/supabase/server";
 
 import { navBadgesFor, type NavBadgeCounts, type NavBadgeKey } from "./badge-permissions";
@@ -45,7 +47,18 @@ export {
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
-const COUNTERS: Record<NavBadgeKey, (supabase: Client) => Promise<number>> = {
+/*
+  Each counter takes the caller as well as the client.
+
+  Most of these are org-wide queues — the unassigned pile is the same
+  pile whoever is looking at it, and RLS decides what they may see of
+  it. Follow-ups are not: the screen opens on *your* overdue calls, so
+  a badge counting everybody's would tell an admin 40 and then show
+  them 2. The badge and the screen it sits on have to agree, or the
+  number trains people to ignore it.
+*/
+const COUNTERS: Record<NavBadgeKey, (supabase: Client, user: SessionUser) => Promise<number>> = {
+  followUps: countOverdueFollowUps,
   unassigned: countUnassignedLeads,
   admissions: countAwaitingFirstPayment,
   profileForms: countUnreadProfileForms,
@@ -57,13 +70,52 @@ export async function getNavBadgeCounts(user: SessionUser): Promise<NavBadgeCoun
   const supabase = await createClient();
   const keys = navBadgesFor((code) => can(user, code));
 
-  const values = await Promise.all(keys.map((key) => COUNTERS[key](supabase)));
+  const values = await Promise.all(keys.map((key) => COUNTERS[key](supabase, user)));
 
   const counts: NavBadgeCounts = {};
   keys.forEach((key, index) => {
     counts[key] = values[index];
   });
   return counts;
+}
+
+/**
+ * Calls this person owes somebody and has not made.
+ *
+ * Scoped to their own leads rather than to everything they may read,
+ * which is the one counter here that is personal: the Follow-ups screen
+ * opens on "mine" for the same reason, and a badge that disagreed with
+ * the screen it links to would be worse than no badge.
+ *
+ * The same three exclusions the screen makes, for the same reason —
+ * won, lost and Dead. A student who enrolled in March still carries
+ * February's follow-up date, and a number that counts them can never be
+ * worked down to zero, which is the one thing a badge must be able to do.
+ */
+async function countOverdueFollowUps(supabase: Client, user: SessionUser): Promise<number> {
+  const { data: stages } = await supabase
+    .from("pipeline_stages")
+    .select("id, stage_type")
+    .returns<Array<{ id: string; stage_type: string }>>();
+
+  const terminal = (stages ?? [])
+    .filter((stage) => stage.stage_type === "won" || stage.stage_type === "lost")
+    .map((stage) => stage.id);
+
+  let query = supabase
+    .from("leads")
+    .select("id", { count: "exact", head: true })
+    .is("deleted_at", null)
+    .eq("assigned_to", user.id);
+
+  query = query.lt("next_followup_at", startOfDayIST(new Date()).toISOString());
+  if (terminal.length > 0) {
+    query = query.not("stage_id", "in", `(${terminal.join(",")})`);
+  }
+  query = query.or(`temperature.is.null,temperature.neq.${DEAD_TEMPERATURE}`);
+
+  const { count } = await query;
+  return count ?? 0;
 }
 
 /**

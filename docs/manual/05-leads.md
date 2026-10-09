@@ -123,28 +123,56 @@ colleague (they will still only see what their own scope allows).
 
 **Related** — Chapter 12 for exporting a filtered list.
 
-## 5.2 The Pipeline board
+## 5.2 The Follow-ups screen
 
+**Follow-ups** is the one screen a counsellor should open first thing in
+the morning. It lists everybody with a follow-up date booked, soonest
+first, cut into five piles:
 
-### What a card tells you
+| Pile | What it means |
+|---|---|
+| **Overdue** | Due before today and still waiting. |
+| **Today** | Booked for today — including a time this morning that has already passed. |
+| **Tomorrow** | Booked for tomorrow. |
+| **Later this week** | Due within the next seven days. |
+| **Later** | Booked further ahead than a week. |
 
-Each card carries the name and lead number, the masked phone, and then
-the two lines a centre head is actually scanning for:
+Overdue is measured against midnight **in Kochi**, so a call booked for
+today is not late at nine in the morning, and a call missed at eight is
+still today's work rather than a backlog item.
 
-- **The follow-up.** *Follow-up today*, *Follow-up tomorrow*, a date, or
-  **Follow-up overdue** in red. Overdue is measured against midnight in
-  Kochi, so a follow-up booked for today is not late at nine in the
-  morning.
-- **Quiet for N days**, once nothing has happened on a lead for a week.
-  This is the "being forgotten" signal: a board of names says who is
-  where, never who is slipping.
+The red number beside **Follow-ups** in the left menu is your own overdue
+count. It is there so you can see you are behind without opening the
+screen, and it can always be worked down to zero.
 
-Temperature shows in its own colour, from Settings → Dropdowns, and the
-centre as a plain tag. A student who took the admission and later left is
-marked **Dropped out** — they stay in the stage they reached, because
-they did reach it.
+### Who you see
 
-**Pipeline** shows the same leads as columns, one per stage.
+By default, **your own** leads. That is the point of the screen: your
+morning, not the institute's.
+
+If you can assign leads — a centre head, co-admin or admin — a **Mine /
+Everyone** switch appears at the top right. Everyone shows every
+follow-up you have access to, with an extra **Owner** column. Counsellors
+do not see the switch, because for them both sides would show the same
+rows.
+
+### Filtering
+
+The same filter bar as the leads list: search by name or phone, and
+narrow by any field an admin has made filterable — centre, source, exam,
+counsellor, stage, temperature. Filters go into the address bar, so a
+filtered view can be bookmarked or sent to a colleague.
+
+### What is deliberately not on it
+
+- **Leads with no follow-up booked.** A dated queue swamped by leads with
+  no date would stop being a queue. To find those, open the leads list
+  and set **Follow-up** to *None* — the empty state links straight there.
+- **Won, lost and dead leads.** A student who enrolled in March still
+  carries the follow-up date somebody booked in February. A catch-up list
+  that opens with twenty of them is not a catch-up list.
+- **Tasks.** A task has its own due date and its own place on the lead.
+  The dashboard queue is where the two are merged.
 
 ### Procedure: move a lead to another stage
 
@@ -153,14 +181,14 @@ they did reach it.
 **Before you start** — `lead.update` on that lead.
 
 **Steps**
-1. Open **Pipeline**.
-2. Find the lead's card.
-3. Drag it to the column you want and release.
+1. Open the lead.
+2. Use the stage control in the bar at the top of the page.
+3. Choose the new stage.
 
-**What you should see** — the card moves immediately and stays after a
+**What you should see** — the stage changes immediately and stays after a
 refresh. The change is written to the lead's history.
 
-**If you drag to Lost**, a small dialog appears first:
+**If you choose Lost**, a small dialog appears first:
 1. Choose a reason under **Select a reason** (Not Interested, Budget
    Constraint, Joined Competitor, Not Reachable, Wrong Number, Other).
 2. Add **Additional detail (optional)**.
@@ -170,12 +198,20 @@ The reason is required because "we lost them" without a why teaches
 nobody anything.
 
 **Common mistakes**
-- *Nothing drags.* You do not hold `lead.update` for that lead.
-- *Dropping into Admission Confirmed to mark a sale.* Do not. Confirming
-  an admission is its own action on the lead page, because it hands the
+- *Nothing changes.* You do not hold `lead.update` for that lead.
+- *Choosing Admission Confirmed to mark a sale.* Do not. Confirming an
+  admission is its own action on the lead page, because it hands the
   family to accounts and creates the fee record (Chapter 7).
 
-[Screenshot: The Pipeline board mid-drag]
+> **The Pipeline board was removed in October 2026.** It showed the same
+> leads as columns, one per stage, and answered "where is everybody in
+> the funnel" — a question asked occasionally, by a manager. The question
+> counsellors open the CRM to ask is "who am I behind on", which the
+> board answered worst of all: the follow-up date was a line of small
+> text on a card in whichever column the lead happened to sit. Stages
+> themselves are unchanged — still on every lead, still filterable, still
+> what the reports group by. The old `/pipeline` address now opens
+> Follow-ups.
 
 ## 5.3 The Unassigned queue
 

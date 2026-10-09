@@ -35,16 +35,15 @@ describe("allowsWidget", () => {
     expect(allowsWidget(widgetByKey("accounts")!, CENTRE_HEAD)).toBe(true);
   });
 
-  it("lets everybody with lead.read see their own day, at any scope", () => {
-    // This used to be scope-restricted to `own`, on the theory that only a
-    // counsellor has leads assigned to them. Wrong: centre heads carry a
-    // pipeline too, and Leon asked for their day. The query filters on
-    // `assigned_to = me`, so it is correct at every scope — an admin with
-    // nothing assigned is handled by their seeded layout, not by a rule
-    // here.
-    expect(allowsWidget(widgetByKey("my_day")!, COUNSELLOR)).toBe(true);
-    expect(allowsWidget(widgetByKey("my_day")!, CENTRE_HEAD)).toBe(true);
-    expect(allowsWidget(widgetByKey("my_day")!, ADMIN)).toBe(true);
+  it("lets everybody with lead.read see the quick links, at any scope", () => {
+    // Your day used to hold this slot and was scope-restricted to `own`
+    // until it turned out centre heads carry leads too. Quick links has
+    // no scope rule at all: the links are the same wherever you sit, and
+    // an admin who does not want them is handled by their seeded layout
+    // (migration 0095), not by a rule here.
+    expect(allowsWidget(widgetByKey("quick_links")!, COUNSELLOR)).toBe(true);
+    expect(allowsWidget(widgetByKey("quick_links")!, CENTRE_HEAD)).toBe(true);
+    expect(allowsWidget(widgetByKey("quick_links")!, ADMIN)).toBe(true);
   });
 
   it("keeps the team table away from a counsellor", () => {
@@ -74,11 +73,11 @@ describe("resolveDashboard", () => {
   it("falls back to everything permitted, in registry order, when nothing is arranged", () => {
     expect(resolveDashboard([], COUNSELLOR).map((w) => w.key)).toEqual([
       "my_numbers",
-      "my_day",
+      "quick_links",
     ]);
     expect(resolveDashboard([], ADMIN).map((w) => w.key)).toEqual([
       "my_numbers",
-      "my_day",
+      "quick_links",
       "centre",
       "centre_team",
       "accounts",
@@ -97,7 +96,7 @@ describe("resolveDashboard", () => {
       { widgetKey: "academics", sortOrder: 3, isVisible: true },
       { widgetKey: "centre_team", sortOrder: 4, isVisible: true },
       { widgetKey: "my_numbers", sortOrder: 5, isVisible: true },
-      { widgetKey: "my_day", sortOrder: 6, isVisible: true },
+      { widgetKey: "quick_links", sortOrder: 6, isVisible: true },
     ];
     expect(resolveDashboard(layout, ADMIN).map((w) => w.key)).toEqual([
       "admin",
@@ -106,7 +105,7 @@ describe("resolveDashboard", () => {
       "academics",
       "centre_team",
       "my_numbers",
-      "my_day",
+      "quick_links",
     ]);
   });
 
@@ -125,12 +124,12 @@ describe("resolveDashboard", () => {
     const layout: LayoutRow[] = [
       { widgetKey: "accounts", sortOrder: 0, isVisible: true },
       { widgetKey: "admin", sortOrder: 1, isVisible: true },
-      { widgetKey: "my_day", sortOrder: 2, isVisible: true },
+      { widgetKey: "quick_links", sortOrder: 2, isVisible: true },
       { widgetKey: "centre_team", sortOrder: 3, isVisible: true },
     ];
     expect(resolveDashboard(layout, COUNSELLOR).map((w) => w.key)).toEqual([
       "my_numbers",
-      "my_day",
+      "quick_links",
     ]);
   });
 
@@ -146,7 +145,7 @@ describe("resolveDashboard", () => {
     expect(keys.at(-1)).toBe("admin");
     // The two shipped since that layout was saved are present, in registry
     // order, without anybody having touched the arrangement.
-    expect(keys.slice(0, 2)).toEqual(["my_numbers", "my_day"]);
+    expect(keys.slice(0, 2)).toEqual(["my_numbers", "quick_links"]);
   });
 
   it("ignores a saved key the code no longer has", () => {
@@ -174,7 +173,7 @@ describe("the seeded admin default", () => {
     // cards to the registry does not change what an admin opens on.
     const layout: LayoutRow[] = [
       { widgetKey: "my_numbers", sortOrder: 0, isVisible: false },
-      { widgetKey: "my_day", sortOrder: 1, isVisible: false },
+      { widgetKey: "quick_links", sortOrder: 1, isVisible: false },
     ];
     expect(resolveDashboard(layout, ADMIN).map((w) => w.key)).toEqual([
       "centre",
@@ -188,7 +187,7 @@ describe("the seeded admin default", () => {
   it("does not hide them from a centre head, who does carry leads", () => {
     expect(resolveDashboard([], CENTRE_HEAD).map((w) => w.key)).toEqual([
       "my_numbers",
-      "my_day",
+      "quick_links",
       "centre",
       "centre_team",
       "accounts",

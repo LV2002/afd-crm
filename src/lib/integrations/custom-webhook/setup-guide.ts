@@ -23,21 +23,19 @@ function canonical(group: keyof typeof ALIASES): string {
 }
 
 /**
- * Where the campaign fields in the sample come from, and why they are
- * spelled out rather than left inside the page URL.
+ * Why the sample carries campaign parameters twice over.
  *
- * `mapFormPayload()` reads UTM parameters from explicit `utm_*` fields
- * only — `explicitUtmFields()` is its single source. It does NOT parse
- * them out of a page URL, despite `ALIASES.query` existing and being
- * documented as the place they come from; nothing reads that group. So a
- * sender that posts only `?utm_source=instagram` inside a URL produces a
- * lead with no attribution, and Ad Performance cannot tell which campaign
- * paid for it.
+ * Both work now: the generic mapper reads `utm_*`, `gclid` and `fbclid`
+ * out of the page URL *and* from fields of their own, merging the two
+ * with explicit fields winning key by key. It did not always — URL
+ * parsing was website-only, so a custom webhook posting a perfectly
+ * good `?gclid=…` had it dropped.
  *
- * Which decides what belongs in a sample: the fields that actually work.
- * Both are included — the URL for the page record, the `utm_*` fields for
- * attribution — so a sender following this gets a correctly attributed
- * lead regardless of what the mapper is later taught to parse.
+ * The sample shows both because a sender reading it decides which they
+ * can do. A platform that only forwards the page address is covered by
+ * the URL; one with hidden inputs is covered by the fields; and a lead
+ * from an institute running several Google Ads campaigns is attributed
+ * either way.
  */
 const UTM_FIELDS = { utm_source: "instagram", utm_campaign: "foundation-2027" } as const;
 

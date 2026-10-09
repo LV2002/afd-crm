@@ -1,5 +1,7 @@
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 
+import { mergeUtm, utmFromQuery } from "./utm";
+
 /**
  * Turning an arbitrary JSON payload into a lead.
  *
@@ -156,8 +158,39 @@ export function mapFormPayload(
 
   const exams = toList(pick(payload, ALIASES.exams, extraAliases?.exams));
 
-  // Explicit utm_* fields win over anything parsed out of a URL.
-  const explicitUtm = explicitUtmFields(payload);
+  const pageValue = pick(payload, ALIASES.page, extraAliases?.page);
+
+  /*
+    Campaign attribution, from every place a form may carry it.
+
+    Until now only the explicit `utm_*` fields were read here, so a
+    sender that posted its page URL and nothing else — which is most of
+    them — produced a lead attributed to nothing at all. `ALIASES.query`
+    has described where the parameters live since this module was
+    written; the website mapper read it and this one never did, so the
+    same submission was attributed through one route and not the other.
+
+    Three sources, weakest first:
+
+    1. **The page field.** `ALIASES.page` and `ALIASES.query` overlap on
+       `pageurl`, `url` and `location` but not on `page`, `pagepath`,
+       `sourceurl` or `referrer` — so a form posting its full address
+       under the commonest key of all, `page`, had the path read off it
+       and the query string thrown away. Reading both costs one call and
+       closes the gap; a page value with no parameters simply yields
+       nothing, and `pagePathOf()` strips the query anyway, so nothing
+       is double-counted.
+    2. **An explicit query field**, where a form posts `location.search`
+       separately. More specific than the page, so it wins.
+    3. **Explicit `utm_*` fields**, which somebody set up deliberately.
+
+    Merged key by key rather than wholesale, so a single hidden input
+    cannot discard everything beside it: see mergeUtm().
+  */
+  const utm = mergeUtm(
+    mergeUtm(utmFromQuery(pageValue), utmFromQuery(pick(payload, ALIASES.query, extraAliases?.query))),
+    explicitUtmFields(payload),
+  );
 
   return {
     ok: true,
@@ -173,8 +206,8 @@ export function mapFormPayload(
       interestedExams: exams,
       coursesInterested: exams,
       formName: pick(payload, ALIASES.formName, extraAliases?.formName),
-      pageValue: pick(payload, ALIASES.page, extraAliases?.page),
-      utm: explicitUtm,
+      pageValue,
+      utm,
       raw: payload as Record<string, unknown>,
     },
   };

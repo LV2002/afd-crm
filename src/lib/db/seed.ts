@@ -175,9 +175,11 @@ async function seedDiscountLimits(roleIds: Record<string, string>) {
  */
 const HIDDEN_BY_DEFAULT: Array<{ roleCode: string; widgetKey: string; sortOrder: number }> = [
   { roleCode: "admin", widgetKey: "my_numbers", sortOrder: 0 },
-  { roleCode: "admin", widgetKey: "my_day", sortOrder: 1 },
+  // Quick links replaced Your day in the registry; it inherits the row
+  // that hid Your day, for the same reason — see migration 0095.
+  { roleCode: "admin", widgetKey: "quick_links", sortOrder: 1 },
   { roleCode: "co_admin", widgetKey: "my_numbers", sortOrder: 0 },
-  { roleCode: "co_admin", widgetKey: "my_day", sortOrder: 1 },
+  { roleCode: "co_admin", widgetKey: "quick_links", sortOrder: 1 },
 ];
 
 async function seedDashboardLayouts(roleIds: Record<string, string>) {

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-import { moveLeadStage } from "@/app/(app)/pipeline/actions";
+import { moveLeadStage } from "@/app/(app)/leads/stage-actions";
 import { setLeadTemperature } from "@/app/(app)/leads/[id]/actions";
 
 export interface StatusBarStage {

@@ -1,12 +1,10 @@
 import {
-  ALIASES,
   mapFormPayload,
-  pick,
   submissionId as genericSubmissionId,
   type FormPayload,
 } from "@/lib/integrations/form-payload/map-fields";
 
-import { composeSubSource, pagePathOf, utmFromQuery } from "./page-identity";
+import { composeSubSource, pagePathOf } from "./page-identity";
 
 /**
  * One website form submission, as a lead.
@@ -16,8 +14,9 @@ import { composeSubSource, pagePathOf, utmFromQuery } from "./page-identity";
  * `integrations/form-payload/map-fields.ts` when custom webhooks needed
  * exactly the same thing for Knorish and whatever comes after it. What
  * stays here is the part that is genuinely about a website: which page
- * the form was on, what the form was called, and the UTM parameters that
- * have to be dug out of a page URL's query string.
+ * the form was on, and what the form was called. Digging the campaign
+ * parameters out of a page URL moved to the generic mapper too, once it
+ * turned out every other source needed exactly the same thing.
  */
 
 export type WebsiteFormPayload = FormPayload;
@@ -62,10 +61,17 @@ export function mapWebsiteForm(payload: WebsiteFormPayload): MapResult | MapFail
   const pagePath = pagePathOf(generic.lead.pageValue);
   const formName = generic.lead.formName;
 
-  // Explicit utm_* fields win over anything parsed out of the URL: a form
-  // that posts them as real fields has done the work deliberately, whereas
-  // a query string may be whatever was on the page when it loaded.
-  const utm = generic.lead.utm ?? utmFromQuery(pick(payload, ALIASES.query));
+  /*
+    Both sources are merged by the generic mapper now.
+
+    This used to read `generic.lead.utm ?? utmFromQuery(...)`, which took
+    the explicit fields *instead of* the URL's whenever there were any —
+    so a form posting one `utm_source` hidden input discarded the `gclid`
+    in the URL next to it, and the gclid is the one parameter Google Ads
+    adds by itself. The merge is per key now, and it happens once, for
+    every source rather than only this one.
+  */
+  const utm = generic.lead.utm;
 
   return {
     ok: true,

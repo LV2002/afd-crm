@@ -77,7 +77,7 @@ export async function moveLeadStage(
   // reason a counsellor's stage move appears not to have worked.
   await startFlows("stage_entered", { leadId, stageId });
 
-  revalidatePath("/pipeline");
+  revalidatePath("/follow-ups");
   // The board is no longer the only place a stage changes: the status bar
   // at the top of a lead calls this too, and without this that page would
   // keep showing the stage it had a moment ago.

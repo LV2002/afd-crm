@@ -2,6 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { fromZonedTime } from "date-fns-tz";
+
 import {
   formatDateIST,
   lastDaysIST,
@@ -38,7 +40,7 @@ import {
  */
 
 const LEAD_COLUMNS =
-  "id, assigned_to, center_id, stage_id, created_at, assigned_at, first_response_at, next_followup_at, sla_breached";
+  "id, assigned_to, center_id, stage_id, created_at, assigned_at, first_response_at, next_followup_at, sla_breached, temperature";
 
 interface LeadRow {
   id: string;
@@ -50,6 +52,7 @@ interface LeadRow {
   first_response_at: string | null;
   next_followup_at: string | null;
   sla_breached: boolean;
+  temperature: string | null;
 }
 
 interface EnrolmentRow {
@@ -69,6 +72,7 @@ function toLead(row: LeadRow): ScoreboardLead {
     firstResponseAt: row.first_response_at,
     nextFollowupAt: row.next_followup_at,
     slaBreached: row.sla_breached,
+    temperature: row.temperature,
   };
 }
 
@@ -80,7 +84,14 @@ function toEnrolment(row: EnrolmentRow): ScoreboardEnrolment {
   };
 }
 
-export function boundariesNow(now = new Date()): Boundaries {
+/**
+ * `cycleStartMonth` is `org_settings.fiscal_year_start_month` — 1 for
+ * January, 4 for April, which is the default and India's own financial
+ * year. An institute running a June intake sets it to 6 and the
+ * dashboard's year figures follow, without a second setting meaning
+ * nearly the same thing.
+ */
+export function boundariesNow(now = new Date(), cycleStartMonth = 4): Boundaries {
   const startOfMonth = startOfMonthIST(now);
   return {
     startOfToday: startOfDayIST(now),
@@ -90,7 +101,29 @@ export function boundariesNow(now = new Date()): Boundaries {
     // previous one, whatever its length — no month arithmetic, and right
     // in January.
     startOfPreviousMonth: startOfMonthIST(new Date(startOfMonth.getTime() - 1)),
+    startOfCycleYear: startOfCycleYearIST(now, cycleStartMonth),
   };
+}
+
+/**
+ * Midnight IST on the first of the cycle's start month, this cycle.
+ *
+ * Built from the IST month and year rather than by subtracting twelve
+ * months from an instant, which is the mistake the date-filter module
+ * already paid for once: 1 July in Kochi is stored as 30 June 18:30 UTC,
+ * so arithmetic on the instant lands a day early in half the cases.
+ * Reading the IST calendar fields and constructing midnight from them
+ * cannot drift.
+ */
+export function startOfCycleYearIST(now: Date, cycleStartMonth: number): Date {
+  const month = Number(formatDateIST(now, "M"));
+  const year = Number(formatDateIST(now, "yyyy"));
+  // Before the start month, the cycle that is running began last year.
+  const cycleYear = month >= cycleStartMonth ? year : year - 1;
+  return fromZonedTime(
+    `${cycleYear}-${String(cycleStartMonth).padStart(2, "0")}-01T00:00:00`,
+    "Asia/Kolkata",
+  );
 }
 
 /** How many days the dashboard's own chart covers. */
@@ -110,6 +143,8 @@ export interface MyDashboard {
   series: DailyCount[];
   /** This month's admissions target for this person, or null if nobody set one. */
   admissionsTarget: number | null;
+  /** When the current admissions cycle year began — the card says so. */
+  cycleYearStart: Date;
 }
 
 /**
@@ -126,12 +161,19 @@ export async function getMyDashboard(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<MyDashboard> {
-  const boundaries = boundariesNow();
+  const boundaries = boundariesNow(new Date(), await cycleStartMonth(supabase));
   const days = lastDaysIST(new Date(), DASHBOARD_DAYS);
-  // Whichever is earlier: the start of last month, or the start of the
-  // chart. One query has to cover both the comparison and the series.
+  // The earliest of the three things one enrolment query has to cover:
+  // last month for the comparison, the start of the chart, and the start
+  // of the cycle year for the year row. The year start is almost always
+  // the winner, which is the point — fetching three times would triple
+  // the cost of the slowest card on the page.
   const since = new Date(
-    Math.min(boundaries.startOfPreviousMonth.getTime(), days[0].from.getTime()),
+    Math.min(
+      boundaries.startOfPreviousMonth.getTime(),
+      days[0].from.getTime(),
+      boundaries.startOfCycleYear.getTime(),
+    ),
   );
 
   const [stages, { data: leadRows }, { data: enrolmentRows }, { data: targetRows }] =
@@ -166,7 +208,24 @@ export async function getMyDashboard(
     scoreboard: buildCounsellorScoreboard({ leads, enrolments, stages, boundaries }),
     series: buildDailySeries({ leads, enrolments, days }),
     admissionsTarget: targetRows?.[0]?.target_value ?? null,
+    cycleYearStart: boundaries.startOfCycleYear,
   };
+}
+
+/**
+ * Which month the admissions cycle year starts in.
+ *
+ * Read from the same `org_settings` row the cash-flow report uses, so
+ * there is one answer to "when does our year start" rather than two that
+ * can disagree. Falls back to April — India's financial year, and the
+ * column's own default — when the row is missing on a fresh instance.
+ */
+async function cycleStartMonth(supabase: SupabaseClient): Promise<number> {
+  const { data } = await supabase
+    .from("org_settings")
+    .select("fiscal_year_start_month")
+    .maybeSingle<{ fiscal_year_start_month: number }>();
+  return data?.fiscal_year_start_month ?? 4;
 }
 
 /** `targets.period_month` is a date pinned to the 1st, in IST terms. */

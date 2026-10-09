@@ -51,10 +51,10 @@ Open **Leads → Merge review**. If it is not there, the two have
 different phone numbers — the system had no way to know. A merge needs
 `lead.merge`.
 
-**I cannot drag a card on the Pipeline**
+**I cannot change a lead's stage**
 You lack `lead.update` for that lead.
 
-**Dragging to Lost will not complete**
+**Moving a lead to Lost will not complete**
 A reason is mandatory. Pick one under **Select a reason**, then **Move
 to Lost**.
 

@@ -38,6 +38,8 @@ const BOUNDARIES: Boundaries = {
   startOfTomorrow: new Date("2026-09-30T18:30:00Z"),
   startOfMonth: new Date("2026-08-31T18:30:00Z"),
   startOfPreviousMonth: new Date("2026-07-31T18:30:00Z"),
+  // The cycle year started on 1 April 2026, the default start month.
+  startOfCycleYear: new Date("2026-03-31T18:30:00Z"),
 };
 
 let seq = 0;
@@ -53,6 +55,7 @@ function lead(over: Partial<ScoreboardLead> = {}): ScoreboardLead {
     firstResponseAt: "2026-09-10T08:00:00Z",
     nextFollowupAt: null,
     slaBreached: false,
+    temperature: null,
     ...over,
   };
 }

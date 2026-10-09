@@ -633,7 +633,7 @@ async function runConfirmAdmission(
   }
 
   revalidatePath(`/leads/${leadId}`);
-  revalidatePath("/pipeline");
+  revalidatePath("/follow-ups");
 
   // Said plainly when it could not happen. An admission is recorded
   // either way — refusing it over a pipeline setting would be absurd —
@@ -828,7 +828,7 @@ export async function deleteLead(
 
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);
-  revalidatePath("/pipeline");
+  revalidatePath("/follow-ups");
   redirect("/leads?deleted=1");
 }
 
@@ -979,6 +979,6 @@ export async function setLeadTemperature(
   });
 
   revalidatePath(`/leads/${leadId}`);
-  revalidatePath("/pipeline");
+  revalidatePath("/follow-ups");
   return { success: "Saved." };
 }

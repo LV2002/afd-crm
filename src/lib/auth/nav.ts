@@ -9,7 +9,7 @@ import { can } from "./session";
 export type NavIconKey =
   | "dashboard"
   | "leads"
-  | "pipeline"
+  | "follow-ups"
   | "orphans"
   | "accounts"
   | "finance"
@@ -66,7 +66,23 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     permission: "lead.read",
     label: { term: "lead", form: "plural" },
   },
-  { href: "/pipeline", iconKey: "pipeline", permission: "lead.read", label: "Pipeline" },
+  /*
+    Follow-ups took the Pipeline board's place.
+
+    The board answered "where is everybody in the funnel" — a question
+    asked occasionally, by a manager. What a counsellor opens a CRM to
+    ask is "who am I behind on", and the board answered that worst of
+    all. The badge is the overdue count, because the whole value of this
+    entry is being able to see from any screen that you are behind.
+  */
+  {
+    href: "/follow-ups",
+    iconKey: "follow-ups",
+    permission: "lead.read",
+    badgeKey: "followUps",
+    badgeWhat: "follow-ups overdue",
+    label: "Follow-ups",
+  },
   // The unassigned pile. It had a screen from Phase 2 and no way to reach
   // it but by typing the URL, which for a queue whose entire job is "these
   // are being forgotten" is close to not having it. Gated on lead.assign,

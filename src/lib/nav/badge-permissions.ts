@@ -14,6 +14,7 @@ import type { PermissionCode } from "@/lib/auth/permissions";
  * badge and the link it sits on always appear and disappear together.
  */
 export const NAV_BADGE_KEYS = [
+  "followUps",
   "unassigned",
   "admissions",
   "profileForms",
@@ -23,6 +24,10 @@ export const NAV_BADGE_KEYS = [
 export type NavBadgeKey = (typeof NAV_BADGE_KEYS)[number];
 
 export const NAV_BADGE_PERMISSION: Record<NavBadgeKey, PermissionCode> = {
+  // Everybody who can see a lead can be behind on one, so this is the
+  // same permission the screen is gated on. Unlike the unassigned pile
+  // it is not an admin's queue — it is each person's own.
+  followUps: "lead.read",
   unassigned: "lead.assign",
   admissions: "payment.read",
   // Same permission the screen itself is gated on, so everybody who can see

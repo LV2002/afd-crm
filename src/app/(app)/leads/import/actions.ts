@@ -308,7 +308,7 @@ export async function importLeads(
   });
 
   revalidatePath("/leads");
-  revalidatePath("/pipeline");
+  revalidatePath("/follow-ups");
 
   return { summary: { total: rows.length, created, matched, skipped, rows: rowResults } };
 }
