@@ -8342,3 +8342,34 @@ those keys — but the documented Google setup sends `utm_campaign={campaignid}`
 so it is noted rather than widened into this change.
 
 Stubbed: nothing. **1699 tests pass** (11 added), typecheck, lint, `db:audit` and build clean.
+
+## Session 62 — who am I behind on this morning
+
+Leon does not use the Pipeline board, so its tab is now **Follow-ups**: everybody with a call
+booked, soonest first.
+
+- **`/follow-ups`** lists leads by `next_followup_at` ascending, cut into five piles —
+  overdue, today, tomorrow, later this week, later — with the overdue one first. The boundaries
+  are midnight IST, in a pure module (`lib/leads/followup-buckets.ts`) so they can be tested
+  without waiting until midnight.
+- **Defaults to the signed-in person's own leads.** Anybody holding `lead.assign` gets a
+  Mine/Everyone switch and an extra Owner column; counsellors do not see it, because RLS already
+  makes both sides identical for them.
+- **Filters are the leads list's own**, component and query helpers alike — `LeadFilters`,
+  `applyLeadFilters`, `readFilterValues`. A second set of filter controls would have drifted.
+- **A personal nav badge**, the first one: your own overdue count. `COUNTERS` now takes the
+  caller as well as the client, because a badge reading 40 over a screen showing 2 teaches people
+  to ignore badges.
+- **The board is deleted; `/pipeline` redirects** rather than 404ing — the dashboard widget,
+  bookmarks and four `revalidatePath()` calls pointed at it. `moveLeadStage` moved to
+  `app/(app)/leads/stage-actions.ts`, since the lead's status bar is what calls it and a live
+  Server Action in a deleted route's folder is a trap.
+- Stages are untouched: still a separate column from temperature, still on every lead, still
+  filterable, still what the reports group by. Only the board went.
+- Manual chapter 5.2 rewritten, plus the six other places that said "drag the card".
+
+Deliberately absent: leads with no follow-up booked (the empty state links to the leads list's
+`followup=none`), won/lost/dead leads, and tasks.
+
+Stubbed: nothing. **1710 tests pass** (11 added, 2 pinned lists updated), typecheck, lint and
+build clean. No migration.

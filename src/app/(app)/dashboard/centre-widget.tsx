@@ -91,7 +91,7 @@ export async function CentreWidget() {
           <Link href="/leads" className="text-sm font-medium hover:underline">
             View leads →
           </Link>
-          <Link href="/pipeline" className="text-sm font-medium hover:underline">
+          <Link href="/follow-ups" className="text-sm font-medium hover:underline">
             Pipeline board →
           </Link>
           {centre.unassigned > 0 && (

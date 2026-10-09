@@ -64,7 +64,7 @@ that is the system working, not a fault.
 |---|---|---|
 | **Dashboard** | Your landing page: your work queue and your numbers | 4 |
 | **Leads** | Every lead you can see, with filters and search | 5 |
-| **Pipeline** | The same leads as a board, by stage | 5 |
+| **Follow-ups** | Who you owe a call, soonest first | 5 |
 | **Unassigned** | Leads nobody owns yet | 5 |
 | **Admissions** | Confirmed admissions and their fee collection | 7 |
 | **Students** | People who have paid and started | 8 |
@@ -106,8 +106,8 @@ Signed in, with at least the Counsellor role.
    **Type** (Call, WhatsApp, Walk-in…), pick an **Outcome**, write a note,
    set **Next follow-up**, and save. This is the single most important
    habit in the system.
-6. **Open Pipeline.** The same leads, arranged by stage. Useful for seeing
-   where everybody is stuck.
+6. **Open Follow-ups.** Everybody with a call booked, soonest first, with
+   the overdue ones at the top. This is the screen to start the day on.
 7. **Open Chats.** Replies to the institute's WhatsApp messages arrive
    here.
 

@@ -31,7 +31,7 @@ Type, Outcome, Notes, Next action, **Next follow-up**. Without the
 follow-up date the lead vanishes from everybody's queue.
 
 **5. Move the stage.**
-Drag the card on **Pipeline**, or set it on the lead. *Contacted* →
+Set it in the stage control at the top of the lead. *Contacted* →
 *Qualified* → *Demo Scheduled* and so on.
 
 **6. Set the temperature honestly.**

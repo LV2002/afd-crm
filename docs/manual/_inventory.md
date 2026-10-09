@@ -17,7 +17,7 @@ tables**, **46 permissions**, **6 seeded roles**, **14 pipeline stages**,
 |---|---|---|---|
 | Dashboard | `/dashboard` | (everyone) | 4 |
 | Leads (list) | `/leads` | `lead.read` | 5 |
-| Pipeline (kanban) | `/pipeline` | `lead.read` | 5 |
+| Follow-ups | `/follow-ups` | `lead.read` | 5 |
 | Unassigned | `/leads/orphans` | `lead.assign` | 5 |
 | Admissions | `/accounts` | `payment.read` | 7 |
 | Students | `/students` | `student.read` | 8 |
