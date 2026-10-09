@@ -123,7 +123,30 @@ test.describe("a counsellor's day", () => {
 
     // The lead's own page, which is the only proof the row was written and
     // the assignment engine ran without throwing.
-    await expect(page).toHaveURL(/\/leads\/[0-9a-f-]{36}/, { timeout: 45_000 });
+    //
+    // Waited for by hand so that a miss can say WHAT THE PAGE SHOWS. The
+    // server answered (the check above) and the URL still did not move, so
+    // the form is displaying something — an error from the action, a
+    // validation message, a spinner stuck on — and "Expected pattern ...
+    // Received /leads/new" has told three investigations nothing about
+    // which. Failing with the visible text turns the next red run into a
+    // diagnosis instead of a fourth guess.
+    const arrived = await page
+      .waitForURL(/\/leads\/[0-9a-f-]{36}/, { timeout: 45_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!arrived) {
+      const visible = (await page.locator("main").innerText().catch(() => "(main not readable)"))
+        .replace(/\s+/g, " ")
+        .slice(0, 700);
+      const alerts = await page.locator("[role='alert'], .text-destructive").allInnerTexts().catch(() => []);
+      throw new Error(
+        `The server answered ${status} but the page stayed on ${page.url()}.\n` +
+          `  Errors on the page: ${alerts.length ? alerts.join(" | ") : "(none shown)"}\n` +
+          `  Visible text: ${visible}\n` +
+          `  Problems the watcher saw: ${JSON.stringify(watcher.problems)}`,
+      );
+    }
     await expect(page.getByRole("heading", { name })).toBeVisible();
 
     expect(await errorBoundaryText(page)).toBeNull();
