@@ -2,18 +2,24 @@
 
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-import type { DailyCount } from "@/lib/dashboard/scoreboard";
+import type { DailyCount, DailyMeasure } from "@/lib/dashboard/scoreboard";
 import { formatDateIST } from "@/lib/format/date";
 
 /**
- * Thirty days of arrivals, as a shape.
+ * Thirty days of one measure, as a shape.
  *
  * The dashboard could say "14 new this month" and nothing else, which
  * hides the week nothing came in. Magnitude over time, one series, so one
- * hue and no legend — the heading names it. The admissions line is
- * deliberately not drawn on top of it: leads run in tens and admissions in
- * ones, and two scales on one axis is the chart mistake that makes a good
- * month look flat.
+ * hue and no legend — the caption names it. Two measures on one axis is
+ * still refused: leads run in tens and admissions in ones, and two
+ * scales on one axis is the chart mistake that makes a good month look
+ * flat. Which one is drawn is now the reader's choice (see
+ * `year-tiles.tsx`) rather than always arrivals.
+ *
+ * The caption carries the measure's own wording — "arrived that day and
+ * are still interested today" — because every measure but enrolments is
+ * a cohort read against arrival date, and a chart that let somebody read
+ * it as history would be worse than no chart.
  *
  * The table underneath is screen-reader only. A chart that exists only as
  * pixels is unreadable to somebody using a screen reader and unquotable by
@@ -24,15 +30,27 @@ function label(date: string): string {
   return formatDateIST(new Date(`${date}T06:00:00Z`), "d MMM");
 }
 
-export function DailyLeadsChart({ series }: { series: DailyCount[] }) {
-  const data = series.map((day) => ({ ...day, label: label(day.date) }));
-  const total = series.reduce((sum, day) => sum + day.leads, 0);
+export function DailyLeadsChart({
+  series,
+  measure = "newLeads",
+  title = "New leads",
+  caption = "arrived that day",
+}: {
+  series: DailyCount[];
+  measure?: DailyMeasure;
+  /** The tile's own words, so the chart and the number agree. */
+  title?: string;
+  /** What a day's bar counts, spelled out — see the module comment. */
+  caption?: string;
+}) {
+  const data = series.map((day) => ({ ...day, label: label(day.date), value: day[measure] }));
+  const total = series.reduce((sum, day) => sum + day[measure], 0);
 
   if (total === 0) {
     return (
       <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-        No leads in the last 30 days. When they arrive — from an ad, the website, or added by
-        hand — they will show up here the same day.
+        Nothing to draw: no {title.toLowerCase()} in the last 30 days. A day counts a lead that{" "}
+        {caption}.
       </p>
     );
   }
@@ -40,8 +58,11 @@ export function DailyLeadsChart({ series }: { series: DailyCount[] }) {
   return (
     <figure className="m-0 flex flex-col gap-2">
       <figcaption className="text-sm font-medium">
-        New leads, last 30 days{" "}
+        {title}, last 30 days{" "}
         <span className="font-normal text-muted-foreground">· {total} in total</span>
+        <span className="block text-xs font-normal text-muted-foreground">
+          Each day counts leads that {caption}.
+        </span>
       </figcaption>
 
       <div className="h-48 w-full">
@@ -80,11 +101,11 @@ export function DailyLeadsChart({ series }: { series: DailyCount[] }) {
                 fontSize: 12,
               }}
               labelStyle={{ color: "var(--muted-foreground)" }}
-              formatter={(value) => [Number(value), Number(value) === 1 ? "lead" : "leads"]}
+              formatter={(value) => [Number(value), title]}
             />
             <Area
               type="monotone"
-              dataKey="leads"
+              dataKey="value"
               stroke="var(--primary)"
               strokeWidth={2}
               fill="url(#daily-leads)"
@@ -97,20 +118,20 @@ export function DailyLeadsChart({ series }: { series: DailyCount[] }) {
       </div>
 
       <table className="sr-only">
-        <caption>New leads per day, last 30 days</caption>
+        <caption>
+          {title} per day, last 30 days. Each day counts leads that {caption}.
+        </caption>
         <thead>
           <tr>
             <th scope="col">Date</th>
-            <th scope="col">New leads</th>
-            <th scope="col">Admissions</th>
+            <th scope="col">{title}</th>
           </tr>
         </thead>
         <tbody>
           {data.map((day) => (
             <tr key={day.date}>
               <th scope="row">{day.label}</th>
-              <td>{day.leads}</td>
-              <td>{day.admissions}</td>
+              <td>{day.value}</td>
             </tr>
           ))}
         </tbody>

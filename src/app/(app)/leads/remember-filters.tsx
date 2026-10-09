@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 /**
  * The filters survive opening a lead.
@@ -28,9 +28,25 @@ import { useEffect } from "react";
  * ## Clearing really clears
  *
  * An empty filter bar is a deliberate state, not an absence: somebody who
- * has just emptied the last filter must not have them reinstated on their
- * next visit. So an empty query is *stored* as empty rather than ignored,
- * and only a remembered query with something in it is ever restored.
+ * has just emptied the last filter must not have it reinstated.
+ *
+ * This is the part that was described here and not implemented, and Leon
+ * found it: *"the follow up filter is not clearing, it clears but then
+ * comes back again."* Clearing the only filter navigates to a bare
+ * `/leads`, the effect saw an empty query, skipped the write — the write
+ * was inside `if (current)` — read the filter still sitting in storage
+ * and put it straight back.
+ *
+ * The two cases cannot be told apart from the query alone, because both
+ * are a bare `/leads`. What tells them apart is **when** it happened:
+ * arriving on the screen, or changing something while already on it.
+ * React keeps this component mounted across a navigation within the same
+ * route, so a ref that remembers whether this mount has already run is
+ * exactly the distinction:
+ *
+ * - **First run, no query** — they came from the sidebar. Restore.
+ * - **A later run, no query** — they emptied the bar in front of us.
+ *   Store the empty string and restore nothing.
  *
  * `replace`, not `push`, so Back still leaves the list rather than
  * bouncing between the bare and the restored URL.
@@ -57,19 +73,29 @@ function write(value: string): void {
 export function RememberLeadFilters() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  /** False until this mount has run once — see "Clearing really clears". */
+  const hasRun = useRef(false);
 
   useEffect(() => {
     const current = searchParams.toString();
+    const isFirstRun = !hasRun.current;
+    hasRun.current = true;
 
     if (current) {
       write(current);
       return;
     }
 
+    // Emptied in front of us. Record the empty bar as the deliberate
+    // state it is, so coming back to this list later shows it empty too.
+    if (!isFirstRun) {
+      write("");
+      return;
+    }
+
     /*
-      A bare `/leads`. Restore, unless they arrived here by clearing the
-      filters — in which case the stored value is the empty string they
-      just chose, and there is nothing to put back.
+      Arrived at a bare `/leads` — the sidebar link. Restore what they
+      were last looking at.
 
       `page` is dropped: coming back to a list should start at the top,
       not on page four of a list that may have changed underneath them.

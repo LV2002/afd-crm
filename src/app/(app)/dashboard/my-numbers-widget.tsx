@@ -6,10 +6,9 @@ import { formatDateIST } from "@/lib/format/date";
 import { interestedTemperatureLabels } from "@/lib/leads/interested-temperature";
 import { createClient } from "@/lib/supabase/server";
 
-import { DailyLeadsChart } from "./daily-leads-chart";
 import { HeroStat } from "./hero-stat";
-import { StatTile } from "./stat-tile";
 import { TargetProgress } from "./target-progress";
+import { YearTiles } from "./year-tiles";
 
 /**
  * A counsellor's own numbers, above their queue.
@@ -35,7 +34,21 @@ import { TargetProgress } from "./target-progress";
  * for any lead that gets reassigned, which is most of them once the orphan
  * queue is in use.
  */
-export async function MyNumbersWidget({ userId }: { userId: string }) {
+export async function MyNumbersWidget({
+  userId,
+  title = "Your numbers",
+  description = "This month so far, then the whole year to date.",
+}: {
+  userId: string;
+  /**
+   * Overridden when a manager is looking at somebody else's card, so it
+   * reads "Athira's numbers" rather than "Your numbers" on a page that
+   * is not about them. Same component, same queries — only the sentence
+   * at the top changes, because two copies of this card would drift.
+   */
+  title?: string;
+  description?: string;
+}) {
   const supabase = await createClient();
   const {
     scoreboard: board,
@@ -63,8 +76,8 @@ export async function MyNumbersWidget({ userId }: { userId: string }) {
   return (
     <Card className="lg:col-span-2">
       <CardHeader>
-        <CardTitle>Your numbers</CardTitle>
-        <CardDescription>This month so far, then the whole year to date.</CardDescription>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
 
       <CardContent className="flex flex-col gap-5">
@@ -101,35 +114,12 @@ export async function MyNumbersWidget({ userId }: { userId: string }) {
           />
         )}
 
-        <DailyLeadsChart series={series} />
-
-        {/*
-          The year so far, as one population seen seven ways.
-
-          These were the month's leftovers — assigned today, due today,
-          SLA breached — each answering a different window from the one
-          beside it. Leon asked for the year instead, and the single rule
-          that makes the row add up is that every tile but the last is
-          about leads that *arrived this cycle year*: new is the whole of
-          it, contacted and never contacted split it in two, and active,
-          overdue and interested are the parts of it still being worked.
-        */}
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="text-sm font-medium">Your year so far</h3>
-            <p className="text-xs text-muted-foreground">Since {cycleStartedOn}</p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatTile label="Active leads" value={board.year.activeLeads} compact />
-            <StatTile label="New leads" value={board.year.newLeads} compact />
-            <StatTile label="Contacted" value={board.year.contacted} compact />
-            <StatTile label="Never contacted" value={board.year.neverContacted} compact />
-            <StatTile label="Overdue follow-ups" value={board.year.overdueFollowups} compact />
-            <StatTile label="Interested" value={board.year.interested} compact />
-            <StatTile label="Enrolments" value={board.year.enrolments} compact />
-            <StatTile label="Admission rate" value={rate} compact />
-          </div>
-        </div>
+        <YearTiles
+          year={board.year}
+          series={series}
+          cycleStartedOn={cycleStartedOn}
+          admissionRate={rate}
+        />
 
         <p className="text-xs text-muted-foreground">
           <strong>Interested</strong> counts anyone still being worked whose temperature is{" "}

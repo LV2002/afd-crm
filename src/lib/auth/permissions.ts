@@ -303,6 +303,27 @@ export const PERMISSIONS = [
     category: "Reports",
     description: "See reports across every center.",
   },
+  /*
+    Ad Performance has its own primitive, separate from report.org.
+
+    It was gated on report.org alone, which meant two things an admin
+    could not separate. Leon: "theres no option for not allowing certain
+    roles to see ad performance tab" — and withholding report.org to
+    hide it would also take away every other org-wide report, which is
+    not the trade he was asking to make.
+
+    What this screen shows is also different in kind: what the institute
+    spends on advertising, which is closer to a finance figure than to a
+    sales report. A centre head can reasonably be given the whole
+    institute's conversion numbers and not its ad budget.
+  */
+  {
+    code: "report.ads",
+    label: "View ad performance",
+    category: "Reports",
+    description:
+      "See what advertising cost and what it produced — spend, cost per lead and return on ad spend, per campaign.",
+  },
   // Separate from settings.manage on purpose. A centre head should be
   // able to set their centre's number for the month — and their people's
   // numbers — without also holding the keys to the pipeline, the roles

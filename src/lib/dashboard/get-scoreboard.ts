@@ -215,7 +215,14 @@ export async function getMyDashboard(
       boundaries,
       interestedTemperatures: interested,
     }),
-    series: buildDailySeries({ leads, enrolments, days }),
+    series: buildDailySeries({
+      leads,
+      enrolments,
+      days,
+      stages,
+      interestedTemperatures: interested,
+      startOfToday: boundaries.startOfToday,
+    }),
     admissionsTarget: targetRows?.[0]?.target_value ?? null,
     cycleYearStart: boundaries.startOfCycleYear,
   };
