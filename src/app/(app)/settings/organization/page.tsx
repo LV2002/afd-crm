@@ -28,7 +28,7 @@ export default async function OrganizationSettingsPage() {
     supabase
       .from("org_settings")
       .select(
-        "name, legal_name, tagline, logo_url, primary_color, address_line, city, state, pincode, phone, email, website, gstin, document_footer, alert_email_to, timezone, currency, locale",
+        "name, legal_name, tagline, logo_url, primary_color, address_line, city, state, pincode, phone, email, website, gstin, document_footer, alert_email_to, timezone, currency, locale, fiscal_year_start_month",
       )
       .limit(1)
       .maybeSingle(),
@@ -93,6 +93,7 @@ export default async function OrganizationSettingsPage() {
           timezone: data?.timezone ?? "Asia/Kolkata",
           currency: data?.currency ?? "INR",
           locale: data?.locale ?? "en-IN",
+          fiscalYearStartMonth: data?.fiscal_year_start_month ?? 4,
         }}
       />
     </div>

@@ -8373,3 +8373,38 @@ Deliberately absent: leads with no follow-up booked (the empty state links to th
 
 Stubbed: nothing. **1710 tests pass** (11 added, 2 pinned lists updated), typecheck, lint and
 build clean. No migration.
+
+## Session 63 — the counsellor dashboard, rearranged
+
+Leon, after a week of using it: the month figures are nearly right, the bottom row answers the
+wrong questions, and the right-hand column is the wrong thing entirely.
+
+- **Two relabels.** "New leads this month" → **Total leads this month**; "Needs you today" →
+  **Follow-ups due**. Text only; the figures behind them are unchanged.
+- **The bottom row is the cycle year now**, not a row of leftovers each answering a different
+  window: active leads, new leads, contacted, never contacted, overdue follow-ups, interested,
+  enrolments. One rule makes it a row — every tile but Enrolments is about leads that *arrived*
+  this cycle year, so contacted and never contacted always add up to new leads. Enrolments count
+  by confirmation date, because an admission confirmed in June on a February lead is June's work.
+- **"Year" is the admissions cycle, Leon's choice when asked.** It runs from
+  `org_settings.fiscal_year_start_month`, which has existed since the finance work and was never
+  editable — now a month picker in Settings → Organisation, so an institute with a June intake
+  can say so. One setting, not a second one meaning nearly the same thing.
+- **"Interested" is Very Hot, Hot or Warm**, his second choice when asked — the explicit list
+  rather than an inference. Matched on a normalised value, so `very_hot`, `very-hot`, `veryhot`
+  and `Very Hot` are one thing. The card names the temperatures it counted, so a fifth one nobody
+  added to the list shows up as a visible gap rather than a quietly low number.
+- **Your day left the dashboard for Follow-ups**, above the dated list, with a `your-day` anchor.
+  It was the right content in the wrong column: a long queue in the narrow half, squeezing the
+  numbers card into a ladder.
+- **Quick links took its place** — add a lead, today's follow-ups, log an interaction, view all
+  leads — each permission-gated, so a counsellor who cannot create a lead gets a shorter list
+  rather than a button that refuses them.
+- **The grid is six columns, not two.** `narrow` (2) beside `wide` (4) is the counsellor's
+  dashboard; `half` is still 3 and still pairs, so every other role's layout is untouched.
+- **Migration 0095** gives `quick_links` the hiding row `my_day` had for admin and co-admin.
+  Without it the next deploy would have put a card on the admin dashboard Leon asked not to have,
+  because a widget with no layout row is visible by default.
+
+Stubbed: nothing. **1724 tests pass** (14 added, one layout spec updated), typecheck, lint,
+`db:audit` and build clean.

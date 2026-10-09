@@ -23,6 +23,8 @@
  * support.
  */
 
+import { isInterestedTemperature } from "@/lib/leads/interested-temperature";
+
 export interface ScoreboardLead {
   id: string;
   assignedTo: string | null;
@@ -34,6 +36,8 @@ export interface ScoreboardLead {
   firstResponseAt: string | null;
   nextFollowupAt: string | null;
   slaBreached: boolean;
+  /** For the "interested" figure — see interested-temperature.ts. */
+  temperature: string | null;
 }
 
 export interface ScoreboardEnrolment {
@@ -63,6 +67,15 @@ export interface Boundaries {
    * person reading the dashboard should not have to remember.
    */
   startOfPreviousMonth: Date;
+  /**
+   * Start of the current admissions cycle year, Asia/Kolkata.
+   *
+   * Not January: an institute's year is an intake cycle, and Leon chose
+   * that basis over a calendar one. It runs from
+   * `org_settings.fiscal_year_start_month`, which already existed for
+   * the cash-flow report and is now editable in Settings → Organisation.
+   */
+  startOfCycleYear: Date;
 }
 
 export interface CounsellorScoreboard {
@@ -92,6 +105,40 @@ export interface CounsellorScoreboard {
   /** The same two figures for the whole of last month, for the comparison. */
   newLastMonth: number;
   admissionsLastMonth: number;
+  /** The year so far, as its own block — see CounsellorYear. */
+  year: CounsellorYear;
+}
+
+/**
+ * The same person's cycle year to date.
+ *
+ * Every figure here is about leads that **arrived this cycle year**, and
+ * that one rule is what makes the row add up. "Active leads" on its own
+ * is a snapshot of everything ever assigned; mixed into a row of
+ * year-to-date figures it would be the only one answering a different
+ * question, and a row where one tile means something else is a row
+ * nobody can total.
+ *
+ * `enrolments` is the exception that proves it: an admission confirmed
+ * this year on a lead that arrived last year is still this year's
+ * admission, because the work happened this year. It counts by when the
+ * admission was confirmed, which is said on the card.
+ */
+export interface CounsellorYear {
+  /** Arrived this cycle year and still being worked — not won, not lost. */
+  activeLeads: number;
+  /** Arrived this cycle year, whatever happened since. */
+  newLeads: number;
+  /** Of those, the ones answered at least once. */
+  contacted: number;
+  /** Of those, the ones never once answered. The most actionable number here. */
+  neverContacted: number;
+  /** Of those still active, a follow-up date that has passed. */
+  overdueFollowups: number;
+  /** Of those still active, a temperature meaning they are still in play. */
+  interested: number;
+  /** Admissions confirmed this cycle year, counted by confirmation date. */
+  enrolments: number;
 }
 
 function isActive(lead: ScoreboardLead, terminalStageIds: Set<string>): boolean {
@@ -131,7 +178,8 @@ export function buildCounsellorScoreboard(input: {
   stages: readonly StageInfo[];
   boundaries: Boundaries;
 }): CounsellorScoreboard {
-  const { startOfToday, startOfTomorrow, startOfMonth, startOfPreviousMonth } = input.boundaries;
+  const { startOfToday, startOfTomorrow, startOfMonth, startOfPreviousMonth, startOfCycleYear } =
+    input.boundaries;
   const terminal = terminalStageIdsOf(input.stages);
 
   const active = input.leads.filter((lead) => isActive(lead, terminal));
@@ -159,8 +207,37 @@ export function buildCounsellorScoreboard(input: {
       within(enrolment.salesToAccountsAt, startOfPreviousMonth, startOfMonth),
   ).length;
 
+  /*
+    The year block. One filter — arrived this cycle year — and every
+    figure but the admissions count is drawn from it, so the row reads as
+    one population seen seven ways rather than seven unrelated numbers.
+  */
+  const thisYear = input.leads.filter((lead) => onOrAfter(lead.createdAt, startOfCycleYear));
+  const activeThisYear = thisYear.filter((lead) => isActive(lead, terminal));
+
+  const year: CounsellorYear = {
+    activeLeads: activeThisYear.length,
+    newLeads: thisYear.length,
+    contacted: thisYear.filter((lead) => lead.firstResponseAt !== null).length,
+    neverContacted: thisYear.filter((lead) => lead.firstResponseAt === null).length,
+    overdueFollowups: activeThisYear.filter(
+      (lead) =>
+        lead.nextFollowupAt && new Date(lead.nextFollowupAt).getTime() < startOfToday.getTime(),
+    ).length,
+    interested: activeThisYear.filter((lead) => isInterestedTemperature(lead.temperature)).length,
+    // By confirmation date, not by when the lead arrived: an admission
+    // confirmed in June on a lead from March is June's work.
+    enrolments: input.enrolments.filter(
+      (enrolment) =>
+        leadIds.has(enrolment.leadId) &&
+        !enrolment.droppedAt &&
+        onOrAfter(enrolment.salesToAccountsAt, startOfCycleYear),
+    ).length,
+  };
+
   return {
     activeLeads: active.length,
+    year,
     assignedToday: input.leads.filter((lead) =>
       within(lead.assignedAt, startOfToday, startOfTomorrow),
     ).length,

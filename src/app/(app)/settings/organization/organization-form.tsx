@@ -30,6 +30,7 @@ export interface OrgSettingsValues {
   alertEmailTo: string;
   timezone: string;
   currency: string;
+  fiscalYearStartMonth: number;
   locale: string;
 }
 
@@ -47,6 +48,21 @@ const initialState: OrgSettingsState = {};
  * nothing on its own; "printed on every receipt, agreement and profile
  * sheet" is why somebody would bother filling it in.
  */
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
 export function OrganizationForm({ values }: { values: OrgSettingsValues }) {
   const [state, formAction, pending] = useActionState(updateOrgSettings, initialState);
   const [colour, setColour] = useState(values.primaryColor);
@@ -258,6 +274,34 @@ export function OrganizationForm({ values }: { values: OrgSettingsValues }) {
           </Field>
           <Field label="Locale" htmlFor="locale">
             <Input id="locale" name="locale" defaultValue={values.locale} required />
+          </Field>
+        </div>
+
+        {/*
+          Stored since the finance work and never editable until now. The
+          dashboard's "your year so far" figures run from it, so an
+          institute whose intake starts in June needs to be able to say
+          so — otherwise the year resets in April, mid-cycle.
+        */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Year starts in" htmlFor="fiscalYearStartMonth">
+            <select
+              id="fiscalYearStartMonth"
+              name="fiscalYearStartMonth"
+              defaultValue={String(values.fiscalYearStartMonth)}
+              className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
+            >
+              {MONTHS.map((month, index) => (
+                <option key={month} value={index + 1}>
+                  {month}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              The admissions cycle. Used by the dashboard&apos;s year figures and the cash-flow
+              report. April is India&apos;s financial year; set it to your intake month if that is
+              what you count by.
+            </p>
           </Field>
         </div>
       </section>

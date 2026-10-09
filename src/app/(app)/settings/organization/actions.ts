@@ -60,6 +60,7 @@ const schema = z.object({
   timezone: z.string().trim().min(1),
   currency: z.string().trim().length(3, "Use a 3-letter currency code").toUpperCase(),
   locale: z.string().trim().min(1),
+  fiscalYearStartMonth: z.coerce.number().int().min(1).max(12),
 });
 
 /** Images only. A PDF logo would render as a broken image on every document. */
@@ -123,6 +124,7 @@ export async function updateOrgSettings(
     documentFooter: formData.get("documentFooter"),
     timezone: formData.get("timezone"),
     currency: formData.get("currency"),
+    fiscalYearStartMonth: formData.get("fiscalYearStartMonth"),
     locale: formData.get("locale"),
   });
 
@@ -163,6 +165,7 @@ export async function updateOrgSettings(
     timezone: parsed.data.timezone,
     currency: parsed.data.currency,
     locale: parsed.data.locale,
+    fiscalYearStartMonth: parsed.data.fiscalYearStartMonth,
   };
 
   const { error } = existing

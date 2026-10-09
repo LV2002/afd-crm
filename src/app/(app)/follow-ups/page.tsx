@@ -42,6 +42,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatTerm } from "@/lib/terminology/terms";
 import { getTerminologyMap } from "@/lib/terminology/get-terminology";
 
+import { MyDayWidget } from "../dashboard/my-day-widget";
 import { LeadFilters, type FilterFieldWithOptions } from "../leads/lead-filters";
 import { FollowupScope } from "./followup-scope";
 
@@ -72,10 +73,23 @@ import { FollowupScope } from "./followup-scope";
  * order by a date that does not exist. The leads list answers that with
  * its own `followup=none` filter, and the empty state here says so.
  *
- * Tasks are also absent. A task has its own due date and its own screen;
+ * ## Your day sits above it
+ *
+ * The work queue — overdue, due today, new assignments, at-risk — used
+ * to be the dashboard's right-hand column, where a long list squeezed
+ * the numbers beside it into a narrow ladder. Leon asked for it here,
+ * and it belongs here: it is the same question as the list below it,
+ * answered for the next hour rather than the next month. The queue
+ * decides what to do now; the list is everything that is coming.
+ *
+ * It carries the `your-day` anchor, because the dashboard's "Today's
+ * follow-ups" link means the queue, not the screen it sits on.
+ *
+ * ## What is deliberately not in the list below
+ *
+ * Tasks. A task has its own due date and its own place on the lead;
  * folding both into one list means two things called "due" that behave
- * differently, and the dashboard queue already merges them for the one
- * place that wants them merged.
+ * differently, and the queue above is where the two are already merged.
  */
 
 const PAGE_SIZE = 50;
@@ -265,6 +279,22 @@ export default async function FollowUpsPage({
           </p>
         </div>
         {seesOthers && <FollowupScope scope={scope} />}
+      </div>
+
+      {/* `scroll-mt` so the anchor does not land the heading under the
+          app's sticky header — the link is the whole reason this id
+          exists, and an anchor that hides its own target is worse than
+          no anchor. */}
+      <div id="your-day" className="scroll-mt-20">
+        <MyDayWidget userId={user.id} canRevealPhone={can(user, "lead.reveal_phone")} />
+      </div>
+
+      <div className="border-t pt-4">
+        <h2 className="text-lg font-semibold">Everything booked</h2>
+        <p className="text-sm text-muted-foreground">
+          Every {formatTerm(terms, "lead", "singular").toLowerCase()} with a date on it, soonest
+          first.
+        </p>
       </div>
 
       <LeadFilters

@@ -3,14 +3,25 @@ import { can, getCurrentUser, scopeFor, type SessionUser } from "@/lib/auth/sess
 import { getRoleLayout } from "@/lib/dashboard/get-layout";
 import { resolveDashboard } from "@/lib/dashboard/resolve-layout";
 import { createClient } from "@/lib/supabase/server";
+import { getTerminologyMap } from "@/lib/terminology/get-terminology";
+import type { TerminologyMap } from "@/lib/terminology/terms";
 
 import { AcademicsWidget } from "./academics-widget";
 import { AccountsWidget } from "./accounts-widget";
 import { AdminWidget } from "./admin-widget";
 import { CentreWidget } from "./centre-widget";
-import { MyDayWidget } from "./my-day-widget";
 import { MyNumbersWidget } from "./my-numbers-widget";
+import { QuickLinksWidget } from "./quick-links-widget";
 import { TeamWidget } from "./team-widget";
+
+/** The six-column grid, by the width a widget asked the registry for. */
+const WIDTH_CLASS: Record<"narrow" | "half" | "wide" | "full", string> = {
+  narrow: "lg:col-span-2",
+  half: "lg:col-span-3",
+  wide: "lg:col-span-4",
+  full: "lg:col-span-6",
+};
+
 
 /**
  * The landing page, composed rather than hardcoded.
@@ -38,12 +49,12 @@ import { TeamWidget } from "./team-widget";
  * the registry rather than one merged card so an admin can still turn either
  * half off per role.
  */
-function renderWidget(key: string, user: SessionUser, canRevealPhone: boolean) {
+function renderWidget(key: string, user: SessionUser, terms: TerminologyMap) {
   switch (key) {
     case "my_numbers":
       return <MyNumbersWidget userId={user.id} />;
-    case "my_day":
-      return <MyDayWidget userId={user.id} canRevealPhone={canRevealPhone} />;
+    case "quick_links":
+      return <QuickLinksWidget user={user} terms={terms} />;
     case "centre":
       return <CentreWidget />;
     case "centre_team":
@@ -64,7 +75,10 @@ export default async function DashboardPage() {
   if (!user) return <AccessDenied />;
 
   const supabase = await createClient();
-  const layout = await getRoleLayout(supabase, user.roleId);
+  const [layout, terms] = await Promise.all([
+    getRoleLayout(supabase, user.roleId),
+    getTerminologyMap(),
+  ]);
 
   const widgets = resolveDashboard(layout, {
     has: (permission) => can(user, permission),
@@ -81,9 +95,15 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/*
+        Six columns rather than two, so a pair can be uneven: the
+        counsellor's numbers take four and Quick links two. A `half`
+        widget is still three, so every layout that existed before this
+        is laid out exactly as it was.
+      */}
+      <div className="grid gap-6 lg:grid-cols-6">
         {widgets.map((widget) => {
-          const card = renderWidget(widget.key, user, can(user, "lead.reveal_phone"));
+          const card = renderWidget(widget.key, user, terms);
           // A key in the database that the code no longer has. Ignored
           // rather than crashed on, so removing a widget cannot break a
           // saved layout.
@@ -108,10 +128,7 @@ export default async function DashboardPage() {
             which is the only thing that can see it.
           */
           return (
-            <div
-              key={widget.key}
-              className={widget.width === "full" ? "min-w-0 lg:col-span-2" : "min-w-0"}
-            >
+            <div key={widget.key} className={`min-w-0 ${WIDTH_CLASS[widget.width ?? "half"]}`}>
               {card}
             </div>
           );
