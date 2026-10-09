@@ -68,7 +68,13 @@ export interface AttributionInput {
   /** Every lead created in the period, whether or not it came from an ad. */
   leadIds: string[];
   /** All enquiries for those leads, ORDERED OLDEST FIRST — the first one wins. */
-  enquiryRows: Array<{ leadId: string; source: string; campaignId: string | null }>;
+  enquiryRows: Array<{
+    leadId: string;
+    source: string;
+    campaignId: string | null;
+    /** `enquiries.ad_platform`, set by a custom webhook that declares itself paid. */
+    adPlatform?: string | null;
+  }>;
   /** Only enrolments that count as admissions: past the gate, not dropped. */
   enrolmentRows: Array<{ id: string; leadId: string; netFeePaise: number }>;
   paymentRows: Array<{ enrolmentId: string; amountPaise: number; direction: string }>;
@@ -76,11 +82,33 @@ export interface AttributionInput {
 
 /**
  * The two platform names are exactly `ad_platform`'s values, and both
- * webhooks write that same word as the enquiry's source — which is what
- * makes the join to `ad_spend_daily` possible at all. Any other source is
- * not paid advertising.
+ * built-in webhooks write that same word as the enquiry's source — which
+ * is what makes the join to `ad_spend_daily` possible at all.
  */
 const AD_PLATFORMS = new Set(["meta", "google"]);
+
+/**
+ * Which platform's spend an enquiry counts against, or null.
+ *
+ * Two routes in, and the order between them is the point.
+ *
+ * `ad_platform` first, because it is a **stated fact**: an admin ticked
+ * "this endpoint is Google Ads" on the custom webhook that wrote this
+ * row. A Google Ads lead form wired up as a custom endpoint has a source
+ * of whatever the admin called it — "Google Ads" — and inferring the
+ * platform from that label would mean a report guessing about money from
+ * a display name. "Google Ads", "google-ads" and "Google Ads – NIFT" are
+ * all things somebody might reasonably type.
+ *
+ * The source second, unchanged, because the built-in Meta and Google
+ * webhooks have written `meta` and `google` there since they shipped and
+ * every historic row depends on it.
+ */
+function platformOf(row: { source: string; adPlatform?: string | null }): string | null {
+  const declared = row.adPlatform?.trim();
+  if (declared && AD_PLATFORMS.has(declared)) return declared;
+  return AD_PLATFORMS.has(row.source) ? row.source : null;
+}
 
 export function attributeLeads(input: AttributionInput): AttributedLead[] {
   const campaignByLead = new Map<string, { platform: string; campaignId: string }>();
@@ -90,8 +118,9 @@ export function attributeLeads(input: AttributionInput): AttributedLead[] {
     // that FOUND the person earned the admission, even if they later
     // filled in a form on the website.
     if (campaignByLead.has(row.leadId)) continue;
-    if (!row.campaignId || !AD_PLATFORMS.has(row.source)) continue;
-    campaignByLead.set(row.leadId, { platform: row.source, campaignId: row.campaignId });
+    const platform = platformOf(row);
+    if (!row.campaignId || !platform) continue;
+    campaignByLead.set(row.leadId, { platform, campaignId: row.campaignId });
   }
 
   const collectedByEnrolment = new Map<string, number>();

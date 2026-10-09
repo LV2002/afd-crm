@@ -4457,3 +4457,52 @@ showing 2 would train people to ignore the number.
 A dated queue swamped by rows with no date stops being a queue, and a catch-up list that opens
 with twenty students who enrolled in March is not a catch-up list. The empty state links to the
 leads list's own `followup=none` filter for the first case.
+
+---
+
+## 2026-10-09 · Two configuration questions, answered as configuration
+
+**"Interested" became a tickbox.** The dashboard tile shipped the day before with
+`["very_hot", "hot", "warm"]` in TypeScript, chosen by Leon from a menu that also offered a
+settings switch. He took the fixed list, then asked for the switch the next morning — which is
+the right instinct and what CLAUDE.md § What is configurable required anyway. The flag lives in
+`dropdown_options.metadata.interested`, a jsonb column that has existed since the reference
+tables shipped, so there is no new column: only data, a tickbox on the one category it means
+anything for, and migration 0096 setting the values that make an existing instance read
+identically this morning.
+
+Per-option rather than a list held elsewhere, because then an option and its meaning cannot
+drift apart — delete the temperature and the flag goes with it. And `metadata` is **merged,
+never replaced**: these rows carry a `rank` the seed wrote, and overwriting the column would
+delete it silently.
+
+**No fallback when nothing is ticked.** The tile reads zero. Falling back to the old hardcoded
+three would mean an admin who deliberately unticked everything got a number they had just
+switched off, which is a screen overruling the person configuring it.
+
+---
+
+**A paid feed that does not call itself "google".** Leon connected his Google Ads lead form as a
+custom webhook and named the source "Google Ads" — correct for the sources report, invisible to
+Ad Performance, which decided "is this paid advertising" by testing the enquiry's source against
+the two literal words `meta` and `google`. The leads arrived carrying a campaign id and a gclid
+and the report could see none of it: a campaign with spend and no leads beside a source with
+leads and no spend.
+
+**Matching the label loosely would have been the wrong fix.** "Google Ads", "google-ads" and
+"Google Ads – NIFT" are all things somebody might reasonably type, and a report that guesses
+about money from a display name will eventually guess wrong. So the platform is recorded as a
+fact at ingestion — `custom_webhooks.ad_platform`, stamped onto `enquiries.ad_platform` by the
+handler (migration 0097) — and the report prefers the stated fact over the inferred one. The
+source match stays, unchanged, because every historic row from the built-in webhooks depends on
+it.
+
+**Saving backfills.** Turning the setting on also attributes the enquiries that endpoint has
+already written, matched on its own source string, which is exact rather than a guess. Without
+it the report would show a campaign's spend against a fraction of what it produced — worse than
+showing none of it. Clearing the setting clears them back, so the figures follow the decision
+both ways.
+
+**Still gated on a numeric campaign id.** `adIdentifiersFrom()` is unchanged: a platform alone
+attributes nothing, because spend is joined on the campaign and a lead with no campaign would
+land in a row no campaign owns.

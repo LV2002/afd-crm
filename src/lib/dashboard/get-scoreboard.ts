@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { fromZonedTime } from "date-fns-tz";
 
+import { interestedTemperatures } from "@/lib/leads/interested-temperature";
+
 import {
   formatDateIST,
   lastDaysIST,
@@ -176,9 +178,10 @@ export async function getMyDashboard(
     ),
   );
 
-  const [stages, { data: leadRows }, { data: enrolmentRows }, { data: targetRows }] =
+  const [stages, interested, { data: leadRows }, { data: enrolmentRows }, { data: targetRows }] =
     await Promise.all([
       loadStages(supabase),
+      interestedTemperatures(supabase),
       supabase
         .from("leads")
         .select(LEAD_COLUMNS)
@@ -205,7 +208,13 @@ export async function getMyDashboard(
   const enrolments = (enrolmentRows ?? []).map(toEnrolment);
 
   return {
-    scoreboard: buildCounsellorScoreboard({ leads, enrolments, stages, boundaries }),
+    scoreboard: buildCounsellorScoreboard({
+      leads,
+      enrolments,
+      stages,
+      boundaries,
+      interestedTemperatures: interested,
+    }),
     series: buildDailySeries({ leads, enrolments, days }),
     admissionsTarget: targetRows?.[0]?.target_value ?? null,
     cycleYearStart: boundaries.startOfCycleYear,

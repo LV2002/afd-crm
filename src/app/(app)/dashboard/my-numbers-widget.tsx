@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMyDashboard } from "@/lib/dashboard/get-scoreboard";
 import { formatDateIST } from "@/lib/format/date";
-import { INTERESTED_TEMPERATURES } from "@/lib/leads/interested-temperature";
+import { interestedTemperatureLabels } from "@/lib/leads/interested-temperature";
 import { createClient } from "@/lib/supabase/server";
 
 import { DailyLeadsChart } from "./daily-leads-chart";
@@ -52,11 +52,11 @@ export async function MyNumbersWidget({ userId }: { userId: string }) {
   const fortnight = series.slice(-14);
   const now = new Date();
   const cycleStartedOn = formatDateIST(cycleYearStart, "d MMM yyyy");
-  // Named rather than listed as raw values, so the sentence reads the way
-  // an admin sees them on the Temperature dropdown.
-  const interestedLabels = INTERESTED_TEMPERATURES.map((value) =>
-    value.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()),
-  ).join(", ");
+  // The admin's own labels, in their own order, so the sentence reads the
+  // way the Temperature dropdown does — and so a temperature nobody
+  // ticked is visibly absent rather than quietly uncounted.
+  const labels = await interestedTemperatureLabels(supabase);
+  const interestedLabels = labels.length > 0 ? labels.join(", ") : "— none ticked yet";
   const dayOfMonth = Number(formatDateIST(now, "d"));
   const daysInMonth = Number(formatDateIST(new Date(now.getFullYear(), now.getMonth() + 1, 0), "d"));
 
@@ -133,7 +133,11 @@ export async function MyNumbersWidget({ userId }: { userId: string }) {
 
         <p className="text-xs text-muted-foreground">
           <strong>Interested</strong> counts anyone still being worked whose temperature is{" "}
-          {interestedLabels}. <strong>Contacted</strong> and <strong>never contacted</strong> split
+          {interestedLabels}. Change which ones count under{" "}
+          <Link href="/settings/dropdowns/temperature" className="font-medium hover:underline">
+            Settings → Dropdowns → Temperature
+          </Link>
+          . <strong>Contacted</strong> and <strong>never contacted</strong> split
           this year&apos;s leads in two, so they always add up to new leads. Enrolments count by
           the date the admission was confirmed, so one confirmed this year on an older lead still
           counts here. The year runs from the month set in{" "}

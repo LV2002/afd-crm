@@ -16,7 +16,7 @@ import {
   type StageInfo,
 } from "@/lib/dashboard/scoreboard";
 import { startOfCycleYearIST } from "@/lib/dashboard/get-scoreboard";
-import { isInterestedTemperature } from "@/lib/leads/interested-temperature";
+import { isInterestedOption } from "@/lib/leads/interested-temperature";
 
 const STAGES: StageInfo[] = [
   { id: "s-new", stageType: "open" },
@@ -51,12 +51,16 @@ function lead(over: Partial<ScoreboardLead> = {}): ScoreboardLead {
   };
 }
 
+/** The three an admin has ticked in Settings → Dropdowns → Temperature. */
+const INTERESTED = new Set(["very_hot", "hot", "warm"]);
+
 function build(leads: ScoreboardLead[], enrolments: ScoreboardEnrolment[] = []) {
   return buildCounsellorScoreboard({
     leads,
     enrolments,
     stages: STAGES,
     boundaries: BOUNDARIES,
+    interestedTemperatures: INTERESTED,
   }).year;
 }
 
@@ -130,14 +134,29 @@ describe("the interested figure", () => {
     expect(year.interested).toBe(0);
   });
 
-  it("reads the same value however it was spelled", () => {
-    // Which spelling an institute ends up with depends on who added the
-    // option, so all four have to mean one thing.
-    for (const spelling of ["very_hot", "very-hot", "veryhot", "Very Hot"]) {
-      expect(isInterestedTemperature(spelling), spelling).toBe(true);
-    }
-    expect(isInterestedTemperature("cold")).toBe(false);
-    expect(isInterestedTemperature(null)).toBe(false);
+  it("counts nothing when an admin has ticked nothing", () => {
+    // Deliberately not a fallback to some built-in list: a screen that
+    // overrules the person configuring it is worse than a zero.
+    const year = buildCounsellorScoreboard({
+      leads: [lead({ temperature: "hot" })],
+      enrolments: [],
+      stages: STAGES,
+      boundaries: BOUNDARIES,
+      interestedTemperatures: new Set(),
+    }).year;
+
+    expect(year.interested).toBe(0);
+  });
+
+  it("reads the tick off the option's metadata", () => {
+    expect(isInterestedOption({ interested: true })).toBe(true);
+    expect(isInterestedOption({ interested: false })).toBe(false);
+    // Everything that is not an explicit true: an option nobody has
+    // edited since the flag existed, and the rank metadata the seed
+    // already writes.
+    expect(isInterestedOption({ rank: 4 })).toBe(false);
+    expect(isInterestedOption(null)).toBe(false);
+    expect(isInterestedOption("interested")).toBe(false);
   });
 });
 

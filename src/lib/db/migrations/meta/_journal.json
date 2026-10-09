@@ -673,6 +673,20 @@
       "when": 1792504808000,
       "tag": "0095_hide_quick_links_for_admins",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1792591208000,
+      "tag": "0096_temperature_interested_flag",
+      "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1792677608000,
+      "tag": "0097_enquiry_ad_platform",
+      "breakpoints": true
     }
   ]
 }

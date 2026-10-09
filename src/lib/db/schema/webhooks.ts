@@ -178,6 +178,16 @@ export const customWebhooks = pgTable(
      * predicted, so the fix is a text box rather than a deploy.
      */
     fieldAliases: jsonb("field_aliases").$type<Record<string, string[]>>(),
+    /**
+     * The paid platform this feed represents, if any.
+     *
+     * A Google Ads lead form posting here is paid advertising even
+     * though the admin called the source "Google Ads"; without this the
+     * report cannot tell it from a Google Form. Null means not
+     * advertising, which is what every endpoint already configured
+     * keeps.
+     */
+    adPlatform: text("ad_platform"),
     isActive: boolean("is_active").notNull().default(true),
     createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
     ...timestamps(),
