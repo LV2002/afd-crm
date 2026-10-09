@@ -121,39 +121,51 @@ test.describe("at phone width", () => {
       /*
         The number AND what caused it.
 
-        This reported "overflows by 173px" and nothing else, which cost
-        two rounds of guessing at the CSS from a transcript: with no
-        element named, the only way to find the culprit was to rebuild
-        candidate layouts offline and hope one of them reproduced. The
-        widest few elements past the right edge are nearly always the
-        answer, and they cost one more `evaluate` on a page that has
-        already been loaded.
+        This reported "overflows by 173px" and nothing else, which cost two
+        rounds of guessing at CSS from a transcript: with no element named,
+        the only way to find the culprit was to rebuild candidate layouts
+        offline and hope one of them reproduced.
 
-        Deepest-first, because an overflowing child drags every ancestor
-        out with it and the ancestors are the uninteresting half of the
-        list.
+        ## Why the ranking is what it is
+
+        Reaching past the right edge is not the same as CAUSING the page to
+        scroll. An element inside an ancestor with `overflow: hidden` or
+        `auto` is clipped, so its geometry is a red herring — the first
+        version of this listed three clipped table cells and sent the
+        search in exactly the wrong direction. So: anything with a
+        clipping ancestor is dropped, and the rest are ranked by their
+        right edge, because the element sitting at the document's own
+        scrollWidth is by definition the one setting it.
+
+        Ancestors are reported too rather than filtered out. An
+        overflowing child does drag its parents out with it, but which of
+        the two is holding the width is the actual question — a parent
+        that is too wide and a child that will not shrink need opposite
+        fixes — and the chain reads it off at a glance.
       */
       const measured = await page.evaluate(() => {
         const limit = document.documentElement.clientWidth;
         const overflow = document.documentElement.scrollWidth - limit;
-        const describe = (el: Element) => {
-          const depth = (function count(node: Element | null): number {
-            return node ? 1 + count(node.parentElement) : 0;
-          })(el);
-          const rect = el.getBoundingClientRect();
-          return { el, depth, right: Math.round(rect.right), width: Math.round(rect.width) };
+
+        const clipped = (el: Element) => {
+          for (let node = el.parentElement; node; node = node.parentElement) {
+            const { overflowX } = getComputedStyle(node);
+            if (overflowX !== "visible") return true;
+          }
+          return false;
         };
+
         const culprits = Array.from(document.querySelectorAll("body *"))
-          .map(describe)
-          .filter((row) => row.right > limit + 2)
-          .sort((a, b) => b.depth - a.depth || b.width - a.width)
-          .slice(0, 3)
+          .map((el) => ({ el, rect: el.getBoundingClientRect() }))
+          .filter((row) => row.rect.right > limit + 2 && !clipped(row.el))
+          .sort((a, b) => b.rect.right - a.rect.right)
+          .slice(0, 4)
           .map(
             (row) =>
               `<${row.el.tagName.toLowerCase()}` +
               `${row.el.id ? ` id="${row.el.id}"` : ""}` +
               ` class="${(row.el.getAttribute("class") ?? "").slice(0, 120)}">` +
-              ` ${row.width}px wide, right edge ${row.right}px`,
+              ` ${Math.round(row.rect.width)}px wide, right edge ${Math.round(row.rect.right)}px`,
           );
         return { overflow, culprits };
       });

@@ -8509,6 +8509,24 @@ Stubbed: nothing. **1742 tests pass** (9 added), typecheck, lint, `db:audit` and
   two rounds of guessing at CSS from a transcript. It reports the widest three elements past
   the right edge, deepest-first, with tag, id, class and width.
 
-Stubbed: nothing. **1742 tests pass**, typecheck, lint, `db:audit` and build clean. The 173px
-phone overflow on `/dashboard` is still open — the diagnostic above is how the next CI run
-names it.
+- **The 173px phone overflow is fixed, and it was a screen-reader table.** Every chart ships
+  its data as a `sr-only` table underneath, and `sr-only` was on the `<table>` itself.
+  `sr-only` is `width: 1px; overflow: hidden; white-space: nowrap`, which works on anything
+  that can be 1px wide — and a table cannot: it will not shrink below its minimum content
+  width, so with `nowrap` holding the caption on one line the box came out **746px** wide.
+  `overflow: hidden` clips a table's *contents*, not the table box, and `sr-only` is also
+  `position: absolute`, so that 746px reported straight into the document's scrollable width.
+  A table nobody can see was dragging every page sideways on a phone. Wrapping it in a
+  `<div class="sr-only">` fixes it, because a div does honour `width: 1px`: measured against
+  the built CSS at 412px, **374px of overflow before, 0 after**, with the table itself
+  unchanged. It only surfaced when a caption grew longer — a longer sentence is a wider
+  nowrap box — which is why it looked like it arrived with an unrelated change, and why two
+  rounds of reproducing the *layout* changes found nothing.
+- **The diagnostic that found it was wrong twice over and is now right.** Reaching past the
+  right edge is not the same as causing the page to scroll: its first version ranked
+  deepest-first and listed three table cells that were clipped by an ancestor, pointing the
+  search in exactly the wrong direction. It now drops anything with a clipping ancestor and
+  ranks by right edge, so the top entry is the element sitting at the document's own
+  scrollWidth.
+
+Stubbed: nothing. **1742 tests pass**, typecheck, lint, `db:audit` and build clean.
