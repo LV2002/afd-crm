@@ -53,7 +53,8 @@ because a number on its own cannot tell you whether it is a good month.
 #### Your year so far
 
 The row underneath is the **admissions cycle year to date**, not the
-month. It starts in the month set under Settings → Organisation →
+month. **Press any tile and the chart above redraws for it** — New leads
+is where it starts, which is what the chart always showed. It starts in the month set under Settings → Organisation →
 **Year starts in** (April by default; set it to your intake month if
 that is what you count by), and the card prints the date it started
 from.
@@ -79,11 +80,59 @@ Two things worth knowing about these:
   when the lead arrived. An admission confirmed in June on a lead from
   February is June's work, and it counts here.
 
+**What the chart is, when a tile is selected.** It is not history. The
+CRM keeps no daily record of what a lead's temperature or stage *was*,
+so "Interested on 3 June" does not mean "was interested on 3 June". It
+means **arrived on 3 June and is interested today** — the caption under
+the chart says so each time.
+
+That is the more useful question anyway: a week whose leads all went
+cold shows as a dip in Interested while New leads stayed flat, which is
+exactly the week worth asking about. Enrolments is the one exception, and
+counts by confirmation date, matching its tile.
+
+**Admission rate is not selectable.** It is this month's running
+percentage, not a count of anything per day, so there is no honest line
+to draw for it.
+
 **Interested** is Very Hot, Hot or Warm. If you add a new temperature
 meaning something similar, tell whoever maintains the CRM — it will not
 be counted until it is added to the list in the code.
 
-### Your day — now on Follow-ups
+## 4.3 Monitoring your counsellors
+
+Anyone who can read another person's reports — a centre head, co-admin
+or admin — gets a row of **chips under the Dashboard heading**:
+**Overview**, then one per person. With one centre it is a single row.
+With two or more, each centre gets its own line with its name on it.
+
+Pressing a name opens that person's page, which has four things in the
+order you would read them:
+
+| Card | What it answers |
+|---|---|
+| **Their numbers** | The same card they see, with their name on it — this month, and the cycle year |
+| **Their day** | What is on their desk right now: overdue, due today, new, at risk |
+| **Open tasks** | What they have been asked to do, soonest first. Each links to its lead |
+| **Their pipeline** | Every lead assigned to them, by stage as bars, and by temperature |
+
+A few things worth knowing:
+
+- **Counsellors do not see this.** It needs *View centre reports*, which
+  a counsellor holds only over their own work. It is not a bar for
+  looking sideways at a colleague.
+- **You only see the people you are allowed to see.** A centre head gets
+  their centres' staff; an admin gets everybody. Typing a user id from
+  another centre into the address bar gives the same "not found" as
+  typing nonsense.
+- **Somebody at two centres appears under both.** Deliberately — if you
+  are scanning "who is at Kannur", the person who splits their week
+  belongs in that list.
+- **The bars are shares of that person's own pipeline**, so two
+  counsellors' bars are not comparable to each other. The counts beside
+  them are.
+
+## 4.4 Your day — now on Follow-ups
 
 The work queue moved to the top of **Follow-ups** in October 2026. It was
 the right content in the wrong column: a long list in the Dashboard's

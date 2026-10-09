@@ -128,6 +128,22 @@ it starts unticked — tick it if it belongs. If nothing is ticked the
 tile reads zero rather than falling back to a built-in list, because a
 screen that overrules the person configuring it is worse than a zero.
 
+### Hiding Ad Performance from a role
+
+**Ad Performance** has its own permission, *View ad performance*
+(`report.ads`), separate from the other report permissions. Untick it
+for a role under **Settings → Roles** and that role loses both the
+screen and the sidebar entry — they do not see a tab they cannot open.
+
+It is separate from *View org-wide reports* on purpose: what this screen
+shows is what the institute spends on advertising, which is closer to a
+finance figure than to a sales report. A centre head can reasonably be
+given the whole institute's conversion numbers and not its ad budget.
+
+The screen still needs *View org-wide reports* as well, because
+advertising spend is charged per campaign and a campaign's leads arrive
+at every centre — there is no honest way to show one centre's share.
+
 ### Settings → Assignment Rules
 Who gets a new lead. **This is the screen that stops leads going
 unassigned.**

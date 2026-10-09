@@ -276,9 +276,42 @@ export function buildCounsellorScoreboard(input: {
   };
 }
 
-export interface DailyCount {
+/**
+ * The measures a day on the chart can be counted in — the same seven
+ * tiles as "Your year so far", so picking a tile redraws the chart
+ * beneath its own number.
+ *
+ * `enrolments` apart, every one of these counts **leads by the day they
+ * arrived**, and reports what is true of them *now*. "Interested on 3
+ * June" means "arrived on 3 June and is interested today", not "was
+ * interested on 3 June" — the CRM keeps no daily history of a lead's
+ * temperature, and inventing one by interpolation would be a chart that
+ * looks like evidence and is not.
+ *
+ * That makes it a cohort read, which is the more useful one anyway: it
+ * answers "which weeks produced leads worth having", and a week whose
+ * leads all went cold shows up as a dip in `interested` while
+ * `newLeads` stayed flat.
+ *
+ * `enrolments` counts by the day the admission was confirmed, matching
+ * its tile, which says so.
+ */
+export const DAILY_MEASURES = [
+  "newLeads",
+  "activeLeads",
+  "contacted",
+  "neverContacted",
+  "overdueFollowups",
+  "interested",
+  "enrolments",
+] as const;
+
+export type DailyMeasure = (typeof DAILY_MEASURES)[number];
+
+export interface DailyCount extends Record<DailyMeasure, number> {
   /** `yyyy-MM-dd`, IST. */
   date: string;
+  /** Kept as the alias the chart and the sparklines already read. */
   leads: number;
   admissions: number;
 }
@@ -296,19 +329,54 @@ export function buildDailySeries(input: {
   leads: readonly ScoreboardLead[];
   enrolments: readonly ScoreboardEnrolment[];
   days: ReadonlyArray<{ date: string; from: Date; to: Date }>;
+  /** For the active/overdue/interested measures. Omitted, those read zero. */
+  stages?: readonly StageInfo[];
+  interestedTemperatures?: ReadonlySet<string>;
+  /** Midnight IST today, for "overdue". Omitted, that measure reads zero. */
+  startOfToday?: Date;
 }): DailyCount[] {
   const leadIds = new Set(input.leads.map((lead) => lead.id));
   const admissions = input.enrolments.filter(
     (enrolment) => leadIds.has(enrolment.leadId) && !enrolment.droppedAt,
   );
+  const terminal = terminalStageIdsOf(input.stages ?? []);
+  const todayMs = input.startOfToday?.getTime();
 
-  return input.days.map((day) => ({
-    date: day.date,
-    leads: input.leads.filter((lead) => within(lead.createdAt, day.from, day.to)).length,
-    admissions: admissions.filter((enrolment) =>
+  return input.days.map((day) => {
+    // One pass per day over the leads that arrived in it, then six
+    // questions of that one group — rather than six filters over the
+    // whole table, which at thirty days would be a hundred and eighty
+    // scans of every lead the counsellor owns.
+    const arrived = input.leads.filter((lead) => within(lead.createdAt, day.from, day.to));
+    const active = arrived.filter((lead) => isActive(lead, terminal));
+
+    const newLeads = arrived.length;
+    const enrolmentsThatDay = admissions.filter((enrolment) =>
       within(enrolment.salesToAccountsAt, day.from, day.to),
-    ).length,
-  }));
+    ).length;
+
+    return {
+      date: day.date,
+      newLeads,
+      activeLeads: active.length,
+      contacted: arrived.filter((lead) => lead.firstResponseAt !== null).length,
+      neverContacted: arrived.filter((lead) => lead.firstResponseAt === null).length,
+      overdueFollowups:
+        todayMs === undefined
+          ? 0
+          : active.filter(
+              (lead) => lead.nextFollowupAt && new Date(lead.nextFollowupAt).getTime() < todayMs,
+            ).length,
+      interested: active.filter(
+        (lead) => lead.temperature !== null && (input.interestedTemperatures?.has(lead.temperature) ?? false),
+      ).length,
+      enrolments: enrolmentsThatDay,
+      // The two names the sparklines and the 30-day chart were written
+      // against, kept so this change is additive.
+      leads: newLeads,
+      admissions: enrolmentsThatDay,
+    };
+  });
 }
 
 export interface TeamMemberRow {

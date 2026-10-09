@@ -687,6 +687,13 @@
       "when": 1792677608000,
       "tag": "0097_enquiry_ad_platform",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1792764008000,
+      "tag": "0098_report_ads_permission",
+      "breakpoints": true
     }
   ]
 }

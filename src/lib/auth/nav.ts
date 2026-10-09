@@ -152,12 +152,18 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
   },
   { href: "/insights", iconKey: "insights", permission: "report.read", label: "Insights" },
   {
-    // Gated on report.read like Insights so it appears for the same people,
-    // and the page itself turns away anyone without report.org — spend
-    // cannot honestly be split by centre. See the page's module comment.
+    /*
+      Gated on the permission the screen actually needs.
+
+      It used to be `report.read`, which every counsellor holds, so the
+      entry appeared for everybody and the page then turned most of them
+      away — a tab whose only function, for four of the six seeded roles,
+      was to refuse them. Now the link and the screen agree, and an admin
+      who unticks "View ad performance" for a role removes both.
+    */
     href: "/marketing",
     iconKey: "marketing",
-    permission: "report.read",
+    permission: "report.ads",
     label: "Ad Performance",
   },
   { href: "/ask", iconKey: "ask", permission: "ai.query", label: "Ask AI" },

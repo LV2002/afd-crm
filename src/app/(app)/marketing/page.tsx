@@ -186,7 +186,11 @@ export default async function MarketingPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await getCurrentUser();
-  if (!user || !can(user, "report.read")) return <AccessDenied />;
+  // `report.ads` is this screen's own primitive, so an admin can withhold
+  // the ad budget from a role without also taking away every other
+  // org-wide report. The sidebar entry is gated on the same thing, so a
+  // role that cannot open this never sees the link either.
+  if (!user || !can(user, "report.ads")) return <AccessDenied />;
   // See the module comment: spend cannot honestly be split by centre.
   if (!can(user, "report.org")) {
     return (

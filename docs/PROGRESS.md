@@ -8435,3 +8435,36 @@ keyed on gclid, nightly — which is the cross-check between CRM admissions and 
 reporting.
 
 Stubbed: nothing. **1733 tests pass** (9 added), typecheck, lint, `db:audit` and build clean.
+
+## Session 65 — a filter that would not clear, and four roads into a counsellor
+
+- **The lead filters now clear.** `RememberLeadFilters` described "an empty query is *stored* as
+  empty" in its own comment and never did it — the write sat inside `if (current)`, so clearing
+  the only filter landed on a bare `/leads`, the effect read the filter still in storage and put
+  it straight back. The two cases are the same URL, so what tells them apart is *when*: a first
+  run on this mount is an arrival (restore), a later one is somebody emptying the bar in front of
+  us (store empty). Nine tests on the rule, written as the three branches rather than through
+  React, because the bug was the branch and not the `useRef`.
+- **Ad Performance has its own permission** (`report.ads`, migration 0098). It was gated on
+  `report.org`, so hiding it meant taking away every other org-wide report; and the sidebar entry
+  asked for `report.read`, which every counsellor holds, so four of the six seeded roles saw a tab
+  whose only behaviour was to refuse them. The link and the screen now agree. The migration
+  inserts the primitive and grants it to every role that already held `report.org`, so nobody
+  loses access they were using.
+- **The year tiles drive the chart.** Press one and the 30-day chart redraws for it.
+  `buildDailySeries` computes all seven measures in one pass per day rather than six filters over
+  the whole table. **The chart is a cohort read, not history** — "Interested on 3 June" means
+  arrived then and is interested *now*, because the CRM keeps no daily record of a lead's
+  temperature, and interpolating one would draw a chart that looks like evidence and is not. The
+  caption says so each time. Admission rate stays a plain tile: a running percentage has no
+  honest daily line.
+- **A counsellor sub-navigation for managers**, gated on `report.center`. Chips under the
+  dashboard heading, grouped per centre when there is more than one; each opens
+  `/dashboard/team/[userId]` with their numbers, their day, their open tasks and their pipeline
+  by stage and temperature. Every card reuses the counsellor's own component with a user id —
+  a second "manager" copy of the numbers card would have drifted by the second change, and then
+  two people would read different figures off screens claiming to say the same thing.
+  Membership comes from `profiles` through RLS, so a head typing another centre's id into the
+  address bar gets the same not-found as one typing nonsense.
+
+Stubbed: nothing. **1742 tests pass** (9 added), typecheck, lint, `db:audit` and build clean.
