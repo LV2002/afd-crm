@@ -5,14 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { OptionBadge } from "@/components/ui/option-badge";
 import { can, getCurrentUser } from "@/lib/auth/session";
-import { getTeamMembers } from "@/lib/dashboard/get-team-members";
+import { getCounsellors } from "@/lib/dashboard/get-counsellors";
 import { getDropdownOptions } from "@/lib/fields/resolve-field-options";
 import { formatDateIST } from "@/lib/format/date";
 import { createClient } from "@/lib/supabase/server";
 
 import { MyDayWidget } from "../../my-day-widget";
 import { MyNumbersWidget } from "../../my-numbers-widget";
-import { TeamNav } from "../../team-nav";
 
 /**
  * One counsellor, as their manager sees them.
@@ -54,17 +53,29 @@ export default async function CounsellorPage({
   const supabase = await createClient();
 
   /*
-    The person is looked up through the same list the navigation is
-    built from, rather than by a direct read.
+    The person is looked up through the same list the sidebar is built
+    from, rather than by a direct read.
 
     That means RLS decides who exists here: a centre head typing another
     centre's user id into the address bar gets the same "not found" as
     one typing nonsense, which is the honest answer and leaks nothing
-    about who works where.
+    about who works where. It also means only counsellors have a page: a
+    colleague who is not one is "not found" too, by design.
   */
-  const centres = await getTeamMembers(supabase, viewer.id);
-  const member = centres.flatMap((centre) => centre.members).find((row) => row.userId === userId);
+  const counsellors = await getCounsellors(supabase, viewer.id);
+  const member = counsellors.find((row) => row.userId === userId);
   if (!member) notFound();
+
+  // The centres, for the subtitle only — the list above deliberately does
+  // not carry them, because the sidebar no longer groups by centre.
+  const { data: centreLinks } = await supabase
+    .from("user_centers")
+    .select("centers(name)")
+    .eq("user_id", userId)
+    .returns<Array<{ centers: { name: string } | null }>>();
+  const centerNames = (centreLinks ?? [])
+    .map((link) => link.centers?.name)
+    .filter((name): name is string => Boolean(name));
 
   const [{ data: stageRows }, { data: leadRows }, { data: taskRows }, temperatureOptions] =
     await Promise.all([
@@ -115,14 +126,12 @@ export default async function CounsellorPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <TeamNav centres={centres} />
-
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">{member.name}</h1>
           <p className="text-sm text-muted-foreground">
             {member.roleName ?? "No role"}
-            {member.centerNames.length > 0 ? ` · ${member.centerNames.join(", ")}` : ""}
+            {centerNames.length > 0 ? ` · ${centerNames.join(", ")}` : ""}
           </p>
         </div>
       </div>

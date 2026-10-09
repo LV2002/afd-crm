@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import * as React from "react";
 import { createPortal } from "react-dom";
 
+import { CounsellorLinks, type CounsellorLink } from "@/components/layout/counsellor-links";
 import { NavBadge } from "@/components/layout/nav-badge";
 import { NAV_ICONS } from "@/components/layout/nav-icons";
 import { Button } from "@/components/ui/button";
@@ -56,10 +57,13 @@ export function MobileNav({
   items,
   userName,
   badges = {},
+  counsellors = [],
 }: {
   items: NavItem[];
   userName: string;
   badges?: NavBadgeCounts;
+  /** Same list, same place as the desktop sidebar: under Dashboard, while it is open. */
+  counsellors?: CounsellorLink[];
 }) {
   const [open, setOpen] = React.useState(false);
   const pathname = usePathname();
@@ -139,13 +143,16 @@ export function MobileNav({
 
               <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
                 {items.map((item) => {
-                  const isActive =
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`);
+                  const hasChildren = item.href === "/dashboard" && counsellors.length > 0;
+                  const isOpen =
+                    hasChildren && (pathname === item.href || pathname.startsWith(`${item.href}/`));
+                  const isActive = hasChildren
+                    ? pathname === item.href
+                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
                   const Icon = NAV_ICONS[item.iconKey];
                   return (
+                    <div key={item.href} className="flex flex-col gap-1">
                     <Link
-                      key={item.href}
                       href={item.href}
                       className={cn(
                         // 48px rows: this is a list operated with a thumb
@@ -155,7 +162,9 @@ export function MobileNav({
                         // looks identical on a phone and on a laptop.
                         isActive
                           ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-foreground hover:bg-primary-subtle hover:text-primary-ink",
+                          : isOpen
+                            ? "bg-primary-subtle text-primary-ink"
+                            : "text-foreground hover:bg-primary-subtle hover:text-primary-ink",
                       )}
                     >
                       <Icon className="size-5 shrink-0" />
@@ -168,6 +177,8 @@ export function MobileNav({
                         />
                       )}
                     </Link>
+                    {isOpen && <CounsellorLinks counsellors={counsellors} pathname={pathname} touch />}
+                    </div>
                   );
                 })}
               </nav>
