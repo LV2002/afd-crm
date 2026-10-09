@@ -1,14 +1,12 @@
 import { notFound } from "next/navigation";
 
 import { AccessDenied } from "@/components/layout/access-denied";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { OptionBadge } from "@/components/ui/option-badge";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { canSeeTeam } from "@/lib/dashboard/can-see-team";
 import { getCounsellors } from "@/lib/dashboard/get-counsellors";
-import { getDropdownOptions } from "@/lib/fields/resolve-field-options";
 import { formatDateIST } from "@/lib/format/date";
+import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 import { createClient } from "@/lib/supabase/server";
 
 import { MyDayWidget } from "../../my-day-widget";
@@ -78,22 +76,14 @@ export default async function CounsellorPage({
     .map((link) => link.centers?.name)
     .filter((name): name is string => Boolean(name));
 
-  const [{ data: stageRows }, { data: leadRows }, { data: taskRows }, temperatureOptions] =
+  const [{ data: leadRows }, { data: taskRows }, temperatureOptions] =
     await Promise.all([
       supabase
-        .from("pipeline_stages")
-        .select("id, name, color, sort_order, stage_type")
-        .eq("is_active", true)
-        .order("sort_order")
-        .returns<
-          Array<{ id: string; name: string; color: string | null; sort_order: number; stage_type: string }>
-        >(),
-      supabase
         .from("leads")
-        .select("id, stage_id, temperature")
+        .select("id, temperature")
         .eq("assigned_to", userId)
         .is("deleted_at", null)
-        .returns<Array<{ id: string; stage_id: string | null; temperature: string | null }>>(),
+        .returns<Array<{ id: string; temperature: string | null }>>(),
       supabase
         .from("tasks")
         .select("id, title, due_at, type, lead_id")
@@ -105,22 +95,24 @@ export default async function CounsellorPage({
         .returns<
           Array<{ id: string; title: string; due_at: string | null; type: string | null; lead_id: string }>
         >(),
-      getDropdownOptions(supabase, "temperature"),
+      loadTemperatureOptions(supabase),
     ]);
 
   const leads = leadRows ?? [];
-  const stages = stageRows ?? [];
   const tasks = taskRows ?? [];
 
-  const countByStage = new Map<string, number>();
   const countByTemperature = new Map<string, number>();
   for (const lead of leads) {
-    if (lead.stage_id) countByStage.set(lead.stage_id, (countByStage.get(lead.stage_id) ?? 0) + 1);
     if (lead.temperature) {
       countByTemperature.set(lead.temperature, (countByTemperature.get(lead.temperature) ?? 0) + 1);
     }
   }
-  const noStage = leads.filter((lead) => !lead.stage_id).length;
+  const noTemperature = leads.filter((lead) => !lead.temperature).length;
+  // A retired temperature still shows while somebody is carrying it, so
+  // the bars always add up to the number of leads.
+  const shownTemperatures = temperatureOptions.filter(
+    (option) => option.isActive || (countByTemperature.get(option.value) ?? 0) > 0,
+  );
 
   const firstName = member.name.split(" ")[0];
   const possessive = firstName.endsWith("s") ? `${firstName}'` : `${firstName}'s`;
@@ -188,46 +180,26 @@ export default async function CounsellorPage({
             <CardHeader>
               <CardTitle>Their pipeline</CardTitle>
               <CardDescription>
-                {leads.length} {leads.length === 1 ? "lead" : "leads"} assigned, by stage and
-                temperature.
+                {leads.length} {leads.length === 1 ? "lead" : "leads"} assigned, by temperature.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                {stages.map((stage) => (
-                  <Row
-                    key={stage.id}
-                    label={stage.name}
-                    color={stage.color}
-                    count={countByStage.get(stage.id) ?? 0}
-                    total={leads.length}
-                  />
-                ))}
-                {noStage > 0 && (
-                  <Row label="No stage yet" color={null} count={noStage} total={leads.length} />
-                )}
-              </div>
-
-              <div className="flex flex-wrap gap-2 border-t pt-3">
-                {temperatureOptions.length === 0 ? (
+                {shownTemperatures.length === 0 && noTemperature === 0 ? (
                   <span className="text-xs text-muted-foreground">No temperatures configured.</span>
                 ) : (
-                  temperatureOptions.map((option) => (
-                    <span key={option.value} className="flex items-center gap-1.5">
-                      <OptionBadge option={option} />
-                      <span className="text-sm tabular-nums">
-                        {countByTemperature.get(option.value) ?? 0}
-                      </span>
-                    </span>
+                  shownTemperatures.map((option) => (
+                    <Row
+                      key={option.value}
+                      label={option.label}
+                      color={option.color}
+                      count={countByTemperature.get(option.value) ?? 0}
+                      total={leads.length}
+                    />
                   ))
                 )}
-                {leads.some((lead) => !lead.temperature) && (
-                  <span className="flex items-center gap-1.5">
-                    <Badge variant="outline">No temperature</Badge>
-                    <span className="text-sm tabular-nums">
-                      {leads.filter((lead) => !lead.temperature).length}
-                    </span>
-                  </span>
+                {noTemperature > 0 && (
+                  <Row label="No temperature yet" color={null} count={noTemperature} total={leads.length} />
                 )}
               </div>
             </CardContent>
@@ -239,11 +211,11 @@ export default async function CounsellorPage({
 }
 
 /**
- * One stage, with a bar.
+ * One temperature, with a bar.
  *
  * A bar rather than a number alone because the question a manager is
  * asking is about shape — "is everything stuck at Contacted" — and
- * fourteen numbers in a column do not answer that at a glance. Width is
+ * eleven numbers in a column do not answer that at a glance. Width is
  * a share of the whole pipeline, so the bars across two counsellors with
  * very different volumes are not comparable and are not meant to be;
  * the count beside each is.

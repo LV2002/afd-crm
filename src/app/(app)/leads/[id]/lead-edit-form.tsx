@@ -43,7 +43,7 @@ export function LeadEditForm({
   /*
     Autosave, because Save changes was being missed.
 
-    Stage and temperature have saved on the spot since the status bar was
+    Temperature has saved on the spot since the status bar was
     built, and the thirty fields underneath them did not — so a counsellor
     who corrected an exam year, got pulled onto a call and came back to
     the lead later found their correction gone, with nothing having said

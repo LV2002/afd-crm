@@ -9,13 +9,8 @@ import type { FieldSchemaEntry } from "@/lib/fields/get-field-schema";
  *   counsellor would let bulk import quietly bypass the rules engine,
  *   exactly the "one source gets a shortcut" mistake the non-negotiable
  *   exists to prevent.
- * - `stage_id`: a freshly-imported lead always enters at the pipeline's
- *   `stage_type = 'new'` stage, same as every other ingestion path
- *   (`resolveOrCreateLead()`'s own default) — importing a lead pre-staged
- *   at, say, "Payment Pending" would be funnel data that never actually
- *   happened.
  */
-const NEVER_MAPPABLE_KEYS = new Set(["assigned_to", "stage_id"]);
+const NEVER_MAPPABLE_KEYS = new Set(["assigned_to"]);
 
 /** No sensible plain-text CSV representation. */
 const NEVER_MAPPABLE_TYPES = new Set<FieldSchemaEntry["type"]>(["user_ref", "lead_ref", "file"]);

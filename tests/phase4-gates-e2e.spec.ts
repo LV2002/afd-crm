@@ -28,7 +28,6 @@ const {
   feeStructures,
   leads,
   payments,
-  pipelineStages,
   receipts,
   studentBatches,
   students,
@@ -131,11 +130,8 @@ describe("Phase 4 lifecycle chain", () => {
     expect(gate1.netFeePaise).toBe(17000000);
 
     const [leadAfterGate1] = await db.select().from(leads).where(eq(leads.id, lead.id));
-    const [wonStage] = await db
-      .select({ id: pipelineStages.id })
-      .from(pipelineStages)
-      .where(eq(pipelineStages.stageType, "won"));
-    expect(leadAfterGate1.stageId).toBe(wonStage.id);
+    // Confirming the admission moves the lead to Took admission by itself.
+    expect(leadAfterGate1.temperature).toBe("took_admission");
 
     const [enrolmentAfterGate1] = await db.select().from(enrolments).where(eq(enrolments.id, gate1.enrolmentId));
     expect(enrolmentAfterGate1.status).toBe("pending_payment");

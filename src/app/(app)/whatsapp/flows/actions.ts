@@ -71,8 +71,8 @@ export async function saveFlow(_prev: FlowFormState, formData: FormData): Promis
   if (!isTrigger(triggerType)) return { error: "Pick what starts it." };
 
   const triggerConfig = readJson(formData.get("triggerConfig"));
-  if (triggerType === "stage_entered" && !triggerConfig.stageId) {
-    return { error: "Pick the stage that starts it." };
+  if (triggerType === "temperature_entered" && !triggerConfig.temperature) {
+    return { error: "Pick the temperature that starts it." };
   }
   if (triggerType === "tag_added" && !triggerConfig.tagId) {
     return { error: "Pick the tag that starts it." };

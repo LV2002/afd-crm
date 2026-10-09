@@ -25,7 +25,6 @@ import {
   notificationSettings,
   orgSettings,
   paymentReminderRules,
-  pipelineStages,
   profiles,
   roles,
   rolePermissions,
@@ -303,13 +302,24 @@ const DROPDOWN_SEEDS: DropdownSeed[] = [
     label: "Temperature",
     isSystem: true,
     options: [
-      // `interested` drives the dashboard's Interested tile and is an
-      // admin's to change under Settings → Dropdowns → Temperature.
-      // Migration 0096 sets the same values on an existing instance.
-      { value: "hot", label: "Hot", color: "#dc2626", metadata: { rank: 4, is_terminal: false, interested: true } },
-      { value: "warm", label: "Warm", color: "#f97316", metadata: { rank: 3, is_terminal: false, interested: true } },
-      { value: "cold", label: "Cold", color: "#0ea5e9", metadata: { rank: 2, is_terminal: false, interested: false } },
-      { value: "dead", label: "Dead", color: "#6b7280", metadata: { rank: 1, is_terminal: true, interested: false } },
+      // The lead's whole status. `kind` is what the system DOES with a lead
+      // on it (new | open | won | lost | parked), and is what behaviour is
+      // keyed on — never the label. `probability` weights the forecast,
+      // `requires_reason` makes a closing outcome ask why, `interested`
+      // feeds the dashboard's Interested tile. All four are an admin's to
+      // change under Settings → Temperatures. Migration 0099 writes the same
+      // values on an existing instance, so keep the two in step.
+      { value: "not_contacted", label: "Not contacted", color: "#94a3b8", metadata: { rank: 1, kind: "new", probability: 5, requires_reason: false, interested: false } },
+      { value: "contacted", label: "Contacted", color: "#3b82f6", metadata: { rank: 2, kind: "open", probability: 10, requires_reason: false, interested: false } },
+      { value: "cold", label: "Cold", color: "#0ea5e9", metadata: { rank: 3, kind: "open", probability: 10, requires_reason: false, interested: false } },
+      { value: "warm", label: "Warm", color: "#f97316", metadata: { rank: 4, kind: "open", probability: 30, requires_reason: false, interested: true } },
+      { value: "hot", label: "Hot", color: "#dc2626", metadata: { rank: 5, kind: "open", probability: 60, requires_reason: false, interested: true } },
+      { value: "took_admission", label: "Took admission", color: "#16a34a", metadata: { rank: 6, kind: "won", probability: 100, requires_reason: false, interested: false } },
+      { value: "future_prospect", label: "Future prospect", color: "#8b5cf6", metadata: { rank: 7, kind: "parked", probability: 15, requires_reason: false, interested: false } },
+      { value: "negative", label: "Negative", color: "#6b7280", metadata: { rank: 8, kind: "lost", probability: 0, requires_reason: true, interested: false } },
+      { value: "wrong_target", label: "Wrong target", color: "#78716c", metadata: { rank: 9, kind: "lost", probability: 0, requires_reason: false, interested: false } },
+      { value: "afd_india_student", label: "AFD India student", color: "#0d9488", metadata: { rank: 10, kind: "lost", probability: 0, requires_reason: false, interested: false } },
+      { value: "joined_competitor", label: "Joined competitor", color: "#db2777", metadata: { rank: 11, kind: "lost", probability: 0, requires_reason: true, interested: false } },
     ],
   },
   {
@@ -567,52 +577,6 @@ async function seedDropdowns() {
   console.log(`seeded ${DROPDOWN_SEEDS.length} dropdown categories`);
 }
 
-interface StageSeed {
-  name: string;
-  stageType: (typeof pipelineStages.$inferInsert)["stageType"];
-  probability: string;
-  slaHours?: number;
-  requiresReason?: boolean;
-}
-
-const STAGE_SEEDS: StageSeed[] = [
-  { name: "New Lead", stageType: "new", probability: "5" },
-  { name: "Contacted", stageType: "normal", probability: "10", slaHours: 4 },
-  { name: "Qualified", stageType: "normal", probability: "20", slaHours: 24 },
-  { name: "Demo Scheduled", stageType: "scheduled", probability: "35", slaHours: 48 },
-  { name: "Demo Completed", stageType: "normal", probability: "45", slaHours: 24 },
-  { name: "Counselling Done", stageType: "normal", probability: "55", slaHours: 48 },
-  { name: "Brochure Sent", stageType: "normal", probability: "40", slaHours: 72 },
-  { name: "Follow-up", stageType: "normal", probability: "50", slaHours: 72 },
-  { name: "Registration Form Sent", stageType: "enrolment_form", probability: "65", slaHours: 48 },
-  { name: "Registration Form Submitted", stageType: "enrolment_form", probability: "80" },
-  { name: "Payment Pending", stageType: "payment", probability: "90", slaHours: 24 },
-  { name: "Admission Confirmed", stageType: "won", probability: "100" },
-  { name: "Lost", stageType: "lost", probability: "0", requiresReason: true },
-  { name: "Parked", stageType: "parked", probability: "15" },
-];
-
-async function seedPipelineStages() {
-  for (const [index, stage] of STAGE_SEEDS.entries()) {
-    const existing = await db
-      .select({ id: pipelineStages.id })
-      .from(pipelineStages)
-      .where(eq(pipelineStages.name, stage.name));
-
-    if (existing.length > 0) continue;
-
-    await db.insert(pipelineStages).values({
-      name: stage.name,
-      sortOrder: index,
-      stageType: stage.stageType,
-      probability: stage.probability,
-      slaHours: stage.slaHours,
-      requiresReason: stage.requiresReason ?? false,
-    });
-  }
-  console.log(`seeded ${STAGE_SEEDS.length} pipeline stages`);
-}
-
 interface FieldSeed {
   key: string;
   label: string;
@@ -669,7 +633,6 @@ const LEAD_FIELD_SEEDS: FieldSeed[] = [
   // Tracking
   { key: "lead_source", label: "Lead Source", type: "select", section: "Tracking", showInList: true, showInFilters: true },
   { key: "sub_source", label: "Sub-source", type: "text", section: "Tracking" },
-  { key: "stage_id", label: "Stage", type: "select", section: "Tracking", showInList: true, showInFilters: true },
   { key: "temperature", label: "Temperature", type: "select", section: "Tracking", showInList: true, showInFilters: true },
   { key: "assigned_to", label: "Assigned Counsellor", type: "user_ref", section: "Tracking", showInList: true, showInFilters: true },
   { key: "center_id", label: "Centre", type: "select", section: "Tracking", showInList: true, showInFilters: true },
@@ -1002,7 +965,6 @@ async function main() {
   await seedPermissions();
   const roleIds = await seedRoles();
   await seedDropdowns();
-  await seedPipelineStages();
   await seedFieldDefinitions();
   await seedNotificationSettings(roleIds);
   await seedDiscountLimits(roleIds);

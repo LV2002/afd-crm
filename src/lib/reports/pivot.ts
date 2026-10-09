@@ -61,13 +61,15 @@ export function dimensionFields(fields: PivotField[]): PivotField[] {
 }
 
 /**
- * One lead, reduced to the dimension values the page asked for. `stageId`
- * is separate because won/lost is derived from the stage's *type*, not
- * from the stage as a dimension.
+ * One lead, reduced to the dimension values the page asked for. `temperature`
+ * is separate because won/lost is derived from the temperature's *kind*,
+ * not from the temperature as a dimension — a report broken down by
+ * source still has to know which of those leads were won.
  */
 export interface PivotLead {
   id: string;
-  stageId: string | null;
+  /** The lead's status. Its kind (won / lost / …) is what the totals read. */
+  temperature: string | null;
   /** Keyed by field key — a core field's column value, or the value out of `custom`. */
   values: Record<string, unknown>;
 }
@@ -114,7 +116,7 @@ const MONTH_NAMES = [
 
 /**
  * A bucket as a human reads it. `optionLabels` comes from
- * resolveFieldOptions() on the server, so a stage id or a counsellor's
+ * resolveFieldOptions() on the server, so a temperature value or a counsellor's
  * uuid shows as its name; anything unresolved falls back to the raw
  * value rather than to a blank.
  */
@@ -192,21 +194,21 @@ export interface PivotTotals {
 /**
  * Which of "won", "lost", "dropped" or none this lead counts as.
  *
- * Dropped wins over the stage, which is the whole point: a student who
- * left is sitting in the Admission Confirmed stage and would otherwise go
- * on counting as a conversion for as long as the record exists. It stays
+ * Dropped wins over the temperature, which is the whole point: a student
+ * who left is still at Took admission and would otherwise go on counting
+ * as a conversion for as long as the record exists. It stays
  * in the total — the lead was real, the work happened — but it is not a
  * win, and it is not a loss either, because it was won and then undone.
  */
 function outcomeOf(
   lead: PivotLead,
-  stageTypeById: ReadonlyMap<string, string>,
+  kindByTemperature: ReadonlyMap<string, string>,
   droppedLeadIds: ReadonlySet<string>,
 ): "won" | "lost" | "dropped" | null {
   if (droppedLeadIds.has(lead.id)) return "dropped";
-  const stageType = lead.stageId ? stageTypeById.get(lead.stageId) : undefined;
-  if (stageType === "won") return "won";
-  if (stageType === "lost") return "lost";
+  const kind = lead.temperature ? kindByTemperature.get(lead.temperature) : undefined;
+  if (kind === "won") return "won";
+  if (kind === "lost") return "lost";
   return null;
 }
 
@@ -214,14 +216,14 @@ const NONE_DROPPED: ReadonlySet<string> = new Set<string>();
 
 export function summarise(
   leads: PivotLead[],
-  stageTypeById: ReadonlyMap<string, string>,
+  kindByTemperature: ReadonlyMap<string, string>,
   droppedLeadIds: ReadonlySet<string> = NONE_DROPPED,
 ): PivotTotals {
   let won = 0;
   let lost = 0;
   let dropped = 0;
   for (const lead of leads) {
-    const outcome = outcomeOf(lead, stageTypeById, droppedLeadIds);
+    const outcome = outcomeOf(lead, kindByTemperature, droppedLeadIds);
     if (outcome === "won") won += 1;
     if (outcome === "lost") lost += 1;
     if (outcome === "dropped") dropped += 1;
@@ -237,7 +239,7 @@ export function summarise(
 export function groupLeads(
   leads: PivotLead[],
   field: PivotField,
-  stageTypeById: ReadonlyMap<string, string>,
+  kindByTemperature: ReadonlyMap<string, string>,
   optionLabels: ReadonlyMap<string, string>,
   droppedLeadIds: ReadonlySet<string> = NONE_DROPPED,
 ): PivotRow[] {
@@ -246,7 +248,7 @@ export function groupLeads(
   for (const lead of leads) {
     const buckets = bucketsFor(field, lead.values[field.key]);
     const keys = buckets.length === 0 ? [NOT_SET] : buckets;
-    const outcome = outcomeOf(lead, stageTypeById, droppedLeadIds);
+    const outcome = outcomeOf(lead, kindByTemperature, droppedLeadIds);
 
     for (const bucket of keys) {
       const row = rows.get(bucket) ?? {

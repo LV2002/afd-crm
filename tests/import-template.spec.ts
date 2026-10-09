@@ -51,17 +51,15 @@ describe("the import template", () => {
   });
 
   it("leaves out the fields the importer refuses to map", () => {
-    // Assignment and stage are set by the rules engine on every ingestion
-    // path (non-negotiable #8). Offering them in a template would invite
-    // a spreadsheet that silently bypasses it.
+    // Assignment is set by the rules engine on every ingestion path
+    // (non-negotiable #8). Offering it in a template would invite a
+    // spreadsheet that silently bypasses it.
     const fields = [
       ...BASE,
       field({ key: "assigned_to", label: "Assigned Counsellor", type: "user_ref" }),
-      field({ key: "stage_id", label: "Stage", type: "select" }),
     ];
     const [header] = rows(buildImportTemplate({ fields, optionsByKey: {} }));
     expect(header).not.toContain("Assigned Counsellor");
-    expect(header).not.toContain("Stage");
   });
 
   it("dates the example in ISO, because the importer guesses otherwise", () => {

@@ -36,7 +36,7 @@ export const temperatureRules = pgTable("temperature_rules", {
 export const slaMeasureEnum = pgEnum("sla_measure", [
   "first_response",
   "next_followup",
-  "in_stage",
+  "in_status",
 ]);
 
 export const slaPolicies = pgTable("sla_policies", {

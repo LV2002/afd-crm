@@ -1,5 +1,6 @@
 import { AddOptionForm } from "./add-option-form";
-import { OptionRow, type OptionRowData } from "./option-row";
+import { OptionRow } from "./option-row";
+import type { OptionRowData } from "./option-row-data";
 
 export function OptionsEditor({ category, options }: { category: string; options: OptionRowData[] }) {
   return (

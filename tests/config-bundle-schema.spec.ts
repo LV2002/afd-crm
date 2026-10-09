@@ -13,7 +13,6 @@ function emptyBundle() {
     centers: [],
     dropdownCategories: [],
     dropdownOptions: [],
-    pipelineStages: [],
     fieldDefinitions: [],
     roles: [],
     rolePermissions: [],

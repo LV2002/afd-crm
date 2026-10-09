@@ -13,16 +13,12 @@ import {
   type Boundaries,
   type ScoreboardEnrolment,
   type ScoreboardLead,
-  type StageInfo,
 } from "@/lib/dashboard/scoreboard";
 import { startOfCycleYearIST } from "@/lib/dashboard/get-scoreboard";
 import { isInterestedOption } from "@/lib/leads/interested-temperature";
 
-const STAGES: StageInfo[] = [
-  { id: "s-new", stageType: "open" },
-  { id: "s-won", stageType: "won" },
-  { id: "s-lost", stageType: "lost" },
-];
+/** The temperatures that mean a lead is finished with: Took admission and a closing outcome. */
+const TERMINAL: ReadonlySet<string> = new Set(["took_admission", "negative"]);
 
 /** 30 September 2026, 14:00 IST. The April cycle began on 1 April 2026. */
 const BOUNDARIES: Boundaries = {
@@ -40,7 +36,6 @@ function lead(over: Partial<ScoreboardLead> = {}): ScoreboardLead {
     id: `lead-${seq}`,
     assignedTo: "athira",
     centerId: "kochi",
-    stageId: "s-new",
     createdAt: "2026-06-10T06:00:00Z",
     assignedAt: "2026-06-10T06:00:00Z",
     firstResponseAt: "2026-06-10T08:00:00Z",
@@ -51,14 +46,14 @@ function lead(over: Partial<ScoreboardLead> = {}): ScoreboardLead {
   };
 }
 
-/** The three an admin has ticked in Settings → Dropdowns → Temperature. */
-const INTERESTED = new Set(["very_hot", "hot", "warm"]);
+/** What an admin has ticked in Settings → Temperatures. The shipped default is Warm and Hot. */
+const INTERESTED = new Set(["hot", "warm"]);
 
 function build(leads: ScoreboardLead[], enrolments: ScoreboardEnrolment[] = []) {
   return buildCounsellorScoreboard({
     leads,
     enrolments,
-    stages: STAGES,
+    terminalTemperatures: TERMINAL,
     boundaries: BOUNDARIES,
     interestedTemperatures: INTERESTED,
   }).year;
@@ -95,7 +90,7 @@ describe("which leads the year row counts", () => {
     the first and leaves the second.
   */
   it("keeps a won lead in new leads but drops it from active", () => {
-    const year = build([lead({ stageId: "s-won" }), lead({ stageId: "s-new" })]);
+    const year = build([lead({ temperature: "took_admission" }), lead()]);
 
     expect(year.newLeads).toBe(2);
     expect(year.activeLeads).toBe(1);
@@ -108,7 +103,7 @@ describe("which leads the year row counts", () => {
       // Won in the meantime: it still carries the date somebody booked,
       // and counting it would put a number on the card that cannot be
       // worked down.
-      lead({ nextFollowupAt: overdue, stageId: "s-won" }),
+      lead({ nextFollowupAt: overdue, temperature: "took_admission" }),
     ]);
 
     expect(year.overdueFollowups).toBe(1);
@@ -116,22 +111,34 @@ describe("which leads the year row counts", () => {
 });
 
 describe("the interested figure", () => {
-  it("counts very hot, hot and warm", () => {
+  it("counts the temperatures that are ticked, and nothing else", () => {
     const year = build([
-      lead({ temperature: "very_hot" }),
       lead({ temperature: "hot" }),
       lead({ temperature: "warm" }),
       lead({ temperature: "cold" }),
-      lead({ temperature: "dead" }),
+      lead({ temperature: "contacted" }),
+      lead({ temperature: "not_contacted" }),
+      lead({ temperature: "negative" }),
       lead({ temperature: null }),
     ]);
 
-    expect(year.interested).toBe(3);
+    expect(year.interested).toBe(2);
   });
 
-  it("does not count somebody who is no longer being worked", () => {
-    const year = build([lead({ temperature: "hot", stageId: "s-won" })]);
-    expect(year.interested).toBe(0);
+  it("does not count somebody who is no longer being worked, even if their temperature is ticked", () => {
+    // An admin who ticks Took admission as "interested" has made a mistake
+    // the figure should not repeat: a student who has joined is not a lead
+    // still being worked, and counting them would inflate the card by every
+    // admission of the year.
+    const year = buildCounsellorScoreboard({
+      leads: [lead({ temperature: "took_admission" }), lead({ temperature: "hot" })],
+      enrolments: [],
+      terminalTemperatures: TERMINAL,
+      boundaries: BOUNDARIES,
+      interestedTemperatures: new Set(["hot", "took_admission"]),
+    }).year;
+
+    expect(year.interested).toBe(1);
   });
 
   it("counts nothing when an admin has ticked nothing", () => {
@@ -140,7 +147,7 @@ describe("the interested figure", () => {
     const year = buildCounsellorScoreboard({
       leads: [lead({ temperature: "hot" })],
       enrolments: [],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
       interestedTemperatures: new Set(),
     }).year;

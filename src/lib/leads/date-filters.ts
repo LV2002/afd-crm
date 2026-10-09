@@ -55,10 +55,10 @@ export interface LeadDateFilters {
    * True only for "overdue". A lead that was won in March still carries
    * the follow-up date somebody booked in February, and a list of people
    * a counsellor is behind on should not open with twenty students who
-   * already enrolled. The page supplies the terminal stage ids; this
-   * module only says whether to exclude them.
+   * already enrolled. The page supplies which temperatures mean
+   * "finished"; this module only says whether to exclude them.
    */
-  excludeTerminalStages: boolean;
+  excludeFinished: boolean;
   /** True when at least one date filter is doing something — for the "clear" affordance. */
   active: boolean;
 }
@@ -159,7 +159,7 @@ export function parseLeadDateFilters(
     followupFrom,
     followupTo,
     followupMissing,
-    excludeTerminalStages: params.followup === "overdue",
+    excludeFinished: params.followup === "overdue",
     active:
       createdFrom !== null ||
       createdTo !== null ||

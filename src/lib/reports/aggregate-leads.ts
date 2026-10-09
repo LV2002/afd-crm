@@ -12,19 +12,23 @@
  * docs/DECISIONS.md.
  */
 
+import type { TemperatureKind } from "@/lib/leads/temperature-kinds";
+
 export interface ReportLead {
   id: string;
   assignedTo: string | null;
   centerId: string | null;
-  stageId: string | null;
+  /** The lead's status — its temperature value. */
+  temperature: string | null;
   firstTouchSource: string | null;
 }
 
-export interface StageInfo {
-  id: string;
-  name: string;
-  sortOrder: number;
-  stageType: string;
+/** One temperature, as the reports need to know it. */
+export interface StatusInfo {
+  value: string;
+  label: string;
+  rank: number;
+  kind: TemperatureKind;
 }
 
 export interface SourceCount {
@@ -32,11 +36,11 @@ export interface SourceCount {
   count: number;
 }
 
-export interface FunnelStage {
-  stageId: string;
+export interface StatusCount {
+  value: string;
   name: string;
   count: number;
-  stageType: string;
+  kind: TemperatureKind;
 }
 
 export interface ScorecardRow {
@@ -68,37 +72,38 @@ export function aggregateLeadsBySource(leads: ReportLead[]): SourceCount[] {
   );
 }
 
-/** Every active stage appears, even with zero leads — a stage nobody's in right now is still real information for a funnel. */
-export function aggregateFunnel(leads: ReportLead[], stages: StageInfo[]): FunnelStage[] {
+/**
+ * Where every lead stands, status by status, in the order an admin put the
+ * statuses in.
+ *
+ * Every status appears even with zero leads — a status nobody is in right
+ * now is still real information. This replaces the pipeline funnel: with
+ * one status there is no longer a sequence a lead moves down, so it is a
+ * breakdown rather than a funnel, and is named for what it is.
+ */
+export function aggregateByStatus(leads: ReportLead[], statuses: StatusInfo[]): StatusCount[] {
   const counts = new Map<string, number>();
   for (const lead of leads) {
-    if (!lead.stageId) continue;
-    counts.set(lead.stageId, (counts.get(lead.stageId) ?? 0) + 1);
+    if (!lead.temperature) continue;
+    counts.set(lead.temperature, (counts.get(lead.temperature) ?? 0) + 1);
   }
-  return [...stages]
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((stage) => ({
-      stageId: stage.id,
-      name: stage.name,
-      stageType: stage.stageType,
-      count: counts.get(stage.id) ?? 0,
+  return [...statuses]
+    .sort((a, b) => a.rank - b.rank)
+    .map((status) => ({
+      value: status.value,
+      name: status.label,
+      kind: status.kind,
+      count: counts.get(status.value) ?? 0,
     }));
-}
-
-function isWon(stageType: string): boolean {
-  return stageType === "won";
-}
-function isLost(stageType: string): boolean {
-  return stageType === "lost";
 }
 
 /** Leads with no owner (`assignedTo` null — the orphan queue's territory, Phase 2) are excluded: there's no counsellor to score. */
 export function aggregateScorecard(
   leads: ReportLead[],
-  stages: StageInfo[],
+  statuses: StatusInfo[],
   nameById: ReadonlyMap<string, string>,
 ): ScorecardRow[] {
-  const stageTypeById = new Map(stages.map((s) => [s.id, s.stageType]));
+  const kindByValue = new Map(statuses.map((s) => [s.value, s.kind]));
   const rows = new Map<string, ScorecardRow>();
 
   for (const lead of leads) {
@@ -111,9 +116,9 @@ export function aggregateScorecard(
       lost: 0,
     };
     row.total += 1;
-    const stageType = lead.stageId ? stageTypeById.get(lead.stageId) : undefined;
-    if (stageType && isWon(stageType)) row.won += 1;
-    if (stageType && isLost(stageType)) row.lost += 1;
+    const kind = lead.temperature ? kindByValue.get(lead.temperature) : undefined;
+    if (kind === "won") row.won += 1;
+    if (kind === "lost") row.lost += 1;
     rows.set(lead.assignedTo, row);
   }
 
@@ -123,10 +128,10 @@ export function aggregateScorecard(
 /** Leads with no centre are excluded — same reasoning as the scorecard's unowned leads. */
 export function aggregateCentrePerformance(
   leads: ReportLead[],
-  stages: StageInfo[],
+  statuses: StatusInfo[],
   nameById: ReadonlyMap<string, string>,
 ): CentreRow[] {
-  const stageTypeById = new Map(stages.map((s) => [s.id, s.stageType]));
+  const kindByValue = new Map(statuses.map((s) => [s.value, s.kind]));
   const rows = new Map<string, CentreRow>();
 
   for (const lead of leads) {
@@ -139,9 +144,9 @@ export function aggregateCentrePerformance(
       lost: 0,
     };
     row.total += 1;
-    const stageType = lead.stageId ? stageTypeById.get(lead.stageId) : undefined;
-    if (stageType && isWon(stageType)) row.won += 1;
-    if (stageType && isLost(stageType)) row.lost += 1;
+    const kind = lead.temperature ? kindByValue.get(lead.temperature) : undefined;
+    if (kind === "won") row.won += 1;
+    if (kind === "lost") row.lost += 1;
     rows.set(lead.centerId, row);
   }
 

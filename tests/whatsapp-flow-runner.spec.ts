@@ -274,7 +274,7 @@ describe("resolveReply", () => {
 
 describe("startFlows", () => {
   it("puts a lead into a flow once, never twice", async () => {
-    // A lead re-entering a stage twice in a week must not get two
+    // A lead re-entering a temperature twice in a week must not get two
     // concurrent copies of the same sequence. The partial unique index is
     // what guarantees it, so this is really a test of the index.
     const { flowId } = await makeFlow(`once-${randomUUID().slice(0, 6)}`);

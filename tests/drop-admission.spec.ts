@@ -145,7 +145,9 @@ describe("dropAdmission", () => {
     );
 
     const [after] = await db.select().from(leads).where(eq(leads.id, leadId));
-    expect(after.stageId).toEqual(before.stageId);
+    // The sales record stops changing at the first gate: dropping an
+    // admission does not touch the lead's own status.
+    expect(after.temperature).toEqual(before.temperature);
     expect(after.lostAt).toBeNull();
   });
 });

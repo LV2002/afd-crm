@@ -10,6 +10,8 @@ import { fieldColumn } from "@/lib/fields/field-column";
 import { getFieldSchema, type FieldSchemaEntry } from "@/lib/fields/get-field-schema";
 import { OPTION_BEARING_TYPES, resolveFieldOptions, type FieldOption } from "@/lib/fields/resolve-field-options";
 import { coerceImportValue } from "@/lib/leads/coerce-import-value";
+import { indexByValue, type TemperatureOption } from "@/lib/leads/temperature-kinds";
+import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 import { importableFields, IMPORT_NOTE_KEY, RESOLVE_INPUT_KEYS } from "@/lib/leads/importable-fields";
 import {
   leadIsVisibleToCaller,
@@ -89,9 +91,9 @@ export async function importLeads(
 
   const supabase = await createClient();
   // The same list the column mapper offers, so a key this action can see
-  // is one the mapper could have produced — `assigned_to` and `stage_id`
-  // are unreachable from here by construction, not by a second check
-  // that could drift from the first.
+  // is one the mapper could have produced — `assigned_to` is unreachable
+  // from here by construction, not by a second check that could drift
+  // from the first.
   const fields = importableFields(await getFieldSchema(supabase, "lead", user));
   const fieldByKey = new Map(fields.map((f) => [f.key, f]));
 
@@ -114,6 +116,10 @@ export async function importLeads(
     ),
   );
   const optionsByKey = new Map<string, FieldOption[]>(optionEntries);
+
+  // Read once: what each temperature MEANS decides what an imported one
+  // is allowed to do, and that is the same for every row.
+  const statusByValue = indexByValue(await loadTemperatureOptions(supabase));
 
   const batchId = randomUUID();
   const rowResults: ImportRowResult[] = [];
@@ -245,7 +251,9 @@ export async function importLeads(
 
     if (outcome.isNewLead) {
       created++;
-      await writeExtraFields(supabase, outcome.leadId, values, fieldByKey);
+      warnings.push(
+        ...(await writeExtraFields(supabase, outcome.leadId, values, fieldByKey, statusByValue)),
+      );
     } else {
       matched++;
     }
@@ -325,16 +333,36 @@ export async function importLeads(
  * Runs through the normal RLS-bound client, same shape as `updateLead()`
  * — this is an ordinary single-row update, not identity resolution, so it
  * doesn't need `resolveOrCreateLead()`'s bypass. If the importer's role
- * doesn't happen to hold `lead.update`, RLS silently drops these extra
- * fields rather than failing the row — the lead itself was already
- * created successfully.
+ * doesn't happen to hold `lead.update`, RLS drops these extra fields
+ * rather than failing the row — the lead itself was already created
+ * successfully.
+ *
+ * ## Returns what it could not do
+ *
+ * This used to discard the update's result, so a refused write cost the
+ * lead EVERY extra field in the row — the follow-up date, the custom
+ * fields, the status — with nothing said to the person who ran the
+ * import. It returns warnings now, for the row's message.
+ *
+ * ## An imported status is held to the same rules as a typed one
+ *
+ * "Took admission" cannot be imported: it means an admission was
+ * confirmed with a course, batch and fee, and a spreadsheet cell cannot
+ * make that true — the database would refuse it. The lead is kept, at its
+ * starting status, and the row says why. A closing outcome that must be
+ * justified (Negative, Joined competitor) is recorded with the reason
+ * "Other" and a note that it was carried over, because the alternative to
+ * an honest placeholder is refusing every historic lead the old system
+ * had already given up on.
  */
 async function writeExtraFields(
   supabase: Awaited<ReturnType<typeof createClient>>,
   leadId: string,
   values: Record<string, unknown>,
   fieldByKey: Map<string, FieldSchemaEntry>,
-): Promise<void> {
+  statusByValue: Map<string, TemperatureOption>,
+): Promise<string[]> {
+  const warnings: string[] = [];
   const coreUpdates: Record<string, unknown> = {};
   const customUpdates: Record<string, unknown> = {};
   let hasCustom = false;
@@ -351,8 +379,22 @@ async function writeExtraFields(
     }
   }
 
-  if (Object.keys(coreUpdates).length === 0 && !hasCustom) return;
+  const status =
+    typeof coreUpdates.temperature === "string" ? statusByValue.get(coreUpdates.temperature) : undefined;
+  if (status?.kind === "won") {
+    delete coreUpdates.temperature;
+    warnings.push(
+      `"${status.label}" can't be imported — it needs a confirmed admission with course, batch and fee. The lead was added at its starting status; confirm the admission on its page.`,
+    );
+  } else if (status?.kind === "lost" && status.requiresReason) {
+    coreUpdates.lost_reason = "other";
+    coreUpdates.lost_reason_detail = "Carried over from the import file";
+  }
+
+  if (Object.keys(coreUpdates).length === 0 && !hasCustom) return warnings;
 
   const payload = hasCustom ? { ...coreUpdates, custom: customUpdates } : coreUpdates;
-  await supabase.from("leads").update(payload).eq("id", leadId);
+  const { error } = await supabase.from("leads").update(payload).eq("id", leadId);
+  if (error) warnings.push(`Some details could not be saved on this lead: ${error.message}`);
+  return warnings;
 }

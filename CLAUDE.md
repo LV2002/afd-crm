@@ -49,9 +49,20 @@ Currency is INR, stored in **paise as `bigint`**. Never use floats for money.
 
 These are the specific failures of v1. Violating any of them means the rebuild was pointless.
 
-1. **Stage and temperature are separate columns.** `stage_id` is funnel position;
-   `temperature` is a separate configurable dimension. A lead can be Hot at
-   Demo-Scheduled. Never merge these, and never derive one from the other.
+1. **A lead has one status, and it is its temperature.** There is no pipeline stage.
+   (This replaced the original rule — "stage and temperature are separate columns" — at
+   Leon's request on 2026-10-09; the reasoning and what it cost are in `docs/DECISIONS.md`.)
+   `leads.temperature` holds one value of the admin-editable `temperature` dropdown — Not
+   contacted, Contacted, Cold, Warm, Hot, Took admission, Future prospect, Negative, Wrong
+   target, AFD India student, Joined competitor — and each carries a **`kind`**
+   (`new | open | won | lost | parked`) in `dropdown_options.metadata`. Code branches on the
+   kind, never on the label or the value, so renaming "Joined competitor" changes nothing.
+   *Took admission* (kind `won`) is reachable **only** through `confirmAdmission()`: the
+   `enforce_lead_status` trigger refuses it from every other write path, and refuses to leave
+   it while the admission stands. Do not reintroduce a second funnel dimension.
+   `leads.stage_id`, `pipeline_stages` and `stage_history` are retired — left in the
+   database so no history is destroyed, unused, and `tests/no-stage.spec.ts` fails the build
+   if anything touches them. Use `lib/leads/temperature-kinds.ts`, not a stage list.
 
 2. **Never reject a duplicate.** Always create, then link or merge. See "Identity" below.
    `throw new Error('phone exists')` on lead creation is forbidden.
@@ -89,7 +100,7 @@ These are the specific failures of v1. Violating any of them means the rebuild w
    so failures were invisible and unrecoverable.
 
 10. **Configuration is data, not code.** Before hardcoding any list, label, threshold,
-   stage, role, field, or rule — check whether an admin would ever reasonably want it
+   status, role, field, or rule — check whether an admin would ever reasonably want it
    different. If yes, it is a database row with an admin UI. The test: *could this system
    be deployed for a completely different company by changing only database contents?*
    See "What is configurable" below.
@@ -105,9 +116,8 @@ These are the specific failures of v1. Violating any of them means the rebuild w
 | Centres | Add, rename, deactivate, set timezone and catchment |
 | Users | Add, deactivate, assign to centres, change role |
 | Roles | Create, rename, change permission bundle, delete (except `admin`) |
-| Pipeline | Stages: add, rename, reorder, recolour, set type, probability, per-stage SLA |
-| Temperature | The temperature values themselves, and the rules that assign them |
-| SLA | Multiple policies, per-source/centre/stage targets, escalation ladders, business hours |
+| Temperature | The statuses themselves: add, rename, reorder, recolour, what each *means* (kind), its chance of admission, whether closing a lead this way asks why, whether it counts as interested — and the rules that re-grade leads automatically |
+| SLA | Multiple policies, per-source/centre/temperature targets, escalation ladders, business hours |
 | Lead fields | Add custom fields of any supported type — no migration |
 | Dropdowns | Every enumerated list in the system |
 | Assignment | Rules, conditions, priority, strategy |
@@ -212,8 +222,9 @@ See `docs/01-DATA-MODEL.md` § Students.
   This is how the same person arriving from Meta then walking in stays one record.
 - **Centre** — a physical branch. Kochi, Kannur.
 - **Counsellor** — sales rep. Owns leads, makes calls, sends WhatsApp.
-- **Stage** — funnel position. See `pipeline_stages`.
-- **Temperature** — hot/warm/cold/dead. Independent of stage.
+- **Temperature** — a lead's one status (see non-negotiable #1): where they are with us, from
+  Not contacted to Took admission or one of the ways a lead ends. Replaced the pipeline
+  *stage* in October 2026.
 - **Enrolment** — the commercial record: course, fee, discount, payment plan. Owned by accounts.
 - **Student** — the academic record, created at the accounts→academics gate. Owned by academics.
 - **Handoff** — one of the two named gates above. Always specify which.
@@ -238,11 +249,11 @@ src/
       leads/
         page.tsx          list + filters
         [id]/             detail: profile, timeline, whatsapp, files, payments
-      pipeline/           kanban
+      pipeline/           redirects to follow-ups (the kanban is gone)
       reports/            prebuilt dashboards
       ask/                AI analyst chat
       settings/
-        centers/ users/ stages/ rules/ dropdowns/ forms/ fees/ templates/ integrations/
+        centers/ users/ temperatures/ rules/ dropdowns/ forms/ fees/ templates/ integrations/
         batches/          class groups — setup, not a daily workspace
     api/
       webhooks/

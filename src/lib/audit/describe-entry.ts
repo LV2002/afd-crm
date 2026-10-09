@@ -36,7 +36,9 @@ const VERBS: Record<string, string> = {
   deactivate: "turned off",
   reveal_phone: "revealed the phone number of",
   reset_password: "reset the password of",
+  // Kept for the audit rows written before stages were retired.
   stage_change: "moved a stage on",
+  status_change: "changed the temperature of",
   update_permissions: "changed the permissions of",
   tag_add: "tagged",
   tag_remove: "untagged",
@@ -129,7 +131,6 @@ const ENTITY_HREFS: Record<string, (id: string) => string> = {
   centers: () => "/settings/centers",
   roles: () => "/settings/roles",
   assignment_rules: (id) => `/settings/rules/${id}`,
-  pipeline_stages: () => "/settings/pipeline-stages",
   dropdown_options: () => "/settings/dropdowns",
   field_definitions: () => "/settings/fields",
   fee_structures: () => "/settings/fee-structures",

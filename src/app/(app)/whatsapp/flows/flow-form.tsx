@@ -25,10 +25,10 @@ const initialState: FlowFormState = {};
 
 const ANY = "__any__";
 
-/** Plain English for each trigger, since "stage_entered" is not a thing anybody says. */
+/** Plain English for each trigger, since "temperature_entered" is not a thing anybody says. */
 const TRIGGER_LABELS: Record<FlowTrigger, string> = {
   lead_created: "A new lead arrives",
-  stage_entered: "A lead moves into a stage",
+  temperature_entered: "A lead's temperature changes to…",
   tag_added: "A tag is put on a lead",
   inbound_keyword: "Somebody messages us a word",
   manual: "Only when somebody starts it by hand",
@@ -39,7 +39,7 @@ export interface FlowValues {
   name: string;
   description: string;
   triggerType: FlowTrigger;
-  stageId: string;
+  temperature: string;
   tagId: string;
   keywords: string;
   centerId: string;
@@ -49,14 +49,14 @@ export interface FlowValues {
 
 export function FlowForm({
   values,
-  stages,
+  statuses,
   tags,
   centers,
   fields,
   optionsByField,
 }: {
   values: FlowValues;
-  stages: Array<{ id: string; name: string }>;
+  statuses: Array<{ value: string; label: string }>;
   tags: Array<{ id: string; name: string }>;
   centers: Array<{ id: string; name: string }>;
   fields: ConditionField[];
@@ -64,7 +64,7 @@ export function FlowForm({
 }) {
   const [state, action, pending] = useActionState(saveFlow, initialState);
   const [trigger, setTrigger] = useState<FlowTrigger>(values.triggerType);
-  const [stageId, setStageId] = useState(values.stageId);
+  const [temperature, setTemperature] = useState(values.temperature);
   const [tagId, setTagId] = useState(values.tagId);
   const [keywords, setKeywords] = useState(values.keywords);
   const [centerId, setCenterId] = useState(values.centerId);
@@ -72,8 +72,8 @@ export function FlowForm({
   // The trigger's own settings travel as one JSON field, because their
   // shape depends entirely on which trigger it is.
   const triggerConfig = JSON.stringify(
-    trigger === "stage_entered"
-      ? { stageId }
+    trigger === "temperature_entered"
+      ? { temperature }
       : trigger === "tag_added"
         ? { tagId }
         : trigger === "inbound_keyword"
@@ -133,15 +133,15 @@ export function FlowForm({
         </Select>
       </div>
 
-      {trigger === "stage_entered" && (
+      {trigger === "temperature_entered" && (
         <div className="flex flex-col gap-2">
-          <Label>Which stage</Label>
+          <Label>Which temperature</Label>
           <Combobox
-            value={stageId || ANY}
-            onChange={(v) => setStageId(v === ANY ? "" : v)}
-            options={stages.map((stage) => ({ value: stage.id, label: stage.name }))}
-            placeholder="Pick a stage"
-            searchPlaceholder="Type a stage…"
+            value={temperature || ANY}
+            onChange={(v) => setTemperature(v === ANY ? "" : v)}
+            options={statuses}
+            placeholder="Pick a temperature"
+            searchPlaceholder="Type a temperature…"
           />
         </div>
       )}

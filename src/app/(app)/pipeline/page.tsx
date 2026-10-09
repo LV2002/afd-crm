@@ -12,9 +12,8 @@ import { redirect } from "next/navigation";
  * stale link and revalidate path working rather than turning them into
  * a 404 nobody can explain.
  *
- * Stages themselves are untouched. They are still on every lead, still
- * filterable, still what the reports group by — only the board is gone.
- * The lead's own page is where a stage gets changed, and always was.
+ * Stages themselves have since gone too: a lead's status is its
+ * temperature, changed from the bar at the top of the lead's own page.
  */
 export default function PipelineRedirect() {
   redirect("/follow-ups");

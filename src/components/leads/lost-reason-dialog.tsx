@@ -22,11 +22,10 @@ export interface LostReasonOption {
 /**
  * The reason a lead is lost, asked for at the moment it becomes one.
  *
- * Shared rather than copied: a stage with `requires_reason` can be
- * entered from the kanban board and from the status bar on a lead's own
- * page, and the two must ask the same question. The database trigger
- * (`enforce_lost_reason`, migration 0012) is the backstop either way;
- * this exists so the counsellor gets a question instead of an error.
+ * Shared rather than copied, so every place a lead can be closed asks the
+ * same question. The database trigger (`enforce_lead_status`, migration
+ * 0099) is the backstop for every other write path; this exists so the
+ * counsellor gets a question instead of an error.
  */
 export function LostReasonDialog({
   open,
@@ -55,7 +54,7 @@ export function LostReasonDialog({
         <DialogHeader>
           <DialogTitle>Why is this lead lost?</DialogTitle>
           <DialogDescription>
-            A reason is required before this lead can move to this stage.
+            A reason is required before this lead can be marked this way.
           </DialogDescription>
         </DialogHeader>
 

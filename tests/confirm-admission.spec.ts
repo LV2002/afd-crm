@@ -20,7 +20,7 @@ if (!process.env.DATABASE_URL) {
 }
 
 const { db } = await import("../src/lib/db/client");
-const { centers, enrolments, feeStructures, leads, pipelineStages } = await import("../src/lib/db/schema");
+const { centers, dropdownOptions, enrolments, feeStructures, leads } = await import("../src/lib/db/schema");
 const { confirmAdmission } = await import("../src/lib/enrolment/confirm-admission");
 
 const MARKER = "ConfirmAdmissionTest";
@@ -30,7 +30,6 @@ function testName(tag: string) {
 }
 
 let centerId: string;
-let wonStageId: string;
 
 async function sweep() {
   const testLeads = await db.select({ id: leads.id }).from(leads).where(like(leads.studentName, `${MARKER}%`));
@@ -46,13 +45,6 @@ beforeAll(async () => {
   await sweep();
   const [center] = await db.insert(centers).values({ name: testName("center"), city: "Kochi" }).returning({ id: centers.id });
   centerId = center.id;
-
-  const [wonStage] = await db
-    .select({ id: pipelineStages.id })
-    .from(pipelineStages)
-    .where(eq(pipelineStages.stageType, "won"));
-  if (!wonStage) throw new Error("Seed data is missing a stage_type='won' pipeline stage.");
-  wonStageId = wonStage.id;
 });
 
 afterAll(async () => {
@@ -62,7 +54,7 @@ afterAll(async () => {
 async function makeLead(tag: string, phone: string) {
   const [lead] = await db
     .insert(leads)
-    .values({ studentName: testName(tag), primaryPhone: phone, centerId })
+    .values({ studentName: testName(tag), primaryPhone: phone, centerId, temperature: "not_contacted" })
     .returning({ id: leads.id });
   return lead.id;
 }
@@ -100,25 +92,46 @@ describe("confirmAdmission", () => {
     expect(enrolment.salesToAccountsAt).not.toBeNull();
     expect(enrolment.accountsToAcademicsAt).toBeNull();
 
+    // Confirming the admission IS what moves the lead to Took admission —
+    // automatically, in the same transaction, from whatever it was before.
     const [leadRow] = await db.select().from(leads).where(eq(leads.id, leadId));
-    expect(leadRow.stageId).toBe(wonStageId);
+    expect(leadRow.temperature).toBe("took_admission");
     // Reported, not just done. The caller writes the audit row, starts the
     // automations and tells the counsellor on the strength of this.
-    expect(result.wonStageId).toBe(wonStageId);
+    expect(result.statusChange).toEqual({ from: "not_contacted", to: "took_admission" });
   });
 
-  it("reports no won stage rather than silently leaving the lead where it was", async () => {
-    // The real failure this reporting exists for: an institute whose
-    // stages were built by hand, with none of them typed `won`. The
-    // admission must still be recorded — refusing one over a pipeline
-    // setting would be absurd — but the caller has to be able to say the
-    // stage did not move, which it could not when this returned nothing.
+  it("moves a lead that was Hot, and the status survives the move", async () => {
+    const leadId = await makeLead("hot", "+919847200198");
+    await db.update(leads).set({ temperature: "hot" }).where(eq(leads.id, leadId));
+
+    const result = await db.transaction((tx) =>
+      confirmAdmission(tx, {
+        leadId,
+        course: testName("hot"),
+        centerId,
+        mode: "offline",
+        academicYear: "2026-27",
+        totalFeePaiseOverride: 1000000,
+        confirmedBy: null,
+      }),
+    );
+
+    expect(result.statusChange).toEqual({ from: "hot", to: "took_admission" });
+  });
+
+  it("reports no admission status rather than silently leaving the lead where it was", async () => {
+    // The real failure this reporting exists for: an institute that
+    // deleted or re-kinded "Took admission". The admission must still be
+    // recorded — refusing one over a settings problem would be absurd —
+    // but the caller has to be able to say the temperature did not move,
+    // which it could not when this returned nothing.
     const leadId = await makeLead("nowon", "+919847200199");
 
     const [leadBefore] = await db.select().from(leads).where(eq(leads.id, leadId));
-    const stageBefore = leadBefore.stageId;
+    const statusBefore = leadBefore.temperature;
 
-    await db.update(pipelineStages).set({ isActive: false }).where(eq(pipelineStages.stageType, "won"));
+    await db.update(dropdownOptions).set({ isActive: false }).where(eq(dropdownOptions.value, "took_admission"));
     try {
       const result = await db.transaction((tx) =>
         confirmAdmission(tx, {
@@ -133,12 +146,12 @@ describe("confirmAdmission", () => {
       );
 
       expect(result.enrolmentId).toBeTruthy();
-      expect(result.wonStageId).toBeNull();
+      expect(result.statusChange).toBeNull();
 
       const [leadRow] = await db.select().from(leads).where(eq(leads.id, leadId));
-      expect(leadRow.stageId).toBe(stageBefore);
+      expect(leadRow.temperature).toBe(statusBefore);
     } finally {
-      await db.update(pipelineStages).set({ isActive: true }).where(eq(pipelineStages.stageType, "won"));
+      await db.update(dropdownOptions).set({ isActive: true }).where(eq(dropdownOptions.value, "took_admission"));
     }
   });
 

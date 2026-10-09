@@ -140,7 +140,9 @@ export const DATA_TABLES = [
   "payment_reminders_sent",
   "payments",
   "receipts",
+  // Retired by migration 0099 but still a table, and still data about leads.
   "stage_history",
+  "temperature_history",
   "student_batches",
   "students",
   "tasks",

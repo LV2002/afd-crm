@@ -33,7 +33,7 @@ export const FLOW_STEP_KINDS = [
   "wait",
   "wait_for_reply",
   "add_tag",
-  "set_stage",
+  "set_temperature",
   "notify_owner",
   "stop",
 ] as const;
@@ -42,7 +42,7 @@ export type FlowStepKind = (typeof FLOW_STEP_KINDS)[number];
 /** What starts a run. Also fixed in code — each corresponds to a real emit site. */
 export const FLOW_TRIGGERS = [
   "lead_created",
-  "stage_entered",
+  "temperature_entered",
   "tag_added",
   "inbound_keyword",
   "manual",
@@ -249,8 +249,8 @@ export function describeStep(step: FlowStep): string {
     }
     case "add_tag":
       return "Add a tag";
-    case "set_stage":
-      return "Move to a stage";
+    case "set_temperature":
+      return "Change their temperature";
     case "notify_owner":
       return "Tell the counsellor";
     case "stop":

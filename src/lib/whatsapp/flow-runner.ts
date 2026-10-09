@@ -102,16 +102,16 @@ async function endRun(runId: string, status: string, reason: string): Promise<vo
  *
  * Conflicts are ignored rather than checked for: the partial unique
  * index on (flow, lead) where the run is live is what guarantees one
- * copy, and doing it in the database means two simultaneous stage
+ * copy, and doing it in the database means two simultaneous status
  * changes cannot race a read-then-insert into two runs.
  *
  * Never throws into its caller. This is called from the middle of
- * ordinary work — saving a lead, moving a stage — and an automation
+ * ordinary work — saving a lead, changing its temperature — and an automation
  * failing must not take that work down with it.
  */
 export async function startFlows(
   trigger: FlowTrigger,
-  input: { leadId: string; stageId?: string | null; tagId?: string | null; text?: string | null },
+  input: { leadId: string; temperature?: string | null; tagId?: string | null; text?: string | null },
 ): Promise<number> {
   try {
     // The whole row, not three columns: a flow's `applies_to` conditions
@@ -177,11 +177,11 @@ export async function startFlows(
 function triggerMatches(
   trigger: string,
   config: Record<string, unknown> | null,
-  input: { stageId?: string | null; tagId?: string | null; text?: string | null },
+  input: { temperature?: string | null; tagId?: string | null; text?: string | null },
 ): boolean {
   if (trigger === "lead_created" || trigger === "manual") return true;
-  if (trigger === "stage_entered")
-    return Boolean(config?.stageId) && config?.stageId === input.stageId;
+  if (trigger === "temperature_entered")
+    return Boolean(config?.temperature) && config?.temperature === input.temperature;
   if (trigger === "tag_added") return Boolean(config?.tagId) && config?.tagId === input.tagId;
   if (trigger === "inbound_keyword") {
     const keywords = Array.isArray(config?.keywords) ? config.keywords : [];
@@ -427,14 +427,32 @@ async function runOne(run: RunRow, steps: FlowStep[]): Promise<void> {
         break;
       }
 
-      case "set_stage": {
-        const stageId = (current.config as { stageId?: unknown }).stageId;
-        if (typeof stageId === "string" && stageId) {
-          await db
-            .update(leads)
-            .set({ stageId, updatedAt: new Date() })
-            .where(eq(leads.id, run.leadId));
-          await logEvent(run.id, current.id, "staged", null);
+      case "set_temperature": {
+        const temperature = (current.config as { temperature?: unknown }).temperature;
+        if (typeof temperature === "string" && temperature) {
+          /*
+            The database refuses a move this automation is not allowed to
+            make — into Took admission (no admission), or into a closing
+            outcome that needs a reason an automation cannot give. The
+            editor only offers statuses that are safe, so reaching that
+            refusal means somebody changed what a status IS after the step
+            was written. The run records it and carries on rather than
+            dying: the later steps (a message, a tag) are still correct.
+          */
+          try {
+            await db
+              .update(leads)
+              .set({ temperature, temperatureOverrideUntil: null, temperatureSetBy: "system", updatedAt: new Date() })
+              .where(eq(leads.id, run.leadId));
+            await logEvent(run.id, current.id, "staged", null);
+          } catch (error) {
+            await logEvent(
+              run.id,
+              current.id,
+              "failed",
+              error instanceof Error ? error.message : "Could not change the temperature",
+            );
+          }
         }
         current = nextStep(steps, current.position);
         break;

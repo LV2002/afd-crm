@@ -10,7 +10,6 @@ import {
   leadTags,
   leads,
   payments,
-  pipelineStages,
   profiles,
   receipts,
   students,
@@ -18,6 +17,7 @@ import {
 } from "@/lib/db/schema";
 import { formatINR } from "@/lib/format/currency";
 import { maskPhone } from "@/lib/leads/mask-phone";
+import { loadTemperatureOptionsDirect } from "@/lib/leads/temperature-options-direct";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 
 import { analystScope } from "./scope";
@@ -60,7 +60,7 @@ export interface PersonMatch {
   leadNumber: number;
   name: string;
   centre: string | null;
-  stage: string | null;
+  temperature: string | null;
   firstEnquiry: string | null;
 }
 
@@ -78,12 +78,11 @@ export async function findPeople(query: string): Promise<PersonMatch[]> {
       leadNumber: leads.leadNumber,
       name: leads.studentName,
       centre: centers.name,
-      stage: pipelineStages.name,
+      temperature: leads.temperature,
       createdAt: leads.createdAt,
     })
     .from(leads)
     .leftJoin(centers, eq(centers.id, leads.centerId))
-    .leftJoin(pipelineStages, eq(pipelineStages.id, leads.stageId))
     .where(
       and(
         isNull(leads.deletedAt),
@@ -106,7 +105,7 @@ export async function findPeople(query: string): Promise<PersonMatch[]> {
     leadNumber: row.leadNumber,
     name: row.name,
     centre: row.centre,
-    stage: row.stage,
+    temperature: row.temperature,
     firstEnquiry: row.createdAt?.toISOString() ?? null,
   }));
 }
@@ -124,9 +123,15 @@ export async function personHistory(leadId: string, canRevealPhone: boolean) {
     .where(and(eq(leads.id, leadId), isNull(leads.deletedAt)));
   if (!lead) return { error: "No lead with that id." };
 
+  // The label the institute uses, not the stored value — "Took admission",
+  // not "took_admission" — since the model repeats whatever it is given.
+  const temperatureLabel = lead.temperature
+    ? ((await loadTemperatureOptionsDirect()).find((option) => option.value === lead.temperature)?.label ??
+      lead.temperature)
+    : null;
+
   const [
     centreRow,
-    stageRow,
     counsellorRow,
     enquiryRows,
     tagRows,
@@ -134,12 +139,6 @@ export async function personHistory(leadId: string, canRevealPhone: boolean) {
   ] = await Promise.all([
     lead.centerId
       ? db.select({ name: centers.name }).from(centers).where(eq(centers.id, lead.centerId))
-      : Promise.resolve([]),
-    lead.stageId
-      ? db
-          .select({ name: pipelineStages.name, type: pipelineStages.stageType })
-          .from(pipelineStages)
-          .where(eq(pipelineStages.id, lead.stageId))
       : Promise.resolve([]),
     lead.assignedTo
       ? db.select({ name: profiles.fullName }).from(profiles).where(eq(profiles.id, lead.assignedTo))
@@ -226,8 +225,7 @@ export async function personHistory(leadId: string, canRevealPhone: boolean) {
       examYear: lead.examYear,
       centre: centreRow[0]?.name ?? null,
       counsellor: counsellorRow[0]?.name ?? null,
-      stage: stageRow[0]?.name ?? null,
-      temperature: lead.temperature,
+      temperature: temperatureLabel,
       tags: tagRows.map((row) => row.name),
     },
     enquiry: {

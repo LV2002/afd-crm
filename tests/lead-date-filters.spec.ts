@@ -57,13 +57,13 @@ describe("parseLeadDateFilters", () => {
     // No lower bound: a follow-up booked last March and never done is the
     // most overdue thing there is.
     expect(filters.followupFrom).toBeNull();
-    expect(filters.excludeTerminalStages).toBe(true);
+    expect(filters.excludeFinished).toBe(true);
   });
 
   it("does not exclude won and lost leads for any filter but overdue", () => {
-    expect(parseLeadDateFilters({ followup: "today" }, NOW).excludeTerminalStages).toBe(false);
-    expect(parseLeadDateFilters({ followup: "week" }, NOW).excludeTerminalStages).toBe(false);
-    expect(parseLeadDateFilters({ followup: "none" }, NOW).excludeTerminalStages).toBe(false);
+    expect(parseLeadDateFilters({ followup: "today" }, NOW).excludeFinished).toBe(false);
+    expect(parseLeadDateFilters({ followup: "week" }, NOW).excludeFinished).toBe(false);
+    expect(parseLeadDateFilters({ followup: "none" }, NOW).excludeFinished).toBe(false);
   });
 
   it("reads today as the IST day, not the UTC one", () => {

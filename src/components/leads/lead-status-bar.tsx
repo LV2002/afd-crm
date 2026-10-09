@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, Lock } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { LostReasonDialog, type LostReasonOption } from "@/components/leads/lost-reason-dialog";
@@ -12,122 +12,91 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { TemperatureOption } from "@/lib/leads/temperature-kinds";
 import { cn } from "@/lib/utils";
 
-import { moveLeadStage } from "@/app/(app)/leads/stage-actions";
 import { setLeadTemperature } from "@/app/(app)/leads/[id]/actions";
 
-export interface StatusBarStage {
-  id: string;
-  name: string;
-  color: string | null;
-  requiresReason: boolean;
-}
-
-export interface StatusBarTemperature {
-  value: string;
-  label: string;
-  color: string | null;
-}
-
 /**
- * Stage and temperature, at the top of a lead, both changeable in one tap.
+ * A lead's whole status, at the top of the page, changeable in one tap.
  *
- * They were two read-only badges. Changing either meant the kanban board
- * (stage) or opening the edit form and finding one dropdown among thirty
- * (temperature) — so during a call, when both are actually known, neither
- * got updated. A counsellor hangs up knowing this lead went cold and the
- * CRM keeps saying Warm until a cron eventually guesses.
+ * ## One control, because it is one thing now
  *
- * ## Two controls, never one
+ * This used to be two: a stage select and four temperature buttons, kept
+ * apart on purpose because funnel position and warmth were separate
+ * dimensions. Leon merged them — "I don't want stages anymore, lets keep
+ * it as only temperature" — into eleven values. So the shape of the
+ * control follows the shape of the data again.
  *
- * CLAUDE.md non-negotiable #1: stage is funnel position, temperature is a
- * separate dimension, and neither is derived from the other. A lead can be
- * Hot at Demo Scheduled and Cold at Payment Pending, and both are
- * ordinary. So this is deliberately not a single "status" picker, however
- * much tidier that would look — the shape of the control is the shape of
- * the data.
+ * ## Why buttons AND a select
  *
- * Temperature is buttons and stage is a select because of how many there
- * are: four temperatures a thumb can hit, fourteen stages that would be a
- * wall of buttons.
+ * What a counsellor changes during a call is warmth: Contacted, Cold,
+ * Warm, Hot. Those few are buttons a thumb can hit. How a lead ENDS is a
+ * different, rarer act — parked for later, wrong target, joined a
+ * competitor — and six more buttons would bury the four that matter, so
+ * the endings live in a select.
+ *
+ * ## "Took admission" is shown and cannot be chosen
+ *
+ * It sits in the list, disabled, with the reason — so nobody wonders where
+ * it went — because the only way to it is to confirm the admission with a
+ * course, batch and fee. The server and the database refuse it too; this
+ * is the version of the refusal that explains itself.
  *
  * ## Saving
  *
- * Each control saves on change, with no Save button, because a two-field
+ * Each choice saves on its own, with no Save button, because a one-field
  * form with a submit is the friction this replaces. The write is
  * optimistic in appearance only: the control shows the new value while the
  * action runs, and puts back the old one if the server refuses.
  */
 export function LeadStatusBar({
   leadId,
-  stages,
-  temperatures,
-  currentStageId,
+  options,
   currentTemperature,
+  admissionStands,
   lostReasonOptions,
   canEdit,
 }: {
   leadId: string;
-  stages: StatusBarStage[];
-  temperatures: StatusBarTemperature[];
-  currentStageId: string | null;
+  options: TemperatureOption[];
   currentTemperature: string | null;
+  /** A confirmed, undropped admission exists: the status is a fact about it. */
+  admissionStands: boolean;
   lostReasonOptions: LostReasonOption[];
   canEdit: boolean;
 }) {
-  const [stageId, setStageId] = useState(currentStageId);
   const [temperature, setTemperature] = useState(currentTemperature);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
   const [askingReasonFor, setAskingReasonFor] = useState<string | null>(null);
 
+  // A retired value (inactive) is still SHOWN when a lead carries it, but
+  // never offered.
+  const offered = options.filter((option) => option.isActive);
+  const working = offered.filter((option) => option.kind === "new" || option.kind === "open");
+  const endings = offered.filter((option) => option.kind !== "new" && option.kind !== "open");
+  const current = options.find((option) => option.value === temperature) ?? null;
+  const currentIsEnding = current !== null && current.kind !== "new" && current.kind !== "open";
+
   function flashSaved() {
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1600);
   }
 
-  function commitStage(nextStageId: string, reason?: { lostReason?: string; lostReasonDetail?: string }) {
-    const previous = stageId;
-    setStageId(nextStageId);
-    setError(null);
-    startTransition(async () => {
-      const result = await moveLeadStage(leadId, nextStageId, reason);
-      if (result.error) {
-        // Put it back. A control that keeps showing the value the server
-        // rejected is worse than one that never moved.
-        setStageId(previous);
-        setError(result.error);
-      } else {
-        flashSaved();
-      }
-    });
-  }
-
-  function chooseStage(nextStageId: string) {
-    const stage = stages.find((candidate) => candidate.id === nextStageId);
-    if (!stage) return;
-    // Ask before moving, not after being refused: the server would reject
-    // this and the counsellor would have watched the select change and
-    // change back for no stated reason.
-    if (stage.requiresReason) {
-      setAskingReasonFor(nextStageId);
-      return;
-    }
-    commitStage(nextStageId);
-  }
-
-  function chooseTemperature(value: string) {
-    // Pressing the one you are already on clears it, which is the only way
-    // back to "let the rules decide" without an extra control.
-    const next = temperature === value ? null : value;
+  function commit(
+    next: string,
+    reason?: { lostReason?: string; lostReasonDetail?: string },
+  ) {
     const previous = temperature;
     setTemperature(next);
     setError(null);
     startTransition(async () => {
-      const result = await setLeadTemperature(leadId, next);
+      const result = await setLeadTemperature(leadId, next, reason);
       if (result.error) {
+        // Put it back. A control that keeps showing the value the server
+        // rejected is worse than one that never moved.
         setTemperature(previous);
         setError(result.error);
       } else {
@@ -136,17 +105,38 @@ export function LeadStatusBar({
     });
   }
 
-  const currentStage = stages.find((stage) => stage.id === stageId) ?? null;
+  function choose(value: string) {
+    const option = options.find((candidate) => candidate.value === value);
+    if (!option || value === temperature) return;
+    // Ask before moving, not after being refused: the server would reject
+    // this and the counsellor would have watched the control change and
+    // change back for no stated reason.
+    if (option.kind === "lost" && option.requiresReason) {
+      setAskingReasonFor(value);
+      return;
+    }
+    commit(value);
+  }
 
-  if (!canEdit) {
+  if (!canEdit || admissionStands) {
     return (
-      <div className="flex flex-wrap items-center gap-2">
-        {currentStage && <Badge variant="secondary">{currentStage.name}</Badge>}
-        {temperature && (
-          <Badge variant="outline">
-            {temperatures.find((t) => t.value === temperature)?.label ?? temperature}
-          </Badge>
-        )}
+      <div className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Temperature
+          </span>
+          {current ? (
+            <Badge variant={current.kind === "won" ? "success" : "outline"}>{current.label}</Badge>
+          ) : (
+            <Badge variant="outline">Not set</Badge>
+          )}
+          {admissionStands && canEdit && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Lock className="size-3" aria-hidden="true" />
+              The admission is confirmed. To change this, drop the admission from the Accounts screen.
+            </span>
+          )}
+        </div>
       </div>
     );
   }
@@ -154,30 +144,12 @@ export function LeadStatusBar({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Stage
-          </span>
-          <Select value={stageId ?? ""} onValueChange={chooseStage} disabled={pending}>
-            <SelectTrigger className="h-9 w-[13.5rem] max-w-full">
-              <SelectValue placeholder="Not in the pipeline" />
-            </SelectTrigger>
-            <SelectContent>
-              {stages.map((stage) => (
-                <SelectItem key={stage.id} value={stage.id}>
-                  {stage.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Temperature
           </span>
           <div className="flex flex-wrap gap-1">
-            {temperatures.map((option) => {
+            {working.map((option) => {
               const isCurrent = temperature === option.value;
               return (
                 <button
@@ -185,11 +157,11 @@ export function LeadStatusBar({
                   type="button"
                   disabled={pending}
                   aria-pressed={isCurrent}
-                  onClick={() => chooseTemperature(option.value)}
+                  onClick={() => choose(option.value)}
                   className={cn(
                     "flex min-h-9 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition-colors disabled:opacity-60",
                     isCurrent
-                      ? "border-transparent bg-primary/10 text-primary"
+                      ? "border-transparent bg-primary-subtle text-primary-ink"
                       : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                   )}
                 >
@@ -205,6 +177,40 @@ export function LeadStatusBar({
               );
             })}
           </div>
+        </div>
+
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Or
+          </span>
+          <Select
+            value={currentIsEnding ? (temperature ?? "") : ""}
+            onValueChange={choose}
+            disabled={pending}
+          >
+            <SelectTrigger
+              aria-label="Mark this lead as"
+              className={cn(
+                "h-9 w-[13.5rem] max-w-full",
+                currentIsEnding && "border-transparent bg-primary-subtle text-primary-ink",
+              )}
+            >
+              <SelectValue placeholder="Mark as…" />
+            </SelectTrigger>
+            <SelectContent>
+              {endings.map((option) => (
+                <SelectItem
+                  key={option.value}
+                  value={option.value}
+                  // The only route to this one is confirming the admission.
+                  disabled={option.kind === "won"}
+                >
+                  {option.label}
+                  {option.kind === "won" ? " — confirm the admission below" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <span className="flex items-center gap-1 text-xs text-muted-foreground" aria-live="polite">
@@ -227,7 +233,7 @@ export function LeadStatusBar({
         onConfirm={(reason) => {
           const target = askingReasonFor;
           setAskingReasonFor(null);
-          if (target) commitStage(target, reason);
+          if (target) commit(target, reason);
         }}
       />
     </div>

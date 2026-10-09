@@ -27,14 +27,14 @@ const CITY = field({ key: "city", type: "text", label: "City" });
 const CREATED = field({ key: "created_at", type: "datetime", label: "Created (month)" });
 const BROCHURE = field({ key: "brochure_sent", type: "boolean", label: "Brochure Sent" });
 
-const STAGE_TYPES = new Map([
-  ["stage-new", "new"],
-  ["stage-won", "won"],
-  ["stage-lost", "lost"],
+const KIND_BY_TEMPERATURE = new Map([
+  ["not_contacted", "new"],
+  ["took_admission", "won"],
+  ["negative", "lost"],
 ]);
 
-function lead(id: string, stageId: string | null, values: Record<string, unknown>): PivotLead {
-  return { id, stageId, values };
+function lead(id: string, temperature: string | null, values: Record<string, unknown>): PivotLead {
+  return { id, temperature, values };
 }
 
 describe("isDimension", () => {
@@ -153,9 +153,9 @@ describe("matchesFilter", () => {
 
 describe("applyPivotFilters", () => {
   const leads = [
-    lead("a", "stage-won", { lead_source: "Meta", city: "Kochi" }),
-    lead("b", "stage-new", { lead_source: "Meta", city: "Kannur" }),
-    lead("c", "stage-new", { lead_source: "Walk-in", city: "Kochi" }),
+    lead("a", "took_admission", { lead_source: "Meta", city: "Kochi" }),
+    lead("b", "not_contacted", { lead_source: "Meta", city: "Kannur" }),
+    lead("c", "not_contacted", { lead_source: "Walk-in", city: "Kochi" }),
   ];
 
   it("returns the set untouched when no filter is set", () => {
@@ -177,27 +177,27 @@ describe("applyPivotFilters", () => {
 });
 
 describe("summarise", () => {
-  it("counts won and lost off the stage's type, not its name", () => {
+  it("counts won and lost off the temperature's kind, not its name", () => {
     const leads = [
-      lead("a", "stage-won", {}),
-      lead("b", "stage-lost", {}),
-      lead("c", "stage-new", {}),
+      lead("a", "took_admission", {}),
+      lead("b", "negative", {}),
+      lead("c", "not_contacted", {}),
       lead("d", null, {}),
     ];
-    expect(summarise(leads, STAGE_TYPES)).toEqual({ total: 4, won: 1, lost: 1, dropped: 0 });
+    expect(summarise(leads, KIND_BY_TEMPERATURE)).toEqual({ total: 4, won: 1, lost: 1, dropped: 0 });
   });
 });
 
 describe("groupLeads", () => {
   const leads = [
-    lead("a", "stage-won", { lead_source: "Meta" }),
-    lead("b", "stage-new", { lead_source: "Meta" }),
-    lead("c", "stage-lost", { lead_source: "Walk-in" }),
-    lead("d", "stage-new", { lead_source: null }),
+    lead("a", "took_admission", { lead_source: "Meta" }),
+    lead("b", "not_contacted", { lead_source: "Meta" }),
+    lead("c", "negative", { lead_source: "Walk-in" }),
+    lead("d", "not_contacted", { lead_source: null }),
   ];
 
   it("counts, and carries won/lost into each row", () => {
-    const rows = groupLeads(leads, SOURCE, STAGE_TYPES, new Map());
+    const rows = groupLeads(leads, SOURCE, KIND_BY_TEMPERATURE, new Map());
     expect(rows.map((r) => [r.label, r.total, r.won, r.lost])).toEqual([
       ["Meta", 2, 1, 0],
       ["Walk-in", 1, 0, 1],
@@ -214,7 +214,7 @@ describe("groupLeads", () => {
       lead("c", null, { lead_source: null }),
       lead("d", null, { lead_source: "Meta" }),
     ];
-    const rows = groupLeads(mostlyBlank, SOURCE, STAGE_TYPES, new Map());
+    const rows = groupLeads(mostlyBlank, SOURCE, KIND_BY_TEMPERATURE, new Map());
     expect(rows.map((r) => r.bucket)).toEqual(["Meta", NOT_SET]);
   });
 
@@ -223,7 +223,7 @@ describe("groupLeads", () => {
       lead("a", null, { lead_source: "Walk-in" }),
       lead("b", null, { lead_source: "Meta" }),
     ];
-    expect(groupLeads(tied, SOURCE, STAGE_TYPES, new Map()).map((r) => r.label)).toEqual([
+    expect(groupLeads(tied, SOURCE, KIND_BY_TEMPERATURE, new Map()).map((r) => r.label)).toEqual([
       "Meta",
       "Walk-in",
     ]);
@@ -231,10 +231,10 @@ describe("groupLeads", () => {
 
   it("counts a multi-value lead under each of its values", () => {
     const multi = [
-      lead("a", "stage-won", { interested_exams: ["NID", "NIFT UG"] }),
+      lead("a", "took_admission", { interested_exams: ["NID", "NIFT UG"] }),
       lead("b", null, { interested_exams: ["NID"] }),
     ];
-    const rows = groupLeads(multi, EXAMS, STAGE_TYPES, new Map());
+    const rows = groupLeads(multi, EXAMS, KIND_BY_TEMPERATURE, new Map());
     expect(rows.map((r) => [r.label, r.total])).toEqual([
       ["NID", 2],
       ["NIFT UG", 1],
@@ -243,7 +243,7 @@ describe("groupLeads", () => {
   });
 
   it("does not claim oversubscription for a single-value variable", () => {
-    const rows = groupLeads(leads, SOURCE, STAGE_TYPES, new Map());
+    const rows = groupLeads(leads, SOURCE, KIND_BY_TEMPERATURE, new Map());
     expect(oversubscribed(rows, leads.length)).toBe(false);
   });
 
@@ -252,7 +252,7 @@ describe("groupLeads", () => {
     const rows = groupLeads(
       [lead("a", null, { center_id: "uuid-1" })],
       centre,
-      STAGE_TYPES,
+      KIND_BY_TEMPERATURE,
       new Map([["uuid-1", "Kochi"]]),
     );
     expect(rows[0].label).toBe("Kochi");
@@ -261,20 +261,19 @@ describe("groupLeads", () => {
 });
 
 /**
- * A student who dropped out is still sitting in the Admission Confirmed
- * stage, so without this they go on counting as a conversion for as long
+ * A student who dropped out is still at Took admission, so without this they go on counting as a conversion for as long
  * as the record exists — which is exactly what Leon asked to stop.
  */
 describe("dropped students", () => {
   const leads = [
-    lead("a", "stage-won", { lead_source: "Meta" }),
-    lead("b", "stage-won", { lead_source: "Meta" }),
-    lead("c", "stage-lost", { lead_source: "Walk-in" }),
+    lead("a", "took_admission", { lead_source: "Meta" }),
+    lead("b", "took_admission", { lead_source: "Meta" }),
+    lead("c", "negative", { lead_source: "Walk-in" }),
   ];
   const dropped = new Set(["b"]);
 
   it("stops counting a dropped student as won, without hiding the lead", () => {
-    expect(summarise(leads, STAGE_TYPES, dropped)).toEqual({
+    expect(summarise(leads, KIND_BY_TEMPERATURE, dropped)).toEqual({
       total: 3,
       won: 1,
       lost: 1,
@@ -285,8 +284,8 @@ describe("dropped students", () => {
   // Won and then undone is neither a win nor a loss — calling it lost
   // would flatter the lost-reason reports with a reason nobody gave.
   it("does not turn a drop into a loss", () => {
-    const bothWon = [lead("a", "stage-won", {}), lead("b", "stage-won", {})];
-    expect(summarise(bothWon, STAGE_TYPES, new Set(["b"]))).toEqual({
+    const bothWon = [lead("a", "took_admission", {}), lead("b", "took_admission", {})];
+    expect(summarise(bothWon, KIND_BY_TEMPERATURE, new Set(["b"]))).toEqual({
       total: 2,
       won: 1,
       lost: 0,
@@ -295,12 +294,12 @@ describe("dropped students", () => {
   });
 
   it("carries the drop into the breakdown rows", () => {
-    const rows = groupLeads(leads, SOURCE, STAGE_TYPES, new Map(), dropped);
+    const rows = groupLeads(leads, SOURCE, KIND_BY_TEMPERATURE, new Map(), dropped);
     const meta = rows.find((row) => row.label === "Meta");
     expect(meta).toMatchObject({ total: 2, won: 1, dropped: 1 });
   });
 
   it("counts everything the old way when nothing has been dropped", () => {
-    expect(summarise(leads, STAGE_TYPES)).toEqual({ total: 3, won: 2, lost: 1, dropped: 0 });
+    expect(summarise(leads, KIND_BY_TEMPERATURE)).toEqual({ total: 3, won: 2, lost: 1, dropped: 0 });
   });
 });

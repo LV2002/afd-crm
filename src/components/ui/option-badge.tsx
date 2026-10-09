@@ -1,13 +1,11 @@
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 
 /**
- * A stage or a temperature, with the colour an admin gave it.
+ * A temperature, with the colour an admin gave it.
  *
- * Scanning two hundred leads for "who is at Demo Scheduled" is a reading
- * task when every stage is the same grey text, and a glance when each one
- * has a colour. The colours already existed — `pipeline_stages.color` and
- * `dropdown_options.color` are editable in Settings — and nothing drew
- * them.
+ * Scanning two hundred leads for "who is Hot" is a reading task when every
+ * status is the same grey text, and a glance when each one has a colour.
+ * The colours are `dropdown_options.color`, editable in Settings.
  *
  * **The label stays in text ink.** The colour is a dot and a wash behind
  * the pill, never the text itself: an admin can pick any hex, including a

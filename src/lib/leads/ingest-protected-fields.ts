@@ -22,14 +22,15 @@ import type { FieldSchemaEntry } from "@/lib/fields/get-field-schema";
  * - `lead_source`, `sub_source` — attribution. CLAUDE.md: first-touch
  *   source is never overwritten, and `lead_source` is not even a column
  *   (see fields/field-column.ts).
- * - `stage_id` — a lead arriving from an ad enters at the pipeline's
- *   `new` stage like every other ingestion path. Funnel positions that
- *   never happened are worse than no data.
  * - `assigned_to`, `center_id` — ownership. CLAUDE.md non-negotiable #8:
  *   assignment is the rules engine's job. A form question is not allowed
  *   to be a shortcut past it.
  * - `temperature`, `next_followup_at` — sales judgement and sales
- *   calendar. Neither belongs to whoever filled in a form.
+ *   calendar. Neither belongs to whoever filled in a form. Temperature is
+ *   the lead's whole status now, so this also keeps a stranger's answer
+ *   from claiming a funnel position that never happened — every lead
+ *   arriving from an ad starts at the `new` status like every other
+ *   ingestion path.
  */
 export const INGEST_PROTECTED_KEYS = new Set([
   "student_name",
@@ -37,7 +38,6 @@ export const INGEST_PROTECTED_KEYS = new Set([
   "email",
   "lead_source",
   "sub_source",
-  "stage_id",
   "assigned_to",
   "center_id",
   "temperature",

@@ -3,14 +3,11 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { formatDateIST } from "@/lib/format/date";
 import { batchNameLookup } from "@/lib/leads/batch-name-lookup";
 import { maskPhone } from "@/lib/leads/mask-phone";
+import { isNoLongerWorked, terminalValuesOf } from "@/lib/leads/temperature-kinds";
+import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 import { createClient } from "@/lib/supabase/server";
 
 import { OrphanRow, type OrphanLeadData } from "./orphan-row";
-
-interface StageRow {
-  id: string;
-  stage_type: string;
-}
 
 /**
  * docs/02-BUILD-PHASES.md § Phase 2: "Orphan queue for centre heads" —
@@ -27,21 +24,19 @@ export default async function OrphansPage() {
 
   const supabase = await createClient();
 
-  const [{ data: stageRows }, { data: leadRows }] = await Promise.all([
-    supabase.from("pipeline_stages").select("id, stage_type").returns<StageRow[]>(),
+  const [temperatureOptions, { data: leadRows }] = await Promise.all([
+    loadTemperatureOptions(supabase),
     supabase
       .from("leads")
-      .select("id, student_name, primary_phone, first_touch_source, center_id, stage_id, created_at")
+      .select("id, student_name, primary_phone, first_touch_source, center_id, temperature, created_at")
       .is("assigned_to", null)
       .is("deleted_at", null)
       .order("created_at")
-      .returns<Array<OrphanLeadData & { stage_id: string | null }>>(),
+      .returns<Array<OrphanLeadData & { temperature: string | null }>>(),
   ]);
 
-  const terminalStageIds = new Set(
-    (stageRows ?? []).filter((s) => s.stage_type === "won" || s.stage_type === "lost").map((s) => s.id),
-  );
-  const orphans = (leadRows ?? []).filter((row) => !row.stage_id || !terminalStageIds.has(row.stage_id));
+  const terminalValues = terminalValuesOf(temperatureOptions);
+  const orphans = (leadRows ?? []).filter((row) => !isNoLongerWorked(row.temperature, terminalValues));
 
   const centerIds = Array.from(new Set(orphans.map((row) => row.center_id).filter(Boolean))) as string[];
 

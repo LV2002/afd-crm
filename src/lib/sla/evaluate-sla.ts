@@ -10,8 +10,8 @@ export interface SlaEvaluationInput {
   lead: Lead;
   /** Active policies — any order; sorted by priority internally. */
   policies: SlaPolicyRow[];
-  /** When the lead entered its current stage — a stage_history row, or the lead's own createdAt if it's never moved. */
-  currentStageEnteredAt: Date;
+  /** When the lead entered its current status — the latest temperature_history row, or the lead's own createdAt if it's never changed. */
+  currentStatusEnteredAt: Date;
   /** The lead's centre's business hours; empty if the centre has none configured (or the lead has no centre). */
   businessHours: DayHours[];
   holidayDates: ReadonlySet<string>;
@@ -37,17 +37,18 @@ export interface SlaEvaluationResult {
  * - `next_followup`: from the scheduled `next_followup_at`, only once
  *   that moment has actually passed — a follow-up scheduled for later
  *   isn't overdue yet, so there's nothing to measure against.
- * - `in_stage`: from whenever the lead entered its current pipeline stage.
+ * - `in_status`: from whenever the lead entered its current status (its
+ *   temperature). Catches leads that quietly stopped moving.
  */
-function measureBaseline(policy: SlaPolicyRow, lead: Lead, currentStageEnteredAt: Date, now: Date): Date | null {
+function measureBaseline(policy: SlaPolicyRow, lead: Lead, currentStatusEnteredAt: Date, now: Date): Date | null {
   switch (policy.measure) {
     case "first_response":
       return lead.firstResponseAt ? null : lead.createdAt;
     case "next_followup":
       if (!lead.nextFollowupAt) return null;
       return lead.nextFollowupAt < now ? lead.nextFollowupAt : null;
-    case "in_stage":
-      return currentStageEnteredAt;
+    case "in_status":
+      return currentStatusEnteredAt;
   }
 }
 
@@ -70,7 +71,7 @@ export function evaluateLeadSla(input: SlaEvaluationInput): SlaEvaluationResult 
   for (const policy of sorted) {
     if (!evaluateConditions((policy.appliesTo as RuleConditions | null) ?? {}, input.lead)) continue;
 
-    const baseline = measureBaseline(policy, input.lead, input.currentStageEnteredAt, input.now);
+    const baseline = measureBaseline(policy, input.lead, input.currentStatusEnteredAt, input.now);
     if (baseline === null) continue;
 
     const elapsedHours = policy.businessHoursOnly

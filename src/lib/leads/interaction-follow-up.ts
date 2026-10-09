@@ -21,7 +21,7 @@
  * they are `dropdown_options` rows an admin can rename, reorder and add
  * to. What is keyed on here is the **value**, not the label — the stable
  * identifier of a row in a *system* category, the same relationship
- * `stage_type = 'won'` has to a stage an admin may call anything. An
+ * `kind = 'won'` has to a temperature an admin may call anything. An
  * institute can rename "Converted" to "Joined" and this keeps working; it
  * is only deleting the row outright that would turn the exemption off,
  * and then every interaction simply needs a follow-up, which is the safe

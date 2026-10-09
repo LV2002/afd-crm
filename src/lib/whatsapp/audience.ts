@@ -129,7 +129,7 @@ export async function resolveAudience(
   const matched = applyPivotFilters(
     rows.map((row) => ({
       id: String(row.id),
-      stageId: null,
+      temperature: null,
       values: Object.fromEntries(fields.map((field) => [field.key, getRawFieldValue(field, row)])),
     })),
     fields,

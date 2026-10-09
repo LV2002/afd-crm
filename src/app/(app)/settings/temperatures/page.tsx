@@ -3,7 +3,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 import { OptionsEditor } from "../dropdowns/options-editor";
-import type { OptionRowData } from "../dropdowns/option-row";
+import { toOptionRowData } from "../dropdowns/option-row-data";
 import { describeConditions } from "@/lib/rules/describe-rule";
 
 import { loadRuleOptions, ruleLabelLookup } from "../rules/load-options";
@@ -16,11 +16,21 @@ export default async function TemperaturesSettingsPage() {
 
   const { data: options } = await supabase
     .from("dropdown_options")
-    .select("id, value, label, color, is_active")
+    .select("id, value, label, color, is_active, metadata")
     .eq("category", "temperature")
     .is("deleted_at", null)
     .order("sort_order")
-    .returns<OptionRowData[]>();
+    .returns<
+      Array<{
+        id: string;
+        value: string;
+        label: string;
+        color: string | null;
+        is_active: boolean;
+        metadata: unknown;
+      }>
+    >();
+  const optionRows = (options ?? []).map(toOptionRowData);
 
   const canEditValues = user ? can(user, "settings.manage") : false;
   const canEditRules = user ? can(user, "rules.manage") : false;
@@ -59,16 +69,18 @@ export default async function TemperaturesSettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Temperatures</h1>
         <p className="text-sm text-muted-foreground">
-          Hot/Warm/Cold/Dead by default — rename them, add one, reorder, and set the rules
-          that assign them automatically. A counsellor&apos;s manual override still wins over
-          any rule while it&apos;s in effect.
+          A lead&apos;s temperature is its whole status: Not contacted, Contacted, Cold, Warm, Hot,
+          Took admission, Future prospect, and the ways a lead can end. Rename them, recolour,
+          reorder, say what each one means and how likely it is to become an admission. The
+          rules below re-grade leads that are being worked, automatically — a counsellor&apos;s
+          manual change still wins over any rule while it&apos;s in effect.
         </p>
       </div>
 
       <div className="flex flex-col gap-2">
         <h2 className="text-lg font-medium">Values</h2>
         {canEditValues ? (
-          <OptionsEditor category="temperature" options={options ?? []} />
+          <OptionsEditor category="temperature" options={optionRows} />
         ) : (
           <p className="text-sm text-muted-foreground">
             You don&apos;t have permission to edit temperature values.
@@ -84,7 +96,7 @@ export default async function TemperaturesSettingsPage() {
               <RuleRow key={rule.id} rule={rule} />
             ))}
             <RuleForm
-              temperatureOptions={(options ?? []).map((o) => ({ value: o.value, label: o.label }))}
+              temperatureOptions={optionRows.filter((o) => o.kind === "open").map((o) => ({ value: o.value, label: o.label }))}
               fields={ruleOptions.fields}
               optionsByField={ruleOptions.optionsByField}
             />

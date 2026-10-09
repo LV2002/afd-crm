@@ -2,8 +2,8 @@
  * Pace and weighted pipeline.
  *
  * Two arithmetic traps live here. A run rate on day one multiplies a
- * single admission by thirty and calls it a forecast; and a stage
- * probability stored as 60 rather than 0.6 turns a demo into sixty
+ * single admission by thirty and calls it a forecast; and a temperature's
+ * probability stored as 60 rather than 0.6 turns a Hot lead into sixty
  * admissions. Both produce a confident-looking number, which is what
  * makes them worth a test each.
  */
@@ -13,7 +13,7 @@ import {
   EARLY_DAYS,
   monthEndCeiling,
   pace,
-  stageProbability,
+  temperatureProbability,
   weightedPipeline,
   type PipelineLead,
 } from "../src/lib/reports/forecast";
@@ -95,42 +95,47 @@ describe("pace", () => {
   });
 });
 
-describe("stageProbability", () => {
+describe("temperatureProbability", () => {
   it("reads a stored percentage as a fraction", () => {
-    expect(stageProbability("60.00")).toBe(0.6);
-    expect(stageProbability(25)).toBe(0.25);
+    expect(temperatureProbability("60.00")).toBe(0.6);
+    expect(temperatureProbability(25)).toBe(0.25);
   });
 
   it("keeps null as null rather than as zero", () => {
-    expect(stageProbability(null)).toBeNull();
-    expect(stageProbability("not a number")).toBeNull();
+    expect(temperatureProbability(null)).toBeNull();
+    expect(temperatureProbability("not a number")).toBeNull();
   });
 
-  it("clamps a nonsense percentage instead of dropping the stage", () => {
-    expect(stageProbability(120)).toBe(1);
-    expect(stageProbability(-5)).toBe(0);
+  it("clamps a nonsense percentage instead of dropping the temperature", () => {
+    expect(temperatureProbability(120)).toBe(1);
+    expect(temperatureProbability(-5)).toBe(0);
   });
 });
 
 describe("weightedPipeline", () => {
-  function lead(stage: string, probability: number | null, id = `${stage}-${Math.random()}`) {
-    return { leadId: id, stageId: stage, stageName: stage, probability } satisfies PipelineLead;
+  function lead(temperature: string, probability: number | null, id = `${temperature}-${Math.random()}`) {
+    return {
+      leadId: id,
+      temperature,
+      temperatureLabel: temperature,
+      probability,
+    } satisfies PipelineLead;
   }
 
-  it("weights each stage by its probability", () => {
+  it("weights each temperature by its probability", () => {
     const result = weightedPipeline([
-      lead("demo", 0.6),
-      lead("demo", 0.6),
-      lead("new", 0.1),
-      lead("new", 0.1),
-      lead("new", 0.1),
+      lead("hot", 0.6),
+      lead("hot", 0.6),
+      lead("contacted", 0.1),
+      lead("contacted", 0.1),
+      lead("contacted", 0.1),
     ]);
     expect(result.openLeads).toBe(5);
     expect(result.expectedAdmissions).toBeCloseTo(1.5);
   });
 
-  it("counts leads in unconfigured stages separately rather than at zero silently", () => {
-    const result = weightedPipeline([lead("demo", 0.5), lead("limbo", null), lead("limbo", null)]);
+  it("counts leads on temperatures with no chance set separately rather than at zero silently", () => {
+    const result = weightedPipeline([lead("hot", 0.5), lead("limbo", null), lead("limbo", null)]);
     expect(result.expectedAdmissions).toBeCloseTo(0.5);
     expect(result.unweightedLeads).toBe(2);
     // They are still open leads — they have not disappeared, they are
@@ -138,20 +143,20 @@ describe("weightedPipeline", () => {
     expect(result.openLeads).toBe(3);
   });
 
-  it("orders stages by what they are worth, not by how many they hold", () => {
+  it("orders temperatures by what they are worth, not by how many they hold", () => {
     const result = weightedPipeline([
-      ...Array.from({ length: 20 }, (_, i) => lead("new", 0.05, `n${i}`)),
-      ...Array.from({ length: 4 }, (_, i) => lead("payment", 0.9, `p${i}`)),
+      ...Array.from({ length: 20 }, (_, i) => lead("contacted", 0.05, `n${i}`)),
+      ...Array.from({ length: 4 }, (_, i) => lead("hot", 0.9, `p${i}`)),
     ]);
-    expect(result.byStage[0].stageName).toBe("payment");
+    expect(result.byTemperature[0].temperatureLabel).toBe("hot");
   });
 
-  it("groups leads with no stage at all under one bucket", () => {
+  it("groups leads with no temperature at all under one bucket", () => {
     const result = weightedPipeline([
-      { leadId: "a", stageId: null, stageName: "No stage", probability: null },
-      { leadId: "b", stageId: null, stageName: "No stage", probability: null },
+      { leadId: "a", temperature: null, temperatureLabel: "No temperature", probability: null },
+      { leadId: "b", temperature: null, temperatureLabel: "No temperature", probability: null },
     ]);
-    expect(result.byStage).toHaveLength(1);
+    expect(result.byTemperature).toHaveLength(1);
     expect(result.unweightedLeads).toBe(2);
   });
 
@@ -159,15 +164,15 @@ describe("weightedPipeline", () => {
     const result = weightedPipeline([]);
     expect(result.openLeads).toBe(0);
     expect(result.expectedAdmissions).toBe(0);
-    expect(result.byStage).toEqual([]);
+    expect(result.byTemperature).toEqual([]);
   });
 });
 
 describe("monthEndCeiling", () => {
   it("adds what is in hand to what has already happened", () => {
     const pipeline = weightedPipeline([
-      { leadId: "a", stageId: "s", stageName: "Demo", probability: 0.5 },
-      { leadId: "b", stageId: "s", stageName: "Demo", probability: 0.5 },
+      { leadId: "a", temperature: "hot", temperatureLabel: "Hot", probability: 0.5 },
+      { leadId: "b", temperature: "hot", temperatureLabel: "Hot", probability: 0.5 },
     ]);
     expect(monthEndCeiling(9, pipeline)).toBe(10);
   });

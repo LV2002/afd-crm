@@ -35,8 +35,8 @@ export default async function ImportLeadsPage() {
         <h1 className="text-2xl font-semibold">Import {leadPlural}</h1>
         <p className="text-sm text-muted-foreground">
           Upload a CSV, map its columns, and import. A repeat phone number is never dropped — it&apos;s attached
-          to the existing lead as a new enquiry instead. Assignment and stage are set automatically, same as any
-          other lead source.
+          to the existing lead as a new enquiry instead. Assignment is automatic and new leads start as Not contacted, same
+          as any other lead source.
         </p>
         {/*
           Offered before the upload control, because the question "what

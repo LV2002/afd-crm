@@ -39,7 +39,9 @@ import { getTerminologyMap } from "@/lib/terminology/get-terminology";
 
 import { ExportButton } from "./export-button";
 import { LeadFilters, type FilterFieldWithOptions } from "./lead-filters";
-import { DEAD_TEMPERATURE } from "@/lib/leads/no-longer-worked";
+import { unfinishedLeadsFilter } from "@/lib/leads/finished-filter";
+import { terminalValuesOf } from "@/lib/leads/temperature-kinds";
+import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 import { RememberLeadFilters } from "./remember-filters";
 import { RevealPhoneButton } from "./reveal-phone-button";
 
@@ -150,26 +152,20 @@ export default async function LeadsPage({
     .is("deleted_at", null);
   query = applyLeadFilters(query, filterableFields, filterValues);
   query = applyLeadDateFilters(query, dateFilters);
-  if (dateFilters.excludeTerminalStages) {
+  if (dateFilters.excludeFinished) {
     // "Overdue" means work somebody still owes a person. A student who
     // enrolled in March still carries February's follow-up date, and a
     // catch-up list that opens with twenty of them is not a catch-up
-    // list. Won and lost stages are the admin's own rows, read rather
-    // than assumed.
-    const { data: terminalStages } = await supabase
-      .from("pipeline_stages")
-      .select("id")
-      .in("stage_type", ["won", "lost"])
-      .returns<Array<{ id: string }>>();
-    const terminalIds = (terminalStages ?? []).map((stage) => stage.id);
-    if (terminalIds.length > 0) {
-      query = query.not("stage_id", "in", `(${terminalIds.join(",")})`);
-    }
-    // And Dead, for the same reason one step further on: the counsellor
-    // has already said they are not chasing this person. A catch-up list
-    // that keeps showing them is asking the same question every morning
-    // and being given the same answer.
-    query = query.or(`temperature.is.null,temperature.neq.${DEAD_TEMPERATURE}`);
+    // list. Which temperatures mean "finished" — Took admission and the
+    // closing outcomes — is the admin's own configuration, read rather
+    // than assumed. A counsellor marking someone Negative has said they are
+    // not chasing this person; a catch-up list that keeps showing them is
+    // asking the same question every morning and being given the same
+    // answer.
+    const unfinished = unfinishedLeadsFilter(
+      terminalValuesOf(await loadTemperatureOptions(supabase)),
+    );
+    if (unfinished) query = query.or(unfinished);
   }
   // Stripped before it reaches the filter expression: a comma in a search
   // box would otherwise open a second clause. See lib/db/filter-term.ts.
@@ -211,12 +207,13 @@ export default async function LeadsPage({
   const hasAnyFilter =
     Boolean(search) || Boolean(tagFilter) || dateFilters.active || Object.keys(filterValues).length > 0;
 
-  // The name leads the card and the stage sits opposite it; everything
-  // else the admin has put on the list follows as label-and-value pairs.
+  // The name leads the card and the temperature sits opposite it;
+  // everything else the admin has put on the list follows as
+  // label-and-value pairs.
   const nameField = listFields.find((field) => field.key === "student_name");
-  const stageField = listFields.find((field) => field.key === "stage_id");
+  const temperatureField = listFields.find((field) => field.key === "temperature");
   const cardFields = listFields.filter(
-    (field) => field.key !== "student_name" && field.key !== "stage_id",
+    (field) => field.key !== "student_name" && field.key !== "temperature",
   );
 
   const total = count ?? 0;
@@ -353,8 +350,8 @@ export default async function LeadsPage({
                     ? renderCell(nameField, row, optionsWithUsers, canRevealPhone, isDropped)
                     : null}
                 </div>
-                {stageField
-                  ? renderCell(stageField, row, optionsWithUsers, canRevealPhone, isDropped)
+                {temperatureField
+                  ? renderCell(temperatureField, row, optionsWithUsers, canRevealPhone, isDropped)
                   : null}
               </div>
               <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2">
@@ -439,7 +436,7 @@ function renderCell(
         </Link>
         {/*
           Beside the name, not in a column of its own: a dropped student
-          sits in the Won stage looking exactly like one still attending,
+          sits at Took admission looking exactly like one still attending,
           and whoever is scanning this list is reading names.
         */}
         {isDropped && (
@@ -452,8 +449,8 @@ function renderCell(
   }
 
   // A select whose chosen option has a colour draws as a coloured pill.
-  // Only when the colour exists, so this turns itself on for stage and
-  // temperature — which ship with colours — and for any dropdown an
+  // Only when the colour exists, so this turns itself on for
+  // temperature — which ships with colours — and for any dropdown an
   // admin colours later, while source, centre and course stay as plain
   // text rather than becoming a row of decorative badges.
   if (field.type === "select" && typeof value === "string") {

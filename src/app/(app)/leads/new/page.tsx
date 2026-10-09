@@ -35,7 +35,7 @@ export default async function NewLeadPage() {
       <div>
         <h1 className="text-2xl font-semibold">New {leadSingular}</h1>
         <p className="text-sm text-muted-foreground">
-          Assignment and stage are set automatically, same as any other lead source.
+          Assignment is automatic and the lead starts as Not contacted, same as any other lead source.
         </p>
       </div>
       <LeadCreateForm

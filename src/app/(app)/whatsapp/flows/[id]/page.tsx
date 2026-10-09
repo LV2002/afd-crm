@@ -16,7 +16,6 @@ import { db } from "@/lib/db/client";
 import {
   centers,
   leads,
-  pipelineStages,
   tags,
   whatsappFlowRuns,
   whatsappFlowSteps,
@@ -31,6 +30,7 @@ import {
   type FlowTrigger,
 } from "@/lib/whatsapp/flow-engine";
 import { templateBody, templatePlaceholderCount } from "@/lib/integrations/whatsapp/templates";
+import { loadTemperatureOptionsDirect } from "@/lib/leads/temperature-options-direct";
 import { createClient } from "@/lib/supabase/server";
 
 import { loadRuleOptions } from "@/app/(app)/settings/rules/load-options";
@@ -63,18 +63,14 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
   if (!flow) notFound();
 
   const supabase = await createClient();
-  const [stepRows, stageRows, tagRows, centerRows, templateResult, runRows, ruleOptions] =
+  const [stepRows, temperatureOptions, tagRows, centerRows, templateResult, runRows, ruleOptions] =
     await Promise.all([
       db
         .select()
         .from(whatsappFlowSteps)
         .where(eq(whatsappFlowSteps.flowId, id))
         .orderBy(asc(whatsappFlowSteps.position)),
-      db
-        .select({ id: pipelineStages.id, name: pipelineStages.name })
-        .from(pipelineStages)
-        .where(isNull(pipelineStages.deletedAt))
-        .orderBy(asc(pipelineStages.sortOrder)),
+      loadTemperatureOptionsDirect(),
       db
         .select({ id: tags.id, name: tags.name })
         .from(tags)
@@ -130,7 +126,18 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
   const lists: StepEditorLists = {
     templates,
     tags: tagRows,
-    stages: stageRows,
+    // What an automation may SET. Took admission needs a confirmed
+    // admission and a closing outcome that asks why needs a reason, and a
+    // step can supply neither — so they are not offered, rather than
+    // offered and then refused by the database at 3am.
+    statuses: temperatureOptions
+      .filter(
+        (option) =>
+          option.isActive &&
+          option.kind !== "won" &&
+          !(option.kind === "lost" && option.requiresReason),
+      )
+      .map((option) => ({ value: option.value, label: option.label })),
     positions: steps.map((step) => step.position),
   };
 
@@ -197,7 +204,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
             name: flow.name,
             description: flow.description ?? "",
             triggerType: flow.triggerType as FlowTrigger,
-            stageId: String(triggerConfig.stageId ?? ""),
+            temperature: String(triggerConfig.temperature ?? ""),
             tagId: String(triggerConfig.tagId ?? ""),
             keywords: Array.isArray(triggerConfig.keywords)
               ? (triggerConfig.keywords as string[]).join(", ")
@@ -205,7 +212,9 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
             centerId: flow.centerId ?? "",
             appliesTo: (flow.appliesTo as RuleConditions | null)?.all ?? [],
           }}
-          stages={stageRows}
+          statuses={temperatureOptions
+            .filter((option) => option.isActive)
+            .map((option) => ({ value: option.value, label: option.label }))}
           tags={tagRows}
           centers={centerRows}
           fields={ruleOptions.fields}

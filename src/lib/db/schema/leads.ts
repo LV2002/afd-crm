@@ -86,9 +86,28 @@ export const leads = pgTable(
 
     centerId: uuid("center_id").references(() => centers.id, { onDelete: "restrict" }),
     assignedTo: uuid("assigned_to").references(() => profiles.id, { onDelete: "set null" }),
+    /**
+     * @deprecated Retired by migration 0099. Funnel position is no longer a
+     * separate dimension: `temperature` is the one status. Kept (frozen at
+     * each lead's last stage) so that history is not destroyed in the same
+     * migration that stops using it — a later migration drops it once the
+     * new model has been seen working. Nothing may read or write it;
+     * tests/no-stage.spec.ts fails the build if anything does.
+     */
     stageId: uuid("stage_id").references(() => pipelineStages.id, { onDelete: "restrict" }),
 
-    /** FK to dropdown_options(category='temperature') by value — no hard FK, see dropdown_options. */
+    /**
+     * THE status. One of the values of the `temperature` dropdown — Not
+     * contacted, Contacted, Cold, Warm, Hot, Took admission, Future
+     * prospect, Negative, Wrong target, AFD India student, Joined
+     * competitor — each with a `kind` that drives behaviour (see
+     * lib/leads/temperature-kinds.ts). A `won` kind can only be set by
+     * confirming an admission: enforced by the `enforce_lead_status`
+     * trigger (migration 0099), not by application code.
+     *
+     * FK to dropdown_options(category='temperature') by value — no hard
+     * FK, see dropdown_options.
+     */
     temperature: text("temperature"),
     temperatureOverrideUntil: timestamp("temperature_override_until", { withTimezone: true }),
     /** Literal 'rule', or a profiles.id as text when a human set it. */
@@ -289,6 +308,9 @@ export const mergeReviewQueue = pgTable("merge_review_queue", {
 });
 
 /**
+ * @deprecated Retired by migration 0099 — superseded by `temperatureHistory`.
+ * Kept because it is the only record of where each lead used to be.
+ *
  * Written ONLY by a database trigger on leads.stage_id (docs/03-V1-AUDIT.md
  * D6) — v1 wrote this from one endpoint and missed every other path, so its
  * time-in-stage data was silently incomplete. Application code never
@@ -303,6 +325,29 @@ export const stageHistory = pgTable("stage_history", {
   toStage: uuid("to_stage")
     .notNull()
     .references(() => pipelineStages.id, { onDelete: "restrict" }),
+  changedBy: uuid("changed_by").references(() => profiles.id, { onDelete: "set null" }),
+  changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+  durationInPreviousSeconds: integer("duration_in_previous_seconds"),
+});
+
+/**
+ * Every change of a lead's status, written ONLY by the
+ * `write_temperature_history` trigger (migration 0099) — the same rule
+ * that governed `stage_history` for the same reason (docs/03-V1-AUDIT.md
+ * D6): a history written by application code is a history that every write
+ * path has to remember to write. There is no INSERT policy; the trigger is
+ * security definer.
+ *
+ * Feeds time-in-status (the SLA sweep's `in_status` measure) and the
+ * funnel reports.
+ */
+export const temperatureHistory = pgTable("temperature_history", {
+  id: idColumn(),
+  leadId: uuid("lead_id")
+    .notNull()
+    .references(() => leads.id, { onDelete: "cascade" }),
+  fromTemperature: text("from_temperature"),
+  toTemperature: text("to_temperature"),
   changedBy: uuid("changed_by").references(() => profiles.id, { onDelete: "set null" }),
   changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
   durationInPreviousSeconds: integer("duration_in_previous_seconds"),

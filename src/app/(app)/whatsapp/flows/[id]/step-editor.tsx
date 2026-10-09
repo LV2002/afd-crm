@@ -29,7 +29,7 @@ export const STEP_LABELS: Record<FlowStepKind, string> = {
   wait: "Wait",
   wait_for_reply: "Wait for their reply",
   add_tag: "Put a tag on them",
-  set_stage: "Move them to a stage",
+  set_temperature: "Change their temperature",
   notify_owner: "Tell their counsellor",
   stop: "Stop here",
 };
@@ -44,7 +44,8 @@ export interface StepTemplate {
 export interface StepEditorLists {
   templates: StepTemplate[];
   tags: Array<{ id: string; name: string }>;
-  stages: Array<{ id: string; name: string }>;
+  /** Only temperatures an automation may safely set — see the page that builds this. */
+  statuses: Array<{ value: string; label: string }>;
   /** Every step number in this flow, so a branch can only point somewhere real. */
   positions: number[];
 }
@@ -133,19 +134,22 @@ function StepConfig({
     );
   }
 
-  if (kind === "add_tag" || kind === "set_stage") {
-    const options = kind === "add_tag" ? lists.tags : lists.stages;
-    const key = kind === "add_tag" ? "tagId" : "stageId";
+  if (kind === "add_tag" || kind === "set_temperature") {
+    const options =
+      kind === "add_tag"
+        ? lists.tags.map((tag) => ({ value: tag.id, label: tag.name }))
+        : lists.statuses;
+    const key = kind === "add_tag" ? "tagId" : "temperature";
     return (
       <div className="flex flex-col gap-1">
         <Label className="text-xs text-muted-foreground">
-          {kind === "add_tag" ? "Tag" : "Stage"}
+          {kind === "add_tag" ? "Tag" : "Temperature"}
         </Label>
         <Combobox
           className="w-64"
           value={String(config[key] ?? "")}
           onChange={(value) => setConfig({ ...config, [key]: value })}
-          options={options.map((option) => ({ value: option.id, label: option.name }))}
+          options={options}
           placeholder="Pick one"
           searchPlaceholder="Type to search…"
         />

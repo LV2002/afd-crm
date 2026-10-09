@@ -9,7 +9,6 @@ function lead(overrides: Partial<MyDayLead> & Pick<MyDayLead, "id">): MyDayLead 
     studentName: "Test Student",
     primaryPhone: "+919847100000",
     temperature: null,
-    stageId: null,
     centerId: null,
     nextFollowupAt: null,
     slaBreached: false,

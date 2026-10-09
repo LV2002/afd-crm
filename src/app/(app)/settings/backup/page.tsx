@@ -103,7 +103,7 @@ export default async function BackupSettingsPage() {
           <Link href="/settings/config" className="underline">
             Config Export/Import
           </Link>{" "}
-          instead. That bundle is stages, roles, fields and rules only.
+          instead. That bundle is temperatures, roles, fields and rules only.
         </p>
       </section>
     </div>

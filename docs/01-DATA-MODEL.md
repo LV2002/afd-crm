@@ -77,7 +77,7 @@ field_definitions  entity ('lead'|'student'|'enrolment'), key, label, help_text,
                    is_required, is_active, sort_order, section,
                    show_in_list, show_in_filters, visible_to_roles uuid[],
                    editable_by_roles uuid[], is_core bool
-                   -- is_core: backed by a real column (name, phone, stage).
+                   -- is_core: backed by a real column (name, phone, temperature).
                    -- Non-core fields live in leads.custom jsonb.
 ```
 
@@ -99,39 +99,81 @@ dropdown_options   category, value, label, sort_order, is_active, color, metadat
                    -- can create a brand new list without a code change
 dropdown_categories key, label, is_system, allow_admin_edit
 
-pipeline_stages    name, sort_order, color, stage_type, is_active,
-                   probability numeric, sla_hours int,
-                   requires_reason bool, required_fields text[],
-                   auto_actions jsonb
-                   stage_type: new|normal|scheduled|enrolment_form|payment|won|lost|parked
+pipeline_stages    RETIRED (migration 0099). Left in place, unused — see "Temperature".
 ```
 
-`stage_type` is the one part of the pipeline that stays a fixed vocabulary — it drives
-behaviour (the lost-reason modal, the form link, the won calculation), so it maps to code.
-Everything else about a stage is free: name, order, colour, probability, SLA, which fields
-become mandatory to enter it.
+## Temperature — a lead's one status
 
-## Temperature
+**Replaced the pipeline stage on 2026-10-09** (`docs/DECISIONS.md`). `pipeline_stages`,
+`leads.stage_id` and `stage_history` still exist in the database, frozen at each lead's last
+stage, so that no history is destroyed in the same migration that stops using it; nothing
+reads or writes them, and `tests/no-stage.spec.ts` keeps it that way. A later migration drops
+them once the new model has been seen working.
 
-Also configurable. `leads.temperature` is a text reference into the `temperature`
-dropdown category, not an enum.
+`leads.temperature` is a text reference into the `temperature` dropdown category, not an
+enum, and it is the whole of "where is this lead".
 
 ```
 dropdown_options   category='temperature'
-                   value, label, color, sort_order,
-                   metadata: { rank: int, is_terminal: bool }
-                   -- ships as Hot / Warm / Cold / Dead. Rename them, add
-                   -- "Very Hot", drop one, reorder — all admin actions.
+                   value, label, color, sort_order, is_active
+                   metadata: {
+                     kind:            new | open | won | lost | parked
+                     probability:     0-100, weights the forecast
+                     requires_reason: bool   -- closing outcomes only
+                     interested:      bool   -- counts toward the dashboard figure
+                   }
+                   -- ships as: Not contacted, Contacted, Cold, Warm, Hot,
+                   -- Took admission, Future prospect, Negative, Wrong target,
+                   -- AFD India student, Joined competitor. Rename, recolour,
+                   -- reorder, add, switch off — all admin actions.
 
 temperature_rules  temperature_value, priority int, conditions jsonb, is_active
                    -- same JSONB condition grammar as assignment_rules.
-                   -- First match by priority wins. Evaluated nightly and on activity.
-                   -- e.g. replied within 48h AND stage rank >= 5 → 'hot'
+                   -- First match by priority wins; evaluated nightly.
+                   -- Only ever SETS a kind=open value, and only ever TOUCHES a
+                   -- lead whose current kind is open.
 ```
+
+### Behaviour hangs off `kind`, never off the label or the value
+
+| kind | meaning | queue / SLA | forecast |
+|---|---|---|---|
+| `new` | nobody has spoken to them. Every lead starts here. | yes | counted |
+| `open` | being worked | yes | counted |
+| `won` | **Took admission.** Set only by `confirmAdmission()`. | no — lead work stops | already an admission |
+| `parked` | not now, maybe later (Future prospect) | yes, for its follow-up date | left out |
+| `lost` | will not join (Negative, Wrong target, AFD India student, Joined competitor) | no | left out |
+
+An option with no kind is treated as `open` — the behaviour a plain temperature always had.
+
+### The rules the database enforces (`enforce_lead_status`, migration 0099)
+
+On any change of `temperature`, from any write path:
+
+1. A `won` status needs a non-deleted `enrolments` row for the lead. Without one it is refused.
+2. A lead whose admission is confirmed and not dropped cannot leave a `won` status. Dropping
+   the admission (Accounts) is the way out.
+3. A `lost` status with `requires_reason` needs `lost_reason`; `lost_at` is stamped. Leaving a
+   `lost` status clears `lost_reason`, `lost_reason_detail` and `lost_at`.
+
+An update that does not change the status is never refused, so a lead closed before these
+rules existed is not locked out of ordinary edits. `confirmAdmission()` inserts the enrolment
+first and sets the status second, in one transaction, so it passes its own gate.
+
+### Automatic moves
+
+- **Not contacted → Contacted** the first time any interaction is logged (same moment as
+  `first_response_at`), only if the lead is still of kind `new`.
+- **→ Took admission** when an admission is confirmed.
+- The nightly rules re-grade `open` leads and nothing else.
 
 `leads.temperature_override_until` still wins over any rule while it is in the future —
 a counsellor's manual judgement beats the engine for a configurable number of days
 (`org_settings.temperature_override_days`).
+
+`temperature_history` (`lead_id, from_temperature, to_temperature, changed_by, changed_at,
+duration_in_previous_seconds`) is written by a trigger and powers time-in-status for the
+SLA sweep's `in_status` measure.
 
 `metadata.is_terminal` is the only behavioural hook: terminal temperatures are excluded
 from active work queues and forecast. Everything else is presentation.
@@ -143,7 +185,7 @@ sla_policies       name, priority int, is_active,
                    applies_to jsonb,   -- same condition grammar; empty = applies to all
                                        -- e.g. source=Walk-in gets a 2h SLA,
                                        -- purchased database gets 72h
-                   measure text,       -- 'first_response' | 'next_followup' | 'in_stage'
+                   measure text,       -- 'first_response' | 'next_followup' | 'in_status'
                    target_hours int,
                    business_hours_only bool,
                    escalations jsonb
@@ -173,7 +215,7 @@ holidays — otherwise a Saturday-evening lead breaches its 24h SLA before anyon
 Both tables are admin-editable and per-centre.
 
 Multiple policies can exist. Highest `priority` whose `applies_to` matches wins;
-`pipeline_stages.sla_hours` overrides for time spent in that specific stage.      name, signal, condition jsonb, weight int, is_active
+The `in_status` measure counts time since the lead's temperature last changed.      name, signal, condition jsonb, weight int, is_active
                    -- replaces any hardcoded scoring function
 
 notification_rules event_key, role_ids uuid[], channels text[],
@@ -192,8 +234,8 @@ config_snapshots   name, version, payload jsonb, created_by, created_at
 ```
 
 Export bundles: `org_settings`, `terminology`, `roles`, `role_permissions`,
-`field_definitions`, `dropdown_categories`, `dropdown_options`, `pipeline_stages`,
-`assignment_rules`, `sla_policies`, `scoring_rules`, `notification_rules`,
+`field_definitions`, `dropdown_categories`, `dropdown_options` (which carries what each
+temperature means), `assignment_rules`, `sla_policies`, `scoring_rules`, `notification_rules`,
 `dashboard_layouts`, `enrolment_forms`, `fee_structures`, `promos`.
 
 Never exports: leads, students, payments, users, messages, audit log.
@@ -216,7 +258,8 @@ leads              lead_number bigserial (human ref)
                    first_touch_source, first_touch_sub_source, first_touch_campaign
                    last_touch_source,  last_touch_sub_source,  last_touch_campaign
                    gclid, fbclid, utm jsonb
-                   center_id, assigned_to, stage_id
+                   center_id, assigned_to
+                   stage_id             -- RETIRED, frozen, unused
                    temperature          -- FK to dropdown_options(category='temperature')
                    temperature_override_until timestamptz
                    temperature_set_by   -- 'rule' | user_id
@@ -287,10 +330,10 @@ Admin/co-admin only. The rule builder UI is a visual condition builder with a
 
 ## Activity
 
-`stage_history` is written by a **database trigger** on `leads.stage_id`, not by
-application code. V1 wrote it from one endpoint and missed every other path, so its
-time-in-stage data was silently incomplete and any funnel-velocity report built on it
-was wrong.
+`temperature_history` (and, before 2026-10-09, `stage_history`) is written by a **database
+trigger**, not by application code. V1 wrote it from one endpoint and missed every other
+path, so its time-in-stage data was silently incomplete and any funnel-velocity report built
+on it was wrong.
 
 ```
 interactions       lead_id, type, direction, occurred_at, duration_seconds,
@@ -300,9 +343,10 @@ interactions       lead_id, type, direction, occurred_at, duration_seconds,
 tasks              lead_id, assigned_to, due_at, type, title, notes,
                    status (open|done|cancelled), completed_at, completed_by
 
-stage_history      lead_id, from_stage, to_stage, changed_by, changed_at,
-                   duration_in_previous_seconds
-                   -- powers time-in-stage and funnel velocity reports
+temperature_history lead_id, from_temperature, to_temperature, changed_by,
+                   changed_at, duration_in_previous_seconds
+                   -- powers time-in-status for the SLA sweep and funnel reports
+stage_history      RETIRED — the record of where each lead used to be, kept, unused
 ```
 
 notifications      user_id, type, title, body, lead_id, is_read, read_at,
@@ -502,7 +546,7 @@ policy. One implementation, dozens of policies, no drift.
 Child tables (`interactions`, `whatsapp_messages`, `documents`, `tasks`, `enrolments`,
 `payments`) inherit visibility via `exists (select 1 from leads ...)` on `lead_id`.
 
-Configuration tables (`roles`, `pipeline_stages`, `field_definitions`, `dropdown_options`,
+Configuration tables (`roles`, `field_definitions`, `dropdown_options`,
 `assignment_rules`, `sla_policies`, `scoring_rules`, `notification_rules`,
 `dashboard_layouts`, `fee_structures`): select for all authenticated users — the app needs
 to render them — insert/update/delete gated on `settings.manage`, `roles.manage` or
@@ -540,8 +584,10 @@ dynamic roles don't survive that test, they aren't really dynamic.
 ## Indexes
 
 ```
-leads: (assigned_to, stage_id), (center_id, created_at desc), (next_followup_at)
-       (sla_breached) where sla_breached, (temperature, stage_id)
+leads: (assigned_to), (center_id, created_at desc), (next_followup_at)
+       (sla_breached) where sla_breached
+       -- no index on temperature: a few thousand rows, and the lists that filter
+       -- on it are always scoped by owner or centre first. Add one if it slows.
        gin on interested_exams, gin on custom
 lead_identifiers: (kind, value_normalised) unique partial
 enquiries: (lead_id, received_at desc), (source, received_at), (ad_id, received_at)

@@ -9,7 +9,7 @@ import {
   leadMerges,
   leads,
   mergeReviewQueue,
-  stageHistory,
+  temperatureHistory,
   tasks,
 } from "@/lib/db/schema";
 
@@ -32,7 +32,7 @@ export interface MergeLeadsInput {
  * different lead_id" as a caller-driven operation anyway.
  *
  * Every row that pointed at `mergedLeadId` now points at `survivorLeadId`
- * instead — enquiries, interactions, tasks, stage_history,
+ * instead — enquiries, interactions, tasks, temperature_history,
  * assignment_history, lead_identifiers (safe: two different leads can
  * never already hold the *same* (kind, value_normalised) pair, or they'd
  * already be one lead per lead_identifiers' own unique constraint). The
@@ -55,7 +55,10 @@ export async function mergeLeads(tx: DbExecutor, input: MergeLeadsInput): Promis
   await tx.update(enquiries).set({ leadId: survivorLeadId }).where(eq(enquiries.leadId, mergedLeadId));
   await tx.update(interactions).set({ leadId: survivorLeadId }).where(eq(interactions.leadId, mergedLeadId));
   await tx.update(tasks).set({ leadId: survivorLeadId }).where(eq(tasks.leadId, mergedLeadId));
-  await tx.update(stageHistory).set({ leadId: survivorLeadId }).where(eq(stageHistory.leadId, mergedLeadId));
+  await tx
+    .update(temperatureHistory)
+    .set({ leadId: survivorLeadId })
+    .where(eq(temperatureHistory.leadId, mergedLeadId));
   await tx
     .update(assignmentHistory)
     .set({ leadId: survivorLeadId })

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, gte, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { SessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
@@ -9,14 +9,15 @@ import {
   enrolments,
   leads,
   payments,
-  pipelineStages,
   profiles,
   targets,
   userCenters,
 } from "@/lib/db/schema";
 import { startOfMonthIST } from "@/lib/format/date";
+import { indexByValue, isClosedKind } from "@/lib/leads/temperature-kinds";
+import { loadTemperatureOptionsDirect } from "@/lib/leads/temperature-options-direct";
 
-import { stageProbability, weightedPipeline, type WeightedPipeline } from "./forecast";
+import { temperatureProbability, weightedPipeline, type WeightedPipeline } from "./forecast";
 import { reportScopeFor } from "./load-report-leads";
 
 /**
@@ -32,12 +33,11 @@ import { reportScopeFor } from "./load-report-leads";
  *
  * The weighted pipeline counts leads that could still become admissions.
  * A won lead has already been counted as an admission and would be
- * counted twice; a lost one is not coming back; a parked one is somebody
- * who told us to call next year, and treating them as 20%-likely this
- * month is how a forecast quietly inflates itself.
+ * counted twice; a lost one is not coming back; a future prospect is
+ * somebody who told us to call next year, and treating them as 15%-likely
+ * this month is how a forecast quietly inflates itself. Which temperatures
+ * those are is their `kind`, not their name.
  */
-
-const CLOSED_STAGE_TYPES: Array<"won" | "lost" | "parked"> = ["won", "lost", "parked"];
 
 export type TargetMetric = "leads" | "admissions" | "revenue";
 
@@ -58,8 +58,8 @@ export interface ForecastData {
   daysInMonth: number;
   rows: ForecastRow[];
   pipeline: WeightedPipeline;
-  /** True when a stage has no probability configured — the page says so rather than under-reporting. */
-  hasUnweightedStages: boolean;
+  /** True when a temperature has no probability configured — the page says so rather than under-reporting. */
+  hasUnweightedTemperatures: boolean;
 }
 
 function emptyTargets(): Record<TargetMetric, number | null> {
@@ -102,7 +102,7 @@ export async function loadForecast(user: SessionUser, now: Date): Promise<Foreca
     newLeads,
     admissions,
     collected,
-    openLeads,
+    scopedLeads,
     targetRows,
     centerRows,
     profileRows,
@@ -143,16 +143,13 @@ export async function loadForecast(user: SessionUser, now: Date): Promise<Foreca
       .where(and(leadScope, gte(payments.receivedAt, monthStart)))
       .groupBy(leads.centerId, leads.assignedTo),
 
+    // Every lead in scope; which are still "open" is decided below from
+    // the temperature's kind, which lives in a table this query does not
+    // need to join.
     db
-      .select({
-        leadId: leads.id,
-        stageId: leads.stageId,
-        stageName: pipelineStages.name,
-        probability: pipelineStages.probability,
-      })
+      .select({ leadId: leads.id, temperature: leads.temperature })
       .from(leads)
-      .innerJoin(pipelineStages, eq(pipelineStages.id, leads.stageId))
-      .where(and(leadScope, notInArray(pipelineStages.stageType, CLOSED_STAGE_TYPES))),
+      .where(leadScope),
 
     db
       .select({
@@ -272,13 +269,22 @@ export async function loadForecast(user: SessionUser, now: Date): Promise<Foreca
   for (const admission of admissions) add("admissions", admission.centerId, admission.ownerId, 1);
   for (const row of collected) add("revenue", row.centerId, row.ownerId, Number(row.amount ?? 0));
 
+  const statusByValue = indexByValue(await loadTemperatureOptionsDirect());
   const pipeline = weightedPipeline(
-    openLeads.map((lead) => ({
-      leadId: lead.leadId,
-      stageId: lead.stageId,
-      stageName: lead.stageName,
-      probability: stageProbability(lead.probability),
-    })),
+    scopedLeads
+      .filter((lead) => {
+        const status = lead.temperature ? statusByValue.get(lead.temperature) : undefined;
+        return !isClosedKind(status?.kind);
+      })
+      .map((lead) => {
+        const status = lead.temperature ? statusByValue.get(lead.temperature) : undefined;
+        return {
+          leadId: lead.leadId,
+          temperature: lead.temperature,
+          temperatureLabel: status?.label ?? lead.temperature ?? "No temperature",
+          probability: temperatureProbability(status?.probability ?? null),
+        };
+      }),
   );
 
   const order = { org: 0, center: 1, owner: 2 } as const;
@@ -291,6 +297,6 @@ export async function loadForecast(user: SessionUser, now: Date): Promise<Foreca
       (a, b) => order[a.kind] - order[b.kind] || a.label.localeCompare(b.label),
     ),
     pipeline,
-    hasUnweightedStages: pipeline.unweightedLeads > 0,
+    hasUnweightedTemperatures: pipeline.unweightedLeads > 0,
   };
 }

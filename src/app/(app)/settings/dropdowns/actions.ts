@@ -6,6 +6,8 @@ import { z } from "zod";
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { INTERESTED_METADATA_KEY } from "@/lib/leads/interested-temperature";
+import { kindOf } from "@/lib/leads/temperature-kinds";
+import { applyTemperatureMeaning, kindChangeError } from "@/lib/leads/temperature-metadata";
 import { createClient } from "@/lib/supabase/server";
 
 export interface OptionFormState {
@@ -53,6 +55,34 @@ export async function createOption(
     .select("id", { count: "exact", head: true })
     .eq("category", category);
 
+  /*
+    A new temperature must say what it MEANS. Without a kind it would
+    default to "being worked", which is a safe default but a silent one:
+    an admin adding "Called twice, no answer" probably does mean that, and
+    one adding "Enrolled elsewhere" certainly does not.
+
+    "Took admission" cannot be the kind of a NEW temperature. The only way
+    onto it is a confirmed admission, and a second option carrying it would
+    be a second door nobody asked for.
+  */
+  let metadata: Record<string, unknown> | undefined;
+  if (category === "temperature") {
+    const meaning = applyTemperatureMeaning(null, {
+      kind: String(formData.get("kind") ?? "open"),
+      probability: String(formData.get("probability") ?? ""),
+      requiresReason: formData.get("requiresReason") === "on",
+      interested: formData.get("interested") === "on",
+    });
+    if (!meaning.ok) return { error: meaning.error };
+    if (meaning.metadata.kind === "won") {
+      return {
+        error:
+          "A new temperature cannot be 'Took admission' — that status is reached only by confirming an admission, and the existing one already is.",
+      };
+    }
+    metadata = meaning.metadata;
+  }
+
   const { data, error } = await supabase
     .from("dropdown_options")
     .insert({
@@ -61,6 +91,7 @@ export async function createOption(
       label: parsed.data.label,
       color: parsed.data.color || null,
       sort_order: count ?? 0,
+      ...(metadata ? { metadata } : {}),
     })
     .select("id")
     .single();
@@ -93,8 +124,26 @@ export async function updateOption(
     return { error: "You don't have permission to do that." };
   }
 
+  const supabase = await createClient();
+
+  const { data: current } = await supabase
+    .from("dropdown_options")
+    .select("value, metadata")
+    .eq("id", optionId)
+    .maybeSingle<{ value: string; metadata: Record<string, unknown> | null }>();
+  if (!current) return { error: "That option no longer exists." };
+
+  /*
+    A temperature's VALUE is its identity, not a label.
+
+    Leads store the value ("took_admission"), and the status rules look
+    the kind up by it, so renaming one orphans every lead carrying the old
+    value and detaches it from its own rules. Nobody needs to rename it —
+    the label is what people read — so for temperatures the posted value
+    is ignored and the stored one kept.
+  */
   const parsed = optionSchema.safeParse({
-    value: formData.get("value"),
+    value: category === "temperature" ? current.value : formData.get("value"),
     label: formData.get("label"),
     color: formData.get("color"),
   });
@@ -102,31 +151,48 @@ export async function updateOption(
     return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
-  const supabase = await createClient();
-
   /*
     `metadata` is merged, never replaced.
 
-    The temperature options carry a `rank` the seed wrote, and other
-    categories may grow their own keys. Writing `{ interested: … }` over
-    the column would silently delete whatever else was in there — the
-    kind of data loss that shows up months later as a feature that
-    stopped working and nobody can say when.
+    The temperature options carry keys the seed wrote, and other
+    categories may grow their own. Writing a fresh object over the column
+    would silently delete whatever else was in there — the kind of data
+    loss that shows up months later as a feature that stopped working and
+    nobody can say when.
 
-    The checkbox only renders for the temperature category, so for every
-    other category this reads as "absent" and writes false, which is
-    both true and harmless.
+    For every category but temperature the only key written is the
+    `interested` flag, which reads as "absent" there and is harmless. For
+    temperature the whole meaning (kind, chance, reason) is validated
+    together — see lib/leads/temperature-metadata.ts.
   */
-  const { data: current } = await supabase
-    .from("dropdown_options")
-    .select("metadata")
-    .eq("id", optionId)
-    .maybeSingle<{ metadata: Record<string, unknown> | null }>();
+  let metadata: Record<string, unknown>;
+  if (category === "temperature") {
+    const meaning = applyTemperatureMeaning(current.metadata, {
+      kind: String(formData.get("kind") ?? ""),
+      probability: String(formData.get("probability") ?? ""),
+      requiresReason: formData.get("requiresReason") === "on",
+      interested: formData.get("interested") === "on",
+    });
+    if (!meaning.ok) return { error: meaning.error };
 
-  const metadata = {
-    ...(current?.metadata ?? {}),
-    [INTERESTED_METADATA_KEY]: formData.get("interested") === "on",
-  };
+    const oldKind = kindOf(current.metadata);
+    const newKind = kindOf(meaning.metadata);
+    if (oldKind !== newKind && (oldKind === "won" || newKind === "won")) {
+      const { count } = await supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("temperature", current.value)
+        .is("deleted_at", null);
+      const refusal = kindChangeError(oldKind, newKind, count ?? 0);
+      if (refusal) return { error: refusal };
+    }
+    metadata = meaning.metadata;
+  } else {
+    metadata = {
+      ...(current.metadata ?? {}),
+      [INTERESTED_METADATA_KEY]: formData.get("interested") === "on",
+    };
+  }
 
   const { error } = await supabase
     .from("dropdown_options")
@@ -152,8 +218,10 @@ export async function updateOption(
 
   revalidatePath(`/settings/dropdowns/${category}`);
   revalidatePath("/settings/temperatures");
-  // The dashboard's Interested tile reads this flag.
+  // The dashboard's Interested tile reads the flag, and every lead page and
+  // list reads the kind.
   revalidatePath("/dashboard");
+  revalidatePath("/leads");
   return { success: "Saved." };
 }
 
@@ -183,6 +251,38 @@ export async function deleteOption(optionId: string, category: string): Promise<
   }
 
   const supabase = await createClient();
+
+  /*
+    A temperature somebody is carrying cannot be deleted out from under
+    them.
+
+    The lead keeps the stored value, but the option is what gives it a
+    label, a colour and — above all — a KIND. Delete "Took admission" and
+    every confirmed admission is suddenly an unclassified lead; delete
+    "Negative" and every closed lead goes back to looking open. Switching
+    it off is the safe version: the leads keep it, new ones cannot be given
+    it, and it can be switched back on.
+  */
+  if (category === "temperature") {
+    const { data: option } = await supabase
+      .from("dropdown_options")
+      .select("value, label")
+      .eq("id", optionId)
+      .maybeSingle<{ value: string; label: string }>();
+    if (option) {
+      const { count } = await supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("temperature", option.value)
+        .is("deleted_at", null);
+      if ((count ?? 0) > 0) {
+        return {
+          error: `${count} lead${count === 1 ? " is" : "s are"} on "${option.label}". Switch it off instead — they keep it, but it can't be chosen for anyone else.`,
+        };
+      }
+    }
+  }
+
   // Soft delete (CLAUDE.md non-negotiable #5: nothing is hard-deleted) —
   // dropdown_options has a deleted_at column for exactly this. Also clears
   // is_active so the option stops appearing anywhere is_active=true is

@@ -18,6 +18,8 @@ import { captureError } from "@/lib/errors/capture";
 import { isFrameworkControlFlow } from "@/lib/errors/request-error";
 import { parseRupeesToPaise } from "@/lib/format/currency";
 import { needsFollowUp } from "@/lib/leads/interaction-follow-up";
+import { firstContactTemperature, indexByValue, valuesOfKinds } from "@/lib/leads/temperature-kinds";
+import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 import { temperatureOverrideFor } from "@/lib/leads/temperature-override";
 import { notify } from "@/lib/notifications/notify";
 import { startFlows } from "@/lib/whatsapp/flow-runner";
@@ -47,11 +49,10 @@ export async function updateLead(leadId: string, _prevState: FormState, formData
 
   const { data: existing, error: readError } = await supabase
     .from("leads")
-    .select("custom, temperature, primary_phone")
+    .select("custom, primary_phone")
     .eq("id", leadId)
     .maybeSingle<{
       custom: Record<string, unknown> | null;
-      temperature: string | null;
       primary_phone: string | null;
     }>();
 
@@ -113,16 +114,6 @@ export async function updateLead(leadId: string, _prevState: FormState, formData
   // count as a referral in the report and point the graph at a loop.
   if (coreUpdates.referred_by_lead_id === leadId) {
     return { error: "A lead can't be their own referrer." };
-  }
-
-  // A human changing `temperature` here is exactly the "counsellor's manual
-  // judgement" docs/01-DATA-MODEL.md § Temperature describes — it must beat
-  // the recompute cron for a configurable number of days, or the cron would
-  // silently overwrite this edit on its very next run. Only stamped on a
-  // genuine change (not a same-value re-submit of the whole form) so an
-  // unrelated field edit doesn't keep resetting the override window.
-  if ("temperature" in coreUpdates && coreUpdates.temperature !== existing?.temperature) {
-    Object.assign(coreUpdates, await temperatureOverrideFor(supabase, user.id));
   }
 
   /*
@@ -299,11 +290,18 @@ export async function logInteraction(leadId: string, _prevState: FormState, form
   // count from until this exists (docs/01-DATA-MODEL.md § SLA policies).
   // The `.is(...)` filter makes this a no-op on every later interaction:
   // once responded, this is set for good.
-  await supabase
+  const { data: firstResponse } = await supabase
     .from("leads")
     .update({ first_response_at: nowIso })
     .eq("id", leadId)
-    .is("first_response_at", null);
+    .is("first_response_at", null)
+    .select("id");
+
+  // The same moment, for the same reason: this is when somebody first
+  // spoke to them, so it is when "Not contacted" stops being true.
+  if (firstResponse && firstResponse.length > 0) {
+    await advanceFromNotContacted(supabase, leadId);
+  }
 
   await writeAuditLog(supabase, {
     actorId: user.id,
@@ -315,6 +313,50 @@ export async function logInteraction(leadId: string, _prevState: FormState, form
 
   revalidatePath(`/leads/${leadId}`);
   return { success: "Interaction logged." };
+}
+
+/**
+ * "Not contacted" stops being true the first time anybody logs an
+ * interaction, and nobody should have to remember to say so.
+ *
+ * Status and funnel position were separate columns, so a lead could sit at
+ * "Contacted" in the pipeline with nobody touching it. Now that one status
+ * carries both, a lead left at "Not contacted" after a ten-minute call is
+ * a lie on the dashboard and in the list — and the counsellor who just
+ * made the call is the person least likely to go and fix it.
+ *
+ * Tied to `first_response_at` rather than to every interaction, so
+ * "Contacted" and the dashboard's contacted figure can never disagree.
+ * Moves a lead only if it is still of kind `new`: a lead the counsellor
+ * has already marked Hot before logging the call must stay Hot, and the
+ * conditional update makes that true even if two interactions race.
+ *
+ * Best-effort by design. The interaction is already saved; failing to tidy
+ * the status must never be reported as failing to log the call.
+ */
+async function advanceFromNotContacted(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  leadId: string,
+): Promise<void> {
+  try {
+    const options = await loadTemperatureOptions(supabase);
+    const contacted = firstContactTemperature(options);
+    const startingValues = valuesOfKinds(options, ["new"]);
+    if (!contacted || startingValues.length === 0) return;
+
+    const { data: moved } = await supabase
+      .from("leads")
+      .update({ temperature: contacted.value, temperature_override_until: null, temperature_set_by: "system" })
+      .eq("id", leadId)
+      .in("temperature", startingValues)
+      .select("id");
+
+    if (moved && moved.length > 0) {
+      await startFlows("temperature_entered", { leadId, temperature: contacted.value });
+    }
+  } catch (error) {
+    await captureError({ source: "action:advanceFromNotContacted", error, context: { leadId } });
+  }
 }
 
 export async function createTask(leadId: string, _prevState: FormState, formData: FormData): Promise<FormState> {
@@ -607,44 +649,42 @@ async function runConfirmAdmission(
   });
 
   /*
-    The stage move is part of confirming an admission, and until now it
+    The status change is part of confirming an admission, and until now it
     was the only part that left no trace.
 
-    `confirmAdmission()` moves the lead into the stage marked Won, inside
-    the same transaction. But it wrote no audit row, so the lead's own
-    history showed an enrolment appearing and the stage changing by
-    itself; and it started no automations, so a sequence set up to fire on
-    "entered Admission Confirmed" never fired for the one event that
-    actually puts a lead there. Both are done here, after the commit, for
-    the same reason the notification is: they must describe an admission
-    that really happened.
+    `confirmAdmission()` moves the lead to "Took admission" inside the same
+    transaction. But it wrote no audit row, so the lead's own history
+    showed an enrolment appearing and the status changing by itself; and it
+    started no automations, so a sequence set up to fire on "entered Took
+    admission" never fired for the one event that actually puts a lead
+    there. Both are done here, after the commit, for the same reason the
+    notification is: they must describe an admission that really happened.
   */
-  if (result.wonStageId) {
+  if (result.statusChange) {
     await writeAuditLog(supabase, {
       actorId: user.id,
-      action: "lead.stage_change",
+      action: "lead.status_change",
       entityType: "leads",
       entityId: leadId,
-      before: { stage_id: lead.stageId },
-      after: { stage_id: result.wonStageId, reason: "admission confirmed" },
+      before: { temperature: result.statusChange.from },
+      after: { temperature: result.statusChange.to, reason: "admission confirmed" },
     });
 
-    await startFlows("stage_entered", { leadId, stageId: result.wonStageId });
+    await startFlows("temperature_entered", { leadId, temperature: result.statusChange.to });
   }
 
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/follow-ups");
 
   // Said plainly when it could not happen. An admission is recorded
-  // either way — refusing it over a pipeline setting would be absurd —
-  // but a counsellor who is not told will keep moving the lead by hand
-  // forever, and an administrator will never learn that one stage needs
-  // its type set.
-  return result.wonStageId
-    ? { success: "Admission confirmed, and the lead moved to the admission stage." }
+  // either way — refusing it over a settings problem would be absurd — but
+  // an administrator who is not told will never learn that no temperature
+  // is marked as the admission status.
+  return result.statusChange
+    ? { success: "Admission confirmed, and the lead's temperature is now Took admission." }
     : {
         success:
-          "Admission confirmed. The lead's stage was left as it was: no pipeline stage is marked as the admission stage, so there was nowhere to move it to. An admin can set one under Settings → Pipeline Stages by giving that stage the type \"Won\".",
+          "Admission confirmed. The lead's temperature was left as it was: no temperature is set up as the admission status, so there was nowhere to move it to. An admin can fix that under Settings → Temperatures by giving one the kind \"Took admission\".",
       };
 }
 
@@ -822,7 +862,7 @@ export async function deleteLead(
     action: "lead.delete",
     entityType: "leads",
     entityId: leadId,
-    before: { studentName: lead.studentName, stageId: lead.stageId, assignedTo: lead.assignedTo },
+    before: { studentName: lead.studentName, temperature: lead.temperature, assignedTo: lead.assignedTo },
     after: { deletedReason: reason },
   });
 
@@ -919,23 +959,33 @@ export async function restoreLead(_prev: FormState, formData: FormData): Promise
 }
 
 /**
- * Sets a lead's temperature from the bar at the top of their page.
+ * Sets a lead's status — its temperature — from the bar at the top of
+ * their page. This is now the only place a lead's position changes.
  *
- * Temperature is a column of its own, never derived from the stage
- * (CLAUDE.md non-negotiable #1), and this is the whole reason that
- * matters in practice: a counsellor who has just got off the phone knows
- * the lead is Hot while the stage is still Demo Scheduled. Before this
- * they had to open the edit form, change one dropdown among thirty and
- * press Save — so mostly they did not, and the temperature column slowly
- * stopped meaning anything.
+ * Temperature used to be one dimension and the pipeline stage another.
+ * Leon merged them: eleven values, one control, "I don't want stages
+ * anymore". So everything the stage move used to do happens here: a
+ * closing outcome that needs a reason asks for it, an automation hung off
+ * "entering" a status fires, and the move is audited.
  *
- * It stamps the same override window as the edit form does, through the
- * same helper: a judgement made here must survive the nightly recompute
- * exactly as one made there.
+ * ## "Took admission" is not something you can pick
+ *
+ * A lead can only reach it by confirming the admission — course, batch
+ * and fee — which is the one thing that makes it true. This action
+ * refuses the attempt with an instruction rather than a bare "no", and it
+ * is a courtesy, not the control: the `enforce_lead_status` trigger
+ * (migration 0099) refuses the same thing for every other write path, the
+ * edit form, an import, a script, a direct SQL session.
+ *
+ * It stamps the same override window as before, through the same helper,
+ * for the same reason: a judgement made here must survive the nightly
+ * recompute — but only for in-progress statuses, the only ones the
+ * recompute is allowed to touch.
  */
 export async function setLeadTemperature(
   leadId: string,
-  temperature: string | null,
+  temperature: string,
+  reason?: { lostReason?: string; lostReasonDetail?: string },
 ): Promise<FormState> {
   const user = await getCurrentUser();
   if (!user || !can(user, "lead.update")) {
@@ -951,32 +1001,55 @@ export async function setLeadTemperature(
     .maybeSingle<{ temperature: string | null }>();
   if (!existing) return { error: "That lead no longer exists." };
 
-  const next = temperature?.trim() || null;
+  const next = temperature.trim();
+  if (!next) return { error: "Choose a temperature." };
   // Not an error, and not a write either: re-pressing the button you are
   // already on must not keep pushing the override window forward.
   if (next === existing.temperature) return {};
 
-  const payload = {
+  const options = indexByValue(await loadTemperatureOptions(supabase));
+  const target = options.get(next);
+  if (!target || !target.isActive) return { error: "That temperature no longer exists." };
+
+  if (target.kind === "won") {
+    return {
+      error: `${target.label} is set by confirming the admission — fill in the course, batch and fee under Confirm admission, further down this page.`,
+    };
+  }
+
+  if (target.kind === "lost" && target.requiresReason && !reason?.lostReason) {
+    return { error: `A reason is required to mark a lead as ${target.label}.` };
+  }
+
+  const payload: Record<string, unknown> = {
     temperature: next,
-    ...(next === null
-      ? // Clearing it hands the lead back to the rules, which means
-        // clearing the override too — otherwise "no temperature" would be
-        // pinned for days as if somebody meant it.
-        { temperature_override_until: null, temperature_set_by: null }
-      : await temperatureOverrideFor(supabase, user.id)),
+    ...(target.kind === "open"
+      ? await temperatureOverrideFor(supabase, user.id)
+      : { temperature_override_until: null, temperature_set_by: user.id }),
   };
+  if (target.kind === "lost" && reason?.lostReason) {
+    payload.lost_reason = reason.lostReason;
+    payload.lost_reason_detail = reason.lostReasonDetail?.trim() || null;
+  }
+  // Moving anywhere that is not a lost outcome clears a stale lost_reason
+  // and lost_at: that is the database trigger's job, not this action's.
 
   const { error } = await supabase.from("leads").update(payload).eq("id", leadId);
   if (error) return { error: error.message };
 
   await writeAuditLog(supabase, {
     actorId: user.id,
-    action: "lead.update",
+    action: "lead.status_change",
     entityType: "leads",
     entityId: leadId,
     before: { temperature: existing.temperature },
     after: payload,
   });
+
+  // After the write and the audit row, and swallowing its own failures, so
+  // an automation can never be the reason a status change appears not to
+  // have worked.
+  await startFlows("temperature_entered", { leadId, temperature: next });
 
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/follow-ups");

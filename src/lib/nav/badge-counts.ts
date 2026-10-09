@@ -2,7 +2,9 @@ import "server-only";
 
 import { can, type SessionUser } from "@/lib/auth/session";
 import { startOfDayIST } from "@/lib/format/date";
-import { DEAD_TEMPERATURE } from "@/lib/leads/no-longer-worked";
+import { unfinishedLeadsFilter } from "@/lib/leads/finished-filter";
+import { terminalValuesOf } from "@/lib/leads/temperature-kinds";
+import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 import { createClient } from "@/lib/supabase/server";
 
 import { navBadgesFor, type NavBadgeCounts, type NavBadgeKey } from "./badge-permissions";
@@ -87,20 +89,13 @@ export async function getNavBadgeCounts(user: SessionUser): Promise<NavBadgeCoun
  * opens on "mine" for the same reason, and a badge that disagreed with
  * the screen it links to would be worse than no badge.
  *
- * The same three exclusions the screen makes, for the same reason —
- * won, lost and Dead. A student who enrolled in March still carries
+ * The same exclusion the screen makes, for the same reason — Took
+ * admission and the closing outcomes. A student who enrolled in March still carries
  * February's follow-up date, and a number that counts them can never be
  * worked down to zero, which is the one thing a badge must be able to do.
  */
 async function countOverdueFollowUps(supabase: Client, user: SessionUser): Promise<number> {
-  const { data: stages } = await supabase
-    .from("pipeline_stages")
-    .select("id, stage_type")
-    .returns<Array<{ id: string; stage_type: string }>>();
-
-  const terminal = (stages ?? [])
-    .filter((stage) => stage.stage_type === "won" || stage.stage_type === "lost")
-    .map((stage) => stage.id);
+  const unfinished = unfinishedLeadsFilter(terminalValuesOf(await loadTemperatureOptions(supabase)));
 
   let query = supabase
     .from("leads")
@@ -109,10 +104,7 @@ async function countOverdueFollowUps(supabase: Client, user: SessionUser): Promi
     .eq("assigned_to", user.id);
 
   query = query.lt("next_followup_at", startOfDayIST(new Date()).toISOString());
-  if (terminal.length > 0) {
-    query = query.not("stage_id", "in", `(${terminal.join(",")})`);
-  }
-  query = query.or(`temperature.is.null,temperature.neq.${DEAD_TEMPERATURE}`);
+  if (unfinished) query = query.or(unfinished);
 
   const { count } = await query;
   return count ?? 0;
@@ -121,19 +113,12 @@ async function countOverdueFollowUps(supabase: Client, user: SessionUser): Promi
 /**
  * Leads no rule matched and nobody has claimed.
  *
- * Terminal stages are excluded for the same reason the orphan queue itself
- * excludes them: a lead that is won or lost needs no owner, and counting
+ * Finished leads are excluded for the same reason the orphan queue itself
+ * excludes them: a lead that took admission or was lost needs no owner, and counting
  * one would put a number on the sidebar that cannot be worked down to zero.
  */
 async function countUnassignedLeads(supabase: Client): Promise<number> {
-  const { data: stages } = await supabase
-    .from("pipeline_stages")
-    .select("id, stage_type")
-    .returns<Array<{ id: string; stage_type: string }>>();
-
-  const terminal = (stages ?? [])
-    .filter((stage) => stage.stage_type === "won" || stage.stage_type === "lost")
-    .map((stage) => stage.id);
+  const unfinished = unfinishedLeadsFilter(terminalValuesOf(await loadTemperatureOptions(supabase)));
 
   let query = supabase
     .from("leads")
@@ -141,11 +126,9 @@ async function countUnassignedLeads(supabase: Client): Promise<number> {
     .is("assigned_to", null)
     .is("deleted_at", null);
 
-  // A lead with no stage at all is still unassigned work, so the filter has
-  // to keep nulls — `not in (…)` alone would drop them.
-  if (terminal.length > 0) {
-    query = query.or(`stage_id.is.null,stage_id.not.in.(${terminal.join(",")})`);
-  }
+  // A lead with no temperature at all is still unassigned work; the filter
+  // keeps nulls explicitly, since `not in (…)` alone would drop them.
+  if (unfinished) query = query.or(unfinished);
 
   const { count } = await query;
   return count ?? 0;
