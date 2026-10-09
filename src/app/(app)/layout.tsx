@@ -6,6 +6,7 @@ import { MobileNav } from "@/components/layout/mobile-nav";
 import { MobileNavWithBadges, SidebarWithBadges } from "@/components/layout/nav-with-badges";
 import { NotificationBell } from "@/components/layout/notification-bell";
 import { Sidebar } from "@/components/layout/sidebar";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { UserMenu } from "@/components/layout/user-menu";
 import { DocumentFooter, Letterhead } from "@/components/print/letterhead";
 import { Toaster } from "@/components/ui/toaster";
@@ -47,7 +48,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         Only from `md` up. Below that the sidebar is hidden and the
         header's mobile menu is the way around.
       */}
-      <aside className="hidden w-56 shrink-0 border-r bg-background md:sticky md:top-0 md:flex md:h-screen md:flex-col print:hidden">
+      <aside className="hidden w-56 shrink-0 border-r bg-card md:sticky md:top-0 md:flex md:h-screen md:flex-col print:hidden">
         <div className="shrink-0 border-b px-4 py-4">
           <span className="text-sm font-semibold">{brand.name}</span>
         </div>
@@ -74,7 +75,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         on its first real run.
       */}
       <div className="flex min-w-0 flex-1 flex-col print:block">
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-4 print:hidden">
+        {/*
+          `bg-card`, like the sidebar, against a page that is now tinted.
+          The chrome is one pale frame and the content area sits inside it —
+          which is what makes a card look like a card without every card
+          needing a heavier border. See globals.css.
+        */}
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b bg-card/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-card/80 sm:px-4 print:hidden">
           {/* Below `md` the sidebar is hidden and this is the only way to
               reach another screen. It was missing entirely. */}
           <Suspense fallback={<MobileNav items={navItems} userName={user.fullName} />}>
@@ -93,6 +100,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Suspense fallback={<div className="size-9" />}>
               <NotificationBell />
             </Suspense>
+            <ThemeToggle />
             <UserMenu user={user} />
           </div>
         </header>

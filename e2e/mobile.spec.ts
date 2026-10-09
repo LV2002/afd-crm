@@ -118,12 +118,55 @@ test.describe("at phone width", () => {
       await page.waitForLoadState("networkidle").catch(() => {});
       visited++;
 
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      );
+      /*
+        The number AND what caused it.
+
+        This reported "overflows by 173px" and nothing else, which cost
+        two rounds of guessing at the CSS from a transcript: with no
+        element named, the only way to find the culprit was to rebuild
+        candidate layouts offline and hope one of them reproduced. The
+        widest few elements past the right edge are nearly always the
+        answer, and they cost one more `evaluate` on a page that has
+        already been loaded.
+
+        Deepest-first, because an overflowing child drags every ancestor
+        out with it and the ancestors are the uninteresting half of the
+        list.
+      */
+      const measured = await page.evaluate(() => {
+        const limit = document.documentElement.clientWidth;
+        const overflow = document.documentElement.scrollWidth - limit;
+        const describe = (el: Element) => {
+          const depth = (function count(node: Element | null): number {
+            return node ? 1 + count(node.parentElement) : 0;
+          })(el);
+          const rect = el.getBoundingClientRect();
+          return { el, depth, right: Math.round(rect.right), width: Math.round(rect.width) };
+        };
+        const culprits = Array.from(document.querySelectorAll("body *"))
+          .map(describe)
+          .filter((row) => row.right > limit + 2)
+          .sort((a, b) => b.depth - a.depth || b.width - a.width)
+          .slice(0, 3)
+          .map(
+            (row) =>
+              `<${row.el.tagName.toLowerCase()}` +
+              `${row.el.id ? ` id="${row.el.id}"` : ""}` +
+              ` class="${(row.el.getAttribute("class") ?? "").slice(0, 120)}">` +
+              ` ${row.width}px wide, right edge ${row.right}px`,
+          );
+        return { overflow, culprits };
+      });
+
       // Two pixels of slack for sub-pixel rounding on borders, which is
       // not a layout anybody can see.
-      if (overflow > 2) tooWide.push(`${path} overflows by ${overflow}px`);
+      if (measured.overflow > 2) {
+        tooWide.push(
+          [`${path} overflows by ${measured.overflow}px`, ...measured.culprits.map((c) => `    ${c}`)].join(
+            "\n",
+          ),
+        );
+      }
 
       const hrefs = await page.locator("a[href]").evaluateAll((anchors) =>
         anchors.map((anchor) => (anchor as HTMLAnchorElement).getAttribute("href") ?? ""),

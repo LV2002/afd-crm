@@ -34,7 +34,22 @@ interface QuickLink {
   label: string;
   hint: string;
   icon: LucideIcon;
+  /**
+   * The kind of action, not decoration. Create, time-bound, record,
+   * browse — four kinds, four colours, so after a week somebody hits the
+   * right one by its colour and shape without reading the label. The
+   * label is still there, and still says the same thing, for the week
+   * before that and for anyone who does not see the difference.
+   */
+  tone: keyof typeof TONES;
 }
+
+const TONES = {
+  create: "border-primary/25 bg-primary-subtle text-primary-ink",
+  due: "border-warning/30 bg-warning-subtle text-warning-ink",
+  record: "border-info/25 bg-info-subtle text-info-ink",
+  browse: "border-border bg-muted text-muted-foreground",
+} as const;
 
 export function QuickLinksWidget({
   user,
@@ -54,6 +69,7 @@ export function QuickLinksWidget({
       label: `Add a ${leadSingular}`,
       hint: "A walk-in, or a call that came to you directly",
       icon: Plus,
+      tone: "create",
     });
   }
 
@@ -70,6 +86,7 @@ export function QuickLinksWidget({
         label: "Today's follow-ups",
         hint: "Overdue first, then what is due today",
         icon: CalendarClock,
+        tone: "due",
       },
       {
         // The interaction log lives on a lead, so there is no form to
@@ -79,12 +96,14 @@ export function QuickLinksWidget({
         label: "Log an interaction",
         hint: `Open a ${leadSingular} and use the log panel on the right`,
         icon: NotebookPen,
+        tone: "record",
       },
       {
         href: "/leads",
         label: `View all ${leadPlural}`,
         hint: "The full list, with every filter",
         icon: Users,
+        tone: "browse",
       },
     );
   }
@@ -105,9 +124,14 @@ export function QuickLinksWidget({
             <Link
               key={link.href}
               href={link.href}
-              className="flex items-start gap-3 rounded-md border p-3 transition-colors hover:bg-muted/50"
+              className="flex items-start gap-3 rounded-md border bg-card p-3 transition-colors hover:border-primary/40 hover:bg-primary-subtle/50"
             >
-              <link.icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span
+                className={`flex size-8 shrink-0 items-center justify-center rounded-md border ${TONES[link.tone]}`}
+                aria-hidden
+              >
+                <link.icon className="size-4" />
+              </span>
               <span className="min-w-0">
                 <span className="block text-sm font-medium">{link.label}</span>
                 <span className="block text-xs text-muted-foreground">{link.hint}</span>

@@ -30,15 +30,28 @@ export function Sidebar({ items, badges = {} }: { items: NavItem[]; badges?: Nav
               // 44px rows and 15px text: this is the control everybody uses
               // dozens of times a day, on every screen size.
               "flex min-h-11 items-center gap-2.5 rounded-md px-3 py-2 text-[0.9375rem] font-medium transition-colors",
+              // Filled, not washed. The active item was a 10% tint of the
+              // accent, which on a white sidebar is a difference you have
+              // to look for — and "where am I" should never be a question
+              // you have to look for the answer to. A solid chip is
+              // unmistakable at a glance and from across a desk.
               isActive
-                ? "bg-primary/10 text-primary"
-                : "text-foreground/80 hover:bg-accent hover:text-accent-foreground",
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-foreground/80 hover:bg-primary-subtle hover:text-primary-ink",
             )}
           >
             <Icon className="size-4 shrink-0" />
             <span className="min-w-0 truncate">{item.label}</span>
             {item.badgeKey && (
-              <NavBadge count={badges[item.badgeKey]} what={item.badgeWhat ?? "waiting"} />
+              <NavBadge
+                count={badges[item.badgeKey]}
+                what={item.badgeWhat ?? "waiting"}
+                // On the solid blue active row a solid red pill is red on
+                // blue, which is the one pairing that fights. Inverted —
+                // white pill, red figure — it is still unmistakably the
+                // red count and it is far easier to read.
+                className={isActive ? "bg-card text-destructive-ink" : undefined}
+              />
             )}
           </Link>
         );

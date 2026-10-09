@@ -24,7 +24,24 @@
      ───────────────────────────────────────────────────────────── */
   --radius: 0.625rem;
 
-  --background: oklch(0.994 0.002 255);
+  /* Native scrollbars, date pickers and <select> popups follow this, and
+     nothing else makes them match the theme. The inline script in the root
+     layout sets it too, before first paint; this is the fallback if that
+     script never runs. */
+  color-scheme: light;
+
+  /* A tint, not white. The page and the cards on it were both white, so
+     a card had only its hairline border to say it was a card — every
+     screen read as one undivided sheet. With the page cooler and darker,
+     a white card lifts off it by itself and the structure of a screen is
+     legible before you read a word of it.
+
+     Measured: 1.14:1 card-to-page, with body text still at 15.4:1 on
+     the page itself. Any darker and the page looks dirty rather than
+     tinted; any lighter and the cards stop separating, which is the
+     whole point. Dark mode does the same thing the other way — the page
+     steps DOWN away from the cards, to the same 1.14:1. */
+  --background: oklch(0.955 0.012 258);
   --foreground: oklch(0.215 0.021 258);
 
   --card: oklch(1 0 0);
@@ -35,7 +52,7 @@
   --primary: oklch(0.505 0.163 262);
   --primary-foreground: oklch(0.99 0.002 250);
 
-  --secondary: oklch(0.962 0.006 253);
+  --secondary: oklch(0.925 0.016 256);
   --secondary-foreground: oklch(0.27 0.023 258);
 
   --muted: oklch(0.966 0.005 253);
@@ -44,19 +61,59 @@
      roughly 7:1 and comfortable at every size the app uses. */
   --muted-foreground: oklch(0.472 0.021 256);
 
-  --accent: oklch(0.955 0.012 255);
+  /* The hover colour, which now has to register against BOTH a white
+     card and the tinted page — at its old 0.955 it was identical to the
+     new page lightness, so hovering anything that sits directly on the
+     page did nothing visible at all. */
+  --accent: oklch(0.928 0.017 255);
   --accent-foreground: oklch(0.27 0.023 258);
 
   --destructive: oklch(0.532 0.196 27);
   --destructive-foreground: oklch(0.99 0.002 250);
 
-  /* Meaning, not decoration: paid, needs attention, overdue. */
+  /* ─────────────────────────────────────────────────────────────
+     Meaning, not decoration: paid, needs attention, overdue.
+
+     Each hue now ships THREE tokens, because a figure needs all
+     three to be coloured honestly:
+
+       --x            the solid fill — buttons, dots, chart strokes
+       --x-subtle     a tinted surface a number can sit on
+       --x-ink        text dark enough to read ON that tint
+
+     The ink is a separate token rather than the solid colour used
+     as text because they have different jobs: `--warning` at 0.63
+     lightness is a correct amber fill and an illegible label. Every
+     subtle/ink pair here is measured rather than assumed: the
+     weakest in either mode is 6.6:1 and most are above 7:1, so
+     they are safe for the 12px labels this app uses as well as
+     for the figures.
+
+     `--info` is the one new hue. It is not a fifth status: it marks
+     a count that is simply in flight — active, in progress, neither
+     good nor bad — which was previously indistinguishable from the
+     accent used for "press this".
+     ───────────────────────────────────────────────────────────── */
+  --destructive-subtle: oklch(0.948 0.034 27);
+  --destructive-ink: oklch(0.452 0.182 27);
+
   --success: oklch(0.523 0.122 156);
   --success-foreground: oklch(0.99 0.002 250);
   --success-subtle: oklch(0.945 0.038 156);
+  --success-ink: oklch(0.414 0.105 156);
+
   --warning: oklch(0.63 0.135 70);
   --warning-foreground: oklch(0.21 0.03 70);
   --warning-subtle: oklch(0.958 0.048 82);
+  --warning-ink: oklch(0.438 0.105 62);
+
+  --info: oklch(0.523 0.106 221);
+  --info-foreground: oklch(0.99 0.002 250);
+  --info-subtle: oklch(0.942 0.037 221);
+  --info-ink: oklch(0.424 0.094 221);
+
+  --primary-subtle: oklch(0.941 0.039 262);
+  --primary-ink: oklch(0.424 0.148 262);
 
   --border: oklch(0.898 0.008 253);
   --input: oklch(0.878 0.009 253);
@@ -88,7 +145,9 @@
 }
 
 .dark {
-  --background: oklch(0.191 0.016 259);
+  color-scheme: dark;
+
+  --background: oklch(0.172 0.016 259);
   --foreground: oklch(0.955 0.005 250);
 
   --card: oklch(0.234 0.018 259);
@@ -110,13 +169,29 @@
 
   --destructive: oklch(0.665 0.176 26);
   --destructive-foreground: oklch(0.16 0.02 26);
+  /* Subtle surfaces go DARKER here, not lighter, and the ink goes
+     lighter — the light-mode pair inverted lands outside the dark
+     lightness band and stops being either legible or the same hue. */
+  --destructive-subtle: oklch(0.306 0.062 26);
+  --destructive-ink: oklch(0.792 0.128 26);
 
   --success: oklch(0.68 0.126 158);
   --success-foreground: oklch(0.16 0.03 158);
   --success-subtle: oklch(0.29 0.05 158);
+  --success-ink: oklch(0.806 0.102 158);
+
   --warning: oklch(0.76 0.128 76);
   --warning-foreground: oklch(0.18 0.03 76);
   --warning-subtle: oklch(0.31 0.05 76);
+  --warning-ink: oklch(0.856 0.102 76);
+
+  --info: oklch(0.69 0.104 221);
+  --info-foreground: oklch(0.16 0.03 221);
+  --info-subtle: oklch(0.302 0.05 221);
+  --info-ink: oklch(0.812 0.086 221);
+
+  --primary-subtle: oklch(0.308 0.058 262);
+  --primary-ink: oklch(0.788 0.112 262);
 
   --border: oklch(1 0 0 / 13%);
   --input: oklch(1 0 0 / 18%);
@@ -157,12 +232,22 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-destructive-subtle: var(--destructive-subtle);
+  --color-destructive-ink: var(--destructive-ink);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-success-subtle: var(--success-subtle);
+  --color-success-ink: var(--success-ink);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-warning-subtle: var(--warning-subtle);
+  --color-warning-ink: var(--warning-ink);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-subtle: var(--info-subtle);
+  --color-info-ink: var(--info-ink);
+  --color-primary-subtle: var(--primary-subtle);
+  --color-primary-ink: var(--primary-ink);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
