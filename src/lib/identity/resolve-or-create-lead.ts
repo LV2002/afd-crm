@@ -20,6 +20,13 @@ export interface ResolveLeadInput {
   source: string;
   subSource?: string | null;
   campaignId?: string | null;
+  /**
+   * The paid platform whose spend this enquiry should count against,
+   * when the caller knows. Only the custom-webhook handler sets it: the
+   * Meta and Google webhooks write their platform as the source, which
+   * Ad Performance already matches on.
+   */
+  adPlatform?: string | null;
   adsetId?: string | null;
   adId?: string | null;
   utm?: Record<string, unknown> | null;
@@ -356,6 +363,7 @@ async function resolveOrCreateLeadInTransaction(
           campaignId: input.campaignId,
           adsetId: input.adsetId,
           adId: input.adId,
+          adPlatform: input.adPlatform,
           utm: input.utm,
           gclid: input.gclid,
           fbclid: input.fbclid,
@@ -481,6 +489,7 @@ async function resolveOrCreateLeadInTransaction(
         campaignId: input.campaignId,
         adsetId: input.adsetId,
         adId: input.adId,
+        adPlatform: input.adPlatform,
         utm: input.utm,
         gclid: input.gclid,
         fbclid: input.fbclid,

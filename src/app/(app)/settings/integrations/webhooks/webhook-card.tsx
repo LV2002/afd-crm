@@ -36,6 +36,8 @@ export interface CustomWebhookView {
   centerId: string | null;
   signingSecret: string;
   authToken: string | null;
+  /** `google`, `meta`, or null when the feed is not paid advertising. */
+  adPlatform: string | null;
   requireSignature: boolean;
   aliasText: string;
   isActive: boolean;
@@ -161,6 +163,11 @@ export function WebhookCard({
               about, so it says the weaker thing instead of the alarming
               one.
             */}
+            {webhook.adPlatform && (
+              <Badge variant="outline">
+                {webhook.adPlatform === "google" ? "Google Ads" : "Meta Ads"}
+              </Badge>
+            )}
             {!webhook.requireSignature &&
               (webhook.authToken ? (
                 <Badge variant="secondary">Key only</Badge>
@@ -288,6 +295,25 @@ export function WebhookCard({
                 />
                 <p className="text-xs text-muted-foreground">
                   Used when the sender does not name the form itself.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor={`platform-${webhook.id}`}>Paid advertising</Label>
+                <select
+                  id={`platform-${webhook.id}`}
+                  name="adPlatform"
+                  defaultValue={webhook.adPlatform ?? ""}
+                  className="h-9 rounded-md border bg-transparent px-3 text-sm"
+                >
+                  <option value="">Not an ad platform</option>
+                  <option value="google">Google Ads</option>
+                  <option value="meta">Meta Ads</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Set this for a lead form run by Google or Meta, and Ad Performance counts these
+                  leads against that platform&apos;s spend. Saving also attributes the ones already
+                  received. They still need a numeric campaign id —{" "}
+                  <code className="font-mono">utm_campaign</code> from the Final URL suffix.
                 </p>
               </div>
               <div className="flex flex-col gap-2">

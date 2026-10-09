@@ -2,15 +2,24 @@
 
 import { randomBytes } from "node:crypto";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { customWebhooks, dropdownOptions } from "@/lib/db/schema";
+import { customWebhooks, dropdownOptions, enquiries } from "@/lib/db/schema";
 import { ALIASES } from "@/lib/integrations/form-payload/map-fields";
 import { createClient } from "@/lib/supabase/server";
+
+/**
+ * The platforms whose spend Ad Performance can join to.
+ *
+ * Exactly `ad_spend_daily.platform`'s values. Not a free-text box: a
+ * typo here would silently detach a campaign's leads from its spend,
+ * and the report would show the two side by side as unrelated rows.
+ */
+const AD_PLATFORMS = ["google", "meta"];
 
 export interface WebhookFormState {
   error?: string;
@@ -100,6 +109,8 @@ export async function saveCustomWebhook(
   const centerId = String(formData.get("centerId") ?? "").trim() || null;
   const requireSignature = formData.get("requireSignature") === "on";
   const wantsAuthToken = formData.get("requireAuthToken") === "on";
+  const adPlatformRaw = String(formData.get("adPlatform") ?? "").trim();
+  const adPlatform = AD_PLATFORMS.includes(adPlatformRaw) ? adPlatformRaw : null;
 
   if (!name) return { error: "Give it a name you will recognise in six months." };
   if (!source) return { error: "Give it a source name — it is what the reports group by." };
@@ -133,10 +144,36 @@ export async function saveCustomWebhook(
           the box means.
         */
         authToken: wantsAuthToken ? (existing.authToken ?? token()) : null,
+        adPlatform,
         fieldAliases: aliases.value,
         updatedAt: new Date(),
       })
       .where(eq(customWebhooks.id, id));
+
+    /*
+      Catch up the enquiries this endpoint has already written.
+
+      Without this, turning the setting on would attribute next week's
+      leads and leave last week's invisible — the report would show a
+      campaign's spend against a fraction of what it produced, which is
+      worse than showing none of it. Matched on the source, which is
+      exact rather than a guess: this endpoint stamps that same string
+      on every enquiry it creates.
+
+      Only rows with no platform yet, so an endpoint whose source was
+      later reused cannot overwrite an attribution something else made.
+      Clearing the setting clears them back, for the same reason: the
+      figures should follow the decision both ways.
+    */
+    await db
+      .update(enquiries)
+      .set({ adPlatform })
+      .where(
+        and(
+          eq(enquiries.source, source),
+          adPlatform === null ? isNotNull(enquiries.adPlatform) : isNull(enquiries.adPlatform),
+        ),
+      );
   } else {
     await db.insert(customWebhooks).values({
       name,
@@ -147,6 +184,7 @@ export async function saveCustomWebhook(
       signingSecret: token(),
       requireSignature,
       authToken: wantsAuthToken ? token() : null,
+      adPlatform,
       fieldAliases: aliases.value,
       createdBy: user.id,
     });
@@ -168,11 +206,21 @@ export async function saveCustomWebhook(
     entityId: id ?? undefined,
     // Whether a key is expected, never the key. An audit row is read by
     // people and kept for ever.
-    after: { name, source, subSource, centerId, requireSignature, hasAuthToken: wantsAuthToken },
+    after: {
+      name,
+      source,
+      subSource,
+      centerId,
+      requireSignature,
+      hasAuthToken: wantsAuthToken,
+      adPlatform,
+    },
   });
 
   revalidatePath("/settings/integrations/webhooks");
   revalidatePath("/settings/integrations");
+  // Ad Performance reads the attribution this just changed.
+  revalidatePath("/marketing");
   return { success: id ? `Saved ${name}.` : `Created ${name}. Its URL is below.` };
 }
 

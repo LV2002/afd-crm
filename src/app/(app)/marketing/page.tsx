@@ -307,6 +307,7 @@ export default async function MarketingPage({
               leadId: enquiries.leadId,
               source: enquiries.source,
               campaignId: enquiries.campaignId,
+              adPlatform: enquiries.adPlatform,
             })
             .from(enquiries)
             .where(inArray(enquiries.leadId, leadIds))

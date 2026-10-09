@@ -195,6 +195,10 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
       // Same reason as the website webhook: without a campaign id the
       // leads an ad produced cannot be shown against what it cost.
       ...adIdentifiersFrom(mapped.lead.utm),
+      // Set only when the admin has said this feed is paid advertising.
+      // It is what lets a Google Ads lead form reach Ad Performance
+      // despite its source reading "Google Ads" rather than "google".
+      adPlatform: webhook.adPlatform,
       raw: mapped.lead.raw,
       dedupeKey: externalId,
     });

@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { INTERESTED_METADATA_KEY } from "@/lib/leads/interested-temperature";
 import { createClient } from "@/lib/supabase/server";
 
 export interface OptionFormState {
@@ -102,9 +103,39 @@ export async function updateOption(
   }
 
   const supabase = await createClient();
+
+  /*
+    `metadata` is merged, never replaced.
+
+    The temperature options carry a `rank` the seed wrote, and other
+    categories may grow their own keys. Writing `{ interested: … }` over
+    the column would silently delete whatever else was in there — the
+    kind of data loss that shows up months later as a feature that
+    stopped working and nobody can say when.
+
+    The checkbox only renders for the temperature category, so for every
+    other category this reads as "absent" and writes false, which is
+    both true and harmless.
+  */
+  const { data: current } = await supabase
+    .from("dropdown_options")
+    .select("metadata")
+    .eq("id", optionId)
+    .maybeSingle<{ metadata: Record<string, unknown> | null }>();
+
+  const metadata = {
+    ...(current?.metadata ?? {}),
+    [INTERESTED_METADATA_KEY]: formData.get("interested") === "on",
+  };
+
   const { error } = await supabase
     .from("dropdown_options")
-    .update({ value: parsed.data.value, label: parsed.data.label, color: parsed.data.color || null })
+    .update({
+      value: parsed.data.value,
+      label: parsed.data.label,
+      color: parsed.data.color || null,
+      metadata,
+    })
     .eq("id", optionId);
 
   if (error) {
@@ -116,11 +147,13 @@ export async function updateOption(
     action: "dropdown_option.update",
     entityType: "dropdown_options",
     entityId: optionId,
-    after: parsed.data,
+    after: { ...parsed.data, metadata },
   });
 
   revalidatePath(`/settings/dropdowns/${category}`);
   revalidatePath("/settings/temperatures");
+  // The dashboard's Interested tile reads this flag.
+  revalidatePath("/dashboard");
   return { success: "Saved." };
 }
 

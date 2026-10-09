@@ -116,6 +116,18 @@ else — the screen says so when you leave the conditions empty.
 Remember the override window: a manual temperature beats the rules for a
 few days (Settings → Organisation sets how many), then the rules resume.
 
+**Which temperatures count as "interested"** is set per value, under
+**Settings → Dropdowns → Temperature**: each one has a **Counts as
+interested** tickbox beside its name. The counsellor dashboard's
+**Interested** tile counts leads still being worked whose temperature is
+ticked, and the card names the ones it counted so you can see at a
+glance whether a new value has been missed.
+
+Hot and Warm ship ticked; Cold and Dead do not. Add a temperature and
+it starts unticked — tick it if it belongs. If nothing is ticked the
+tile reads zero rather than falling back to a built-in list, because a
+screen that overrules the person configuring it is worse than a zero.
+
 ### Settings → Assignment Rules
 Who gets a new lead. **This is the screen that stops leads going
 unassigned.**
@@ -507,6 +519,28 @@ has all four ready to copy:
 | Payload / body / sample request | **Sample payload** |
 | API key / auth key / header value | **Authentication key** (after step 7) |
 | Expected response / success condition | **Expected response** — `{"ok": true}` with HTTP 200 |
+
+**If the feed is a Google or Meta lead form, set Paid advertising.** On
+the card, under **Set up**, there is a **Paid advertising** dropdown:
+*Not an ad platform*, *Google Ads*, *Meta Ads*. Setting it makes Ad
+Performance count these leads against that platform's spend, so cost per
+lead and return on ad spend include them.
+
+It is a separate setting from the source name on purpose. The source is
+what the reports group by and you can call it anything — *Google Ads*,
+*Google search NIFT*. Ad Performance will not guess the platform from
+that label, because a report that guesses about money from a display
+name eventually guesses wrong.
+
+Two things to know:
+
+- **Saving also attributes the leads already received** through that
+  endpoint, so last week's leads appear too rather than only next
+  week's. Clearing the setting removes the attribution again.
+- **A platform alone is not enough.** The lead still needs a numeric
+  campaign id, which comes from `utm_campaign={campaignid}` in the
+  Google Ads Final URL suffix — see `docs/GOOGLE-ADS-SETUP.md`. A
+  campaign *name* cannot be matched to spend.
 
 The sample payload is generated from what the CRM actually understands
 rather than written out by hand, so it cannot drift out of date. Paste it

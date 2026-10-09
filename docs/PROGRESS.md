@@ -8408,3 +8408,30 @@ wrong questions, and the right-hand column is the wrong thing entirely.
 
 Stubbed: nothing. **1724 tests pass** (14 added, one layout spec updated), typecheck, lint,
 `db:audit` and build clean.
+
+## Session 64 — two settings, and a paid feed nobody could see
+
+- **"Interested" is a tickbox now.** `dropdown_options.metadata.interested`, edited per value
+  under Settings → Dropdowns → Temperature, read by the dashboard tile. Migration 0096 ticks Hot
+  and Warm (and Very Hot where it exists) so an existing instance reads the same number it did
+  yesterday, and `metadata` is merged rather than replaced so the seed's `rank` survives. No
+  fallback when nothing is ticked: the tile reads zero rather than overruling the admin.
+  `buildCounsellorScoreboard` takes the set as input, so the module stays pure.
+- **A custom webhook can declare itself paid advertising.** Migration 0097 adds
+  `custom_webhooks.ad_platform` and `enquiries.ad_platform`; the handler stamps one onto the
+  other, and `attributeLeads()` prefers the stated platform over the source match. This is the
+  fix for Leon's Google Ads lead form, whose source reads "Google Ads" and which Ad Performance
+  could not see at all. Saving backfills the enquiries that endpoint already wrote, matched on
+  its own source string; clearing it reverses them.
+- The source match is untouched, because every historic row from the built-in Meta and Google
+  webhooks depends on it, and a platform still attributes nothing without a numeric campaign id.
+
+**Answered without code**, for the record: leads already go back to both platforms nightly as
+**"AFD India CRM — consented leads"** (Meta Custom Audience, Google Customer Match), a real
+two-way diff through `ad_audience_members`, hourly, within a 180-day window of the later of
+arrival and last activity. Eligibility needs consent given, not do-not-contact, no opted-out
+channel, and a phone or email. Admissions also go back to Google Ads as offline conversions
+keyed on gclid, nightly — which is the cross-check between CRM admissions and Google's own
+reporting.
+
+Stubbed: nothing. **1733 tests pass** (9 added), typecheck, lint, `db:audit` and build clean.

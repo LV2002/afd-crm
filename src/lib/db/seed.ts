@@ -303,10 +303,13 @@ const DROPDOWN_SEEDS: DropdownSeed[] = [
     label: "Temperature",
     isSystem: true,
     options: [
-      { value: "hot", label: "Hot", color: "#dc2626", metadata: { rank: 4, is_terminal: false } },
-      { value: "warm", label: "Warm", color: "#f97316", metadata: { rank: 3, is_terminal: false } },
-      { value: "cold", label: "Cold", color: "#0ea5e9", metadata: { rank: 2, is_terminal: false } },
-      { value: "dead", label: "Dead", color: "#6b7280", metadata: { rank: 1, is_terminal: true } },
+      // `interested` drives the dashboard's Interested tile and is an
+      // admin's to change under Settings → Dropdowns → Temperature.
+      // Migration 0096 sets the same values on an existing instance.
+      { value: "hot", label: "Hot", color: "#dc2626", metadata: { rank: 4, is_terminal: false, interested: true } },
+      { value: "warm", label: "Warm", color: "#f97316", metadata: { rank: 3, is_terminal: false, interested: true } },
+      { value: "cold", label: "Cold", color: "#0ea5e9", metadata: { rank: 2, is_terminal: false, interested: false } },
+      { value: "dead", label: "Dead", color: "#6b7280", metadata: { rank: 1, is_terminal: true, interested: false } },
     ],
   },
   {

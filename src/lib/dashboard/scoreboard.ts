@@ -23,8 +23,6 @@
  * support.
  */
 
-import { isInterestedTemperature } from "@/lib/leads/interested-temperature";
-
 export interface ScoreboardLead {
   id: string;
   assignedTo: string | null;
@@ -177,6 +175,21 @@ export function buildCounsellorScoreboard(input: {
   enrolments: readonly ScoreboardEnrolment[];
   stages: readonly StageInfo[];
   boundaries: Boundaries;
+  /**
+   * Which temperature values an admin has marked as "interested"
+   * (`dropdown_options.metadata.interested`). Passed in rather than
+   * looked up, so this module stays pure — and so the rule stays a
+   * configuration question answered by the caller rather than a list
+   * buried in the arithmetic.
+   *
+   * Empty means nothing is ticked and the figure is zero, which is the
+   * honest answer to "count the temperatures I marked" when none are.
+   *
+   * Optional because only the counsellor dashboard reads the figure it
+   * feeds; the centre and team builders forward whatever they were
+   * given, so a caller that starts showing it only has to add it once.
+   */
+  interestedTemperatures?: ReadonlySet<string>;
 }): CounsellorScoreboard {
   const { startOfToday, startOfTomorrow, startOfMonth, startOfPreviousMonth, startOfCycleYear } =
     input.boundaries;
@@ -224,7 +237,9 @@ export function buildCounsellorScoreboard(input: {
       (lead) =>
         lead.nextFollowupAt && new Date(lead.nextFollowupAt).getTime() < startOfToday.getTime(),
     ).length,
-    interested: activeThisYear.filter((lead) => isInterestedTemperature(lead.temperature)).length,
+    interested: activeThisYear.filter(
+      (lead) => lead.temperature !== null && (input.interestedTemperatures?.has(lead.temperature) ?? false),
+    ).length,
     // By confirmation date, not by when the lead arrived: an admission
     // confirmed in June on a lead from March is June's work.
     enrolments: input.enrolments.filter(
@@ -320,6 +335,8 @@ export function buildTeamScoreboard(input: {
   enrolments: readonly ScoreboardEnrolment[];
   stages: readonly StageInfo[];
   boundaries: Boundaries;
+  /** Forwarded to each member's scoreboard — see buildCounsellorScoreboard. */
+  interestedTemperatures?: ReadonlySet<string>;
 }): TeamMemberRow[] {
   const leadsByOwner = new Map<string, ScoreboardLead[]>();
   for (const lead of input.leads) {
@@ -336,6 +353,7 @@ export function buildTeamScoreboard(input: {
       scoreboard: buildCounsellorScoreboard({
         leads: leadsByOwner.get(member.userId) ?? [],
         enrolments: input.enrolments,
+        interestedTemperatures: input.interestedTemperatures,
         stages: input.stages,
         boundaries: input.boundaries,
       }),

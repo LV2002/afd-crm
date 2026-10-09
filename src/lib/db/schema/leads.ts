@@ -229,6 +229,15 @@ export const enquiries = pgTable("enquiries", {
   campaignId: text("campaign_id"),
   adsetId: text("adset_id"),
   adId: text("ad_id"),
+  /**
+   * Which paid platform's spend this enquiry belongs to, when it is paid
+   * at all. Null for everything that is not advertising, and null for
+   * the built-in Meta and Google webhooks, whose `source` already says
+   * which platform they are. Set from `custom_webhooks.ad_platform` so a
+   * Google Ads feed wired up as a custom endpoint is attributed without
+   * the report having to guess from a display name.
+   */
+  adPlatform: text("ad_platform"),
   utm: jsonb("utm").$type<Record<string, unknown>>(),
   gclid: text("gclid"),
   fbclid: text("fbclid"),

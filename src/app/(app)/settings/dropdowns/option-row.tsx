@@ -16,7 +16,19 @@ export interface OptionRowData {
   label: string;
   color: string | null;
   is_active: boolean;
+  /** `metadata.interested` — only meaningful for the temperature category. */
+  interested: boolean;
 }
+
+/**
+ * The one category with a per-option meaning attached.
+ *
+ * The dashboard's "Interested" tile counts leads whose temperature is
+ * ticked here. Shown only for this category, because a tick labelled
+ * "counts as interested" on Lost reason or Lead source would be a
+ * control that does nothing.
+ */
+const INTERESTED_CATEGORY = "temperature";
 
 const initialState: OptionFormState = {};
 
@@ -58,6 +70,21 @@ export function OptionRow({
       <Input id={`color-${option.id}`} name="color" defaultValue={option.color ?? ""} className="w-28" />
       <Input name="value" defaultValue={option.value} className="w-36" required />
       <Input name="label" defaultValue={option.label} className="w-40 flex-1" required />
+      {category === INTERESTED_CATEGORY && (
+        <label className="flex items-center gap-1.5 whitespace-nowrap text-xs">
+          {/* A plain checkbox inside the form, not the Switch beside it:
+              this one is saved with Save like the value and the label,
+              where the Switch writes immediately. Two controls that look
+              alike and commit differently is how somebody loses an edit. */}
+          <input
+            type="checkbox"
+            name="interested"
+            defaultChecked={option.interested}
+            className="size-4 rounded border-input"
+          />
+          Counts as interested
+        </label>
+      )}
       <div className="flex items-center gap-1">
         <Button type="button" variant="ghost" size="icon" disabled={isPending || isFirst} onClick={() => run(() => moveOption(option.id, category, "up"))}>
           <ArrowUp className="size-4" />
