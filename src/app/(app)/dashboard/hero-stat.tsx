@@ -27,18 +27,29 @@ export interface HeroStatProps {
   series?: number[];
   hint?: string;
   /**
-   * `attention` tints the number itself: this is a figure somebody is
-   * supposed to act on, and zero is the good outcome. Used for overdue
-   * work, never for a figure that is merely large.
+   * Tints the number itself, and only the number.
+   *
+   * `attention` — a figure somebody is supposed to act on, where zero is
+   * the good outcome. Used for overdue work, never for a figure that is
+   * merely large.
+   * `good` — the outcome the month is judged on. Green here is the same
+   * green as a cleared payment, which is the point: it means achieved.
+   *
+   * An `attention` figure at zero goes green, not grey: "0 follow-ups
+   * due" is the best news on the screen and should look like it.
    */
-  tone?: "default" | "attention";
+  tone?: "default" | "attention" | "good";
 }
 
 function Delta({ value, previous }: { value: number; previous: number }) {
   const change = value - previous;
   const Icon = change > 0 ? ArrowUpRight : change < 0 ? ArrowDownRight : ArrowRight;
   const colour =
-    change > 0 ? "text-[var(--success)]" : change < 0 ? "text-destructive" : "text-muted-foreground";
+    change > 0
+      ? "text-success-ink"
+      : change < 0
+        ? "text-destructive-ink"
+        : "text-muted-foreground";
   const words =
     change === 0
       ? `Same as last month (${previous})`
@@ -92,21 +103,23 @@ function Sparkline({ series, label }: { series: number[]; label: string }) {
   );
 }
 
+const TONE_INK: Record<NonNullable<HeroStatProps["tone"]>, string> = {
+  default: "",
+  attention: "text-destructive-ink",
+  good: "text-success-ink",
+};
+
 export function HeroStat({ label, value, previous, series, hint, tone = "default" }: HeroStatProps) {
   const numeric = typeof value === "number" ? value : null;
-  const attention = tone === "attention" && numeric !== null && numeric > 0;
+  // At zero an `attention` figure is the good news, so it loses the red
+  // rather than announcing nothing in the colour of a problem.
+  const ink = tone === "attention" && numeric === 0 ? TONE_INK.good : TONE_INK[tone];
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-card p-4">
+    <div className="flex flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm">
       <span className="text-sm text-muted-foreground">{label}</span>
 
-      <span
-        className={`text-4xl font-semibold leading-none tabular-nums ${
-          attention ? "text-destructive" : ""
-        }`}
-      >
-        {value}
-      </span>
+      <span className={`text-4xl font-semibold leading-none tabular-nums ${ink}`}>{value}</span>
 
       {numeric !== null && previous !== null && previous !== undefined ? (
         <Delta value={numeric} previous={previous} />

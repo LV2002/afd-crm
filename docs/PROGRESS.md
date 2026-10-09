@@ -8468,3 +8468,65 @@ Stubbed: nothing. **1733 tests pass** (9 added), typecheck, lint, `db:audit` and
   address bar gets the same not-found as one typing nonsense.
 
 Stubbed: nothing. **1742 tests pass** (9 added), typecheck, lint, `db:audit` and build clean.
+
+## Session 66 — dark mode, and colour that says something
+
+- **A dark mode switch in the top bar.** The `.dark` palette had existed in `globals.css` for
+  weeks with nothing to turn it on. One button, two states, no light/dark/system menu: the
+  system preference is still the *default*, applied by a blocking inline script in the root
+  layout, and the button simply flips to the other one and remembers that choice in
+  `localStorage`. The script is why there is no white flash — a theme applied from a React
+  effect means a bright screen for one frame on every navigation, which is the thing somebody
+  turns dark mode on to avoid. `e2e/theme.spec.ts` asserts the class is present at
+  `domcontentloaded`, before hydration, so that flash cannot come back unnoticed.
+- **Three tokens per semantic hue, not one.** `--x`, `--x-subtle` (a surface a figure can sit
+  on) and `--x-ink` (text legible on it). The ink is separate because the two jobs are
+  different: `--warning` at 0.63 lightness is a correct amber fill and an illegible label. Every
+  pair was measured rather than assumed — the weakest in either mode is 6.6:1, most above 7:1.
+  One new hue, `--info`, for a count that is merely in flight: previously indistinguishable
+  from the accent that means "press this".
+- **The page is tinted; the cards are not.** Page and card were both white, so a card had only
+  its hairline border to say it was a card and every screen read as one undivided sheet. The
+  page now sits 1.14:1 below the cards in both modes, with body text still at 15.4:1 on it. The
+  hover `--accent` had to move too — at its old lightness it was identical to the new page, so
+  hovering anything sitting directly on the page did nothing visible.
+- **The dashboard tiles carry meaning.** Seven identical bordered boxes said nothing about
+  which number was good news and which was work. Active leads reads as in-flight, never
+  contacted as attention, overdue as overdue, interested as intent, enrolments as achieved —
+  and new leads and contacted stay deliberately uncoloured, because if every tile is coloured
+  none of them are. Colour is never the only signal: every tile keeps its label in words, so
+  the meaning survives greyscale, a screenshot and colour vision deficiency. The selected tile
+  is marked with a ring rather than a fill, since changing the fill would overwrite the one
+  thing the colour is there to say.
+- **The active nav item is a filled chip**, in the sidebar and in the phone drawer. It was a
+  10% tint, which on a white sidebar is a difference you have to look for — and "where am I"
+  should not be a question you have to look for the answer to. The red queue badge inverts on
+  that row (white pill, red figure) because solid red on solid blue is the one pairing that
+  fights.
+- **Soft badge variants** (`success`, `warning`, `info`, `danger`): the same meaning at the
+  weight of a label. Twelve solid pills in one table is a ransom note.
+- **The phone-width test now names the element.** "overflows by 173px" and nothing else cost
+  two rounds of guessing at CSS from a transcript. It reports the widest three elements past
+  the right edge, deepest-first, with tag, id, class and width.
+
+- **The 173px phone overflow is fixed, and it was a screen-reader table.** Every chart ships
+  its data as a `sr-only` table underneath, and `sr-only` was on the `<table>` itself.
+  `sr-only` is `width: 1px; overflow: hidden; white-space: nowrap`, which works on anything
+  that can be 1px wide — and a table cannot: it will not shrink below its minimum content
+  width, so with `nowrap` holding the caption on one line the box came out **746px** wide.
+  `overflow: hidden` clips a table's *contents*, not the table box, and `sr-only` is also
+  `position: absolute`, so that 746px reported straight into the document's scrollable width.
+  A table nobody can see was dragging every page sideways on a phone. Wrapping it in a
+  `<div class="sr-only">` fixes it, because a div does honour `width: 1px`: measured against
+  the built CSS at 412px, **374px of overflow before, 0 after**, with the table itself
+  unchanged. It only surfaced when a caption grew longer — a longer sentence is a wider
+  nowrap box — which is why it looked like it arrived with an unrelated change, and why two
+  rounds of reproducing the *layout* changes found nothing.
+- **The diagnostic that found it was wrong twice over and is now right.** Reaching past the
+  right edge is not the same as causing the page to scroll: its first version ranked
+  deepest-first and listed three table cells that were clipped by an ancestor, pointing the
+  search in exactly the wrong direction. It now drops anything with a clipping ancestor and
+  ranks by right edge, so the top entry is the element sitting at the document's own
+  scrollWidth.
+
+Stubbed: nothing. **1742 tests pass**, typecheck, lint, `db:audit` and build clean.

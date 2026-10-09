@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+
+import { THEME_INIT_SCRIPT } from "@/lib/theme/script";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -45,7 +47,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    /*
+     * `suppressHydrationWarning` because the script below adds `class="dark"`
+     * to this element before React sees it, which is otherwise a server/client
+     * mismatch React will shout about. It is scoped to <html> alone, so it
+     * cannot hide a real mismatch anywhere inside the application.
+     */
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/*
+          Before first paint, on purpose. Applying the theme from a React
+          effect means a dark-mode user gets a full white screen first, on
+          every navigation — see lib/theme/script.ts.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>{children}</body>
     </html>
   );

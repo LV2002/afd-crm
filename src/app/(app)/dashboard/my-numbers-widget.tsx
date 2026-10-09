@@ -93,6 +93,7 @@ export async function MyNumbersWidget({
             value={board.admissionsThisMonth}
             previous={board.admissionsLastMonth}
             series={fortnight.map((day) => day.admissions)}
+            tone="good"
           />
           <HeroStat
             label="Follow-ups due"

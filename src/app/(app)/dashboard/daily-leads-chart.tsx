@@ -117,25 +117,50 @@ export function DailyLeadsChart({
         </ResponsiveContainer>
       </div>
 
-      <table className="sr-only">
-        <caption>
-          {title} per day, last 30 days. Each day counts leads that {caption}.
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Date</th>
-            <th scope="col">{title}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((day) => (
-            <tr key={day.date}>
-              <th scope="row">{day.label}</th>
-              <td>{day.value}</td>
+      {/*
+        `sr-only` goes on a WRAPPER, never on the <table> itself.
+
+        This was the 173px of sideways scroll on /dashboard at phone width,
+        and it is a nasty one. `sr-only` is `width: 1px; overflow: hidden;
+        white-space: nowrap`, which works on anything that can be 1px wide
+        — and a table cannot: a table box will not shrink below its minimum
+        content width, so with `nowrap` holding the caption on one line the
+        box came out 746px wide. `overflow: hidden` then clips the table's
+        CONTENTS and not the table box, and because `sr-only` is also
+        `position: absolute`, that 746px box reports straight into the
+        document's scrollable width. A table nobody can see was dragging
+        every page sideways on a phone.
+
+        A <div> does honour `width: 1px`, so the clipping happens one level
+        up and nothing escapes. Measured against the built CSS at 412px:
+        374px of page overflow with the class on the table, 0 with it on a
+        wrapper. The table is unchanged and still reads out the same way.
+
+        It surfaced when the caption grew — a longer sentence is a wider
+        nowrap box — which is why it looked like it arrived with an
+        unrelated change.
+      */}
+      <div className="sr-only">
+        <table>
+          <caption>
+            {title} per day, last 30 days. Each day counts leads that {caption}.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">{title}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.map((day) => (
+              <tr key={day.date}>
+                <th scope="row">{day.label}</th>
+                <td>{day.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </figure>
   );
 }

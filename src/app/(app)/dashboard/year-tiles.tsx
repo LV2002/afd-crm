@@ -5,7 +5,7 @@ import { useState } from "react";
 import type { CounsellorYear, DailyCount, DailyMeasure } from "@/lib/dashboard/scoreboard";
 
 import { DailyLeadsChart } from "./daily-leads-chart";
-import { StatTile } from "./stat-tile";
+import { StatTile, type StatTone } from "./stat-tile";
 
 /**
  * The year row, and the chart it drives.
@@ -41,6 +41,11 @@ interface Tile {
   value: number;
   /** Said in the chart caption when this one is selected. */
   caption: string;
+  /**
+   * Which of these numbers is good news and which is work. Seven
+   * identical boxes told you neither; see stat-tile.tsx.
+   */
+  tone: StatTone;
 }
 
 export function YearTiles({
@@ -63,42 +68,49 @@ export function YearTiles({
       label: "Active leads",
       value: year.activeLeads,
       caption: "arrived that day and still being worked",
+      tone: "info",
     },
     {
       measure: "newLeads",
       label: "New leads",
       value: year.newLeads,
       caption: "arrived that day",
+      tone: "neutral",
     },
     {
       measure: "contacted",
       label: "Contacted",
       value: year.contacted,
       caption: "arrived that day and have been answered at least once",
+      tone: "neutral",
     },
     {
       measure: "neverContacted",
       label: "Never contacted",
       value: year.neverContacted,
       caption: "arrived that day and have never been answered",
+      tone: "attention",
     },
     {
       measure: "overdueFollowups",
       label: "Overdue follow-ups",
       value: year.overdueFollowups,
       caption: "arrived that day and are now past their follow-up date",
+      tone: "overdue",
     },
     {
       measure: "interested",
       label: "Interested",
       value: year.interested,
       caption: "arrived that day and are still interested today",
+      tone: "primary",
     },
     {
       measure: "enrolments",
       label: "Enrolments",
       value: year.enrolments,
       caption: "admissions confirmed that day",
+      tone: "good",
     },
   ];
 
@@ -129,15 +141,17 @@ export function YearTiles({
               onClick={() => setMeasure(tile.measure)}
               aria-pressed={tile.measure === measure}
               className={
-                // The ring rather than a fill: these sit in a row of
-                // numbers and a filled tile would read as a different
-                // kind of figure rather than the selected one.
+                // A ring, not a change of fill. Each tile already carries
+                // its own tone, so swapping the fill to mark the selection
+                // would overwrite the one thing the colour is there to
+                // say. The ring sits outside the tile and says "this one"
+                // without touching what the tile means.
                 tile.measure === measure
-                  ? "rounded-lg text-left ring-2 ring-primary"
-                  : "rounded-lg text-left transition-colors hover:ring-2 hover:ring-border"
+                  ? "rounded-lg text-left ring-2 ring-ring ring-offset-2 ring-offset-background"
+                  : "rounded-lg text-left opacity-80 transition hover:opacity-100 hover:ring-2 hover:ring-border"
               }
             >
-              <StatTile label={tile.label} value={tile.value} compact />
+              <StatTile label={tile.label} value={tile.value} tone={tile.tone} compact />
             </button>
           ))}
           {/* Not a button: the admission rate is this month's running

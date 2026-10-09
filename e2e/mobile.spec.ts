@@ -118,12 +118,67 @@ test.describe("at phone width", () => {
       await page.waitForLoadState("networkidle").catch(() => {});
       visited++;
 
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      );
+      /*
+        The number AND what caused it.
+
+        This reported "overflows by 173px" and nothing else, which cost two
+        rounds of guessing at CSS from a transcript: with no element named,
+        the only way to find the culprit was to rebuild candidate layouts
+        offline and hope one of them reproduced.
+
+        ## Why the ranking is what it is
+
+        Reaching past the right edge is not the same as CAUSING the page to
+        scroll. An element inside an ancestor with `overflow: hidden` or
+        `auto` is clipped, so its geometry is a red herring — the first
+        version of this listed three clipped table cells and sent the
+        search in exactly the wrong direction. So: anything with a
+        clipping ancestor is dropped, and the rest are ranked by their
+        right edge, because the element sitting at the document's own
+        scrollWidth is by definition the one setting it.
+
+        Ancestors are reported too rather than filtered out. An
+        overflowing child does drag its parents out with it, but which of
+        the two is holding the width is the actual question — a parent
+        that is too wide and a child that will not shrink need opposite
+        fixes — and the chain reads it off at a glance.
+      */
+      const measured = await page.evaluate(() => {
+        const limit = document.documentElement.clientWidth;
+        const overflow = document.documentElement.scrollWidth - limit;
+
+        const clipped = (el: Element) => {
+          for (let node = el.parentElement; node; node = node.parentElement) {
+            const { overflowX } = getComputedStyle(node);
+            if (overflowX !== "visible") return true;
+          }
+          return false;
+        };
+
+        const culprits = Array.from(document.querySelectorAll("body *"))
+          .map((el) => ({ el, rect: el.getBoundingClientRect() }))
+          .filter((row) => row.rect.right > limit + 2 && !clipped(row.el))
+          .sort((a, b) => b.rect.right - a.rect.right)
+          .slice(0, 4)
+          .map(
+            (row) =>
+              `<${row.el.tagName.toLowerCase()}` +
+              `${row.el.id ? ` id="${row.el.id}"` : ""}` +
+              ` class="${(row.el.getAttribute("class") ?? "").slice(0, 120)}">` +
+              ` ${Math.round(row.rect.width)}px wide, right edge ${Math.round(row.rect.right)}px`,
+          );
+        return { overflow, culprits };
+      });
+
       // Two pixels of slack for sub-pixel rounding on borders, which is
       // not a layout anybody can see.
-      if (overflow > 2) tooWide.push(`${path} overflows by ${overflow}px`);
+      if (measured.overflow > 2) {
+        tooWide.push(
+          [`${path} overflows by ${measured.overflow}px`, ...measured.culprits.map((c) => `    ${c}`)].join(
+            "\n",
+          ),
+        );
+      }
 
       const hrefs = await page.locator("a[href]").evaluateAll((anchors) =>
         anchors.map((anchor) => (anchor as HTMLAnchorElement).getAttribute("href") ?? ""),
