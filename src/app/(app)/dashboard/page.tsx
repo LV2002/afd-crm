@@ -1,7 +1,6 @@
 import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser, scopeFor, type SessionUser } from "@/lib/auth/session";
 import { getRoleLayout } from "@/lib/dashboard/get-layout";
-import { getTeamMembers } from "@/lib/dashboard/get-team-members";
 import { resolveDashboard } from "@/lib/dashboard/resolve-layout";
 import { createClient } from "@/lib/supabase/server";
 import { getTerminologyMap } from "@/lib/terminology/get-terminology";
@@ -13,7 +12,6 @@ import { AdminWidget } from "./admin-widget";
 import { CentreWidget } from "./centre-widget";
 import { MyNumbersWidget } from "./my-numbers-widget";
 import { QuickLinksWidget } from "./quick-links-widget";
-import { TeamNav } from "./team-nav";
 import { TeamWidget } from "./team-widget";
 
 /** The six-column grid, by the width a widget asked the registry for. */
@@ -77,20 +75,11 @@ export default async function DashboardPage() {
   if (!user) return <AccessDenied />;
 
   const supabase = await createClient();
-  /*
-    The counsellor sub-navigation, for anybody who may read somebody
-    else's numbers.
-
-    Gated on `report.center` — the same permission as the team table and
-    the per-counsellor pages it links to, so the chips and the screens
-    they open appear and disappear together. A counsellor holds
-    `report.read` at `own` and never sees it, which is right: this is not
-    a bar for looking sideways at a colleague.
-  */
-  const [layout, terms, teamCentres] = await Promise.all([
+  // The counsellors a manager can open live in the sidebar, under Dashboard
+  // — see components/layout/counsellor-links.tsx — not on this page.
+  const [layout, terms] = await Promise.all([
     getRoleLayout(supabase, user.roleId),
     getTerminologyMap(),
-    can(user, "report.center") ? getTeamMembers(supabase, user.id) : Promise.resolve([]),
   ]);
 
   const widgets = resolveDashboard(layout, {
@@ -100,8 +89,6 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {teamCentres.length > 0 && <TeamNav centres={teamCentres} />}
-
       <div>
         <h1 className="text-2xl font-semibold">Welcome, {user.fullName}</h1>
         <p className="text-sm text-muted-foreground">
