@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { OptionBadge } from "@/components/ui/option-badge";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { canSeeTeam } from "@/lib/dashboard/can-see-team";
 import { getCounsellors } from "@/lib/dashboard/get-counsellors";
 import { getDropdownOptions } from "@/lib/fields/resolve-field-options";
 import { formatDateIST } from "@/lib/format/date";
@@ -47,7 +48,7 @@ export default async function CounsellorPage({
   params: Promise<{ userId: string }>;
 }) {
   const viewer = await getCurrentUser();
-  if (!viewer || !can(viewer, "report.center")) return <AccessDenied />;
+  if (!viewer || !canSeeTeam(viewer)) return <AccessDenied />;
 
   const { userId } = await params;
   const supabase = await createClient();

@@ -43,6 +43,23 @@ export async function getCounsellors(
   /** Left out of their own list: a manager does not monitor themselves. */
   excludeUserId: string,
 ): Promise<Counsellor[]> {
+  return (await getCounsellorsWithReason(supabase, excludeUserId)).counsellors;
+}
+
+/**
+ * The list, plus why it is empty when it is.
+ *
+ * An empty list used to look identical whether no role is set up as a
+ * counsellor role, or the people exist but this viewer's policies hide them
+ * — and "I can't see them" cannot be fixed from either of those. The reason
+ * is shown on the Dashboard so a manager (or Leon) can tell which it is.
+ */
+export type EmptyReason = "no_counsellor_role" | "no_visible_people" | null;
+
+export async function getCounsellorsWithReason(
+  supabase: SupabaseClient,
+  excludeUserId: string,
+): Promise<{ counsellors: Counsellor[]; reason: EmptyReason }> {
   const [{ data: permissionRows }, { data: roleRows }] = await Promise.all([
     supabase
       .from("role_permissions")
@@ -54,7 +71,7 @@ export async function getCounsellors(
   ]);
 
   const counsellorRoleIds = [...new Set((permissionRows ?? []).map((row) => row.role_id))];
-  if (counsellorRoleIds.length === 0) return [];
+  if (counsellorRoleIds.length === 0) return { counsellors: [], reason: "no_counsellor_role" };
 
   const roleNameById = new Map((roleRows ?? []).map((row) => [row.id, row.name]));
 
@@ -66,7 +83,7 @@ export async function getCounsellors(
     .order("full_name")
     .returns<Array<{ id: string; full_name: string | null; role_id: string | null }>>();
 
-  return (profileRows ?? [])
+  const counsellors = (profileRows ?? [])
     .filter((row) => row.id !== excludeUserId)
     .map((row) => ({
       userId: row.id,
@@ -75,4 +92,5 @@ export async function getCounsellors(
       name: row.full_name?.trim() || "Unnamed",
       roleName: row.role_id ? (roleNameById.get(row.role_id) ?? null) : null,
     }));
+  return { counsellors, reason: counsellors.length === 0 ? "no_visible_people" : null };
 }

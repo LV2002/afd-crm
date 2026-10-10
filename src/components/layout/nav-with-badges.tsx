@@ -2,7 +2,7 @@ import { MobileNav } from "@/components/layout/mobile-nav";
 import { Sidebar } from "@/components/layout/sidebar";
 import type { NavItem } from "@/lib/auth/nav";
 import type { SessionUser } from "@/lib/auth/session";
-import { can } from "@/lib/auth/session";
+import { canSeeTeam } from "@/lib/dashboard/can-see-team";
 import { getCounsellors } from "@/lib/dashboard/get-counsellors";
 import { getNavBadgeCounts } from "@/lib/nav/badge-counts";
 import { createClient } from "@/lib/supabase/server";
@@ -35,7 +35,7 @@ import { createClient } from "@/lib/supabase/server";
  * boundary, so it never sits on the critical path of a click.
  */
 async function counsellorsFor(user: SessionUser) {
-  if (!can(user, "report.center")) return [];
+  if (!canSeeTeam(user)) return [];
   const supabase = await createClient();
   return getCounsellors(supabase, user.id);
 }
