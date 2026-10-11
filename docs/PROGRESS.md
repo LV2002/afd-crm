@@ -8530,3 +8530,14 @@ Stubbed: nothing. **1742 tests pass** (9 added), typecheck, lint, `db:audit` and
   scrollWidth.
 
 Stubbed: nothing. **1742 tests pass**, typecheck, lint, `db:audit` and build clean.
+
+## Lead profile: Save button removed
+
+- The profile form on a lead no longer has a **Save changes** button. Every field already
+  saved as you left it (autosave, added earlier); the button was a second way to do what had
+  happened already. The quiet "Changes save as you go / Saving… / Saved" line stays as the
+  acknowledgement, and Enter in a text box still submits through the same action.
+- Counsellor list: shown to `report.center` or `report.org`, and the Dashboard says why it is
+  empty (PR #89).
+
+Stubbed: nothing.
