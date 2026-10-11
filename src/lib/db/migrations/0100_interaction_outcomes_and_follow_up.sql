@@ -12,6 +12,13 @@
 -- nothing to schedule: converted (they joined), not_interested, dropped,
 -- wrong_target_audience. Unchanged otherwise, including a blank outcome.
 
+-- The category first: on a fresh database it only exists once the seed has
+-- run, and the options below reference it by foreign key.
+insert into dropdown_categories (key, label, is_system)
+  values ('interaction_outcome', 'Interaction outcome', true)
+  on conflict do nothing;
+--> statement-breakpoint
+
 insert into dropdown_options (category, value, label, sort_order, is_active) values
   ('interaction_outcome', 'connected',             'Connected',             1, true),
   ('interaction_outcome', 'not_reachable',         'Not connected',         2, true),
