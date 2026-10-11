@@ -27,14 +27,17 @@ export interface ScoreboardLead {
   id: string;
   assignedTo: string | null;
   centerId: string | null;
-  stageId: string | null;
   createdAt: string;
   /** Set by a database trigger whenever the owner changes. Null for never-assigned. */
   assignedAt: string | null;
   firstResponseAt: string | null;
   nextFollowupAt: string | null;
   slaBreached: boolean;
-  /** For the "interested" figure — see interested-temperature.ts. */
+  /**
+   * The lead's status. Decides both "still being worked" (a won or lost
+   * temperature is finished) and the "interested" figure — see
+   * temperature-kinds.ts and interested-temperature.ts.
+   */
   temperature: string | null;
 }
 
@@ -43,12 +46,6 @@ export interface ScoreboardEnrolment {
   /** Gate 1 — the counsellor confirmed the admission. Null means not yet confirmed. */
   salesToAccountsAt: string | null;
   droppedAt: string | null;
-}
-
-/** Terminal stages need no daily attention and are excluded from "active". */
-export interface StageInfo {
-  id: string;
-  stageType: string;
 }
 
 export interface Boundaries {
@@ -139,8 +136,13 @@ export interface CounsellorYear {
   enrolments: number;
 }
 
-function isActive(lead: ScoreboardLead, terminalStageIds: Set<string>): boolean {
-  return !lead.stageId || !terminalStageIds.has(lead.stageId);
+/**
+ * Still being worked: not Took admission, not a lost outcome. A lead with
+ * no temperature at all counts — an unclassified lead needs attention, and
+ * dropping it from "active" would hide exactly the ones nobody has looked at.
+ */
+function isActive(lead: ScoreboardLead, terminalTemperatures: ReadonlySet<string>): boolean {
+  return !lead.temperature || !terminalTemperatures.has(lead.temperature);
 }
 
 function within(value: string | null, from: Date, to: Date): boolean {
@@ -160,12 +162,6 @@ export function ratePercent(numerator: number, denominator: number): number | nu
   return Math.round((numerator / denominator) * 1000) / 10;
 }
 
-export function terminalStageIdsOf(stages: readonly StageInfo[]): Set<string> {
-  return new Set(
-    stages.filter((s) => s.stageType === "won" || s.stageType === "lost").map((s) => s.id),
-  );
-}
-
 /**
  * One person's figures. `leads` should already be only their leads —
  * filtering here too would hide a caller's mistake rather than fix it.
@@ -173,7 +169,12 @@ export function terminalStageIdsOf(stages: readonly StageInfo[]): Set<string> {
 export function buildCounsellorScoreboard(input: {
   leads: readonly ScoreboardLead[];
   enrolments: readonly ScoreboardEnrolment[];
-  stages: readonly StageInfo[];
+  /**
+   * The temperature values that mean a lead is finished with (kind won or
+   * lost) — `terminalValuesOf()` in temperature-kinds.ts. Passed in rather
+   * than looked up so this module stays pure.
+   */
+  terminalTemperatures: ReadonlySet<string>;
   boundaries: Boundaries;
   /**
    * Which temperature values an admin has marked as "interested"
@@ -193,7 +194,7 @@ export function buildCounsellorScoreboard(input: {
 }): CounsellorScoreboard {
   const { startOfToday, startOfTomorrow, startOfMonth, startOfPreviousMonth, startOfCycleYear } =
     input.boundaries;
-  const terminal = terminalStageIdsOf(input.stages);
+  const terminal = input.terminalTemperatures;
 
   const active = input.leads.filter((lead) => isActive(lead, terminal));
   const leadIds = new Set(input.leads.map((lead) => lead.id));
@@ -330,7 +331,7 @@ export function buildDailySeries(input: {
   enrolments: readonly ScoreboardEnrolment[];
   days: ReadonlyArray<{ date: string; from: Date; to: Date }>;
   /** For the active/overdue/interested measures. Omitted, those read zero. */
-  stages?: readonly StageInfo[];
+  terminalTemperatures?: ReadonlySet<string>;
   interestedTemperatures?: ReadonlySet<string>;
   /** Midnight IST today, for "overdue". Omitted, that measure reads zero. */
   startOfToday?: Date;
@@ -339,7 +340,7 @@ export function buildDailySeries(input: {
   const admissions = input.enrolments.filter(
     (enrolment) => leadIds.has(enrolment.leadId) && !enrolment.droppedAt,
   );
-  const terminal = terminalStageIdsOf(input.stages ?? []);
+  const terminal = input.terminalTemperatures ?? new Set<string>();
   const todayMs = input.startOfToday?.getTime();
 
   return input.days.map((day) => {
@@ -401,7 +402,7 @@ export function buildTeamScoreboard(input: {
   members: ReadonlyArray<{ userId: string; name: string }>;
   leads: readonly ScoreboardLead[];
   enrolments: readonly ScoreboardEnrolment[];
-  stages: readonly StageInfo[];
+  terminalTemperatures: ReadonlySet<string>;
   boundaries: Boundaries;
   /** Forwarded to each member's scoreboard — see buildCounsellorScoreboard. */
   interestedTemperatures?: ReadonlySet<string>;
@@ -422,7 +423,7 @@ export function buildTeamScoreboard(input: {
         leads: leadsByOwner.get(member.userId) ?? [],
         enrolments: input.enrolments,
         interestedTemperatures: input.interestedTemperatures,
-        stages: input.stages,
+        terminalTemperatures: input.terminalTemperatures,
         boundaries: input.boundaries,
       }),
     }))
@@ -462,13 +463,13 @@ export interface CentreScoreboard {
 export function buildCentreScoreboard(input: {
   leads: readonly ScoreboardLead[];
   enrolments: readonly ScoreboardEnrolment[];
-  stages: readonly StageInfo[];
+  terminalTemperatures: ReadonlySet<string>;
   boundaries: Boundaries;
 }): CentreScoreboard {
   // Every lead in scope, owned or not — so this is the whole-centre view,
   // not the sum of the people in it.
   const whole = buildCounsellorScoreboard(input);
-  const terminal = terminalStageIdsOf(input.stages);
+  const terminal = input.terminalTemperatures;
 
   return {
     activeLeads: whole.activeLeads,

@@ -33,6 +33,7 @@ import { getStudentFieldLabels } from "@/lib/profile-form/field-labels";
 
 import { ChangePlanPanel } from "@/components/enrolment/change-plan-panel";
 import { LeadStatusBar } from "@/components/leads/lead-status-bar";
+import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 
 import { ConfirmAdmissionForm } from "./confirm-admission-form";
 import { InteractionForm } from "./interaction-form";
@@ -71,9 +72,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const detail = await getLeadDetail(supabase, id);
   if (!detail) notFound();
 
-  // `stageName` is no longer read here: the status bar resolves the name
-  // from the stage list it already needs, so that it can also offer the
-  // others.
   const { row, centerName, assignedToName } = detail;
   const canRevealPhone = can(user, "lead.reveal_phone");
 
@@ -106,29 +104,15 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   }
 
   /*
-    Stage and temperature, for the bar at the top.
+    The status options, for the control at the top.
 
-    Fetched here rather than inside the bar because this page is already a
-    server component with the client at hand, and because the three lists
-    are small, cached config rows — the alternative is a client component
-    that opens with three empty controls and fills them in.
+    Fetched here rather than inside the control because this page is already
+    a server component with the client at hand, and because the list is a
+    small, cached config table — the alternative is a client component that
+    opens empty and fills itself in.
   */
-  const [{ data: stageRows }, { data: temperatureRows }, lostReasonOptions] = await Promise.all([
-    supabase
-      .from("pipeline_stages")
-      .select("id, name, color, requires_reason")
-      .eq("is_active", true)
-      .is("deleted_at", null)
-      .order("sort_order")
-      .returns<Array<{ id: string; name: string; color: string | null; requires_reason: boolean }>>(),
-    supabase
-      .from("dropdown_options")
-      .select("value, label, color")
-      .eq("category", "temperature")
-      .eq("is_active", true)
-      .is("deleted_at", null)
-      .order("sort_order")
-      .returns<Array<{ value: string; label: string; color: string | null }>>(),
+  const [temperatureOptions, lostReasonOptions] = await Promise.all([
+    loadTemperatureOptions(supabase),
     getDropdownOptions(supabase, "lost_reason"),
   ]);
 
@@ -265,23 +249,21 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       </div>
 
       {/*
-        Stage and temperature are no longer badges here. They were the two
-        things a counsellor learns during a call and the two they had to
-        leave the page to change — the board for one, thirty fields of
-        edit form for the other. Now they are the controls themselves,
-        above everything else on the page.
+        One status, as a control, above everything else on the page.
+
+        It used to be two read-only badges — a pipeline stage and a
+        temperature — and the two things a counsellor learns during a call
+        were the two they had to leave the page to change. Leon merged them
+        into a single temperature, so this is the whole of "where is this
+        lead".
+        `admissionStands` locks it: a lead with a confirmed, undropped
+        admission is Took admission until Accounts drops the admission.
       */}
       <LeadStatusBar
         leadId={id}
-        stages={(stageRows ?? []).map((stage) => ({
-          id: stage.id,
-          name: stage.name,
-          color: stage.color,
-          requiresReason: stage.requires_reason,
-        }))}
-        temperatures={temperatureRows ?? []}
-        currentStageId={row.stage_id ? String(row.stage_id) : null}
+        options={temperatureOptions}
         currentTemperature={row.temperature ? String(row.temperature) : null}
+        admissionStands={enrolment !== null && enrolment.dropped_at === null}
         lostReasonOptions={lostReasonOptions}
         canEdit={can(user, "lead.update")}
       />
@@ -564,13 +546,18 @@ async function getTimeline(
   supabase: Awaited<ReturnType<typeof createClient>>,
   leadId: string,
 ): Promise<TimelineEntry[]> {
-  const [stageHistoryRes, interactionsRes] = await Promise.all([
+  const [historyRes, interactionsRes, options] = await Promise.all([
     supabase
-      .from("stage_history")
-      .select("id, changed_at, from_stage, to_stage")
+      .from("temperature_history")
+      .select("id, changed_at, from_temperature, to_temperature")
       .eq("lead_id", leadId)
       .returns<
-        Array<{ id: string; changed_at: string; from_stage: string | null; to_stage: string }>
+        Array<{
+          id: string;
+          changed_at: string;
+          from_temperature: string | null;
+          to_temperature: string | null;
+        }>
       >(),
     supabase
       .from("interactions")
@@ -587,30 +574,21 @@ async function getTimeline(
           next_action: string;
         }>
       >(),
+    loadTemperatureOptions(supabase),
   ]);
 
-  const stageIds = new Set<string>();
-  for (const row of stageHistoryRes.data ?? []) {
-    if (row.from_stage) stageIds.add(row.from_stage);
-    stageIds.add(row.to_stage);
-  }
-  const stageNameById = new Map<string, string>();
-  if (stageIds.size > 0) {
-    const { data: stages } = await supabase
-      .from("pipeline_stages")
-      .select("id, name")
-      .in("id", Array.from(stageIds))
-      .returns<Array<{ id: string; name: string }>>();
-    for (const s of stages ?? []) stageNameById.set(s.id, s.name);
-  }
+  // The label an admin can rename, not the stored value — a timeline that
+  // says "afd_india_student" reads as a bug.
+  const labelOf = (value: string | null) =>
+    value ? (options.find((option) => option.value === value)?.label ?? value) : "no temperature";
 
   const entries: TimelineEntry[] = [
-    ...(stageHistoryRes.data ?? []).map((row) => ({
-      id: `stage-${row.id}`,
+    ...(historyRes.data ?? []).map((row) => ({
+      id: `status-${row.id}`,
       at: row.changed_at,
-      label: row.from_stage
-        ? `Stage changed: ${stageNameById.get(row.from_stage) ?? "?"} → ${stageNameById.get(row.to_stage) ?? "?"}`
-        : `Entered pipeline at ${stageNameById.get(row.to_stage) ?? "?"}`,
+      label: row.from_temperature
+        ? `Temperature changed: ${labelOf(row.from_temperature)} → ${labelOf(row.to_temperature)}`
+        : `Started as ${labelOf(row.to_temperature)}`,
       detail: null,
     })),
     ...(interactionsRes.data ?? []).map((row) => ({

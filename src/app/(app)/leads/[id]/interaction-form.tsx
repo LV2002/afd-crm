@@ -24,12 +24,12 @@ const initialState: FormState = {};
  * nobody notices until a report counts it months later.
  *
  * The exemption is the outcome with nowhere left to go: pick
- * **Converted** and both fields relax, because the student has joined and
- * there is no next call. Everything else, including leaving the outcome
- * blank, needs a follow-up.
+ * **Converted**, **Not interested**, **Dropped** or **Wrong target
+ * audience** and both fields relax, because there is no next call.
+ * Everything else, including leaving the outcome blank, needs a follow-up.
  *
  * The same rule is applied again in `logInteraction()` and again by the
- * CHECK constraint on `interactions` (migrations 0009 and 0087), so this
+ * CHECK constraint on `interactions` (migrations 0009, 0087 and 0100), so this
  * is the courteous half of three, not the enforcement.
  */
 export function InteractionForm({
@@ -104,7 +104,7 @@ export function InteractionForm({
 
       {!required && (
         <p className="text-sm text-muted-foreground">
-          No follow-up needed — they have joined.
+          No follow-up needed for this outcome.
         </p>
       )}
 

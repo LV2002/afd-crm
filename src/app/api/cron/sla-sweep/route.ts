@@ -10,11 +10,11 @@ import {
   centers,
   holidays,
   leads,
-  pipelineStages,
   slaPolicies,
-  stageHistory,
+  temperatureHistory,
 } from "@/lib/db/schema";
-import { isNoLongerWorked } from "@/lib/leads/no-longer-worked";
+import { isNoLongerWorked, terminalValuesOf } from "@/lib/leads/temperature-kinds";
+import { loadTemperatureOptionsDirect } from "@/lib/leads/temperature-options-direct";
 import type { DayHours } from "@/lib/sla/business-hours";
 import { dueEscalations, policyEscalationSteps } from "@/lib/sla/escalations";
 import { evaluateLeadSla } from "@/lib/sla/evaluate-sla";
@@ -46,13 +46,11 @@ async function run(request: Request) {
 
   const now = new Date();
 
-  const [activeLeads, activePolicies, stageRows, businessHourRows, holidayRows, centerRows] =
+  const [activeLeads, activePolicies, temperatureOptions, businessHourRows, holidayRows, centerRows] =
     await Promise.all([
       db.select().from(leads).where(isNull(leads.deletedAt)),
       db.select().from(slaPolicies).where(isNull(slaPolicies.deletedAt)),
-      db
-        .select({ id: pipelineStages.id, stageType: pipelineStages.stageType })
-        .from(pipelineStages),
+      loadTemperatureOptionsDirect(),
       db.select().from(businessHours),
       db.select().from(holidays),
       db.select({ id: centers.id, name: centers.name, timezone: centers.timezone }).from(centers),
@@ -60,9 +58,7 @@ async function run(request: Request) {
 
   const enabledPolicies = activePolicies.filter((p) => p.isActive);
 
-  const terminalStageIds = new Set(
-    stageRows.filter((s) => s.stageType === "won" || s.stageType === "lost").map((s) => s.id),
-  );
+  const terminalValues = terminalValuesOf(temperatureOptions);
 
   const businessHoursByCenter = new Map<string, DayHours[]>();
   for (const row of businessHourRows) {
@@ -86,35 +82,35 @@ async function run(request: Request) {
   const timeZoneByCenter = new Map(centerRows.map((c) => [c.id, c.timezone]));
 
   /*
-    Won, lost — and Dead.
+    Won or lost — Took admission, Negative, Wrong target, AFD India
+    student, Joined competitor.
 
-    The first two were always excluded. The third was not, so a lead a
-    counsellor had explicitly marked Dead went on breaching its SLA every
-    night and escalating to whoever the ladder named. The one action
-    available for saying "stop chasing this person" changed nothing about
-    what the system chased them about, which is how an escalation ladder
-    stops being read.
+    A lead somebody has stopped working must stop breaching its SLA, or
+    the escalation ladder keeps paging people about students nobody is
+    chasing, which is how a ladder stops being read. One test now, where
+    there used to be two (a terminal stage, or the Dead temperature)
+    because status and funnel position were separate columns.
   */
-  const evaluableLeads = activeLeads.filter((lead) => !isNoLongerWorked(lead, terminalStageIds));
+  const evaluableLeads = activeLeads.filter((lead) => !isNoLongerWorked(lead.temperature, terminalValues));
   const leadIds = evaluableLeads.map((lead) => lead.id);
 
-  // Only the most recent stage_history row per lead is needed (when it
-  // entered its *current* stage) — fetched newest-first and the first hit
-  // per lead id kept, cheaper than a per-lead query for AFD's actual
+  // Only the most recent temperature_history row per lead is needed (when
+  // it entered its *current* status) — fetched newest-first and the first
+  // hit per lead id kept, cheaper than a per-lead query for AFD's actual
   // volume (~200 leads/month, see docs/DECISIONS.md's export-guard note
   // for the same reasoning applied elsewhere).
-  const stageHistoryRows =
+  const statusHistoryRows =
     leadIds.length > 0
       ? await db
-          .select({ leadId: stageHistory.leadId, changedAt: stageHistory.changedAt })
-          .from(stageHistory)
-          .where(inArray(stageHistory.leadId, leadIds))
-          .orderBy(desc(stageHistory.changedAt))
+          .select({ leadId: temperatureHistory.leadId, changedAt: temperatureHistory.changedAt })
+          .from(temperatureHistory)
+          .where(inArray(temperatureHistory.leadId, leadIds))
+          .orderBy(desc(temperatureHistory.changedAt))
       : [];
-  const stageEnteredAtByLead = new Map<string, Date>();
-  for (const row of stageHistoryRows) {
-    if (!stageEnteredAtByLead.has(row.leadId)) {
-      stageEnteredAtByLead.set(row.leadId, row.changedAt);
+  const statusEnteredAtByLead = new Map<string, Date>();
+  for (const row of statusHistoryRows) {
+    if (!statusEnteredAtByLead.has(row.leadId)) {
+      statusEnteredAtByLead.set(row.leadId, row.changedAt);
     }
   }
 
@@ -144,12 +140,12 @@ async function run(request: Request) {
     const centerBusinessHours = (lead.centerId && businessHoursByCenter.get(lead.centerId)) || [];
     const centerHolidays =
       (lead.centerId && holidaysByCenter.get(lead.centerId)) || new Set<string>();
-    const stageEnteredAt = stageEnteredAtByLead.get(lead.id) ?? lead.createdAt;
+    const statusEnteredAt = statusEnteredAtByLead.get(lead.id) ?? lead.createdAt;
 
     const result = evaluateLeadSla({
       lead,
       policies: enabledPolicies,
-      currentStageEnteredAt: stageEnteredAt,
+      currentStatusEnteredAt: statusEnteredAt,
       businessHours: centerBusinessHours,
       holidayDates: centerHolidays,
       timeZone,

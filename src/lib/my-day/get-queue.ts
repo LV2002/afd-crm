@@ -3,6 +3,13 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { startOfDayIST, startOfTomorrowIST } from "@/lib/format/date";
+import {
+  indexByValue,
+  isNoLongerWorked,
+  terminalValuesOf,
+  type TemperatureOption,
+} from "@/lib/leads/temperature-kinds";
+import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 
 import { buildMyDayQueue, type MyDayLead, type MyDayQueue, type MyDayTask } from "./build-queue";
 
@@ -12,7 +19,6 @@ interface LeadRow {
   student_name: string;
   primary_phone: string;
   temperature: string | null;
-  stage_id: string | null;
   center_id: string | null;
   next_followup_at: string | null;
   sla_breached: boolean;
@@ -21,36 +27,35 @@ interface LeadRow {
 
 export interface MyDayQueueResult {
   queue: MyDayQueue;
-  stageById: Map<string, { id: string; name: string; stage_type: string }>;
+  /** value → option, so a row can show the label and colour an admin chose. */
+  temperatureByValue: Map<string, TemperatureOption>;
   centerIds: string[];
 }
 
 /**
  * The fetch-and-build behind My Day, factored out of the page component so
  * the dashboard's "Your day" widget can show the same counts without
- * duplicating this query. Same "won/lost leads need no more daily
- * attention" filter as the full My Day page.
+ * duplicating this query. Leads that are Took admission or a closing
+ * outcome need no more daily attention, and are left out.
  */
 export async function getMyDayQueueForUser(supabase: SupabaseClient, userId: string): Promise<MyDayQueueResult> {
-  const [{ data: stageRows }, { data: leadRows }] = await Promise.all([
-    supabase.from("pipeline_stages").select("id, name, stage_type").returns<
-      Array<{ id: string; name: string; stage_type: string }>
-    >(),
+  const [temperatureOptions, { data: leadRows }] = await Promise.all([
+    loadTemperatureOptions(supabase),
     supabase
       .from("leads")
       .select(
-        "id, lead_number, student_name, primary_phone, temperature, stage_id, center_id, next_followup_at, sla_breached, created_at",
+        "id, lead_number, student_name, primary_phone, temperature, center_id, next_followup_at, sla_breached, created_at",
       )
       .eq("assigned_to", userId)
       .is("deleted_at", null)
       .returns<LeadRow[]>(),
   ]);
 
-  const stageById = new Map((stageRows ?? []).map((s) => [s.id, s]));
-  const activeLeadRows = (leadRows ?? []).filter((row) => {
-    const stageType = row.stage_id ? stageById.get(row.stage_id)?.stage_type : undefined;
-    return stageType !== "won" && stageType !== "lost";
-  });
+  const temperatureByValue = indexByValue(temperatureOptions);
+  const terminalValues = terminalValuesOf(temperatureOptions);
+  const activeLeadRows = (leadRows ?? []).filter(
+    (row) => !isNoLongerWorked(row.temperature, terminalValues),
+  );
 
   const leadIds = activeLeadRows.map((row) => row.id);
 
@@ -79,7 +84,6 @@ export async function getMyDayQueueForUser(supabase: SupabaseClient, userId: str
     studentName: row.student_name,
     primaryPhone: row.primary_phone,
     temperature: row.temperature,
-    stageId: row.stage_id,
     centerId: row.center_id,
     nextFollowupAt: row.next_followup_at,
     slaBreached: row.sla_breached,
@@ -106,7 +110,7 @@ export async function getMyDayQueueForUser(supabase: SupabaseClient, userId: str
 
   return {
     queue,
-    stageById,
+    temperatureByValue,
     centerIds: Array.from(new Set(activeLeadRows.map((row) => row.center_id).filter(Boolean))) as string[],
   };
 }

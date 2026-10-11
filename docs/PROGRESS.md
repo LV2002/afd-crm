@@ -8530,3 +8530,71 @@ Stubbed: nothing. **1742 tests pass** (9 added), typecheck, lint, `db:audit` and
   scrollWidth.
 
 Stubbed: nothing. **1742 tests pass**, typecheck, lint, `db:audit` and build clean.
+
+## Lead profile: Save button removed
+
+- The profile form on a lead no longer has a **Save changes** button. Every field already
+  saved as you left it (autosave, added earlier); the button was a second way to do what had
+  happened already. The quiet "Changes save as you go / Saving… / Saved" line stays as the
+  acknowledgement, and Enter in a text box still submits through the same action.
+- Counsellor list: shown to `report.center` or `report.org`, and the Dashboard says why it is
+  empty (PR #89).
+
+Stubbed: nothing.
+
+## Session 67 — one status: temperature replaces the pipeline stage
+
+Leon: *"I don't want stages anymore, instead lets keep it as only temperature"* — eleven values,
+Took admission set automatically on confirming an admission, and refused by hand without one.
+Full reasoning, every assumption and what it costs are in `docs/DECISIONS.md` (2026-10-09, "One
+status"); CLAUDE.md's first non-negotiable now says so instead of contradicting the code.
+
+- **Migration 0099** converts every lead (any enrolment → Took admission; Won stage with no
+  enrolment → Hot, reported, never a fabricated admission; Lost → Negative; Parked → Future
+  prospect; Dead → Negative; Very Hot → Hot; otherwise Contacted/Not contacted by whether anyone
+  ever spoke to them), seeds the history table so SLA clocks do not restart, and re-points or
+  **switches off and labels** every rule, policy and WhatsApp flow that conditioned on a stage —
+  an unknown condition field makes the evaluator throw, which on an assignment rule would stop
+  every new lead being assigned. **Verified three ways before it was allowed near a push:** a
+  scratch database at migration 0098 loaded with thirteen lead shapes and stage-based rules,
+  policies and flows (`verify0099.sh` pattern — rebuild, load, apply, read back); the
+  CI-style fresh install (shim → migrate → seed), which **caught a real failure** — the
+  `temperature` category does not exist until the seed runs, so the migration's foreign key
+  failed every fresh database; and the full suite against that database.
+- **The admission rule is a database trigger** (`enforce_lead_status`), so it holds for the edit
+  form, an import, a script and raw SQL alike: Took admission needs a non-deleted enrolment;
+  a standing admission cannot be moved off it by hand; a closing outcome that asks why needs
+  `lost_reason`. 17 integration tests against the real trigger (`lead-status-rules.spec.ts`).
+- **`kind` is the behaviour** (`new | open | won | lost | parked`, in `dropdown_options.metadata`)
+  — nothing branches on a label or a value. `lib/leads/temperature-kinds.ts` is the one
+  definition of "no longer worked" that the queue, the SLA sweep, the dashboard, the forecast, the
+  orphan queue and the nav badges now share, where there were two (a terminal stage, or Dead).
+- **One control on the lead page**: Contacted / Cold / Warm / Hot as buttons, the endings in a
+  select, Took admission shown but disabled with the reason. Closing outcomes that ask why open
+  the existing reason dialog. `confirmAdmission()` sets Took admission in the same transaction;
+  the first logged interaction moves Not contacted → Contacted.
+- **Settings → Temperatures** now sets what each one *means*, its chance of admission and whether
+  closing asks why. Fixed on the way: a temperature's value could be renamed (orphaning its
+  leads), deleted while leads were on it, and have its kind moved into or out of Took admission;
+  "move up" changed the settings list and nothing else; and the CSV import threw away the result
+  of the update that wrote a lead's status, so a refused write silently cost the lead its
+  follow-up date and custom fields.
+- **Retired, not dropped:** `pipeline_stages`, `leads.stage_id`, `stage_history` stay in the
+  database, unused, and `tests/no-stage.spec.ts` fails the build if anything touches them (shown
+  to fire on a planted violation and to ignore a comment). A follow-up migration drops them.
+
+Stubbed / not done: **the staff and administrator manuals, their PDFs and the training video still
+describe stages** and need rewriting and regenerating. The old stage history is not shown on a
+lead's timeline (it is all still in the table). Browser (e2e) tests could not be run locally —
+they need the Supabase stack — so CI is their first run.
+
+**1792 tests pass** against a fresh CI-style database; typecheck, lint, `db:audit` and build clean.
+
+## Interaction outcomes and follow-up rule (migration 0100)
+
+- Outcomes are now Connected, Not connected, Call back later, Interested, Not interested,
+  Converted, Dropped, Wrong target audience.
+- Next action and its date are not required for Converted, Not interested, Dropped or Wrong
+  target audience (form, server action and CHECK constraint agree). Tests added for each.
+
+Stubbed: nothing. **1795 tests pass**, typecheck, lint and `db:audit` clean.

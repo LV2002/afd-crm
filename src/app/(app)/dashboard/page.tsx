@@ -1,5 +1,7 @@
 import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser, scopeFor, type SessionUser } from "@/lib/auth/session";
+import { canSeeTeam } from "@/lib/dashboard/can-see-team";
+import { getCounsellorsWithReason } from "@/lib/dashboard/get-counsellors";
 import { getRoleLayout } from "@/lib/dashboard/get-layout";
 import { resolveDashboard } from "@/lib/dashboard/resolve-layout";
 import { createClient } from "@/lib/supabase/server";
@@ -77,9 +79,10 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   // The counsellors a manager can open live in the sidebar, under Dashboard
   // — see components/layout/counsellor-links.tsx — not on this page.
-  const [layout, terms] = await Promise.all([
+  const [layout, terms, team] = await Promise.all([
     getRoleLayout(supabase, user.roleId),
     getTerminologyMap(),
+    canSeeTeam(user) ? getCounsellorsWithReason(supabase, user.id) : null,
   ]);
 
   const widgets = resolveDashboard(layout, {
@@ -96,6 +99,25 @@ export default async function DashboardPage() {
           {user.centerIds.length ? ` · ${user.centerIds.length} centre(s)` : ""}.
         </p>
       </div>
+
+      {/*
+        Why the sidebar has no names under Dashboard, said out loud. An
+        empty list looks the same whether no role is a counsellor role or
+        this person's policies hide the people, and neither can be fixed
+        from a blank.
+      */}
+      {team?.reason === "no_counsellor_role" && (
+        <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+          No counsellors to list: no role is set up to work its own leads. A counsellor role is
+          one that can read leads at the &ldquo;own&rdquo; scope (Settings &rarr; Roles).
+        </p>
+      )}
+      {team?.reason === "no_visible_people" && (
+        <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+          No counsellors to list: the counsellor role exists, but no active person in it is visible
+          to you. Check that they are active and assigned to your centre (Settings &rarr; Users).
+        </p>
+      )}
 
       {/*
         Six columns rather than two, so a pair can be uneven: the

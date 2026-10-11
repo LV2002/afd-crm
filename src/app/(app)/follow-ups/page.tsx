@@ -18,7 +18,6 @@ import { droppedLeadIds } from "@/lib/enrolment/dropped-leads";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import {
   OPTION_BEARING_TYPES,
-  getDropdownOptions,
   resolveFieldOptions,
   type FieldOption,
 } from "@/lib/fields/resolve-field-options";
@@ -36,7 +35,9 @@ import {
   type FollowupBucket,
 } from "@/lib/leads/followup-buckets";
 import { maskPhone } from "@/lib/leads/mask-phone";
-import { DEAD_TEMPERATURE } from "@/lib/leads/no-longer-worked";
+import { unfinishedLeadsFilter } from "@/lib/leads/finished-filter";
+import { terminalValuesOf } from "@/lib/leads/temperature-kinds";
+import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 import { batchNameLookup } from "@/lib/leads/batch-name-lookup";
 import { createClient } from "@/lib/supabase/server";
 import { formatTerm } from "@/lib/terminology/terms";
@@ -104,7 +105,6 @@ interface FollowupRow {
   student_name: string;
   primary_phone: string;
   next_followup_at: string;
-  stage_id: string | null;
   temperature: string | null;
   center_id: string | null;
   assigned_to: string | null;
@@ -156,24 +156,22 @@ export default async function FollowUpsPage({
   const bounds = boundariesFrom(startOfDayIST(now), startOfTomorrowIST(now));
 
   /*
-    Won, lost and Dead are left out, and this is the same judgement the
-    "overdue" filter on the leads list makes — see date-filters.ts. A
-    student who enrolled in March still carries the follow-up date
-    somebody booked in February, and a catch-up list that opens with
-    twenty of them is not a catch-up list. Nor is one that keeps asking
-    about somebody the counsellor has already marked Dead.
+    Took admission and the closing outcomes are left out, and this is the
+    same judgement the "overdue" filter on the leads list makes — see
+    date-filters.ts. A student who enrolled in March still carries the
+    follow-up date somebody booked in February, and a catch-up list that
+    opens with twenty of them is not a catch-up list. Nor is one that keeps
+    asking about somebody the counsellor has already marked Negative.
+
+    The options are loaded once and reused below for the badges.
   */
-  const { data: terminalStages } = await supabase
-    .from("pipeline_stages")
-    .select("id")
-    .in("stage_type", ["won", "lost"])
-    .returns<Array<{ id: string }>>();
-  const terminalIds = (terminalStages ?? []).map((stage) => stage.id);
+  const temperatureOptions = await loadTemperatureOptions(supabase);
+  const unfinished = unfinishedLeadsFilter(terminalValuesOf(temperatureOptions));
 
   let query = supabase
     .from("leads")
     .select(
-      "id, lead_number, student_name, primary_phone, next_followup_at, stage_id, temperature, center_id, assigned_to",
+      "id, lead_number, student_name, primary_phone, next_followup_at, temperature, center_id, assigned_to",
       { count: "exact" },
     )
     .is("deleted_at", null);
@@ -185,10 +183,7 @@ export default async function FollowUpsPage({
   query = query.not("next_followup_at", "is", null);
   query = applyLeadFilters(query, filterableFields, filterValues);
   if (scope === "mine") query = query.eq("assigned_to", user.id);
-  if (terminalIds.length > 0) {
-    query = query.not("stage_id", "in", `(${terminalIds.join(",")})`);
-  }
-  query = query.or(`temperature.is.null,temperature.neq.${DEAD_TEMPERATURE}`);
+  if (unfinished) query = query.or(unfinished);
 
   const searchFilter = filterTerm(search);
   if (searchFilter) {
@@ -220,10 +215,8 @@ export default async function FollowUpsPage({
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const [stageOptions, temperatureOptions, optionsWithUsers, centerNames, dropped] =
+  const [optionsWithUsers, centerNames, dropped] =
     await Promise.all([
-      stageOptionsFor(supabase),
-      getDropdownOptions(supabase, "temperature"),
       // Names for whoever these rows are assigned to, which is not the
       // same set as "who may a lead be assigned to" — a lead owned by a
       // deactivated counsellor still has to say who owns it.
@@ -242,7 +235,6 @@ export default async function FollowUpsPage({
       droppedLeadIds(supabase, list.map((row) => row.id)),
     ]);
 
-  const stageByValue = new Map(stageOptions.map((option) => [option.value, option]));
   const temperatureByValue = new Map(temperatureOptions.map((option) => [option.value, option]));
   const assigneeByValue = new Map(
     (optionsWithUsers.assigned_to ?? []).map((option) => [option.value, option] as const),
@@ -345,7 +337,6 @@ export default async function FollowUpsPage({
                         <TableHead>Due</TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead>Phone</TableHead>
-                        <TableHead>Stage</TableHead>
                         <TableHead>Temperature</TableHead>
                         <TableHead>Centre</TableHead>
                         {scope === "all" && <TableHead>Owner</TableHead>}
@@ -353,7 +344,6 @@ export default async function FollowUpsPage({
                     </TableHeader>
                     <TableBody>
                       {bucketRows.map((row) => {
-                        const stage = row.stage_id ? stageByValue.get(row.stage_id) : undefined;
                         const temperature = row.temperature
                           ? temperatureByValue.get(row.temperature)
                           : undefined;
@@ -382,9 +372,6 @@ export default async function FollowUpsPage({
                                 The full number is one click away on the lead. */}
                             <TableCell className="whitespace-nowrap font-mono text-xs">
                               {maskPhone(row.primary_phone)}
-                            </TableCell>
-                            <TableCell>
-                              {stage ? <OptionBadge option={stage} /> : <span className="text-muted-foreground">—</span>}
                             </TableCell>
                             <TableCell>
                               {temperature ? (
@@ -446,27 +433,4 @@ function pageHref(
   }
   next.set("page", String(target));
   return `/follow-ups?${next.toString()}`;
-}
-
-/**
- * Stages as badge options, with the admin's own colours.
- *
- * `pipeline_stages` is not a `dropdown_options` category, so the generic
- * option resolver does not reach it — which is why this is three lines
- * here rather than one call.
- */
-async function stageOptionsFor(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-): Promise<FieldOption[]> {
-  const { data } = await supabase
-    .from("pipeline_stages")
-    .select("id, name, color")
-    .eq("is_active", true)
-    .order("sort_order")
-    .returns<Array<{ id: string; name: string; color: string | null }>>();
-  return (data ?? []).map((stage) => ({
-    value: stage.id,
-    label: stage.name,
-    color: stage.color,
-  }));
 }

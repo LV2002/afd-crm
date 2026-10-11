@@ -4506,3 +4506,130 @@ both ways.
 **Still gated on a numeric campaign id.** `adIdentifiersFrom()` is unchanged: a platform alone
 attributes nothing, because spend is joined on the campaign and a lead with no campaign would
 land in a row no campaign owns.
+
+---
+
+## 2026-10-09 · One status: temperature replaces the pipeline stage
+
+**Leon's decision, and it reverses CLAUDE.md's first non-negotiable.** "I don't want stages
+anymore, instead lets keep it as only temperature" — eleven values (Not contacted, Contacted,
+Cold, Warm, Hot, Took admission, Future prospect, Negative, Wrong target, AFD India student,
+Joined competitor), replacing the stage everywhere. The original rule said stage and
+temperature must stay separate so that a lead could be Hot at Demo Scheduled. He has chosen
+the simpler model; the cost is that "Hot, and at which step?" is no longer answerable from the
+data. That trade is his to make, so it was made, and CLAUDE.md now says so rather than
+contradicting the code.
+
+**Two rules he specified, enforced where no write path can skip them.** Confirming an admission
+moves the lead to *Took admission* automatically, in the same transaction as the enrolment. And
+nobody may mark a lead *Took admission* without a confirmed admission behind it — "course,
+batch and fee". Both live in the `enforce_lead_status` trigger (migration 0099), not in the
+Server Action, because the rule's whole value is that it holds for the edit form, an import, a
+script and a direct SQL session alike. The action refuses first with an instruction ("fill in
+Confirm admission further down") and the trigger is the backstop.
+
+### What each temperature *means* is data, not code
+
+Behaviour used to hang off `pipeline_stages.stage_type`. It now hangs off
+`dropdown_options.metadata.kind` — `new | open | won | lost | parked` — and nothing branches on a
+label or a value, so an admin can rename "Joined competitor" to "Went elsewhere" and nothing
+notices. Alongside it: `probability` (the forecast's weight), `requires_reason` (a closing
+outcome asks why) and the existing `interested` flag. All editable in Settings → Temperatures.
+An option with no kind is `open` — what a plain temperature always was — because a stronger
+default would either silently stop the chasing or trip the admission rule on an innocent new
+option.
+
+### Assumptions I made, for Leon to correct
+
+These were judgement calls; none is hard to change, and each is a setting or one line.
+
+- **Existing leads were converted** by: any enrolment → Took admission; sat in a Won stage with
+  *no* enrolment → **Hot** (somebody dragged them there by hand; inventing an admission would be
+  fabricating a fact, and Hot puts them back in front of a counsellor — the migration reports
+  how many); Lost stage → Negative; Parked → Future prospect; old Dead → Negative; Very Hot →
+  Hot; Hot/Warm/Cold unchanged; no temperature → Contacted if ever spoken to, else Not
+  contacted. Tested on a scratch copy loaded with every combination before it touched anything.
+- **Negative and Joined competitor ask why; Wrong target and AFD India student do not.** The old
+  Lost stage required a reason, and the lost-reason report depends on it; the other two explain
+  themselves. Imports record "Other — carried over from the import file" rather than refusing a
+  historic lead the old system had already given up on.
+- **Interested = Warm and Hot.** Very Hot is not in his list. Unticked in Settings if he wants
+  Contacted counted too.
+- **Chance of admission** (the forecast's weights): Not contacted 5%, Contacted 10, Cold 10,
+  Warm 30, Hot 60, Took admission 100, Future prospect 15, closed outcomes 0. These are starting
+  estimates — the old stage probabilities (5 to 90) were never comparable to a temperature's —
+  and the forecast page says plainly when a temperature has none set.
+- **Not contacted → Contacted happens by itself** the first time anyone logs an interaction,
+  tied to the same moment as `first_response_at` so the status and the dashboard's "contacted"
+  figure cannot disagree. Left to people, "Not contacted" would still be on a lead ten minutes
+  after the call.
+- **A lead with a standing admission cannot be moved off Took admission by hand.** The status is
+  a fact about the enrolment, and a lead edited back to Hot while an admission is open would
+  re-enter the queue and be chased as if unsold. Dropping the admission (Accounts) is the way
+  out, and then it can be changed. Not asked for — the other direction was — but the same
+  invariant, and it was a hole.
+- **The nightly rules only re-grade leads that are being worked, and only set in-progress
+  values.** A rule that wrote Hot over Not contacted would claim a conversation that never
+  happened; one that wrote Negative would need a reason it cannot supply. The settings screen
+  refuses to save such a rule.
+- **Clearing a temperature is gone.** A lead always has one. (Pressing the active button used to
+  hand the lead "back to the rules"; with a status that means something, "no status" is not a
+  state to offer.)
+- **The edit form no longer carries temperature**, only the status bar does — two doors to one
+  column is how a closing outcome gets recorded without its reason.
+
+### Retired, not dropped
+
+`pipeline_stages`, `leads.stage_id` and `stage_history` are **left in the database, unused.**
+`stage_history` is the only record of where each lead used to be, and dropping it in the same
+migration that stops using it is a decision for after the new model has been seen working. A
+test (`tests/no-stage.spec.ts`) fails the build if any application code touches them, because
+code that did would still type-check and still run, and silently return nothing useful. A
+follow-up migration drops them.
+
+What this costs, plainly: a lead's **old stage history no longer appears on its timeline** (it is
+all still in the table); **WhatsApp automations triggered by "entering a stage"** were re-pointed
+to the matching temperature where there is one (Won → Took admission, Lost → Negative, Parked →
+Future prospect, New → Not contacted, a stage named Contacted → Contacted) and **switched off and
+labelled "[Needs review: used a stage]"** where there is not; the same for any assignment rule,
+SLA policy or temperature rule that conditioned on a stage. An unknown condition field makes the
+evaluator throw, which on an assignment rule would stop every new lead being assigned, so
+leaving them live was not an option. **A configuration bundle exported before this (version 4) is
+refused**, not half-imported: its temperatures have no kind, and a CRM that imports "Hot" with no
+meaning attached would behave differently from the one it came from, without saying so.
+
+### Things this exposed in the settings screen, fixed on the way
+
+- A temperature's **value could be renamed**. Leads store the value, and the rules look the kind
+  up by it, so a rename orphaned every lead carrying the old one. The value is read-only for
+  temperatures now; the label stays free.
+- **Deleting** a temperature leads were still on silently turned them into unclassified leads —
+  "Took admission" would have made every confirmed admission look open. It is refused with a
+  count, and switching it off is offered instead.
+- A temperature's kind cannot move **into or out of Took admission** while leads carry it, for
+  the same reason: either way the status and the enrolment would stop agreeing.
+- Moving an option up or down in Settings changed the list and nothing else, because the order
+  was read from a stale seed field. It reads `sort_order`.
+- The **CSV import discarded the result** of the update that wrote the status (and every other
+  non-identity column), so a refused write cost the lead its follow-up date, custom fields and
+  status with nothing said. It reports them now.
+
+### Still to do
+
+The staff and administrator manuals (and the PDFs and training video built from them) still
+describe stages; they need rewriting and regenerating. Nothing in the application depends on them.
+
+## 2026-10-11 · Outcomes that end a conversation need no follow-up
+
+Leon: the interaction outcomes are Connected, Not connected, Call back later, Interested,
+Not interested, Converted, Dropped, Wrong target audience; and the next action/date are not
+required for Converted, Not interested, Dropped or Wrong target audience.
+
+- Migration 0100 sets the list (the stored value `not_reachable` is relabelled "Not
+  connected" so history stays valid; "Demo scheduled" is deactivated, not deleted) and widens
+  the `interactions_next_action_required` CHECK to the four values.
+- **Assumption:** the exempt outcomes are keyed on the stored *value* in code
+  (`NO_FOLLOW_UP_OUTCOMES`), as `converted` already was, not on a flag in the row's
+  metadata. A CHECK cannot read another table, and a trigger to do it is more machinery than
+  four fixed values justify. If an admin should be able to mark their own outcomes as
+  conversation-enders, move this to a `needs_follow_up` flag read by a trigger.

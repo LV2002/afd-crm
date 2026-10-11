@@ -104,22 +104,6 @@ export const dropdownOptionSchema = z.object({
   updatedAt: nullableTimestamp,
 });
 
-export const pipelineStageSchema = z.object({
-  id: uuid,
-  name: z.string(),
-  sortOrder: z.number().int(),
-  color: z.string().nullable().optional(),
-  stageType: z.enum(["new", "normal", "scheduled", "enrolment_form", "payment", "won", "lost", "parked"]),
-  isActive: z.boolean(),
-  probability: z.string().nullable().optional(),
-  slaHours: z.number().int().nullable().optional(),
-  requiresReason: z.boolean(),
-  requiredFields: z.array(z.string()).nullable().optional(),
-  autoActions: z.record(z.string(), z.unknown()).nullable().optional(),
-  createdAt: timestamp,
-  updatedAt: nullableTimestamp,
-});
-
 export const fieldDefinitionSchema = z.object({
   id: uuid,
   entity: z.enum(["lead", "student", "enrolment"]),
@@ -193,7 +177,7 @@ export const slaPolicySchema = z.object({
   priority: z.number().int(),
   isActive: z.boolean(),
   appliesTo: z.record(z.string(), z.unknown()).nullable().optional(),
-  measure: z.enum(["first_response", "next_followup", "in_stage"]),
+  measure: z.enum(["first_response", "next_followup", "in_status"]),
   targetHours: z.number().int(),
   businessHoursOnly: z.boolean(),
   escalations: z.array(z.record(z.string(), z.unknown())).nullable().optional(),
@@ -273,8 +257,19 @@ export const dashboardLayoutSchema = z.object({
   updatedAt: nullableTimestamp,
 });
 
-/** Bumped only if this shape itself changes, not on every export. */
-export const CONFIG_BUNDLE_VERSION = "4";
+/**
+ * Bumped only if this shape itself changes, not on every export.
+ *
+ * 5 — pipeline stages are gone. A lead's status is its temperature, and
+ * what each temperature MEANS (kind, chance of admission, whether it asks
+ * for a reason) travels inside `dropdownOptions[].metadata`, so there is no
+ * separate stage table to carry. A version-4 bundle is refused rather than
+ * half-imported: its temperatures have no kind, and a CRM that imports
+ * "Hot" with no meaning attached would behave differently from the one it
+ * was exported from without saying so. Export again from an updated
+ * instance.
+ */
+export const CONFIG_BUNDLE_VERSION = "5";
 
 export const configBundleSchema = z.object({
   version: z.literal(CONFIG_BUNDLE_VERSION),
@@ -284,7 +279,6 @@ export const configBundleSchema = z.object({
   centers: z.array(centerSchema),
   dropdownCategories: z.array(dropdownCategorySchema),
   dropdownOptions: z.array(dropdownOptionSchema),
-  pipelineStages: z.array(pipelineStageSchema),
   fieldDefinitions: z.array(fieldDefinitionSchema),
   roles: z.array(roleSchema),
   rolePermissions: z.array(rolePermissionSchema),

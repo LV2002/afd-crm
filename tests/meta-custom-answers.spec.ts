@@ -89,15 +89,15 @@ const COUNSELLOR: MappableField = {
   options: [],
 };
 
-const STAGE: MappableField = {
-  key: "stage_id",
-  label: "Stage",
+const TEMPERATURE: MappableField = {
+  key: "temperature",
+  label: "Temperature",
   type: "select",
   isCore: true,
-  options: [{ value: "abc", label: "Payment Pending" }],
+  options: [{ value: "hot", label: "Hot" }],
 };
 
-const CATALOG = [EDUCATION, EXAMS, COURSES, EXAM_YEAR, SCHOOL, ATTEMPTS, COUNSELLOR, STAGE];
+const CATALOG = [EDUCATION, EXAMS, COURSES, EXAM_YEAR, SCHOOL, ATTEMPTS, COUNSELLOR, TEMPERATURE];
 
 describe("mapMetaCustomAnswers", () => {
   it("maps the two questions AFD's own forms actually ask", () => {
@@ -200,15 +200,15 @@ describe("mapMetaCustomAnswers", () => {
     expect(values).toEqual({ previous_attempts: 2 });
   });
 
-  it("will not let a form question set ownership or funnel position", () => {
-    // A form asking "which counsellor?" or "stage" must not be a shortcut
-    // past the assignment rules engine (CLAUDE.md non-negotiable #8) or
-    // put a lead at a funnel position that never happened.
+  it("will not let a form question set ownership or the lead's status", () => {
+    // A form asking "which counsellor?" or "temperature" must not be a
+    // shortcut past the assignment rules engine (CLAUDE.md non-negotiable
+    // #8) or put a lead at a status nobody gave it.
     const mapping = mapMetaCustomAnswers(
       [
         { name: "assigned_to", values: ["Athira"] },
-        { name: "stage_id", values: ["abc"] },
-        { name: "stage", values: ["Payment Pending"] },
+        { name: "temperature", values: ["hot"] },
+        { name: "lead status", values: ["Hot"] },
       ],
       CATALOG,
     );

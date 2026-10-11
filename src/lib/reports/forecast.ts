@@ -108,47 +108,48 @@ export function pace(input: PaceInput): Pace {
 
 export interface PipelineLead {
   leadId: string;
-  stageId: string | null;
-  stageName: string;
-  /** 0–1. Null when the admin has not set one for this stage. */
+  /** The lead's temperature value; null for a lead with no status at all. */
+  temperature: string | null;
+  temperatureLabel: string;
+  /** 0–1. Null when the admin has not set one for this temperature. */
   probability: number | null;
 }
 
-export interface PipelineStageWeight {
-  stageId: string | null;
-  stageName: string;
+export interface TemperatureWeight {
+  temperature: string | null;
+  temperatureLabel: string;
   leads: number;
   probability: number | null;
-  /** leads × probability, or 0 for a stage with no probability set. */
+  /** leads × probability, or 0 for a temperature with no probability set. */
   expected: number;
 }
 
 export interface WeightedPipeline {
-  /** Every open lead, whether or not its stage carries a probability. */
+  /** Every open lead, whether or not its temperature carries a probability. */
   openLeads: number;
   /** The sum of the probabilities: how many admissions the open pipeline is worth. */
   expectedAdmissions: number;
   /**
-   * Leads sitting in stages with no probability configured. They count
+   * Leads whose temperature has no probability configured. They count
    * as nothing above, and saying so is the difference between a low
    * forecast and a misconfigured one.
    */
   unweightedLeads: number;
-  byStage: PipelineStageWeight[];
+  byTemperature: TemperatureWeight[];
 }
 
 export function weightedPipeline(leads: PipelineLead[]): WeightedPipeline {
-  const groups = new Map<string, PipelineStageWeight>();
+  const groups = new Map<string, TemperatureWeight>();
 
   for (const lead of leads) {
-    const key = lead.stageId ?? "__none__";
+    const key = lead.temperature ?? "__none__";
     const existing = groups.get(key);
     if (existing) {
       existing.leads += 1;
     } else {
       groups.set(key, {
-        stageId: lead.stageId,
-        stageName: lead.stageName,
+        temperature: lead.temperature,
+        temperatureLabel: lead.temperatureLabel,
         leads: 1,
         probability: lead.probability,
         expected: 0,
@@ -173,29 +174,29 @@ export function weightedPipeline(leads: PipelineLead[]): WeightedPipeline {
     openLeads: leads.length,
     expectedAdmissions,
     unweightedLeads,
-    byStage: [...groups.values()].sort((a, b) => b.expected - a.expected || b.leads - a.leads),
+    byTemperature: [...groups.values()].sort((a, b) => b.expected - a.expected || b.leads - a.leads),
   };
 }
 
 /**
- * Reads a stage's stored probability, which is a percentage in the
- * database (`numeric(5,2)`, 0–100) and a fraction everywhere in this
- * file. Getting that wrong turns a 60% stage into sixty admissions,
+ * Reads a temperature's stored probability, which is a percentage on the
+ * option (`metadata.probability`, 0–100) and a fraction everywhere in this
+ * file. Getting that wrong turns a 60% temperature into sixty admissions,
  * which is exactly the kind of error a forecast makes look plausible.
  */
-export function stageProbability(value: string | number | null): number | null {
+export function temperatureProbability(value: string | number | null): number | null {
   if (value === null || value === undefined) return null;
   const numeric = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(numeric)) return null;
   // Out-of-range values are clamped rather than dropped: an admin who
-  // typed 120 meant "very likely", and a stage silently contributing
+  // typed 120 meant "very likely", and a temperature silently contributing
   // nothing is worse than one contributing at 100%.
   return Math.min(1, Math.max(0, numeric / 100));
 }
 
 /**
  * What the month looks like if everything currently open behaves as its
- * stage says.
+ * temperature says.
  *
  * Explicitly the optimistic end: the open pipeline does not all land this
  * month, and this makes no attempt to guess how much of it will. It is

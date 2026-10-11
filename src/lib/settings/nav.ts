@@ -48,15 +48,9 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["roles.manage"],
   },
   {
-    href: "/settings/pipeline-stages",
-    label: "Pipeline Stages",
-    description: "Add, reorder, colour, type, probability, SLA hours",
-    permissions: ["settings.manage"],
-  },
-  {
     href: "/settings/temperatures",
     label: "Temperatures",
-    description: "Values, colours, order, and the rules that assign them",
+    description: "The statuses a lead can have: values, colours, order, meaning, and the rules that assign them",
     permissions: ["settings.manage", "rules.manage"],
   },
   {

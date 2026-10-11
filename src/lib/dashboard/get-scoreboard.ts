@@ -5,6 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fromZonedTime } from "date-fns-tz";
 
 import { interestedTemperatures } from "@/lib/leads/interested-temperature";
+import { terminalValuesOf } from "@/lib/leads/temperature-kinds";
+import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 
 import {
   formatDateIST,
@@ -25,7 +27,6 @@ import {
   type CounsellorScoreboard,
   type ScoreboardEnrolment,
   type ScoreboardLead,
-  type StageInfo,
   type TeamMemberRow,
 } from "./scoreboard";
 
@@ -42,13 +43,12 @@ import {
  */
 
 const LEAD_COLUMNS =
-  "id, assigned_to, center_id, stage_id, created_at, assigned_at, first_response_at, next_followup_at, sla_breached, temperature";
+  "id, assigned_to, center_id, created_at, assigned_at, first_response_at, next_followup_at, sla_breached, temperature";
 
 interface LeadRow {
   id: string;
   assigned_to: string | null;
   center_id: string | null;
-  stage_id: string | null;
   created_at: string;
   assigned_at: string | null;
   first_response_at: string | null;
@@ -68,7 +68,6 @@ function toLead(row: LeadRow): ScoreboardLead {
     id: row.id,
     assignedTo: row.assigned_to,
     centerId: row.center_id,
-    stageId: row.stage_id,
     createdAt: row.created_at,
     assignedAt: row.assigned_at,
     firstResponseAt: row.first_response_at,
@@ -131,12 +130,13 @@ export function startOfCycleYearIST(now: Date, cycleStartMonth: number): Date {
 /** How many days the dashboard's own chart covers. */
 export const DASHBOARD_DAYS = 30;
 
-async function loadStages(supabase: SupabaseClient): Promise<StageInfo[]> {
-  const { data } = await supabase
-    .from("pipeline_stages")
-    .select("id, stage_type")
-    .returns<Array<{ id: string; stage_type: string }>>();
-  return (data ?? []).map((row) => ({ id: row.id, stageType: row.stage_type }));
+/**
+ * The temperatures that mean a lead is finished with: Took admission and
+ * the closing outcomes. Read from the options themselves — their `kind` —
+ * so an admin who renames or adds one changes the dashboard with it.
+ */
+async function loadTerminalTemperatures(supabase: SupabaseClient): Promise<Set<string>> {
+  return terminalValuesOf(await loadTemperatureOptions(supabase));
 }
 
 export interface MyDashboard {
@@ -178,9 +178,9 @@ export async function getMyDashboard(
     ),
   );
 
-  const [stages, interested, { data: leadRows }, { data: enrolmentRows }, { data: targetRows }] =
+  const [terminalTemperatures, interested, { data: leadRows }, { data: enrolmentRows }, { data: targetRows }] =
     await Promise.all([
-      loadStages(supabase),
+      loadTerminalTemperatures(supabase),
       interestedTemperatures(supabase),
       supabase
         .from("leads")
@@ -211,7 +211,7 @@ export async function getMyDashboard(
     scoreboard: buildCounsellorScoreboard({
       leads,
       enrolments,
-      stages,
+      terminalTemperatures,
       boundaries,
       interestedTemperatures: interested,
     }),
@@ -219,7 +219,7 @@ export async function getMyDashboard(
       leads,
       enrolments,
       days,
-      stages,
+      terminalTemperatures,
       interestedTemperatures: interested,
       startOfToday: boundaries.startOfToday,
     }),
@@ -274,9 +274,9 @@ export async function getCentreView(supabase: SupabaseClient): Promise<CentreVie
     Math.min(boundaries.startOfPreviousMonth.getTime(), days[0].from.getTime()),
   );
 
-  const [stages, { data: leadRows }, { data: enrolmentRows }, { data: memberRows }] =
+  const [terminalTemperatures, { data: leadRows }, { data: enrolmentRows }, { data: memberRows }] =
     await Promise.all([
-      loadStages(supabase),
+      loadTerminalTemperatures(supabase),
       supabase.from("leads").select(LEAD_COLUMNS).is("deleted_at", null).returns<LeadRow[]>(),
       supabase
         .from("enrolments")
@@ -304,8 +304,8 @@ export async function getCentreView(supabase: SupabaseClient): Promise<CentreVie
     .map((row) => ({ userId: row.id, name: row.full_name ?? "Unnamed" }));
 
   return {
-    centre: buildCentreScoreboard({ leads, enrolments, stages, boundaries }),
+    centre: buildCentreScoreboard({ leads, enrolments, terminalTemperatures, boundaries }),
     series: buildDailySeries({ leads, enrolments, days }),
-    team: buildTeamScoreboard({ members, leads, enrolments, stages, boundaries }),
+    team: buildTeamScoreboard({ members, leads, enrolments, terminalTemperatures, boundaries }),
   };
 }

@@ -13,7 +13,7 @@ export interface SlaFormState {
   success?: string;
 }
 
-const MEASURES = ["first_response", "next_followup", "in_stage"] as const;
+const MEASURES = ["first_response", "next_followup", "in_status"] as const;
 
 const policySchema = z.object({
   name: z.string().trim().min(1, "Name is required"),

@@ -2,22 +2,22 @@ import { describe, expect, it } from "vitest";
 
 import {
   aggregateCentrePerformance,
-  aggregateFunnel,
+  aggregateByStatus,
   aggregateLeadsBySource,
   aggregateScorecard,
   type ReportLead,
-  type StageInfo,
+  type StatusInfo,
 } from "../src/lib/reports/aggregate-leads";
 
 function lead(overrides: Partial<ReportLead> & Pick<ReportLead, "id">): ReportLead {
-  return { assignedTo: null, centerId: null, stageId: null, firstTouchSource: null, ...overrides };
+  return { assignedTo: null, centerId: null, temperature: null, firstTouchSource: null, ...overrides };
 }
 
-const STAGES: StageInfo[] = [
-  { id: "new", name: "New", sortOrder: 0, stageType: "new" },
-  { id: "qualified", name: "Qualified", sortOrder: 1, stageType: "normal" },
-  { id: "won", name: "Enrolled", sortOrder: 2, stageType: "won" },
-  { id: "lost", name: "Lost", sortOrder: 3, stageType: "lost" },
+const STATUSES: StatusInfo[] = [
+  { value: "not_contacted", label: "Not contacted", rank: 1, kind: "new" },
+  { value: "hot", label: "Hot", rank: 5, kind: "open" },
+  { value: "took_admission", label: "Took admission", rank: 6, kind: "won" },
+  { value: "negative", label: "Negative", rank: 8, kind: "lost" },
 ];
 
 describe("aggregateLeadsBySource", () => {
@@ -39,19 +39,24 @@ describe("aggregateLeadsBySource", () => {
   });
 });
 
-describe("aggregateFunnel", () => {
-  it("includes every stage in sort order, even with zero leads", () => {
-    const leads = [lead({ id: "1", stageId: "qualified" })];
-    const result = aggregateFunnel(leads, STAGES);
-    expect(result.map((r) => r.name)).toEqual(["New", "Qualified", "Enrolled", "Lost"]);
-    expect(result.find((r) => r.name === "Qualified")?.count).toBe(1);
-    expect(result.find((r) => r.name === "New")?.count).toBe(0);
+describe("aggregateByStatus", () => {
+  it("includes every status in rank order, even with zero leads", () => {
+    const leads = [lead({ id: "1", temperature: "hot" })];
+    const result = aggregateByStatus(leads, [...STATUSES].reverse());
+    expect(result.map((r) => r.name)).toEqual(["Not contacted", "Hot", "Took admission", "Negative"]);
+    expect(result.find((r) => r.name === "Hot")?.count).toBe(1);
+    expect(result.find((r) => r.name === "Not contacted")?.count).toBe(0);
   });
 
-  it("ignores a lead with no stage at all", () => {
-    const leads = [lead({ id: "1", stageId: null })];
-    const result = aggregateFunnel(leads, STAGES);
+  it("ignores a lead with no temperature at all", () => {
+    const leads = [lead({ id: "1", temperature: null })];
+    const result = aggregateByStatus(leads, STATUSES);
     expect(result.every((r) => r.count === 0)).toBe(true);
+  });
+
+  it("carries each status's kind through, so a chart can treat a closed one differently", () => {
+    const result = aggregateByStatus([], STATUSES);
+    expect(result.map((r) => r.kind)).toEqual(["new", "open", "won", "lost"]);
   });
 });
 
@@ -60,11 +65,11 @@ describe("aggregateScorecard", () => {
 
   it("counts total/won/lost per owner, sorted by total descending", () => {
     const leads = [
-      lead({ id: "1", assignedTo: "u1", stageId: "won" }),
-      lead({ id: "2", assignedTo: "u1", stageId: "new" }),
-      lead({ id: "3", assignedTo: "u2", stageId: "lost" }),
+      lead({ id: "1", assignedTo: "u1", temperature: "took_admission" }),
+      lead({ id: "2", assignedTo: "u1", temperature: "not_contacted" }),
+      lead({ id: "3", assignedTo: "u2", temperature: "negative" }),
     ];
-    const result = aggregateScorecard(leads, STAGES, names);
+    const result = aggregateScorecard(leads, STATUSES, names);
     expect(result).toEqual([
       { ownerId: "u1", name: "Athira", total: 2, won: 1, lost: 0 },
       { ownerId: "u2", name: "Divya", total: 1, won: 0, lost: 1 },
@@ -73,7 +78,7 @@ describe("aggregateScorecard", () => {
 
   it("excludes unassigned leads — there's no counsellor to score", () => {
     const leads = [lead({ id: "1", assignedTo: null })];
-    expect(aggregateScorecard(leads, STAGES, names)).toEqual([]);
+    expect(aggregateScorecard(leads, STATUSES, names)).toEqual([]);
   });
 });
 
@@ -82,11 +87,11 @@ describe("aggregateCentrePerformance", () => {
 
   it("counts total/won/lost per centre", () => {
     const leads = [
-      lead({ id: "1", centerId: "kochi", stageId: "won" }),
-      lead({ id: "2", centerId: "kochi", stageId: "new" }),
-      lead({ id: "3", centerId: "kannur", stageId: "lost" }),
+      lead({ id: "1", centerId: "kochi", temperature: "took_admission" }),
+      lead({ id: "2", centerId: "kochi", temperature: "not_contacted" }),
+      lead({ id: "3", centerId: "kannur", temperature: "negative" }),
     ];
-    expect(aggregateCentrePerformance(leads, STAGES, names)).toEqual([
+    expect(aggregateCentrePerformance(leads, STATUSES, names)).toEqual([
       { centerId: "kochi", name: "Kochi", total: 2, won: 1, lost: 0 },
       { centerId: "kannur", name: "Kannur", total: 1, won: 0, lost: 1 },
     ]);
@@ -94,6 +99,6 @@ describe("aggregateCentrePerformance", () => {
 
   it("excludes leads with no centre", () => {
     const leads = [lead({ id: "1", centerId: null })];
-    expect(aggregateCentrePerformance(leads, STAGES, names)).toEqual([]);
+    expect(aggregateCentrePerformance(leads, STATUSES, names)).toEqual([]);
   });
 });

@@ -63,7 +63,7 @@ async function pickRoundRobinUser(
  * The one place assignment actually happens (CLAUDE.md non-negotiable #4:
  * assignment is a rules engine). Evaluates active assignment_rules in
  * ascending priority order (lower number = higher priority, same
- * convention as pipeline_stages.sort_order) and applies the action of the
+ * convention as the dropdown options' sort_order) and applies the action of the
  * first one whose conditions match. Writes assignment_history for the
  * match; a lead that matches nothing is left exactly as it was — Phase 2's
  * orphan queue is what surfaces those, not this function.

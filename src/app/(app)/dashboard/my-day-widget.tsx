@@ -2,9 +2,11 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { OptionBadge } from "@/components/ui/option-badge";
 import type { MyDayItem, MyDayQueue, MyDayReason } from "@/lib/my-day/build-queue";
 import { formatDateIST } from "@/lib/format/date";
 import { maskPhone } from "@/lib/leads/mask-phone";
+import type { TemperatureOption } from "@/lib/leads/temperature-kinds";
 import { getMyDayQueueForUser } from "@/lib/my-day/get-queue";
 import { batchNameLookup } from "@/lib/leads/batch-name-lookup";
 import { createClient } from "@/lib/supabase/server";
@@ -37,7 +39,7 @@ export async function MyDayWidget({
   canRevealPhone: boolean;
 }) {
   const supabase = await createClient();
-  const { queue, stageById, centerIds } = await getMyDayQueueForUser(supabase, userId);
+  const { queue, temperatureByValue, centerIds } = await getMyDayQueueForUser(supabase, userId);
   const centerNameById = await batchNameLookup(supabase, "centers", "name", centerIds);
 
   const total =
@@ -86,7 +88,7 @@ export async function MyDayWidget({
                   <QueueRow
                     key={item.lead.id}
                     item={item}
-                    stageName={item.lead.stageId ? stageById.get(item.lead.stageId)?.name : undefined}
+                    temperature={item.lead.temperature ? temperatureByValue.get(item.lead.temperature) : undefined}
                     centerName={item.lead.centerId ? centerNameById.get(item.lead.centerId) : undefined}
                     canRevealPhone={canRevealPhone}
                   />
@@ -107,12 +109,12 @@ export async function MyDayWidget({
 
 function QueueRow({
   item,
-  stageName,
+  temperature,
   centerName,
   canRevealPhone,
 }: {
   item: MyDayItem;
-  stageName?: string;
+  temperature?: TemperatureOption;
   centerName?: string;
   canRevealPhone: boolean;
 }) {
@@ -126,13 +128,11 @@ function QueueRow({
             {lead.studentName}
           </Link>
           {lead.temperature ? (
-            <Badge variant="outline" className="text-xs">
-              {lead.temperature}
-            </Badge>
+            <OptionBadge option={temperature} fallback={lead.temperature} />
           ) : null}
         </div>
         <p className="text-xs text-muted-foreground">
-          {[stageName, centerName].filter(Boolean).join(" · ") || "—"}
+          {centerName || "—"}
         </p>
       </div>
 

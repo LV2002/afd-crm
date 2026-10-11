@@ -2,16 +2,15 @@
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-import type { FunnelStage } from "@/lib/reports/aggregate-leads";
+import type { StatusCount } from "@/lib/reports/aggregate-leads";
 
 /**
- * Same single-hue magnitude treatment as the source chart — stage order
- * (already sorted by the caller) carries the funnel's meaning, not
- * colour. Horizontal bars (Recharts' `layout="vertical"`, which flips
- * which axis is categorical) read top-to-bottom in pipeline order, the
- * natural reading direction for a funnel.
+ * Same single-hue magnitude treatment as the source chart — the order the
+ * admin put the temperatures in (already sorted by the caller) carries the
+ * meaning, not colour. Horizontal bars (Recharts' `layout="vertical"`,
+ * which flips which axis is categorical) read top-to-bottom in that order.
  */
-export function FunnelChart({ data }: { data: FunnelStage[] }) {
+export function FunnelChart({ data }: { data: StatusCount[] }) {
   const height = Math.max(240, data.length * 40);
   return (
     <div className="w-full" style={{ height }}>

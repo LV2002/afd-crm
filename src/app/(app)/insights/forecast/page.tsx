@@ -156,7 +156,7 @@ export default async function ForecastPage() {
           <p className="text-sm text-muted-foreground">
             {data.pipeline.openLeads} leads are still open and worth{" "}
             <strong>{data.pipeline.expectedAdmissions.toFixed(1)} admissions</strong> at their
-            stages&rsquo; own probabilities. Everything currently in play, if it all landed this
+            temperatures&rsquo; own probabilities. Everything currently in play, if it all landed this
             month, would end at {monthEndCeiling(headline.achieved, data.pipeline).toFixed(1)} —
             that is a ceiling, not a forecast: most pipelines do not close inside one month.
           </p>
@@ -204,57 +204,57 @@ export default async function ForecastPage() {
 
       <section className="flex flex-col gap-3">
         <h3 className="text-sm font-semibold">What the open pipeline is worth</h3>
-        {data.pipeline.byStage.length === 0 ? (
+        {data.pipeline.byTemperature.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nothing open.</p>
         ) : (
           <div className="flex flex-col gap-4">
-            {/* Expected admissions, not lead counts: a stage holding
+            {/* Expected admissions, not lead counts: a temperature holding
                 forty leads at 5% is worth less than one holding six at
-                60%, and the bar has to say which is which. Stages with
+                60%, and the bar has to say which is which. Temperatures with
                 no chance set are left out of the chart — they have no
                 expected value to draw — and the table below still lists
                 them. */}
             <ChartFigure
-              title="Expected admissions by stage"
-              note={`${data.pipeline.byStage.reduce((sum, stage) => sum + stage.leads, 0)} open leads`}
-              columns={["Stage", "Expected", "Leads", "Chance"]}
-              rows={data.pipeline.byStage.map((stage) => [
-                stage.stageName,
+              title="Expected admissions by temperature"
+              note={`${data.pipeline.byTemperature.reduce((sum, stage) => sum + stage.leads, 0)} open leads`}
+              columns={["Temperature", "Expected", "Leads", "Chance"]}
+              rows={data.pipeline.byTemperature.map((stage) => [
+                stage.temperatureLabel,
                 stage.probability === null ? "—" : stage.expected.toFixed(1),
                 stage.leads,
                 stage.probability === null ? "not set" : formatPercent(stage.probability),
               ])}
             >
               <BarList
-                rows={data.pipeline.byStage
+                rows={data.pipeline.byTemperature
                   .filter((stage) => stage.probability !== null)
                   .map((stage) => ({
-                    label: stage.stageName,
+                    label: stage.temperatureLabel,
                     value: stage.expected,
                     display: stage.expected.toFixed(1),
                     hint: `${stage.leads} leads · ${formatPercent(stage.probability ?? 0)}`,
                   }))}
-                emptyMessage="No stage has a chance-of-conversion set, so nothing can be weighted yet."
+                emptyMessage="No temperature has a chance-of-conversion set, so nothing can be weighted yet."
               />
             </ChartFigure>
           </div>
         )}
 
-        {data.pipeline.byStage.length > 0 && (
+        {data.pipeline.byTemperature.length > 0 && (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Stage</TableHead>
+                  <TableHead>Temperature</TableHead>
                   <TableHead className="text-right">Leads</TableHead>
                   <TableHead className="text-right">Chance</TableHead>
                   <TableHead className="text-right">Worth</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.pipeline.byStage.map((stage) => (
-                  <TableRow key={stage.stageId ?? stage.stageName}>
-                    <TableCell className="font-medium">{stage.stageName}</TableCell>
+                {data.pipeline.byTemperature.map((stage) => (
+                  <TableRow key={stage.temperature ?? stage.temperatureLabel}>
+                    <TableCell className="font-medium">{stage.temperatureLabel}</TableCell>
                     <TableCell className="text-right tabular">{stage.leads}</TableCell>
                     <TableCell className="text-right tabular">
                       {stage.probability === null ? (
@@ -273,18 +273,18 @@ export default async function ForecastPage() {
           </div>
         )}
 
-        {data.hasUnweightedStages && (
+        {data.hasUnweightedTemperatures && (
           <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
             {data.pipeline.unweightedLeads} open lead
-            {data.pipeline.unweightedLeads === 1 ? " sits" : "s sit"} in stages with no chance-of-
+            {data.pipeline.unweightedLeads === 1 ? " has" : "s have"} a temperature with no chance-of-
             closing set, so they count as nothing above and the pipeline figure is lower than the
             truth.{" "}
             {can(user, "settings.manage") ? (
-              <Link href="/settings/pipeline-stages" className="underline">
-                Set a probability on each stage
+              <Link href="/settings/temperatures" className="underline">
+                Set a probability on each temperature
               </Link>
             ) : (
-              "An administrator can set a probability on each stage in Settings."
+              "An administrator can set a probability on each temperature in Settings."
             )}
             .
           </p>

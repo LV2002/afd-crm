@@ -15,7 +15,6 @@ export interface MyDayLead {
   studentName: string;
   primaryPhone: string;
   temperature: string | null;
-  stageId: string | null;
   centerId: string | null;
   nextFollowupAt: string | null;
   slaBreached: boolean;
@@ -59,7 +58,7 @@ export interface MyDayQueue {
 }
 
 export interface BuildMyDayQueueInput {
-  /** Already filtered by the caller: assigned to this user, not soft-deleted, not in a won/lost stage. */
+  /** Already filtered by the caller: assigned to this user, not soft-deleted, not Took admission or a closing outcome. */
   leads: MyDayLead[];
   /** Open tasks for those same leads. */
   openTasks: MyDayTask[];

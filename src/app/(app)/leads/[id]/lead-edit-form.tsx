@@ -3,7 +3,6 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import type { FieldSection } from "@/lib/fields/group-by-section";
@@ -44,7 +43,7 @@ export function LeadEditForm({
   /*
     Autosave, because Save changes was being missed.
 
-    Stage and temperature have saved on the spot since the status bar was
+    Temperature has saved on the spot since the status bar was
     built, and the thirty fields underneath them did not — so a counsellor
     who corrected an exam year, got pulled onto a call and came back to
     the lead later found their correction gone, with nothing having said
@@ -193,14 +192,15 @@ export function LeadEditForm({
       */}
       <FormMessage error={state.error} />
 
-      <div className="flex items-center gap-3">
-        <Button type="submit" disabled={pending} className="w-fit">
-          {pending ? "Saving…" : "Save changes"}
-        </Button>
-        <span aria-live="polite" className="text-xs text-muted-foreground">
-          {pending ? "Saving…" : savedAt ? "Saved" : "Changes save as you go"}
-        </span>
-      </div>
+      {/*
+        No Save button: every field already saves as you leave it (above),
+        so the button was a second way to do what had happened already.
+        Pressing Enter in a text box still submits the form, through the
+        same action.
+      */}
+      <span aria-live="polite" className="text-xs text-muted-foreground">
+        {pending ? "Saving…" : savedAt ? "Saved" : "Changes save as you go"}
+      </span>
     </form>
   );
 }

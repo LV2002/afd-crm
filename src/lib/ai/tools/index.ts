@@ -3,10 +3,11 @@ import { z } from "zod";
 
 import type { SessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { centers, leads, pipelineStages, profiles } from "@/lib/db/schema";
+import { centers, leads, profiles } from "@/lib/db/schema";
+import { loadTemperatureOptionsDirect } from "@/lib/leads/temperature-options-direct";
 import {
   aggregateCentrePerformance,
-  aggregateFunnel,
+  aggregateByStatus,
   aggregateLeadsBySource,
   aggregateScorecard,
 } from "@/lib/reports/aggregate-leads";
@@ -80,22 +81,21 @@ async function scopedLeadRows(ctx: AnalystContext, range: DateRange) {
       id: leads.id,
       assignedTo: leads.assignedTo,
       centerId: leads.centerId,
-      stageId: leads.stageId,
+      temperature: leads.temperature,
       firstTouchSource: leads.firstTouchSource,
     })
     .from(leads)
     .where(where);
 }
 
-async function stageRows() {
-  return db
-    .select({
-      id: pipelineStages.id,
-      name: pipelineStages.name,
-      sortOrder: pipelineStages.sortOrder,
-      stageType: pipelineStages.stageType,
-    })
-    .from(pipelineStages);
+/** The temperatures, in the order an admin put them, with what each one means. */
+async function statusRows() {
+  return (await loadTemperatureOptionsDirect()).map((option) => ({
+    value: option.value,
+    label: option.label,
+    rank: option.rank,
+    kind: option.kind,
+  }));
 }
 
 export const ANALYST_TOOLS: AnalystTool[] = [
@@ -164,12 +164,12 @@ export const ANALYST_TOOLS: AnalystTool[] = [
   {
     name: "funnel_snapshot",
     description:
-      "How many leads currently sit at each pipeline stage, in stage order. Use for questions about where leads are stuck or how the funnel looks right now.",
+      "How many leads currently have each temperature (Not contacted, Contacted, Cold, Warm, Hot, Took admission, and so on), in the order the institute lists them. Use for questions about where leads are stuck or how the pipeline looks right now.",
     inputSchema: { type: "object", properties: { ...DATE_RANGE_SCHEMA }, additionalProperties: false },
     async run(rawArgs, ctx) {
       const args = dateRange.parse(rawArgs ?? {});
-      const [rows, stages] = await Promise.all([scopedLeadRows(ctx, args), stageRows()]);
-      return { totalLeads: rows.length, funnel: aggregateFunnel(rows, stages) };
+      const [rows, statuses] = await Promise.all([scopedLeadRows(ctx, args), statusRows()]);
+      return { totalLeads: rows.length, byTemperature: aggregateByStatus(rows, statuses) };
     },
   },
   {
@@ -185,9 +185,9 @@ export const ANALYST_TOOLS: AnalystTool[] = [
       if (analystScope(ctx.user) === "own") {
         return { scorecard: [], note: "Counsellor comparison needs centre-wide or org-wide report access." };
       }
-      const [rows, stages] = await Promise.all([scopedLeadRows(ctx, args), stageRows()]);
+      const [rows, statuses] = await Promise.all([scopedLeadRows(ctx, args), statusRows()]);
       const nameRows = await db.select({ id: profiles.id, fullName: profiles.fullName }).from(profiles);
-      return { scorecard: aggregateScorecard(rows, stages, new Map(nameRows.map((p) => [p.id, p.fullName]))) };
+      return { scorecard: aggregateScorecard(rows, statuses, new Map(nameRows.map((p) => [p.id, p.fullName]))) };
     },
   },
   {
@@ -200,10 +200,10 @@ export const ANALYST_TOOLS: AnalystTool[] = [
       if (analystScope(ctx.user) === "own") {
         return { centres: [], note: "Centre comparison needs centre-wide or org-wide report access." };
       }
-      const [rows, stages] = await Promise.all([scopedLeadRows(ctx, args), stageRows()]);
+      const [rows, statuses] = await Promise.all([scopedLeadRows(ctx, args), statusRows()]);
       const centreRows = await db.select({ id: centers.id, name: centers.name }).from(centers);
       return {
-        centres: aggregateCentrePerformance(rows, stages, new Map(centreRows.map((c) => [c.id, c.name]))),
+        centres: aggregateCentrePerformance(rows, statuses, new Map(centreRows.map((c) => [c.id, c.name]))),
       };
     },
   },

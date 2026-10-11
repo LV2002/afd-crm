@@ -10,7 +10,6 @@ import {
   fieldDefinitions,
   holidays,
   orgSettings,
-  pipelineStages,
   roles,
   rolePermissions,
   slaPolicies,
@@ -32,7 +31,6 @@ const GUARD_TABLES = [
   { name: "centers", table: centers },
   { name: "dropdown_categories", table: dropdownCategories },
   { name: "dropdown_options", table: dropdownOptions },
-  { name: "pipeline_stages", table: pipelineStages },
   { name: "field_definitions", table: fieldDefinitions },
   { name: "roles", table: roles },
   { name: "role_permissions", table: rolePermissions },
@@ -70,7 +68,7 @@ const GUARD_TABLES = [
  * "Import into an empty instance" (CLAUDE.md) is read literally here, on
  * purpose: this tool bootstraps a fresh instance's configuration, not a
  * merge onto one that's already diverged (real business data referencing
- * the target's own existing centres/stages/roles by id would be left
+ * the target's own existing centres/roles by id would be left
  * pointing at the wrong things, or the import would collide on a unique
  * constraint like `roles.code`). Pushing a config change onto an
  * already-configured, already-live instance is real, harder work
@@ -97,7 +95,6 @@ export async function importConfig(bundle: ConfigBundle): Promise<ImportConfigRe
     if (bundle.centers.length > 0) await tx.insert(centers).values(bundle.centers);
     if (bundle.dropdownCategories.length > 0) await tx.insert(dropdownCategories).values(bundle.dropdownCategories);
     if (bundle.dropdownOptions.length > 0) await tx.insert(dropdownOptions).values(bundle.dropdownOptions);
-    if (bundle.pipelineStages.length > 0) await tx.insert(pipelineStages).values(bundle.pipelineStages);
     if (bundle.roles.length > 0) await tx.insert(roles).values(bundle.roles);
     if (bundle.rolePermissions.length > 0) await tx.insert(rolePermissions).values(bundle.rolePermissions);
     if (bundle.fieldDefinitions.length > 0) await tx.insert(fieldDefinitions).values(bundle.fieldDefinitions);
@@ -118,7 +115,6 @@ export async function importConfig(bundle: ConfigBundle): Promise<ImportConfigRe
         centers: bundle.centers.length,
         dropdownCategories: bundle.dropdownCategories.length,
         dropdownOptions: bundle.dropdownOptions.length,
-        pipelineStages: bundle.pipelineStages.length,
         fieldDefinitions: bundle.fieldDefinitions.length,
         roles: bundle.roles.length,
         rolePermissions: bundle.rolePermissions.length,

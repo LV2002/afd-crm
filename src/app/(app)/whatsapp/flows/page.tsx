@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 
 const TRIGGER_LABELS: Record<string, string> = {
   lead_created: "A new lead arrives",
-  stage_entered: "A lead moves into a stage",
+  temperature_entered: "A lead's temperature changes",
   tag_added: "A tag is put on a lead",
   inbound_keyword: "Somebody messages us a word",
   manual: "Started by hand",

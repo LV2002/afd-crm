@@ -14,23 +14,17 @@ import {
   buildDailySeries,
   buildTeamScoreboard,
   ratePercent,
-  terminalStageIdsOf,
   type Boundaries,
   type ScoreboardEnrolment,
   type ScoreboardLead,
-  type StageInfo,
 } from "@/lib/dashboard/scoreboard";
 
 const ATHIRA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const RAHUL = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 const KOCHI = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 
-const STAGES: StageInfo[] = [
-  { id: "s-new", stageType: "open" },
-  { id: "s-demo", stageType: "open" },
-  { id: "s-won", stageType: "won" },
-  { id: "s-lost", stageType: "lost" },
-];
+/** The temperatures that mean a lead is finished with: Took admission and a closing outcome. */
+const TERMINAL: ReadonlySet<string> = new Set(["took_admission", "negative"]);
 
 /** 30 September 2026, 14:00 IST. Today started at 00:00 IST, the month on the 1st. */
 const BOUNDARIES: Boundaries = {
@@ -49,7 +43,6 @@ function lead(over: Partial<ScoreboardLead> = {}): ScoreboardLead {
     id: `lead-${seq}`,
     assignedTo: ATHIRA,
     centerId: KOCHI,
-    stageId: "s-new",
     createdAt: "2026-09-10T06:00:00Z",
     assignedAt: "2026-09-10T06:00:00Z",
     firstResponseAt: "2026-09-10T08:00:00Z",
@@ -83,26 +76,17 @@ describe("ratePercent", () => {
   });
 });
 
-describe("terminalStageIdsOf", () => {
-  it("picks out won and lost only", () => {
-    const terminal = terminalStageIdsOf(STAGES);
-    expect(terminal.has("s-won")).toBe(true);
-    expect(terminal.has("s-lost")).toBe(true);
-    expect(terminal.has("s-new")).toBe(false);
-  });
-});
-
 describe("buildCounsellorScoreboard", () => {
   it("counts an ordinary month", () => {
     const leads = [
       lead({ id: "l1" }),
       lead({ id: "l2" }),
-      lead({ id: "l3", stageId: "s-won" }),
+      lead({ id: "l3", temperature: "took_admission" }),
     ];
     const result = buildCounsellorScoreboard({
       leads,
       enrolments: [admission("l3")],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
 
@@ -123,7 +107,7 @@ describe("buildCounsellorScoreboard", () => {
         lead({ createdAt: "2026-09-05T06:00:00Z", assignedAt: "2026-09-05T06:00:00Z" }),
       ],
       enrolments: [],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
 
@@ -135,7 +119,7 @@ describe("buildCounsellorScoreboard", () => {
     const result = buildCounsellorScoreboard({
       leads: [lead({ assignedAt: "2026-09-29T18:29:59Z" })],
       enrolments: [],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
     expect(result.assignedToday).toBe(0);
@@ -150,7 +134,7 @@ describe("buildCounsellorScoreboard", () => {
         lead({ nextFollowupAt: null }),
       ],
       enrolments: [],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
 
@@ -163,11 +147,11 @@ describe("buildCounsellorScoreboard", () => {
     // it as overdue makes the number worth ignoring.
     const result = buildCounsellorScoreboard({
       leads: [
-        lead({ stageId: "s-won", nextFollowupAt: "2026-09-20T06:00:00Z" }),
-        lead({ stageId: "s-lost", nextFollowupAt: "2026-09-20T06:00:00Z", slaBreached: true }),
+        lead({ temperature: "took_admission", nextFollowupAt: "2026-09-20T06:00:00Z" }),
+        lead({ temperature: "negative", nextFollowupAt: "2026-09-20T06:00:00Z", slaBreached: true }),
       ],
       enrolments: [],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
 
@@ -184,7 +168,7 @@ describe("buildCounsellorScoreboard", () => {
         lead({ firstResponseAt: "2026-09-11T06:00:00Z" }),
       ],
       enrolments: [],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
 
@@ -196,7 +180,7 @@ describe("buildCounsellorScoreboard", () => {
     const result = buildCounsellorScoreboard({
       leads: [lead({ id: "l1" })],
       enrolments: [{ leadId: "l1", salesToAccountsAt: "2026-09-15T06:00:00Z", droppedAt: "2026-09-20T06:00:00Z" }],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
     expect(result.admissionsThisMonth).toBe(0);
@@ -206,7 +190,7 @@ describe("buildCounsellorScoreboard", () => {
     const result = buildCounsellorScoreboard({
       leads: [lead({ id: "l1" })],
       enrolments: [{ leadId: "l1", salesToAccountsAt: null, droppedAt: null }],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
     expect(result.admissionsThisMonth).toBe(0);
@@ -216,7 +200,7 @@ describe("buildCounsellorScoreboard", () => {
     const result = buildCounsellorScoreboard({
       leads: [lead({ id: "l1" })],
       enrolments: [admission("l1", "2026-08-20T06:00:00Z")],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
     expect(result.admissionsThisMonth).toBe(0);
@@ -226,7 +210,7 @@ describe("buildCounsellorScoreboard", () => {
     const result = buildCounsellorScoreboard({
       leads: [lead({ id: "mine" })],
       enrolments: [admission("not-mine")],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
     expect(result.admissionsThisMonth).toBe(0);
@@ -236,7 +220,7 @@ describe("buildCounsellorScoreboard", () => {
     const result = buildCounsellorScoreboard({
       leads: [],
       enrolments: [],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
 
@@ -248,9 +232,9 @@ describe("buildCounsellorScoreboard", () => {
   it("treats a lead with no stage as active", () => {
     // Leads arrive from a webhook before any stage is set.
     const result = buildCounsellorScoreboard({
-      leads: [lead({ stageId: null })],
+      leads: [lead()],
       enrolments: [],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
     expect(result.activeLeads).toBe(1);
@@ -272,7 +256,7 @@ describe("buildTeamScoreboard", () => {
         lead({ id: "r1", assignedTo: RAHUL }),
       ],
       enrolments: [admission("r1")],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
 
@@ -292,7 +276,7 @@ describe("buildTeamScoreboard", () => {
       members,
       leads: [lead({ assignedTo: ATHIRA })],
       enrolments: [],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
 
@@ -315,7 +299,7 @@ describe("buildTeamScoreboard", () => {
         lead({ id: "a2", assignedTo: ATHIRA }),
       ],
       enrolments: [admission("r1")],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
 
@@ -328,7 +312,7 @@ describe("buildTeamScoreboard", () => {
       members: [{ userId: ATHIRA, name: "Athira" }],
       leads: [lead({ assignedTo: RAHUL }), lead({ assignedTo: null })],
       enrolments: [],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
     expect(rows[0].scoreboard.activeLeads).toBe(0);
@@ -344,10 +328,10 @@ describe("buildCentreScoreboard", () => {
         lead({ assignedTo: ATHIRA }),
         lead({ assignedTo: RAHUL }),
         lead({ assignedTo: null }),
-        lead({ assignedTo: null, stageId: "s-lost" }),
+        lead({ assignedTo: null, temperature: "negative" }),
       ],
       enrolments: [],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
 
@@ -360,7 +344,7 @@ describe("buildCentreScoreboard", () => {
     const result = buildCentreScoreboard({
       leads: [lead({ id: "a1", assignedTo: ATHIRA }), lead({ id: "r1", assignedTo: RAHUL })],
       enrolments: [admission("a1"), admission("r1")],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
 
@@ -382,7 +366,7 @@ describe("last month, for the comparison", () => {
     const result = buildCounsellorScoreboard({
       leads,
       enrolments: [admission("aug-1", "2026-08-20T06:00:00Z"), admission("sep-1")],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
 
@@ -398,7 +382,7 @@ describe("last month, for the comparison", () => {
       enrolments: [
         { leadId: "l1", salesToAccountsAt: "2026-08-20T06:00:00Z", droppedAt: "2026-09-01T06:00:00Z" },
       ],
-      stages: STAGES,
+      terminalTemperatures: TERMINAL,
       boundaries: BOUNDARIES,
     });
 

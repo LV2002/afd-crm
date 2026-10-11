@@ -62,6 +62,22 @@ interface FieldDefinitionRow {
 }
 
 /**
+ * Fields that exist and show in lists and filters but are never edited
+ * through the generic form.
+ *
+ * A lead's `temperature` is its whole status, and changing it has rules a
+ * plain dropdown cannot express: a closing outcome asks why, and "Took
+ * admission" cannot be chosen at all without a confirmed admission behind
+ * it. The status control at the top of the lead carries all of that, so
+ * the form must not offer a second, unguarded door to the same column —
+ * the database would refuse the bad moves, but with an error message
+ * instead of the question a counsellor should have been asked.
+ */
+const MANAGED_ELSEWHERE: Partial<Record<FieldEntity, ReadonlySet<string>>> = {
+  lead: new Set(["temperature"]),
+};
+
+/**
  * The one schema source for a given entity (docs/02-BUILD-PHASES.md § Phase 1,
  * docs/01-DATA-MODEL.md § Custom fields): the lead form, the list columns,
  * the filter bar and the export all read `field_definitions` through this,
@@ -107,6 +123,8 @@ export async function getFieldSchema(
       sortOrder: row.sort_order,
       showInList: row.show_in_list,
       showInFilters: row.show_in_filters,
-      isEditable: row.editable_by_roles === null || row.editable_by_roles.includes(user.roleId),
+      isEditable:
+        !MANAGED_ELSEWHERE[entity]?.has(row.key) &&
+        (row.editable_by_roles === null || row.editable_by_roles.includes(user.roleId)),
     }));
 }

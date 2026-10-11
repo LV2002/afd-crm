@@ -694,6 +694,20 @@
       "when": 1792764008000,
       "tag": "0098_report_ads_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1792850408000,
+      "tag": "0099_status_replaces_stage",
+      "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1792936808000,
+      "tag": "0100_interaction_outcomes_and_follow_up",
+      "breakpoints": true
     }
   ]
 }

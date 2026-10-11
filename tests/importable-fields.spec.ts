@@ -22,10 +22,13 @@ function field(key: string, type: FieldSchemaEntry["type"]): FieldSchemaEntry {
 }
 
 describe("importableFields", () => {
-  it("excludes assigned_to and stage_id regardless of type", () => {
-    const fields = [field("assigned_to", "user_ref"), field("stage_id", "select"), field("student_name", "text")];
+  it("excludes assigned_to regardless of type, and offers temperature", () => {
+    const fields = [field("assigned_to", "user_ref"), field("temperature", "select"), field("student_name", "text")];
     const result = importableFields(fields).map((f) => f.key);
-    expect(result).toEqual(["student_name", IMPORT_NOTE_KEY]);
+    // Temperature IS importable: a spreadsheet can say who is Hot. What it
+    // cannot do is claim an admission, and the importer enforces that per
+    // row — see writeExtraFields() in leads/import/actions.ts.
+    expect(result).toEqual(["temperature", "student_name", IMPORT_NOTE_KEY]);
   });
 
   it("excludes user_ref, lead_ref and file typed fields", () => {

@@ -2,9 +2,7 @@ import { notFound } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 
-import { isInterestedOption } from "@/lib/leads/interested-temperature";
-
-import type { OptionRowData } from "../option-row";
+import { toOptionRowData } from "../option-row-data";
 import { OptionsEditor } from "../options-editor";
 
 export default async function DropdownCategoryPage({
@@ -29,16 +27,20 @@ export default async function DropdownCategoryPage({
     .eq("category", category)
     .is("deleted_at", null)
     .order("sort_order")
-    .returns<Array<Omit<OptionRowData, "interested"> & { metadata: unknown }>>();
+    .returns<
+      Array<{
+        id: string;
+        value: string;
+        label: string;
+        color: string | null;
+        is_active: boolean;
+        metadata: unknown;
+      }>
+    >();
 
-  // The flag is flattened out of `metadata` here rather than passed as a
-  // blob: the row editor should not have to know the shape of a jsonb
-  // column, and `metadata` carries other keys (the temperature `rank`)
-  // that are nobody's business on this screen.
-  const options: OptionRowData[] = (optionRows ?? []).map(({ metadata, ...row }) => ({
-    ...row,
-    interested: isInterestedOption(metadata),
-  }));
+  // Flattened out of `metadata` here rather than passed as a blob: the row
+  // editor should not have to know the shape of a jsonb column.
+  const options = (optionRows ?? []).map(toOptionRowData);
 
   return (
     <div className="flex flex-col gap-4">

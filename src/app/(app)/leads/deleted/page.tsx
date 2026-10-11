@@ -74,8 +74,8 @@ export default async function DeletedLeadsPage() {
         <h1 className="text-2xl font-semibold">Deleted leads</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           Nothing in this system is ever really deleted — a lead is hidden, and everything
-          recorded against it is kept. Restore one and it returns to the pipeline exactly as it
-          was, in whatever stage it was in.
+          recorded against it is kept. Restore one and it comes back exactly as it
+          was, with the temperature it had.
         </p>
       </div>
 

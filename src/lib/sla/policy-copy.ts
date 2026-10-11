@@ -24,9 +24,9 @@
 import { policyEscalationSteps } from "@/lib/sla/escalations";
 
 /** What a policy can measure. The stored enum, as the form offers it. */
-export type SlaMeasure = "first_response" | "next_followup" | "in_stage";
+export type SlaMeasure = "first_response" | "next_followup" | "in_status";
 
-export const SLA_MEASURES: SlaMeasure[] = ["first_response", "next_followup", "in_stage"];
+export const SLA_MEASURES: SlaMeasure[] = ["first_response", "next_followup", "in_status"];
 
 /** The stored JSON shape, built from the editor's readable one. */
 export function escalationsToJson(
@@ -58,9 +58,9 @@ export const MEASURE_COPY: Record<SlaMeasure, { label: string; clock: string }> 
     label: "Follow-up kept",
     clock: "From the follow-up date a counsellor promised until they actually log something.",
   },
-  in_stage: {
-    label: "Time in one stage",
-    clock: "From entering the current pipeline stage. Catches leads that quietly stopped moving.",
+  in_status: {
+    label: "Time in one status",
+    clock: "From the last time the lead's temperature changed. Catches leads that quietly stopped moving.",
   },
 };
 

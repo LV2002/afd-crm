@@ -13,13 +13,14 @@ import {
 } from "@/components/ui/table";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db, isDatabaseUnreachable, isDeadlineExceeded, withDeadline } from "@/lib/db/client";
-import { centers, enrolments, leads, pipelineStages, profiles } from "@/lib/db/schema";
+import { centers, enrolments, leads, profiles } from "@/lib/db/schema";
+import { loadTemperatureOptionsDirect } from "@/lib/leads/temperature-options-direct";
 import { fieldColumn } from "@/lib/fields/field-column";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import { OPTION_BEARING_TYPES, resolveFieldOptions, type FieldOption } from "@/lib/fields/resolve-field-options";
 import { readFilterValues } from "@/lib/leads/apply-filters";
 import { createClient } from "@/lib/supabase/server";
-import { aggregateFunnel } from "@/lib/reports/aggregate-leads";
+import { aggregateByStatus } from "@/lib/reports/aggregate-leads";
 import {
   applyPivotFilters,
   dimensionFields,
@@ -225,7 +226,7 @@ export default async function InsightsPage({
   const columnByDbName = new Map(
     Object.values(leadColumns).map((column) => [column.name, column as PgColumn]),
   );
-  const selection: Record<string, PgColumn> = { id: leads.id, stageId: leads.stageId };
+  const selection: Record<string, PgColumn> = { id: leads.id, temperature: leads.temperature };
   let needsCustom = false;
   for (const field of dimensions) {
     if (!field.isCore) {
@@ -240,7 +241,7 @@ export default async function InsightsPage({
   if (needsCustom) selection.custom = leads.custom;
 
   let leadRows: Array<Record<string, unknown>>;
-  let stageRows, centerRows, profileRows, droppedRows;
+  let statusRows, centerRows, profileRows, droppedRows;
   try {
     leadRows = (await timedQuery("leads", () =>
       db
@@ -248,11 +249,7 @@ export default async function InsightsPage({
         .from(leads)
         .where(and(scopeWhere, ...dateWhere)),
     )) as Array<Record<string, unknown>>;
-    stageRows = await timedQuery("stages", () =>
-      db
-        .select({ id: pipelineStages.id, name: pipelineStages.name, sortOrder: pipelineStages.sortOrder, stageType: pipelineStages.stageType })
-        .from(pipelineStages),
-    );
+    statusRows = await timedQuery("temperatures", () => loadTemperatureOptionsDirect());
     centerRows = await timedQuery("centers", () =>
       db.select({ id: centers.id, name: centers.name }).from(centers),
     );
@@ -276,15 +273,12 @@ export default async function InsightsPage({
     throw error;
   }
 
-  // Stage, centre and counsellor names come from the same direct
+  // Temperature, centre and counsellor names come from the same direct
   // connection as the counts. resolveFieldOptions() would go through RLS,
   // and `profiles` is only readable to whoever holds users.manage — a
   // centre head would get a table of uuids where names belong.
   const localOptions: Record<string, FieldOption[]> = {
-    stage_id: stageRows
-      .slice()
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((s) => ({ value: s.id, label: s.name })),
+    temperature: statusRows.map((s) => ({ value: s.value, label: s.label })),
     center_id: centerRows.map((c) => ({ value: c.id, label: c.name })),
   };
   const staffOptions: FieldOption[] = profileRows
@@ -314,29 +308,29 @@ export default async function InsightsPage({
     for (const field of dimensions) {
       values[field.key] = field.isCore ? (row[`v_${field.key}`] ?? null) : (custom?.[field.key] ?? null);
     }
-    return { id: String(row.id), stageId: (row.stageId as string | null) ?? null, values };
+    return { id: String(row.id), temperature: (row.temperature as string | null) ?? null, values };
   });
 
-  const stageTypeById = new Map(stageRows.map((s) => [s.id, s.stageType]));
+  const kindByTemperature = new Map(statusRows.map((s) => [s.value, s.kind]));
   const droppedLeadIds = new Set(droppedRows.map((row) => row.leadId));
   const filtered = applyPivotFilters(pivotLeads, dimensions, filters);
-  const totals = summarise(filtered, stageTypeById, droppedLeadIds);
+  const totals = summarise(filtered, kindByTemperature, droppedLeadIds);
   const rows = groupLeads(
     filtered,
     groupBy,
-    stageTypeById,
+    kindByTemperature,
     labelsFor(groupBy.key),
     droppedLeadIds,
   );
-  const funnel = aggregateFunnel(
+  const statusBreakdown = aggregateByStatus(
     filtered.map((lead) => ({
       id: lead.id,
-      stageId: lead.stageId,
+      temperature: lead.temperature,
       assignedTo: null,
       centerId: null,
       firstTouchSource: null,
     })),
-    stageRows,
+    statusRows,
   );
 
   const controls: DimensionControl[] = dimensions.map((field) => ({
@@ -437,11 +431,11 @@ export default async function InsightsPage({
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">Funnel</h2>
+        <h2 className="text-lg font-medium">By temperature</h2>
         <p className="text-sm text-muted-foreground">
-          The same filtered set, by pipeline stage.
+          The same filtered set, by where each lead stands right now.
         </p>
-        <FunnelChart data={funnel} />
+        <FunnelChart data={statusBreakdown} />
       </section>
     </div>
   );

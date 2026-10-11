@@ -5,7 +5,9 @@ import { requireCronSecret } from "@/lib/cron/require-secret";
 import { reportingFailures } from "@/lib/errors/capture";
 
 import { db } from "@/lib/db/client";
-import { leads, pipelineStages, temperatureRules } from "@/lib/db/schema";
+import { leads, temperatureRules } from "@/lib/db/schema";
+import { indexByValue } from "@/lib/leads/temperature-kinds";
+import { loadTemperatureOptionsDirect } from "@/lib/leads/temperature-options-direct";
 import { evaluateLeadTemperature } from "@/lib/temperature/evaluate-temperature";
 
 export const dynamic = "force-dynamic";
@@ -26,15 +28,40 @@ async function run(request: Request) {
 
   const now = new Date();
 
-  const [activeLeads, activeRules, stageRows] = await Promise.all([
+  const [activeLeads, activeRules, temperatureOptions] = await Promise.all([
     db.select().from(leads).where(isNull(leads.deletedAt)),
     db.select().from(temperatureRules).where(isNull(temperatureRules.deletedAt)),
-    db.select({ id: pipelineStages.id, stageType: pipelineStages.stageType }).from(pipelineStages),
+    loadTemperatureOptionsDirect(),
   ]);
 
-  const enabledRules = activeRules.filter((r) => r.isActive);
-  const terminalStageIds = new Set(
-    stageRows.filter((s) => s.stageType === "won" || s.stageType === "lost").map((s) => s.id),
+  const optionByValue = indexByValue(temperatureOptions);
+
+  /*
+    Rules re-grade a lead that is BEING WORKED, and nothing else.
+
+    Temperature used to be a dimension of its own, so a rule could safely
+    write any of its four values. It is now the whole status, and a rule
+    must not be able to do what a status change by hand cannot:
+
+    - It never TOUCHES a lead that is Not contacted, parked, won or lost.
+      "Hot" written over "Not contacted" would claim a conversation that
+      never happened; written over "Took admission" it is refused by the
+      database and would take the whole batch down with it; written over
+      "Negative" it would resurrect a lead somebody deliberately closed.
+    - It never PRODUCES anything but an in-progress value, for the same
+      reason from the other side: a rule that wrote "Negative" would need
+      a lost reason it cannot supply, and one that wrote "Took admission"
+      would need an admission.
+
+    A rule whose value is not in-progress is ignored here rather than
+    failing the run, and the settings screen only offers in-progress values
+    when writing one.
+  */
+  const enabledRules = activeRules.filter(
+    (r) => {
+      const target = optionByValue.get(r.temperatureValue);
+      return r.isActive && target?.kind === "open" && target.isActive;
+    },
   );
 
   let evaluated = 0;
@@ -45,7 +72,10 @@ async function run(request: Request) {
   const leadIdsByNewValue = new Map<string, string[]>();
 
   for (const lead of activeLeads) {
-    if (lead.stageId && terminalStageIds.has(lead.stageId)) continue;
+    // An unclassified lead (no status at all) is exactly what a rule is for.
+    // One carrying a value that is not in the list at all is left alone: it
+    // is somebody's data, and guessing what it means is how it gets lost.
+    if (lead.temperature !== null && optionByValue.get(lead.temperature)?.kind !== "open") continue;
 
     // "leads.temperature_override_until still wins over any rule while it
     // is in the future — a counsellor's manual judgement beats the engine"

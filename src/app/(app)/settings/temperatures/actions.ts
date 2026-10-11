@@ -5,6 +5,8 @@ import { z } from "zod";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { indexByValue } from "@/lib/leads/temperature-kinds";
+import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 import { createClient } from "@/lib/supabase/server";
 
 export interface RuleFormState {
@@ -52,6 +54,25 @@ export async function createTemperatureRule(
   }
 
   const supabase = await createClient();
+
+  /*
+    A rule may only set a temperature that means "being worked".
+
+    The nightly job applies these to leads on its own, and it cannot do
+    what a person can: it cannot confirm an admission (so it cannot set
+    Took admission), and it cannot say why a lead is closed (so it cannot
+    set Negative). The recompute ignores such a rule rather than failing,
+    but an admin who writes one deserves to be told now, not to wonder
+    for a month why it never fires.
+  */
+  const target = indexByValue(await loadTemperatureOptions(supabase)).get(parsed.data.temperatureValue);
+  if (!target || target.kind !== "open") {
+    return {
+      error:
+        "A rule can only set a temperature that means a lead is being worked — such as Contacted, Cold, Warm or Hot. Closing a lead, or marking an admission, is done by a person.",
+    };
+  }
+
   const { data, error } = await supabase
     .from("temperature_rules")
     .insert({

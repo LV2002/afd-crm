@@ -113,7 +113,7 @@ describe("evaluateLeadSla", () => {
     const result = evaluateLeadSla({
       lead: baseLead(),
       policies: [],
-      currentStageEnteredAt: NOW,
+      currentStatusEnteredAt: NOW,
       businessHours: [],
       holidayDates: new Set(),
       timeZone: "Asia/Kolkata",
@@ -127,7 +127,7 @@ describe("evaluateLeadSla", () => {
     const result = evaluateLeadSla({
       lead: baseLead(),
       policies: [policy],
-      currentStageEnteredAt: NOW,
+      currentStatusEnteredAt: NOW,
       businessHours: [],
       holidayDates: new Set(),
       timeZone: "Asia/Kolkata",
@@ -144,7 +144,7 @@ describe("evaluateLeadSla", () => {
     const result = evaluateLeadSla({
       lead,
       policies: [policy],
-      currentStageEnteredAt: NOW,
+      currentStatusEnteredAt: NOW,
       businessHours: [],
       holidayDates: new Set(),
       timeZone: "Asia/Kolkata",
@@ -158,7 +158,7 @@ describe("evaluateLeadSla", () => {
     const result = evaluateLeadSla({
       lead: baseLead(),
       policies: [policy],
-      currentStageEnteredAt: NOW,
+      currentStatusEnteredAt: NOW,
       businessHours: [],
       holidayDates: new Set(),
       timeZone: "Asia/Kolkata",
@@ -173,7 +173,7 @@ describe("evaluateLeadSla", () => {
     const result = evaluateLeadSla({
       lead,
       policies: [policy],
-      currentStageEnteredAt: NOW,
+      currentStatusEnteredAt: NOW,
       businessHours: [],
       holidayDates: new Set(),
       timeZone: "Asia/Kolkata",
@@ -188,7 +188,7 @@ describe("evaluateLeadSla", () => {
     const result = evaluateLeadSla({
       lead,
       policies: [policy],
-      currentStageEnteredAt: NOW,
+      currentStatusEnteredAt: NOW,
       businessHours: [],
       holidayDates: new Set(),
       timeZone: "Asia/Kolkata",
@@ -198,13 +198,13 @@ describe("evaluateLeadSla", () => {
     expect(result.elapsedHours).toBeCloseTo(3, 6);
   });
 
-  it("in_stage: measures from the given stage-entry instant, not lead creation", () => {
-    const policy = basePolicy({ measure: "in_stage", targetHours: 10 });
+  it("in_status: measures from the given status-entry instant, not lead creation", () => {
+    const policy = basePolicy({ measure: "in_status", targetHours: 10 });
     const enteredAt = new Date("2026-08-23T12:00:00.000Z"); // 12h before `now`
     const result = evaluateLeadSla({
       lead: baseLead(),
       policies: [policy],
-      currentStageEnteredAt: enteredAt,
+      currentStatusEnteredAt: enteredAt,
       businessHours: [],
       holidayDates: new Set(),
       timeZone: "Asia/Kolkata",
@@ -231,7 +231,7 @@ describe("evaluateLeadSla", () => {
     const result = evaluateLeadSla({
       lead,
       policies: [policy],
-      currentStageEnteredAt: now,
+      currentStatusEnteredAt: now,
       businessHours: hours,
       holidayDates: new Set(),
       timeZone: "Asia/Kolkata",
@@ -254,7 +254,7 @@ describe("evaluateLeadSla", () => {
     const result = evaluateLeadSla({
       lead,
       policies: [catchAll, specific], // deliberately out of order — sorting is the function's job
-      currentStageEnteredAt: NOW,
+      currentStatusEnteredAt: NOW,
       businessHours: [],
       holidayDates: new Set(),
       timeZone: "Asia/Kolkata",
@@ -275,7 +275,7 @@ describe("evaluateLeadSla", () => {
     const result = evaluateLeadSla({
       lead: baseLead(),
       policies: [notYetOverdue, fallback],
-      currentStageEnteredAt: NOW,
+      currentStatusEnteredAt: NOW,
       businessHours: [],
       holidayDates: new Set(),
       timeZone: "Asia/Kolkata",

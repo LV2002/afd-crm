@@ -2,7 +2,15 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { applyAssignment } from "@/lib/assignment/apply-assignment";
 import { db } from "@/lib/db/client";
-import { centers, enquiries, leadIdentifiers, leads, mergeReviewQueue, pipelineStages, profiles } from "@/lib/db/schema";
+import {
+  centers,
+  dropdownOptions,
+  enquiries,
+  leadIdentifiers,
+  leads,
+  mergeReviewQueue,
+  profiles,
+} from "@/lib/db/schema";
 import { notify } from "@/lib/notifications/notify";
 import { startFlows } from "@/lib/whatsapp/flow-runner";
 
@@ -390,13 +398,26 @@ async function resolveOrCreateLeadInTransaction(
       };
     }
 
-    // No match anywhere — a genuinely new person. Default to the pipeline's
-    // stage_type='new' stage so it lands somewhere real in the funnel.
-    const [newStage] = await tx
-      .select({ id: pipelineStages.id })
-      .from(pipelineStages)
-      .where(and(eq(pipelineStages.stageType, "new"), eq(pipelineStages.isActive, true)))
-      .orderBy(pipelineStages.sortOrder)
+    // No match anywhere — a genuinely new person. Start them on the
+    // lowest-ranked status of kind `new` ("Not contacted" as shipped), so
+    // every lead has a real status from its first second and the queue can
+    // tell "nobody has spoken to them" from "nobody has classified them".
+    //
+    // Read through `tx`, not the shared client: the transaction holds the
+    // pool's only connection, and a second query on `db` here would wait
+    // for a connection that this very function is holding.
+    const [startingStatus] = await tx
+      .select({ value: dropdownOptions.value })
+      .from(dropdownOptions)
+      .where(
+        and(
+          eq(dropdownOptions.category, "temperature"),
+          eq(dropdownOptions.isActive, true),
+          isNull(dropdownOptions.deletedAt),
+          sql`${dropdownOptions.metadata} ->> 'kind' = 'new'`,
+        ),
+      )
+      .orderBy(dropdownOptions.sortOrder)
       .limit(1);
 
     const [lead] = await tx
@@ -415,7 +436,7 @@ async function resolveOrCreateLeadInTransaction(
         centerId: input.centerId,
         assignedTo: input.assignedTo,
         referredByLeadId: input.referredByLeadId ?? null,
-        stageId: newStage?.id,
+        temperature: startingStatus?.value ?? null,
         firstTouchSource: input.source,
         firstTouchSubSource: input.subSource,
         firstTouchCampaign: input.campaignId,
