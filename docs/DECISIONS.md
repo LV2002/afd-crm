@@ -4618,3 +4618,18 @@ meaning attached would behave differently from the one it came from, without say
 
 The staff and administrator manuals (and the PDFs and training video built from them) still
 describe stages; they need rewriting and regenerating. Nothing in the application depends on them.
+
+## 2026-10-11 · Outcomes that end a conversation need no follow-up
+
+Leon: the interaction outcomes are Connected, Not connected, Call back later, Interested,
+Not interested, Converted, Dropped, Wrong target audience; and the next action/date are not
+required for Converted, Not interested, Dropped or Wrong target audience.
+
+- Migration 0100 sets the list (the stored value `not_reachable` is relabelled "Not
+  connected" so history stays valid; "Demo scheduled" is deactivated, not deleted) and widens
+  the `interactions_next_action_required` CHECK to the four values.
+- **Assumption:** the exempt outcomes are keyed on the stored *value* in code
+  (`NO_FOLLOW_UP_OUTCOMES`), as `converted` already was, not on a flag in the row's
+  metadata. A CHECK cannot read another table, and a trigger to do it is more machinery than
+  four fixed values justify. If an admin should be able to mark their own outcomes as
+  conversation-enders, move this to a `needs_follow_up` flag read by a trigger.

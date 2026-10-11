@@ -67,10 +67,13 @@ beforeAll(async () => {
 afterAll(sweep);
 
 describe("needsFollowUp", () => {
-  it("exempts only the converted outcome", () => {
-    expect(needsFollowUp(CONVERTED_OUTCOME)).toBe(false);
-    expect(needsFollowUp("connected")).toBe(true);
-    expect(needsFollowUp("not_interested")).toBe(true);
+  it("exempts the outcomes that end the conversation, and only those", () => {
+    for (const outcome of [CONVERTED_OUTCOME, "not_interested", "dropped", "wrong_target_audience"]) {
+      expect(needsFollowUp(outcome), outcome).toBe(false);
+    }
+    for (const outcome of ["connected", "not_reachable", "call_back_later", "interested"]) {
+      expect(needsFollowUp(outcome), outcome).toBe(true);
+    }
   });
 
   it("treats an unchosen outcome as needing a follow-up", () => {
@@ -140,6 +143,17 @@ describe("the interactions CHECK constraint", () => {
       .returning({ id: interactions.id });
     expect(row.id).toBeTruthy();
   });
+
+  it.each(["not_interested", "dropped", "wrong_target_audience"])(
+    "accepts a %s interaction with neither",
+    async (outcome) => {
+      const [row] = await db
+        .insert(interactions)
+        .values({ leadId, type: "call", outcome, source: "manual" })
+        .returning({ id: interactions.id });
+      expect(row.id).toBeTruthy();
+    },
+  );
 
   it("still exempts a system-written interaction", async () => {
     // An automatic log entry has no counsellor to have decided anything.

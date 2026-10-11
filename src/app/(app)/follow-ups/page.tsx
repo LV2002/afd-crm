@@ -18,7 +18,6 @@ import { droppedLeadIds } from "@/lib/enrolment/dropped-leads";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import {
   OPTION_BEARING_TYPES,
-  getDropdownOptions,
   resolveFieldOptions,
   type FieldOption,
 } from "@/lib/fields/resolve-field-options";

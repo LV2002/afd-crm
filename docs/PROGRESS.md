@@ -8589,3 +8589,12 @@ lead's timeline (it is all still in the table). Browser (e2e) tests could not be
 they need the Supabase stack — so CI is their first run.
 
 **1792 tests pass** against a fresh CI-style database; typecheck, lint, `db:audit` and build clean.
+
+## Interaction outcomes and follow-up rule (migration 0100)
+
+- Outcomes are now Connected, Not connected, Call back later, Interested, Not interested,
+  Converted, Dropped, Wrong target audience.
+- Next action and its date are not required for Converted, Not interested, Dropped or Wrong
+  target audience (form, server action and CHECK constraint agree). Tests added for each.
+
+Stubbed: nothing. **1795 tests pass**, typecheck, lint and `db:audit` clean.

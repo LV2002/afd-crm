@@ -236,8 +236,9 @@ export async function logInteraction(leadId: string, _prevState: FormState, form
     counts against it, and it is found months later in a list of leads
     that were quietly abandoned mid-conversation.
 
-    Unless the conversation is over because they joined — see
-    `needsFollowUp()` for why that one outcome is exempt and why it is
+    Unless the conversation is over (joined, not interested, dropped,
+    wrong target audience) — see `needsFollowUp()` for why those
+    outcomes are exempt and why it is
     keyed on the row's value rather than its label.
   */
   const followUpRequired = needsFollowUp(typeof outcome === "string" ? outcome : null);

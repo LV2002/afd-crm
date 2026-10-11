@@ -459,12 +459,13 @@ const DROPDOWN_SEEDS: DropdownSeed[] = [
     isSystem: true,
     options: [
       { value: "connected", label: "Connected" },
-      { value: "not_reachable", label: "Not Reachable" },
-      { value: "call_back_later", label: "Call Back Later" },
+      { value: "not_reachable", label: "Not connected" },
+      { value: "call_back_later", label: "Call back later" },
       { value: "interested", label: "Interested" },
-      { value: "not_interested", label: "Not Interested" },
-      { value: "demo_scheduled", label: "Demo Scheduled" },
+      { value: "not_interested", label: "Not interested" },
       { value: "converted", label: "Converted" },
+      { value: "dropped", label: "Dropped" },
+      { value: "wrong_target_audience", label: "Wrong target audience" },
     ],
   },
   {

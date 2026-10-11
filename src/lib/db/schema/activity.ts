@@ -58,8 +58,9 @@ export const interactions = pgTable(
       nobody would ever be shown again: nothing surfaced the lead in the
       morning queue and nothing counted it against a response target.
 
-      `outcome = 'converted'` is the one exemption — the student joined,
-      so there is no next call. The VALUE is keyed on and not the label;
+      Outcomes that end the conversation are exempt (converted, not_interested,
+      dropped, wrong_target_audience — migration 0100): the student joined or
+      there is nobody left to call. The VALUE is keyed on and not the label;
       `dropdown_options` rows stay admin-editable, and renaming
       "Converted" to "Joined" changes nothing here, exactly as renaming a
       `stage_type = 'won'` stage does not change what it means.
@@ -74,7 +75,7 @@ export const interactions = pgTable(
     */
     check(
       "interactions_next_action_required",
-      sql`${t.source} = 'system' or coalesce(${t.outcome}, '') = 'converted' or (${t.nextAction} is not null and ${t.nextFollowupAt} is not null)`,
+      sql`${t.source} = 'system' or coalesce(${t.outcome}, '') in ('converted', 'not_interested', 'dropped', 'wrong_target_audience') or (${t.nextAction} is not null and ${t.nextFollowupAt} is not null)`,
     ),
   ],
 );
