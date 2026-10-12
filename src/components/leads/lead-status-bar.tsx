@@ -5,13 +5,6 @@ import { useState, useTransition } from "react";
 
 import { LostReasonDialog, type LostReasonOption } from "@/components/leads/lost-reason-dialog";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { TemperatureOption } from "@/lib/leads/temperature-kinds";
 import { cn } from "@/lib/utils";
 
@@ -28,20 +21,21 @@ import { setLeadTemperature } from "@/app/(app)/leads/[id]/actions";
  * it as only temperature" — into eleven values. So the shape of the
  * control follows the shape of the data again.
  *
- * ## Why buttons AND a select
+ * ## Every status is a button
  *
- * What a counsellor changes during a call is warmth: Contacted, Cold,
- * Warm, Hot. Those few are buttons a thumb can hit. How a lead ENDS is a
- * different, rarer act — parked for later, wrong target, joined a
- * competitor — and six more buttons would bury the four that matter, so
- * the endings live in a select.
+ * Leon: "all of these should be other temperature buttons which you can
+ * click" — Future prospect, Negative, Wrong target, AFD India student and
+ * Joined competitor sit beside Hot and Cold, not behind a menu. They are all
+ * the same kind of thing: where this lead is with us. Closing ones that ask
+ * why (Negative, Joined competitor) pop the reason dialog first.
  *
- * ## "Took admission" is shown and cannot be chosen
+ * ## "Took admission" is shown and cannot be clicked
  *
- * It sits in the list, disabled, with the reason — so nobody wonders where
- * it went — because the only way to it is to confirm the admission with a
- * course, batch and fee. The server and the database refuse it too; this
- * is the version of the refusal that explains itself.
+ * It is the one button that is not a choice. It lights up by itself when the
+ * admission is confirmed in the panel below, so a counsellor marks the
+ * admission once, in one place, and never has to come back up here. The
+ * server and the database refuse it from any other route too; this is the
+ * version of the refusal that explains itself.
  *
  * ## Saving
  *
@@ -75,10 +69,9 @@ export function LeadStatusBar({
   // A retired value (inactive) is still SHOWN when a lead carries it, but
   // never offered.
   const offered = options.filter((option) => option.isActive);
-  const working = offered.filter((option) => option.kind === "new" || option.kind === "open");
-  const endings = offered.filter((option) => option.kind !== "new" && option.kind !== "open");
+  // A retired value the lead still carries stays visible, as a selected button.
   const current = options.find((option) => option.value === temperature) ?? null;
-  const currentIsEnding = current !== null && current.kind !== "new" && current.kind !== "open";
+  const shown = current && !current.isActive ? [...offered, current] : offered;
 
   function flashSaved() {
     setSaved(true);
@@ -149,20 +142,24 @@ export function LeadStatusBar({
             Temperature
           </span>
           <div className="flex flex-wrap gap-1">
-            {working.map((option) => {
+            {shown.map((option) => {
               const isCurrent = temperature === option.value;
+              // Only the admission confirmation can set this one.
+              const automatic = option.kind === "won";
               return (
                 <button
                   key={option.value}
                   type="button"
-                  disabled={pending}
+                  disabled={pending || automatic}
                   aria-pressed={isCurrent}
+                  title={automatic ? "Set automatically when you confirm the admission below" : undefined}
                   onClick={() => choose(option.value)}
                   className={cn(
                     "flex min-h-9 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition-colors disabled:opacity-60",
                     isCurrent
                       ? "border-transparent bg-primary-subtle text-primary-ink"
                       : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                    automatic && "border-dashed",
                   )}
                 >
                   {option.color && (
@@ -173,44 +170,11 @@ export function LeadStatusBar({
                     />
                   )}
                   {option.label}
+                  {automatic && <Lock className="size-3" aria-hidden="true" />}
                 </button>
               );
             })}
           </div>
-        </div>
-
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Or
-          </span>
-          <Select
-            value={currentIsEnding ? (temperature ?? "") : ""}
-            onValueChange={choose}
-            disabled={pending}
-          >
-            <SelectTrigger
-              aria-label="Mark this lead as"
-              className={cn(
-                "h-9 w-[13.5rem] max-w-full",
-                currentIsEnding && "border-transparent bg-primary-subtle text-primary-ink",
-              )}
-            >
-              <SelectValue placeholder="Mark as…" />
-            </SelectTrigger>
-            <SelectContent>
-              {endings.map((option) => (
-                <SelectItem
-                  key={option.value}
-                  value={option.value}
-                  // The only route to this one is confirming the admission.
-                  disabled={option.kind === "won"}
-                >
-                  {option.label}
-                  {option.kind === "won" ? " — confirm the admission below" : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
 
         <span className="flex items-center gap-1 text-xs text-muted-foreground" aria-live="polite">

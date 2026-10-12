@@ -4633,3 +4633,21 @@ required for Converted, Not interested, Dropped or Wrong target audience.
   metadata. A CHECK cannot read another table, and a trigger to do it is more machinery than
   four fixed values justify. If an admin should be able to mark their own outcomes as
   conversation-enders, move this to a `needs_follow_up` flag read by a trigger.
+
+## 2026-10-12 · Every status is a button; Very hot and Dead return
+
+Leon, on seeing the merged lead page: Future prospect, Negative, Wrong target, AFD India
+student and Joined competitor are temperatures like Hot and Cold, not entries in a "Mark
+as…" menu — "all of these should be other temperature buttons which you can click", along
+with Very hot and Dead. And the admission is marked once, in Confirm admission at the bottom;
+the temperature follows by itself, so nobody comes back up to set it.
+
+- The status bar is now one row of buttons for every active temperature. Closing ones that
+  ask why (Negative, Joined competitor) still ask first. **Took admission** is shown as a
+  locked button: it lights up on its own when the admission is confirmed and cannot be
+  clicked — the database trigger still refuses it from any other route.
+- Migration 0101 reactivates **Very hot** (open, interested, 80%) and **Dead** (lost, no
+  reason asked), which 0099 had folded into Hot and Negative. Leads 0099 already converted
+  stay where they are; nothing is guessed back.
+- **Assumption:** "marked as dropped" was read as the admission being dropped, which already
+  unlocks the buttons so the counsellor picks the new status; it does not choose one for them.
