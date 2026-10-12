@@ -307,19 +307,21 @@ const DROPDOWN_SEEDS: DropdownSeed[] = [
       // keyed on — never the label. `probability` weights the forecast,
       // `requires_reason` makes a closing outcome ask why, `interested`
       // feeds the dashboard's Interested tile. All four are an admin's to
-      // change under Settings → Temperatures. Migration 0099 writes the same
+      // change under Settings → Temperatures. Migrations 0099 and 0101 write the same
       // values on an existing instance, so keep the two in step.
       { value: "not_contacted", label: "Not contacted", color: "#94a3b8", metadata: { rank: 1, kind: "new", probability: 5, requires_reason: false, interested: false } },
       { value: "contacted", label: "Contacted", color: "#3b82f6", metadata: { rank: 2, kind: "open", probability: 10, requires_reason: false, interested: false } },
       { value: "cold", label: "Cold", color: "#0ea5e9", metadata: { rank: 3, kind: "open", probability: 10, requires_reason: false, interested: false } },
       { value: "warm", label: "Warm", color: "#f97316", metadata: { rank: 4, kind: "open", probability: 30, requires_reason: false, interested: true } },
       { value: "hot", label: "Hot", color: "#dc2626", metadata: { rank: 5, kind: "open", probability: 60, requires_reason: false, interested: true } },
+      { value: "very_hot", label: "Very hot", color: "#991b1b", metadata: { rank: 5, kind: "open", probability: 80, requires_reason: false, interested: true } },
       { value: "took_admission", label: "Took admission", color: "#16a34a", metadata: { rank: 6, kind: "won", probability: 100, requires_reason: false, interested: false } },
       { value: "future_prospect", label: "Future prospect", color: "#8b5cf6", metadata: { rank: 7, kind: "parked", probability: 15, requires_reason: false, interested: false } },
       { value: "negative", label: "Negative", color: "#6b7280", metadata: { rank: 8, kind: "lost", probability: 0, requires_reason: true, interested: false } },
       { value: "wrong_target", label: "Wrong target", color: "#78716c", metadata: { rank: 9, kind: "lost", probability: 0, requires_reason: false, interested: false } },
       { value: "afd_india_student", label: "AFD India student", color: "#0d9488", metadata: { rank: 10, kind: "lost", probability: 0, requires_reason: false, interested: false } },
       { value: "joined_competitor", label: "Joined competitor", color: "#db2777", metadata: { rank: 11, kind: "lost", probability: 0, requires_reason: true, interested: false } },
+      { value: "dead", label: "Dead", color: "#6b7280", metadata: { rank: 12, kind: "lost", probability: 0, requires_reason: false, interested: false } },
     ],
   },
   {

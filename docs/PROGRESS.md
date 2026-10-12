@@ -8598,3 +8598,13 @@ they need the Supabase stack — so CI is their first run.
   target audience (form, server action and CHECK constraint agree). Tests added for each.
 
 Stubbed: nothing. **1795 tests pass**, typecheck, lint and `db:audit` clean.
+
+## Status bar: every temperature is a button (migration 0101)
+
+- The "Mark as…" menu is gone. Future prospect, Negative, Wrong target, AFD India student,
+  Joined competitor, Very hot and Dead are buttons beside Hot and Cold; Took admission is a
+  locked button that lights up when the admission is confirmed.
+- Very hot and Dead are active again (0101). Seed and migration agree; verified on a fresh
+  database (13 active temperatures).
+
+Stubbed: nothing. **1795 tests pass**, typecheck and lint clean.
