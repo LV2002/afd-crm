@@ -8608,3 +8608,14 @@ Stubbed: nothing. **1795 tests pass**, typecheck, lint and `db:audit` clean.
   database (13 active temperatures).
 
 Stubbed: nothing. **1795 tests pass**, typecheck and lint clean.
+
+## Camera upload on the phone
+
+- Upload forms for the signed agreement (lead page) and student attachments gain a **Take photo**
+  button below the `md` breakpoint (`CameraFileInput`). It opens the rear camera, shrinks the
+  picture to 2400px JPEG (phone photos are 4–12 MB) and places it in the form's ordinary file field,
+  so the server action and its validation are unchanged. The normal picker stays for PDFs and gallery images.
+- Not changed: the public student profile form (it deliberately lets people pick from their gallery)
+  and the WhatsApp attach button.
+
+Stubbed: no automated browser test — the camera cannot be driven in CI; try it on a real phone.
