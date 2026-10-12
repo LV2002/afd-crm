@@ -255,6 +255,10 @@ export async function createBroadcast(
 
     const kind = mediaKindFor(headerFile.type);
     if (!kind) return { error: "WhatsApp cannot send that kind of file." };
+    // A template header is an image, a video or a document — never audio.
+    if (kind === "audio" || headerFile.type !== "application/pdf" && kind === "document") {
+      return { error: "A broadcast header can be a JPG or PNG image, an MP4 or 3GP video, or a PDF." };
+    }
 
     const phoneNumberId = await getIntegrationCredential("whatsapp", "phone_number_id");
     const accessToken = await getIntegrationCredential("whatsapp", "access_token");

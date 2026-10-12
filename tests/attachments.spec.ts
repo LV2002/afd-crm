@@ -107,7 +107,7 @@ describe("validateUpload", () => {
 
   it("rejects a file over the size limit, and reports the actual size", () => {
     const message = validateUpload({ ...ok, size: MAX_FILE_BYTES + 1 });
-    expect(message).toMatch(/limit is 20 MB/);
+    expect(message).toContain(`limit is ${MAX_FILE_BYTES / 1024 / 1024} MB`);
   });
 
   it("accepts a file exactly at the limit", () => {

@@ -4651,3 +4651,22 @@ the temperature follows by itself, so nobody comes back up to set it.
   stay where they are; nothing is guessed back.
 - **Assumption:** "marked as dropped" was read as the admission being dropped, which already
   unlocks the buttons so the counsellor picks the new status; it does not choose one for them.
+
+## 2026-10-12 · Files in WhatsApp, and what a file can weigh
+
+Leon: file sending on WhatsApp Business (the counsellors' own numbers) and the WhatsApp API.
+
+- **Bug found:** `sendWhatsAppMedia` checked the 24-hour window against the lead alone and uploaded
+  the file with the institute's broadcast number, then sent from the counsellor's own. A media id
+  belongs to the number that uploaded it, so every file from a counsellor's number was rejected by
+  Meta. It now follows the text path: sender resolved from the session, window read for that
+  number pair, upload with the same number.
+- Conversations with no lead can now send files too (they could send text). Reverses the earlier
+  "text only, deliberately" for unmatched threads: a file inside an open window is free-form like text.
+- Accepted: images, video, **audio** and **Word/Excel/PowerPoint/text** documents, plus PDF.
+  Broadcast template headers stay image, video or PDF (Meta's rule for headers).
+- **Size:** Next's Server Action body limit is 1 MB by default — smaller than one phone photo —
+  and Vercel rejects bodies over 4.5 MB. `next.config.ts` now sets 4 MB and `MAX_UPLOAD_BYTES`
+  (4 MB) caps every upload. The old 20 MB figure was never reachable on this hosting. Images are
+  shrunk in the browser. **Assumption:** 4 MB is acceptable for now; larger videos and scanned PDFs
+  need a direct-to-storage upload, which is separate work.

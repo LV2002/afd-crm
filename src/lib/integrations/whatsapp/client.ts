@@ -92,8 +92,8 @@ export async function uploadMedia(
 }
 
 export interface WhatsAppMediaPayload {
-  /** Meta's own message type — "image", "video" or "document". */
-  kind: "image" | "video" | "document";
+  /** Meta's own message type — "image", "video", "audio" or "document". */
+  kind: "image" | "video" | "audio" | "document";
   /** From `uploadMedia`. */
   mediaId: string;
   /** Shown under the media. Documents also take a filename. */
@@ -112,7 +112,8 @@ export async function sendMediaMessage(
   media: WhatsAppMediaPayload,
 ): Promise<string> {
   const payload: Record<string, unknown> = { id: media.mediaId };
-  if (media.caption) payload.caption = media.caption;
+  // Audio takes no caption; Meta rejects the field.
+  if (media.caption && media.kind !== "audio") payload.caption = media.caption;
   // Only documents carry a filename; sending one on an image is rejected.
   if (media.kind === "document" && media.fileName) payload.filename = media.fileName;
 

@@ -1,3 +1,5 @@
+import { MAX_UPLOAD_BYTES } from "@/lib/storage/shared";
+
 /**
  * What WhatsApp will accept as an attachment, and what it calls it.
  *
@@ -13,13 +15,12 @@
  * to 100 MB would not change what Meta accepts, it would only move the
  * rejection somewhere less useful (CLAUDE.md § What is configurable).
  *
- * Note the limits are lower than the CRM's own 20 MB attachment cap for
- * images (5 MB) and higher for video (16 MB), so neither list subsumes the
- * other and `validateWhatsAppMedia` is not a duplicate of `validateUpload`.
+ * Every limit here is also capped at the CRM's own upload size (4 MB), which
+ * is what actually fits through a Server Action on this hosting.
  */
 
 /** Meta's own word for the message type; it goes straight into the send payload. */
-export type WhatsAppMediaKind = "image" | "video" | "document";
+export type WhatsAppMediaKind = "image" | "video" | "audio" | "document";
 
 interface MediaRule {
   kind: WhatsAppMediaKind;
@@ -29,20 +30,49 @@ interface MediaRule {
 const MB = 1024 * 1024;
 
 /**
+ * What fits through the CRM, whatever Meta would accept: the Server Action body
+ * limit (see MAX_UPLOAD_BYTES). A 16 MB video is fine for WhatsApp and
+ * impossible from here, so the rule is the smaller of the two.
+ */
+const CAP = MAX_UPLOAD_BYTES;
+
+/**
  * Meta accepts more types than this (audio, stickers, several document
  * formats). This is the subset AFD actually sends: a photo or a video of
  * the campus and the occasional PDF brochure. Adding one is a line here,
  * and nothing else.
  */
 const MEDIA_RULES: Record<string, MediaRule> = {
-  "image/jpeg": { kind: "image", maxBytes: 5 * MB },
-  "image/png": { kind: "image", maxBytes: 5 * MB },
-  "video/mp4": { kind: "video", maxBytes: 16 * MB },
-  "video/3gpp": { kind: "video", maxBytes: 16 * MB },
-  "application/pdf": { kind: "document", maxBytes: 100 * MB },
+  "image/jpeg": { kind: "image", maxBytes: Math.min(5 * MB, CAP) },
+  "image/png": { kind: "image", maxBytes: Math.min(5 * MB, CAP) },
+  "video/mp4": { kind: "video", maxBytes: Math.min(16 * MB, CAP) },
+  "video/3gpp": { kind: "video", maxBytes: Math.min(16 * MB, CAP) },
+  // Voice notes and recordings. Audio takes no caption.
+  "audio/aac": { kind: "audio", maxBytes: Math.min(16 * MB, CAP) },
+  "audio/mp4": { kind: "audio", maxBytes: Math.min(16 * MB, CAP) },
+  "audio/mpeg": { kind: "audio", maxBytes: Math.min(16 * MB, CAP) },
+  "audio/amr": { kind: "audio", maxBytes: Math.min(16 * MB, CAP) },
+  "audio/ogg": { kind: "audio", maxBytes: Math.min(16 * MB, CAP) },
+  // Documents: brochures, fee sheets, syllabi.
+  "application/pdf": { kind: "document", maxBytes: Math.min(100 * MB, CAP) },
+  "application/msword": { kind: "document", maxBytes: Math.min(100 * MB, CAP) },
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": { kind: "document", maxBytes: Math.min(100 * MB, CAP) },
+  "application/vnd.ms-excel": { kind: "document", maxBytes: Math.min(100 * MB, CAP) },
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": { kind: "document", maxBytes: Math.min(100 * MB, CAP) },
+  "application/vnd.ms-powerpoint": { kind: "document", maxBytes: Math.min(100 * MB, CAP) },
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": { kind: "document", maxBytes: Math.min(100 * MB, CAP) },
+  "text/plain": { kind: "document", maxBytes: Math.min(100 * MB, CAP) },
 };
 
-export const WHATSAPP_MEDIA_EXTENSIONS = ".jpg,.jpeg,.png,.mp4,.3gp,.pdf";
+export const WHATSAPP_MEDIA_EXTENSIONS =
+  ".jpg,.jpeg,.png,.mp4,.3gp,.aac,.m4a,.mp3,.amr,.ogg,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt";
+
+/**
+ * A template's header can be an image, a video or a PDF — not audio, and not
+ * the Office formats a free-form message can carry. The broadcast form offers
+ * only these, and the server refuses anything else.
+ */
+export const BROADCAST_HEADER_EXTENSIONS = ".jpg,.jpeg,.png,.mp4,.3gp,.pdf";
 
 /** The mime type Meta will accept, or null if it will not. */
 export function mediaKindFor(mimeType: string): WhatsAppMediaKind | null {
@@ -62,10 +92,10 @@ export function validateWhatsAppMedia(file: { size: number; type: string }): str
 
   const rule = MEDIA_RULES[file.type];
   if (!rule) {
-    return "WhatsApp accepts JPG and PNG images, MP4 or 3GP video, and PDF documents.";
+    return "WhatsApp accepts JPG and PNG images, MP4 or 3GP video, audio (MP3, M4A, AAC, AMR, OGG), and PDF, Word, Excel, PowerPoint or text documents.";
   }
   if (file.size > rule.maxBytes) {
-    return `That ${rule.kind} is ${(file.size / MB).toFixed(1)} MB. WhatsApp's limit for ${rule.kind}s is ${describeLimit(rule.maxBytes)}.`;
+    return `That ${rule.kind} is ${(file.size / MB).toFixed(1)} MB. Files sent from the CRM can be up to ${describeLimit(rule.maxBytes)} — send bigger ones from the WhatsApp Business app on your phone.`;
   }
   return null;
 }

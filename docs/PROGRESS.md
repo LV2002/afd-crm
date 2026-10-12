@@ -8619,3 +8619,12 @@ Stubbed: nothing. **1795 tests pass**, typecheck and lint clean.
   and the WhatsApp attach button.
 
 Stubbed: no automated browser test — the camera cannot be driven in CI; try it on a real phone.
+
+## WhatsApp file sending
+
+- Files from a counsellor's own (Coexistence) number now work: the upload uses the sending number.
+- Replies in conversations with no lead can send files. Audio and Office documents accepted.
+- Phones: a camera button beside the paperclip; photos are shrunk to fit.
+- Upload limit is an honest 4 MB everywhere (Server Action body limit raised from the 1 MB default).
+
+Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. Not testable in CI against Meta.
