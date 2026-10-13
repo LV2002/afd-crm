@@ -36,8 +36,20 @@ import { webhookEvents } from "@/lib/db/schema";
 export interface WebhookSourceHealth {
   source: string;
   total: number;
-  /** Deliveries whose HMAC did not verify. Any at all is a configuration fault. */
+  /**
+   * Deliveries that were turned away at the door: a bad signature or key, and
+   * refused (status `failed`). An unsigned delivery that an endpoint is set to
+   * accept has `signature_ok = false` too but WAS processed, so it is not
+   * counted — it used to be, which made a working endpoint look broken.
+   */
   rejected: number;
+  /**
+   * Whether the NEWEST delivery on this channel was one of those. This, not the
+   * count, is what says the channel is broken now: an endpoint whose signing was
+   * fixed last week still has last week's rejections in the window.
+   */
+  rejectedLatest: boolean;
+  lastRejectedAt: string | null;
   failed: number;
   lastAt: string | null;
   lastError: string | null;
@@ -48,7 +60,9 @@ export async function recentWebhookDeliveries(days = 7): Promise<WebhookSourceHe
     .select({
       source: webhookEvents.source,
       total: sql<number>`count(*)`,
-      rejected: sql<number>`count(*) filter (where ${webhookEvents.signatureOk} = false)`,
+      rejected: sql<number>`count(*) filter (where ${webhookEvents.signatureOk} = false and ${webhookEvents.status} = 'failed')`,
+      rejectedLatest: sql<boolean>`(array_agg(${webhookEvents.signatureOk} = false and ${webhookEvents.status} = 'failed' order by ${webhookEvents.receivedAt} desc))[1]`,
+      lastRejectedAt: sql<Date | null>`max(${webhookEvents.receivedAt}) filter (where ${webhookEvents.signatureOk} = false and ${webhookEvents.status} = 'failed')`,
       failed: sql<number>`count(*) filter (where ${webhookEvents.status} = 'failed')`,
       lastAt: sql<Date | null>`max(${webhookEvents.receivedAt})`,
       // The most recent complaint, whatever it was. Prefer a rejection's
@@ -68,6 +82,8 @@ export async function recentWebhookDeliveries(days = 7): Promise<WebhookSourceHe
     source: row.source,
     total: Number(row.total),
     rejected: Number(row.rejected),
+    rejectedLatest: row.rejectedLatest === true,
+    lastRejectedAt: row.lastRejectedAt ? new Date(row.lastRejectedAt).toISOString() : null,
     failed: Number(row.failed),
     lastAt: row.lastAt ? new Date(row.lastAt).toISOString() : null,
     lastError: row.lastError,

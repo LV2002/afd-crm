@@ -8649,3 +8649,10 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 - The card showed the most recent failure ever seen as "Last error", even when every delivery since was
   accepted. It now says whether the NEWEST delivery was rejected (red), and otherwise lists earlier
   rejections as history ("3 earlier deliveries were rejected … the latest was accepted"). `summariseDeliveries`, tested.
+
+## Platform Health: rejections only alarm when current
+
+- "Deliveries are being rejected" fired for any refusal in the last 7 days, and counted an endpoint's
+  accepted-but-unsigned deliveries as rejected. Now `rejected` means refused at the door (bad signature/key,
+  status failed), and the red banner/row appears only when the NEWEST delivery on a channel was refused.
+  Older refusals show muted on their row ("N earlier deliveries were refused (last …); the newest was accepted").
