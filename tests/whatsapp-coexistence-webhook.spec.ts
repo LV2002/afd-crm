@@ -184,7 +184,7 @@ describe("an inbound message decides lead creation by the number it arrived on",
     // routing this through the rules engine to somebody else would be
     // actively wrong.
     expect(lead.assignedTo).toBe(counsellorId);
-    expect(lead.firstTouchSource).toBe("WhatsApp");
+    expect(lead.firstTouchSource).toBe("whatsapp");
   });
 
   it("does not create one on the institute's broadcast number", async () => {

@@ -8633,3 +8633,8 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 
 - WhatsApp messages that began with a Meta ad now create/attach the lead as source Meta, with the
   ad id (`adReferralOf`, tests added). Not covered: Instagram ad DMs; existing mislabelled leads.
+
+## Lead source: match the options, and never look blank
+
+- New leads' source is normalised onto the Lead Source options; tests updated (`meta`/`website`/`whatsapp`).
+- The lead form shows an unknown stored source as its raw value. Existing leads untouched pending a look at the data.

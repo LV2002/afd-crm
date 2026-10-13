@@ -62,16 +62,31 @@ export function DynamicFieldInput({
       return <MoneyInput name={name} defaultValue={String(defaultValue ?? "")} />;
 
     case "select":
-    case "user_ref":
+    case "user_ref": {
+      /*
+        A stored value that is not one of the options is SHOWN, not blanked.
+
+        The control used to draw "Choose lead source" for a lead whose source
+        was a string the dropdown does not hold (an older import, a webhook's
+        own wording) — so a lead that had a source looked as though it had
+        none, and nobody could tell what it actually was. It now appears as
+        its raw value, marked as not being in the list.
+      */
+      const current = typeof defaultValue === "string" ? defaultValue : "";
+      const shown =
+        field.type === "select" && current && !options.some((option) => option.value === current)
+          ? [{ value: current, label: `${current} (not in the list)` }, ...options]
+          : options;
       return (
         <Combobox
           name={name}
-          defaultValue={(defaultValue as string) ?? ""}
-          options={options}
+          defaultValue={current}
+          options={shown}
           placeholder={`Choose ${field.label.toLowerCase()}`}
           clearable
         />
       );
+    }
 
     case "multiselect": {
       const current = Array.isArray(defaultValue) ? (defaultValue as string[]) : [];

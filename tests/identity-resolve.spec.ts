@@ -101,9 +101,9 @@ describe("resolveOrCreateLead", () => {
     });
 
     const [lead] = await db.select().from(leads).where(eq(leads.id, first.leadId));
-    expect(lead.firstTouchSource).toBe("Meta");
+    expect(lead.firstTouchSource).toBe("meta");
     expect(lead.firstTouchSubSource).toBe("Lead Ad A");
-    expect(lead.lastTouchSource).toBe("Website");
+    expect(lead.lastTouchSource).toBe("website");
     expect(lead.lastTouchSubSource).toBe("Contact Form");
   });
 

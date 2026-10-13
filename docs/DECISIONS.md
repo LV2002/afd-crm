@@ -4688,3 +4688,17 @@ on the broadcast number not created at all.
   already exist under "WhatsApp" are not rewritten.
 - **Assumption:** this is the cause for Leon's missing sources; he has not yet confirmed it from a
   lead's Tracking tab. Lead-form leads were checked in code and always carry `meta`.
+
+## 2026-10-13 · A lead's source is made to match the Lead Source options
+
+Leon showed a Meta lead (#126) whose Lead Source reads "Choose lead source" and whose Sub-source is empty.
+That field is `last_touch_source`, and the control shows its placeholder for any stored value that is
+not one of the dropdown's options — so a lead with a source can look as if it has none.
+
+- `resolveOrCreateLead()` now maps `source` onto an existing option case-, spacing- and
+  punctuation-insensitively, by value or label (`canonicalSource`); unfamiliar sources are kept as given.
+  Routes had been writing `WhatsApp`, `Website`, `Meta` against options `whatsapp`, `website`, `meta`.
+- The lead form shows a stored value that is not in the list as "<value> (not in the list)" instead of blank.
+- **Not done, deliberately:** existing leads are not rewritten. **Assumption:** the cause for #126 is a
+  stored value that is not an option; unconfirmed until Leon runs the query in the reply (distinct
+  `last_touch_source` values). A one-off backfill is a small migration once we know the values.

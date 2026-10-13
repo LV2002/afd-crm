@@ -133,7 +133,7 @@ describe("a real submission", () => {
       .where(eq(leads.primaryPhone, `+91${phone}`));
 
     expect(lead).toBeTruthy();
-    expect(lead.source).toBe("Website");
+    expect(lead.source).toBe("website");
     expect(lead.subSource).toBe("Homepage enquiry");
     expect(lead.city).toBe("Kochi");
   });
