@@ -1,3 +1,4 @@
+import { summariseDeliveries } from "@/lib/integrations/delivery-summary";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 
@@ -25,6 +26,10 @@ interface WebhookRow {
   require_signature: boolean;
   field_aliases: Record<string, string[]> | null;
   is_active: boolean;
+}
+
+function summaryLabel(iso: string | null | undefined): string | null {
+  return iso ? formatDateIST(iso, "d MMM, h:mm a") : null;
 }
 
 interface DeliveryRow {
@@ -80,23 +85,7 @@ export default async function CustomWebhooksPage() {
       .returns<DeliveryRow[]>(),
   ]);
 
-  const summary = new Map<string, { count: number; lastAt: string; lastError: string | null }>();
-  for (const row of deliveryRows ?? []) {
-    if (!row.custom_webhook_id) continue;
-    const existing = summary.get(row.custom_webhook_id);
-    if (existing) {
-      existing.count += 1;
-      // Rows arrive newest first, so the first failure seen is the most
-      // recent one — and that is the one worth putting on the card.
-      if (!existing.lastError && row.status === "failed") existing.lastError = row.last_error;
-    } else {
-      summary.set(row.custom_webhook_id, {
-        count: 1,
-        lastAt: formatDateIST(row.received_at, "d MMM, h:mm a"),
-        lastError: row.status === "failed" ? row.last_error : null,
-      });
-    }
-  }
+  const summary = summariseDeliveries(deliveryRows ?? []);
 
   const webhooks: CustomWebhookView[] = await Promise.all(
     (rows ?? []).map(async (row) => ({
@@ -113,8 +102,11 @@ export default async function CustomWebhooksPage() {
       aliasText: await formatAliases(row.field_aliases),
       isActive: row.is_active,
       deliveries: summary.get(row.id)?.count ?? 0,
-      lastDeliveryAt: summary.get(row.id)?.lastAt ?? null,
+      lastDeliveryAt: summaryLabel(summary.get(row.id)?.lastAt),
+      rejected: summary.get(row.id)?.failed ?? 0,
+      lastDeliveryFailed: summary.get(row.id)?.lastFailed ?? false,
       lastError: summary.get(row.id)?.lastError ?? null,
+      lastErrorAt: summaryLabel(summary.get(row.id)?.lastErrorAt),
     })),
   );
 

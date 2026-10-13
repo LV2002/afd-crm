@@ -8643,3 +8643,9 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 
 - Lead page read the wrong key for Lead Source / Sub-source, so the form was blank and autosave blanked the
   stored value. Fixed, guarded, and repaired from the enquiries table (migration 0102). 1808 tests pass.
+
+## Custom webhook card: current fault vs old failure
+
+- The card showed the most recent failure ever seen as "Last error", even when every delivery since was
+  accepted. It now says whether the NEWEST delivery was rejected (red), and otherwise lists earlier
+  rejections as history ("3 earlier deliveries were rejected … the latest was accepted"). `summariseDeliveries`, tested.

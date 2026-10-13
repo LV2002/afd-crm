@@ -43,7 +43,12 @@ export interface CustomWebhookView {
   isActive: boolean;
   deliveries: number;
   lastDeliveryAt: string | null;
+  /** How many of the recent deliveries were rejected. */
+  rejected: number;
+  /** Whether the NEWEST delivery was rejected — the only case that is a current fault. */
+  lastDeliveryFailed: boolean;
   lastError: string | null;
+  lastErrorAt: string | null;
 }
 
 /** One line of a credential, with a copy button that works. */
@@ -183,8 +188,15 @@ export function WebhookCard({
             {webhook.deliveries === 0
               ? "Nothing has been posted here yet."
               : `${webhook.deliveries} deliver${webhook.deliveries === 1 ? "y" : "ies"}, last ${webhook.lastDeliveryAt}.`}
-            {webhook.lastError && (
-              <span className="text-destructive"> Last error: {webhook.lastError}</span>
+            {webhook.lastDeliveryFailed && webhook.lastError && (
+              <span className="text-destructive"> The latest delivery was rejected: {webhook.lastError}</span>
+            )}
+            {!webhook.lastDeliveryFailed && webhook.rejected > 0 && (
+              <span>
+                {" "}
+                {webhook.rejected} earlier {webhook.rejected === 1 ? "delivery was" : "deliveries were"} rejected
+                {webhook.lastError ? ` (last: ${webhook.lastError}, ${webhook.lastErrorAt})` : ""} — the latest was accepted.
+              </span>
             )}
           </p>
         </div>
