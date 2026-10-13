@@ -8638,3 +8638,8 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 
 - New leads' source is normalised onto the Lead Source options; tests updated (`meta`/`website`/`whatsapp`).
 - The lead form shows an unknown stored source as its raw value. Existing leads untouched pending a look at the data.
+
+## Leads losing their source (root cause found)
+
+- Lead page read the wrong key for Lead Source / Sub-source, so the form was blank and autosave blanked the
+  stored value. Fixed, guarded, and repaired from the enquiries table (migration 0102). 1808 tests pass.

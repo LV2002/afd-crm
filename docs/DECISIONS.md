@@ -4702,3 +4702,21 @@ not one of the dropdown's options — so a lead with a source can look as if it 
 - **Not done, deliberately:** existing leads are not rewritten. **Assumption:** the cause for #126 is a
   stored value that is not an option; unconfirmed until Leon runs the query in the reply (distinct
   `last_touch_source` values). A one-off backfill is a small migration once we know the values.
+
+## 2026-10-13 · Leads were losing their source when edited — the real cause
+
+Leon's Supabase query for lead #126 showed its enquiry intact (`meta`, form id, campaign, ad) while the
+lead's Lead Source and Sub-source were blank. So the source arrived correctly and was erased afterwards.
+
+- **Cause:** the lead page filled the form with `row[field.key]`. Lead Source / Sub-source live in
+  `last_touch_source` / `last_touch_sub_source`, so `row.lead_source` was undefined: every lead showed an
+  empty Lead Source. Autosave submits every field, so the first edit of anything on a lead posted that
+  blank back and `updateLead` wrote it over the real value. Leads nobody had edited kept theirs — the
+  "some have it, some don't". (The earlier theories — Click-to-WhatsApp, spelling mismatches — were real
+  gaps but not this.)
+- **Fix:** the page reads via `getRawFieldValue`; `updateLead` never writes a blank Lead Source or
+  Sub-source (`isBlankAttribution`); changing to a different source is still allowed.
+- **Repair (0102):** leads with an empty `last_touch_source` get it back from their most recent enquiry
+  (append-only, never touched), spelled as the matching option; empty sub-sources likewise. Only NULL/empty
+  values are written. Verified on fixture leads.
+- **Not recoverable:** a source the lead *changed to* by hand and then lost, if the enquiry says otherwise.

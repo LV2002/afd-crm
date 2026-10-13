@@ -715,6 +715,13 @@
       "when": 1793023208000,
       "tag": "0101_very_hot_and_dead_return",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1793109608000,
+      "tag": "0102_restore_wiped_lead_sources",
+      "breakpoints": true
     }
   ]
 }

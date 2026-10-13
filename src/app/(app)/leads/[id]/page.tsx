@@ -37,6 +37,7 @@ import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 
 import { ConfirmAdmissionForm } from "./confirm-admission-form";
 import { InteractionForm } from "./interaction-form";
+import { getRawFieldValue } from "@/lib/fields/field-column";
 import { describeLead } from "@/lib/leads/search-leads";
 
 import { LeadEditForm } from "./lead-edit-form";
@@ -96,7 +97,14 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   */
   const values: Record<string, unknown> = {};
   for (const field of fields) {
-    const raw = field.isCore ? row[field.key] : (row.custom ?? {})[field.key];
+    /*
+      `getRawFieldValue`, not `row[field.key]`. Lead Source and Sub-source
+      are stored as `last_touch_source` / `last_touch_sub_source`, so reading
+      `row.lead_source` found nothing: the form drew "Choose lead source" for
+      EVERY lead, and its next autosave then posted that blank back over the
+      real value.
+    */
+    const raw = getRawFieldValue(field, row);
     values[field.key] =
       field.type === "phone" && !canRevealPhone && typeof raw === "string"
         ? maskPhone(raw)

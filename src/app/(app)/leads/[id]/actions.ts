@@ -11,7 +11,7 @@ import { batches, enrolments, leadIdentifiers, leads } from "@/lib/db/schema";
 import { confirmAdmission } from "@/lib/enrolment/confirm-admission";
 import { resolveDiscount } from "@/lib/enrolment/discount-authority";
 import { getDiscountLimit } from "@/lib/enrolment/get-discount-limit";
-import { fieldColumn } from "@/lib/fields/field-column";
+import { fieldColumn, isBlankAttribution } from "@/lib/fields/field-column";
 import { getFieldSchema } from "@/lib/fields/get-field-schema";
 import { NOT_PROVIDED, parseFieldValue } from "@/lib/fields/parse-field-value";
 import { captureError } from "@/lib/errors/capture";
@@ -100,6 +100,9 @@ export async function updateLead(leadId: string, _prevState: FormState, formData
     if (!parsed.ok) return { error: parsed.message };
     if (parsed.value === NOT_PROVIDED) continue; // not rendered in this form at all
     const value = parsed.value;
+
+    // Never blank a lead's source from the form — see isBlankAttribution.
+    if (field.isCore && isBlankAttribution(field.key, value)) continue;
 
     if (field.isCore) {
       coreUpdates[fieldColumn(field.key)] = value;
