@@ -33,7 +33,7 @@ const { webhookEvents } = await import("../src/lib/db/schema");
 const MARKER = "WebhookDeliveriesTest";
 
 async function sweep() {
-  for (const suffix of ["ok", "rejected", "failed"]) {
+  for (const suffix of ["ok", "rejected", "failed", "old-rejected", "new-ok", "old-ok", "new-rejected", "unsigned-ok"]) {
     await db.delete(webhookEvents).where(eq(webhookEvents.externalId, `${MARKER}:${suffix}`));
   }
 }
@@ -64,6 +64,51 @@ beforeAll(async () => {
       raw: {},
       status: "failed",
       lastError: "Something downstream broke",
+    },
+    // A channel whose signing was fixed: an old refusal, then a newer accepted delivery.
+    {
+      source: "instagram",
+      externalId: `${MARKER}:old-rejected`,
+      signatureOk: false,
+      raw: {},
+      status: "failed",
+      lastError: "Invalid or missing X-Hub-Signature-256",
+      receivedAt: new Date(Date.now() + 86_400_000),
+    },
+    {
+      source: "instagram",
+      externalId: `${MARKER}:new-ok`,
+      signatureOk: true,
+      raw: {},
+      status: "done",
+      receivedAt: new Date(Date.now() + 2 * 86_400_000),
+    },
+    // A channel that is broken now: accepted, then refused.
+    {
+      source: "knorish",
+      externalId: `${MARKER}:old-ok`,
+      signatureOk: true,
+      raw: {},
+      status: "done",
+      receivedAt: new Date(Date.now() + 86_400_000),
+    },
+    {
+      source: "knorish",
+      externalId: `${MARKER}:new-rejected`,
+      signatureOk: false,
+      raw: {},
+      status: "failed",
+      lastError: "Invalid or missing X-AFD-Signature",
+      receivedAt: new Date(Date.now() + 2 * 86_400_000),
+    },
+    // An endpoint set to accept unsigned deliveries: signature not ok, but processed.
+    {
+      source: "custom",
+      externalId: `${MARKER}:unsigned-ok`,
+      signatureOk: false,
+      raw: {},
+      status: "done",
+      receivedAt: new Date(Date.now() + 3 * 86_400_000),
     },
   ]);
 });
@@ -96,6 +141,22 @@ describe("recentWebhookDeliveries", () => {
     const rows = await recentWebhookDeliveries();
     const whatsapp = rows.find((row) => row.source === "whatsapp")!;
     expect(whatsapp.lastError).toMatch(/Signature|X-Hub-Signature/i);
+  });
+
+  it("raises the alarm only when the NEWEST delivery was refused", async () => {
+    const rows = await recentWebhookDeliveries();
+    const fixed = rows.find((row) => row.source === "instagram")!;
+    expect(fixed.rejected).toBeGreaterThanOrEqual(1);
+    expect(fixed.rejectedLatest).toBe(false);
+    const broken = rows.find((row) => row.source === "knorish")!;
+    expect(broken.rejectedLatest).toBe(true);
+    expect(broken.lastRejectedAt).toBeTruthy();
+  });
+
+  it("does not call an accepted unsigned delivery a rejection", async () => {
+    const rows = await recentWebhookDeliveries();
+    const custom = rows.find((row) => row.source === "custom")!;
+    expect(custom.rejectedLatest).toBe(false);
   });
 
   it("honours the window", async () => {
