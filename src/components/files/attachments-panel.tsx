@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { removeAttachment, uploadAttachment, type UploadState } from "@/lib/storage/actions";
 import { ALLOWED_EXTENSIONS, MAX_FILE_BYTES, type AttachmentRow } from "@/lib/storage/shared";
 
+import { CameraFileInput } from "./camera-file-input";
 import { OpenFileButton } from "./open-file-button";
 
 const initialState: UploadState = {};
@@ -55,7 +56,7 @@ export function AttachmentsPanel({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="file">File</Label>
-              <Input id="file" name="file" type="file" accept={ALLOWED_EXTENSIONS} required />
+              <CameraFileInput id="file" accept={ALLOWED_EXTENSIONS} required />
               <p className="text-xs font-medium text-muted-foreground">
                 Maximum file size {MAX_FILE_BYTES / 1024 / 1024} MB · JPG, PNG, WebP, HEIC or PDF
               </p>

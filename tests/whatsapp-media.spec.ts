@@ -48,21 +48,31 @@ describe("mediaKindFor", () => {
 });
 
 describe("validateWhatsAppMedia", () => {
-  it("accepts a photo and a short video", () => {
+  it("accepts a photo and a short video inside the CRM's upload size", () => {
     expect(validateWhatsAppMedia({ size: 2 * MB, type: "image/jpeg" })).toBeNull();
-    expect(validateWhatsAppMedia({ size: 12 * MB, type: "video/mp4" })).toBeNull();
+    expect(validateWhatsAppMedia({ size: 3 * MB, type: "video/mp4" })).toBeNull();
   });
 
-  it("applies a DIFFERENT limit per kind, which is the whole point", () => {
-    // 12 MB is fine as a video and refused as an image. A single limit
-    // would have to be the smaller one, and would rule out video entirely.
-    expect(validateWhatsAppMedia({ size: 12 * MB, type: "image/png" })).toMatch(/limit for images is 5 MB/);
-    expect(validateWhatsAppMedia({ size: 12 * MB, type: "video/mp4" })).toBeNull();
+  it("is capped at what fits through a Server Action, not at Meta's own limit", () => {
+    // 12 MB is within Meta's limit for a video and impossible from here: the
+    // request would be rejected by the host before the app saw it.
+    expect(validateWhatsAppMedia({ size: 12 * MB, type: "video/mp4" })).toMatch(/up to 4 MB/);
+    expect(validateWhatsAppMedia({ size: 12 * MB, type: "image/png" })).toMatch(/up to 4 MB/);
+    expect(validateWhatsAppMedia({ size: 20 * MB, type: "application/pdf" })).toMatch(/up to 4 MB/);
   });
 
-  it("accepts a file exactly at its limit", () => {
-    expect(validateWhatsAppMedia({ size: 5 * MB, type: "image/jpeg" })).toBeNull();
-    expect(validateWhatsAppMedia({ size: 16 * MB, type: "video/mp4" })).toBeNull();
+  it("accepts a file exactly at the cap, and refuses one byte over", () => {
+    expect(validateWhatsAppMedia({ size: 4 * MB, type: "image/jpeg" })).toBeNull();
+    expect(validateWhatsAppMedia({ size: 4 * MB + 1, type: "image/jpeg" })).toMatch(/4 MB/);
+  });
+
+  it("accepts audio and Office documents", () => {
+    expect(mediaKindFor("audio/mpeg")).toBe("audio");
+    expect(mediaKindFor("audio/ogg")).toBe("audio");
+    expect(mediaKindFor("application/vnd.openxmlformats-officedocument.wordprocessingml.document")).toBe("document");
+    expect(mediaKindFor("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")).toBe("document");
+    expect(validateWhatsAppMedia({ size: MB, type: "audio/mpeg" })).toBeNull();
+    expect(validateWhatsAppMedia({ size: MB, type: "application/vnd.ms-excel" })).toBeNull();
   });
 
   it("names the actual size so somebody can go and shrink the file", () => {
@@ -72,8 +82,8 @@ describe("validateWhatsAppMedia", () => {
   it("refuses a type WhatsApp cannot send, including ones the CRM itself stores", () => {
     // HEIC is fine as a CRM attachment and not sendable over WhatsApp, so
     // the two allow-lists genuinely differ and neither can be dropped.
-    expect(validateWhatsAppMedia({ size: MB, type: "image/heic" })).toMatch(/JPG and PNG/);
-    expect(validateWhatsAppMedia({ size: MB, type: "image/webp" })).toMatch(/JPG and PNG/);
+    expect(validateWhatsAppMedia({ size: MB, type: "image/heic" })).toMatch(/JPG and PNG images/);
+    expect(validateWhatsAppMedia({ size: MB, type: "image/webp" })).toMatch(/JPG and PNG images/);
   });
 
   it("refuses an empty file", () => {

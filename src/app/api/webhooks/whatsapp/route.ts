@@ -21,6 +21,7 @@ import { normalizePhone } from "@/lib/identity/normalize-phone";
 import { notify } from "@/lib/notifications/notify";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import {
+  adReferralOf,
   mapMessageContent,
   type WhatsAppContact,
   type WhatsAppInboundMessage,
@@ -217,7 +218,36 @@ export async function POST(request: Request) {
           // the conversation.
           let matched = await findLeadByPhone(message.from);
 
-          if (!matched && number?.createsLeads) {
+          /*
+            A conversation that began with a tap on a Meta ad.
+
+            Meta counts it as a lead in Ads Manager; here it was filed under
+            "WhatsApp" — and on the institute's broadcast number, not
+            created at all. Either way the CRM and Ads Manager disagreed.
+            Tapping an ad and writing is an enquiry by definition, unlike a
+            reply to a broadcast button, so it goes through
+            resolveOrCreateLead() on any number, as Meta: creating the lead
+            or, for somebody already known, recording this as their latest
+            touch. The ad id lets Ad Performance count it against spend.
+          */
+          const adReferral = adReferralOf(message);
+          if (adReferral) {
+            const profileName = value.contacts?.find((c) => c.wa_id === message.from)?.profile?.name;
+            await resolveOrCreateLead({
+              studentName: profileName?.trim() || `WhatsApp ${message.from.slice(-4)}`,
+              primaryPhone: message.from,
+              source: "meta",
+              subSource: adReferral.headline ?? "Click-to-WhatsApp ad",
+              adId: adReferral.adId,
+              adPlatform: "meta",
+              // Only a counsellor's own number names an owner; otherwise
+              // the assignment rules decide, like any other Meta lead.
+              assignedTo: number?.createsLeads ? number.counsellorId : null,
+              raw: message as unknown as Record<string, unknown>,
+              dedupeKey: `wa:${message.id}`,
+            });
+            matched = await findLeadByPhone(message.from);
+          } else if (!matched && number?.createsLeads) {
             const profileName = value.contacts?.find((c) => c.wa_id === message.from)?.profile?.name;
             await resolveOrCreateLead({
               // WhatsApp gives a profile name, which is whatever the

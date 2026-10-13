@@ -4651,3 +4651,72 @@ the temperature follows by itself, so nobody comes back up to set it.
   stay where they are; nothing is guessed back.
 - **Assumption:** "marked as dropped" was read as the admission being dropped, which already
   unlocks the buttons so the counsellor picks the new status; it does not choose one for them.
+
+## 2026-10-12 · Files in WhatsApp, and what a file can weigh
+
+Leon: file sending on WhatsApp Business (the counsellors' own numbers) and the WhatsApp API.
+
+- **Bug found:** `sendWhatsAppMedia` checked the 24-hour window against the lead alone and uploaded
+  the file with the institute's broadcast number, then sent from the counsellor's own. A media id
+  belongs to the number that uploaded it, so every file from a counsellor's number was rejected by
+  Meta. It now follows the text path: sender resolved from the session, window read for that
+  number pair, upload with the same number.
+- Conversations with no lead can now send files too (they could send text). Reverses the earlier
+  "text only, deliberately" for unmatched threads: a file inside an open window is free-form like text.
+- Accepted: images, video, **audio** and **Word/Excel/PowerPoint/text** documents, plus PDF.
+  Broadcast template headers stay image, video or PDF (Meta's rule for headers).
+- **Size:** Next's Server Action body limit is 1 MB by default — smaller than one phone photo —
+  and Vercel rejects bodies over 4.5 MB. `next.config.ts` now sets 4 MB and `MAX_UPLOAD_BYTES`
+  (4 MB) caps every upload. The old 20 MB figure was never reachable on this hosting. Images are
+  shrunk in the browser. **Assumption:** 4 MB is acceptable for now; larger videos and scanned PDFs
+  need a direct-to-storage upload, which is separate work.
+
+## 2026-10-13 · Click-to-WhatsApp ad conversations are Meta leads
+
+Leon: some leads Ads Manager counts as Meta arrive in the CRM without the Meta source.
+The Lead Ads webhook always stamps `meta`; the gap was Click-to-WhatsApp. Meta counts that
+conversation as a lead, but it arrived on the plain WhatsApp webhook, filed as "WhatsApp" — and
+on the broadcast number not created at all.
+
+- A message whose `referral` says it came from an ad (or carries a `ctwa_clid`) now goes through
+  `resolveOrCreateLead()` as source `meta`, `adPlatform` meta, with the ad id, on **any** number.
+  For somebody already known it records a new enquiry and last touch (first-touch is never
+  overwritten, as before).
+- **Reverses, narrowly,** the broadcast-number rule "a reply there must not create a lead":
+  that rule is about replies to a campaign button. Tapping an ad and writing is an enquiry.
+- **Not done:** Instagram DMs from ads (different referral shape, unverified), and leads that
+  already exist under "WhatsApp" are not rewritten.
+- **Assumption:** this is the cause for Leon's missing sources; he has not yet confirmed it from a
+  lead's Tracking tab. Lead-form leads were checked in code and always carry `meta`.
+
+## 2026-10-13 · A lead's source is made to match the Lead Source options
+
+Leon showed a Meta lead (#126) whose Lead Source reads "Choose lead source" and whose Sub-source is empty.
+That field is `last_touch_source`, and the control shows its placeholder for any stored value that is
+not one of the dropdown's options — so a lead with a source can look as if it has none.
+
+- `resolveOrCreateLead()` now maps `source` onto an existing option case-, spacing- and
+  punctuation-insensitively, by value or label (`canonicalSource`); unfamiliar sources are kept as given.
+  Routes had been writing `WhatsApp`, `Website`, `Meta` against options `whatsapp`, `website`, `meta`.
+- The lead form shows a stored value that is not in the list as "<value> (not in the list)" instead of blank.
+- **Not done, deliberately:** existing leads are not rewritten. **Assumption:** the cause for #126 is a
+  stored value that is not an option; unconfirmed until Leon runs the query in the reply (distinct
+  `last_touch_source` values). A one-off backfill is a small migration once we know the values.
+
+## 2026-10-13 · Leads were losing their source when edited — the real cause
+
+Leon's Supabase query for lead #126 showed its enquiry intact (`meta`, form id, campaign, ad) while the
+lead's Lead Source and Sub-source were blank. So the source arrived correctly and was erased afterwards.
+
+- **Cause:** the lead page filled the form with `row[field.key]`. Lead Source / Sub-source live in
+  `last_touch_source` / `last_touch_sub_source`, so `row.lead_source` was undefined: every lead showed an
+  empty Lead Source. Autosave submits every field, so the first edit of anything on a lead posted that
+  blank back and `updateLead` wrote it over the real value. Leads nobody had edited kept theirs — the
+  "some have it, some don't". (The earlier theories — Click-to-WhatsApp, spelling mismatches — were real
+  gaps but not this.)
+- **Fix:** the page reads via `getRawFieldValue`; `updateLead` never writes a blank Lead Source or
+  Sub-source (`isBlankAttribution`); changing to a different source is still allowed.
+- **Repair (0102):** leads with an empty `last_touch_source` get it back from their most recent enquiry
+  (append-only, never touched), spelled as the matching option; empty sub-sources likewise. Only NULL/empty
+  values are written. Verified on fixture leads.
+- **Not recoverable:** a source the lead *changed to* by hand and then lost, if the enquiry says otherwise.

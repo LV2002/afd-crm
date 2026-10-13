@@ -2,6 +2,17 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /**
+   * Server Actions refuse a body over 1 MB by default, which is smaller than
+   * one phone photo — every file upload in the CRM (attachments, WhatsApp
+   * media) goes through one. 4 MB sits under Vercel's own 4.5 MB request cap,
+   * so a file either fits both or is refused with a plain message first
+   * (see MAX_UPLOAD_BYTES in lib/storage/shared.ts).
+   */
+  experimental: {
+    serverActions: { bodySizeLimit: "4mb" },
+  },
+
+  /**
    * `/manual` reads `docs/manual/manual.html` at request time, and a
    * dynamic read is invisible to Next's dependency tracing — so without
    * this the route works locally and 404s in production. Listed here

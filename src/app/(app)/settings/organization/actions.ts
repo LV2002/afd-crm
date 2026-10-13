@@ -82,7 +82,7 @@ async function storeLogo(
   file: File,
 ): Promise<{ path?: string; error?: string }> {
   if (file.size > MAX_FILE_BYTES) {
-    return { error: `That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. The limit is 20 MB.` };
+    return { error: `That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. The limit is ${MAX_FILE_BYTES / 1024 / 1024} MB.` };
   }
   if (!LOGO_MIME_TYPES.includes(file.type)) {
     return { error: "A logo has to be a PNG, JPG, WebP or SVG." };

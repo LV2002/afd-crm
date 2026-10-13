@@ -9,7 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { WhatsAppThreadMessage } from "@/lib/whatsapp/get-thread";
-import { sendWhatsAppMessage, type WhatsAppSendState } from "@/lib/whatsapp/send-actions";
+import { MediaPicker } from "@/components/whatsapp/media-picker";
+import {
+  sendWhatsAppMedia,
+  sendWhatsAppMessage,
+  type WhatsAppSendState,
+} from "@/lib/whatsapp/send-actions";
 
 import { convertWhatsAppThreadToLead, type WhatsAppConvertState } from "./actions";
 
@@ -26,7 +31,10 @@ import { convertWhatsAppThreadToLead, type WhatsAppConvertState } from "./action
  * afterwards, when you know. Migration 0090 is what lets the reply be
  * stored with no lead on it.
  *
- * **Text only, deliberately.** No attachments and no templates. A
+ * **Text and files, no templates.** A file is free-form content like text, so
+ * it is allowed on the same terms: inside the 24-hour window, from the
+ * counsellor's own number (Leon asked for file sending on both channels, which
+ * reverses the earlier text-only rule). Templates stay out. A
  * template send is billed and counts against the number's quality rating,
  * which is why it is gated on `whatsapp.campaign` with a lead to record
  * it against; and an unmatched thread exists at all because somebody just
@@ -51,6 +59,7 @@ export function UnmatchedThread({
   withinWindow: boolean;
 }) {
   const [body, setBody] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [sendState, setSendState] = useState<WhatsAppSendState>({});
   const [isSending, startSending] = useTransition();
   const [showConvert, setShowConvert] = useState(false);
@@ -149,9 +158,20 @@ export function UnmatchedThread({
             onSubmit={(event) => {
               event.preventDefault();
               startSending(async () => {
-                const result = await sendWhatsAppMessage(null, phone, body);
+                let result: WhatsAppSendState;
+                if (file) {
+                  const formData = new FormData();
+                  formData.append("file", file);
+                  formData.append("caption", body);
+                  result = await sendWhatsAppMedia(null, phone, formData);
+                } else {
+                  result = await sendWhatsAppMessage(null, phone, body);
+                }
                 setSendState(result);
-                if (!result.error) setBody("");
+                if (!result.error) {
+                  setBody("");
+                  setFile(null);
+                }
               });
             }}
           >
@@ -159,13 +179,21 @@ export function UnmatchedThread({
               <Textarea
                 value={body}
                 onChange={(event) => setBody(event.target.value)}
-                placeholder="Type a message…"
+                placeholder={file ? "Add a caption (optional)…" : "Type a message…"}
                 className="min-h-10 flex-1"
                 rows={2}
               />
-              <Button type="submit" disabled={isSending || !body.trim()} className="self-end">
-                Send
-              </Button>
+              <div className="flex flex-col gap-1 self-end">
+                <MediaPicker
+                  file={file}
+                  onChange={setFile}
+                  onError={(message) => setSendState(message ? { error: message } : {})}
+                  disabled={isSending}
+                />
+                <Button type="submit" disabled={isSending || (!body.trim() && !file)}>
+                  Send
+                </Button>
+              </div>
             </div>
             <FormMessage error={sendState.error} success={sendState.success} />
           </form>

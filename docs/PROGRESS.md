@@ -8608,3 +8608,44 @@ Stubbed: nothing. **1795 tests pass**, typecheck, lint and `db:audit` clean.
   database (13 active temperatures).
 
 Stubbed: nothing. **1795 tests pass**, typecheck and lint clean.
+
+## Camera upload on the phone
+
+- Upload forms for the signed agreement (lead page) and student attachments gain a **Take photo**
+  button below the `md` breakpoint (`CameraFileInput`). It opens the rear camera, shrinks the
+  picture to 2400px JPEG (phone photos are 4–12 MB) and places it in the form's ordinary file field,
+  so the server action and its validation are unchanged. The normal picker stays for PDFs and gallery images.
+- Not changed: the public student profile form (it deliberately lets people pick from their gallery)
+  and the WhatsApp attach button.
+
+Stubbed: no automated browser test — the camera cannot be driven in CI; try it on a real phone.
+
+## WhatsApp file sending
+
+- Files from a counsellor's own (Coexistence) number now work: the upload uses the sending number.
+- Replies in conversations with no lead can send files. Audio and Office documents accepted.
+- Phones: a camera button beside the paperclip; photos are shrunk to fit.
+- Upload limit is an honest 4 MB everywhere (Server Action body limit raised from the 1 MB default).
+
+Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. Not testable in CI against Meta.
+
+## Meta source on Click-to-WhatsApp leads
+
+- WhatsApp messages that began with a Meta ad now create/attach the lead as source Meta, with the
+  ad id (`adReferralOf`, tests added). Not covered: Instagram ad DMs; existing mislabelled leads.
+
+## Lead source: match the options, and never look blank
+
+- New leads' source is normalised onto the Lead Source options; tests updated (`meta`/`website`/`whatsapp`).
+- The lead form shows an unknown stored source as its raw value. Existing leads untouched pending a look at the data.
+
+## Leads losing their source (root cause found)
+
+- Lead page read the wrong key for Lead Source / Sub-source, so the form was blank and autosave blanked the
+  stored value. Fixed, guarded, and repaired from the enquiries table (migration 0102). 1808 tests pass.
+
+## Custom webhook card: current fault vs old failure
+
+- The card showed the most recent failure ever seen as "Last error", even when every delivery since was
+  accepted. It now says whether the NEWEST delivery was rejected (red), and otherwise lists earlier
+  rejections as history ("3 earlier deliveries were rejected … the latest was accepted"). `summariseDeliveries`, tested.

@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 import { NOT_SET, NOT_SET_LABEL, type PivotField } from "@/lib/reports/pivot";
 import type { AudienceEntity } from "@/lib/whatsapp/audience";
-import { WHATSAPP_MEDIA_EXTENSIONS } from "@/lib/whatsapp/media";
+import { BROADCAST_HEADER_EXTENSIONS } from "@/lib/whatsapp/media";
 import { MERGE_VARIABLES, mergeVariablesFor } from "@/lib/whatsapp/merge-variables";
 import { fillTemplateBody, resolveParams, type ParamSource } from "@/lib/whatsapp/personalise";
 import { SWEEP_CADENCE_NOTE, defaultScheduleValue } from "@/lib/whatsapp/schedule";
@@ -359,7 +359,7 @@ export function NewBroadcastForm({
               id="broadcast-header-media"
               name="headerMedia"
               type="file"
-              accept={WHATSAPP_MEDIA_EXTENSIONS}
+              accept={BROADCAST_HEADER_EXTENSIONS}
               required
             />
             <p className="text-xs text-muted-foreground">

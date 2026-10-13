@@ -59,7 +59,15 @@ async function recordAndSend(
     mediaId?: string | null;
     mediaMimeType?: string | null;
   },
-  send: (phoneNumberId: string, accessToken: string) => Promise<string>,
+  /**
+   * Returns Meta's message id. A media send uploads the file first, with the
+   * `phoneNumberId` it is handed — a media id is only valid on the number that
+   * uploaded it — and returns the media id too, so the row can be completed.
+   */
+  send: (
+    phoneNumberId: string,
+    accessToken: string,
+  ) => Promise<string | { waMessageId: string; mediaId: string }>,
 ): Promise<WhatsAppSendState> {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.send")) {
@@ -122,8 +130,16 @@ async function recordAndSend(
   }
 
   try {
-    const waMessageId = await send(phoneNumberId, accessToken);
-    await supabase.from("whatsapp_messages").update({ wa_message_id: waMessageId, status: "sent" }).eq("id", inserted.id);
+    const sent = await send(phoneNumberId, accessToken);
+    const waMessageId = typeof sent === "string" ? sent : sent.waMessageId;
+    await supabase
+      .from("whatsapp_messages")
+      .update({
+        wa_message_id: waMessageId,
+        status: "sent",
+        ...(typeof sent === "string" ? {} : { media_id: sent.mediaId }),
+      })
+      .eq("id", inserted.id);
   } catch (err) {
     const message = err instanceof MetaGraphApiError ? err.message : "Could not reach WhatsApp.";
     await supabase.from("whatsapp_messages").update({ status: "failed", error_message: message }).eq("id", inserted.id);
@@ -239,23 +255,32 @@ export async function sendWhatsAppTemplate(
 }
 
 /**
- * An image, video or PDF, sent into an open conversation.
+ * An image, video, audio clip or document, sent into an open conversation.
+ *
+ * Follows the text path exactly, which it did not before: it checked the
+ * window against the lead alone and uploaded the file with the institute's
+ * broadcast number, then sent from the counsellor's own. A media id belongs to
+ * the number that uploaded it, so every file sent from a counsellor's
+ * WhatsApp Business number was rejected by Meta. Now the number is resolved
+ * once from the session, the window is read for that number pair, and the
+ * upload uses that same number.
+ *
+ * `leadId` null is a reply to somebody who is not in the CRM yet, as for text.
  *
  * Same 24-hour rule as a text message, for the same reason: Meta accepts
- * free-form content only inside the window the lead's own message opens.
- * Outside it, a media message needs a template with an approved media
+ * free-form content only inside the window the other person's own message
+ * opens. Outside it, a media message needs a template with an approved media
  * header, which is a broadcast decision rather than a counsellor's — see
  * sendWhatsAppTemplate.
  *
- * The bytes go straight to Meta and are NOT written to the CRM's own
- * bucket. A photo of a fee receipt or a campus video sent in conversation
- * is not a document of record; storing every one of them would fill
- * private storage with things nobody will ever open again, and the lead's
- * Files section is now deliberately about one document only. What is kept
- * is the fact of the send: the row, its media id, and its type.
+ * The bytes go straight to Meta and are NOT written to the CRM's own bucket.
+ * A photo of a fee receipt or a campus video sent in conversation is not a
+ * document of record; storing every one would fill private storage with things
+ * nobody will ever open again. What is kept is the fact of the send: the row,
+ * its media id, and its type.
  */
 export async function sendWhatsAppMedia(
-  leadId: string,
+  leadId: string | null,
   toPhone: string,
   formData: FormData,
 ): Promise<WhatsAppSendState> {
@@ -273,54 +298,45 @@ export async function sendWhatsAppMedia(
   const captionRaw = formData.get("caption");
   const caption = typeof captionRaw === "string" ? trimCaption(captionRaw) : "";
 
+  const user = await getCurrentUser();
+  if (!user) return { error: "You don't have permission to do that." };
+
+  // "own": a counsellor's file leaves from their own number, like their text.
+  const sender = await senderNumberFor(user.id);
+  if (!sender) return { error: NO_SENDER_NUMBER_MESSAGE };
+
   const supabase = await createClient();
-  const withinWindow = await isWithinCustomerServiceWindow(supabase, leadId);
+  const withinWindow = leadId
+    ? await isWithinCustomerServiceWindow(supabase, leadId, sender.id)
+    : await isWithinCustomerServiceWindowForPhone(supabase, toPhone, sender.id);
   if (!withinWindow) {
     return {
-      error:
-        "This lead hasn't messaged in the last 24 hours, so WhatsApp won't accept a file from here. Send it from the WhatsApp Business app on your phone — the window reopens as soon as they write back.",
+      error: `${leadId ? "This lead hasn't" : "They haven't"} messaged ${sender.label} in the last 24 hours, so WhatsApp won't accept a file from here. Send it from the WhatsApp Business app on your phone — the window reopens as soon as they write back.`,
     };
-  }
-
-  // Uploaded before the row is written so a rejected file never produces a
-  // 'failed' message on the thread: a 12 MB photo is the user's mistake to
-  // fix, not an event in the conversation.
-  const phoneNumberId = await getIntegrationCredential("whatsapp", "phone_number_id");
-  const accessToken = await getIntegrationCredential("whatsapp", "access_token");
-  if (!phoneNumberId || !accessToken) {
-    return { error: "WhatsApp isn't connected yet — an admin sets it up in Settings → Integrations → WhatsApp." };
-  }
-
-  let mediaId: string;
-  try {
-    mediaId = await uploadMedia(phoneNumberId, accessToken, file, file.name);
-  } catch (err) {
-    const message = err instanceof MetaGraphApiError ? err.message : "Could not reach WhatsApp.";
-    return { error: `Upload failed: ${message}` };
   }
 
   return recordAndSend(
     leadId,
     toPhone,
-    // A photo of a campus or a fee receipt is a counsellor sending
-    // something, so it follows the same rule as the text beside it.
     "own",
     {
       messageType: "media",
       // The caption is the message's readable content, so it goes in the
       // body — that is what the thread renders and what a later search
-      // over the conversation would find.
-      body: caption || null,
+      // over the conversation would find. Audio has none.
+      body: kind === "audio" ? null : caption || null,
       templateName: null,
-      mediaId,
       mediaMimeType: file.type,
     },
-    (id, token) =>
-      sendMediaMessage(id, token, toPhone, {
+    async (phoneNumberId, accessToken) => {
+      const mediaId = await uploadMedia(phoneNumberId, accessToken, file, file.name);
+      const waMessageId = await sendMediaMessage(phoneNumberId, accessToken, toPhone, {
         kind,
         mediaId,
         caption: caption || undefined,
         fileName: file.name,
-      }),
+      });
+      return { waMessageId, mediaId };
+    },
   );
 }

@@ -41,3 +41,17 @@ export function getRawFieldValue(
   const custom = row.custom as Record<string, unknown> | null | undefined;
   return custom?.[field.key] ?? null;
 }
+
+/**
+ * Attribution fields the profile form must never CLEAR.
+ *
+ * Where a lead came from is recorded by ingestion, not typed by a person, and
+ * "I don't remember" is not a reason to erase it. The form posts every field
+ * on each autosave, so a blank here would be written straight over the stored
+ * source — which is how leads lost theirs (see DECISIONS 2026-10-13). Changing
+ * a source to a different one is still allowed; emptying it is not.
+ */
+export function isBlankAttribution(key: string, value: unknown): boolean {
+  if (key !== "lead_source" && key !== "sub_source") return false;
+  return value === null || value === undefined || (typeof value === "string" && value.trim() === "");
+}

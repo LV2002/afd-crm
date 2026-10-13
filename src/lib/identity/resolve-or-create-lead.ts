@@ -14,6 +14,7 @@ import {
 import { notify } from "@/lib/notifications/notify";
 import { startFlows } from "@/lib/whatsapp/flow-runner";
 
+import { canonicalSource } from "./canonical-source";
 import { normalizeEmail } from "./normalize-email";
 import { consentOnEntry, consentOnRepeatEnquiry } from "@/lib/consent/consent";
 
@@ -111,7 +112,20 @@ export interface ResolveLeadResult {
  * caller to decide that for, this runs against the direct db client, same
  * as the seed script. See docs/DECISIONS.md.
  */
-export async function resolveOrCreateLead(input: ResolveLeadInput): Promise<ResolveLeadResult> {
+export async function resolveOrCreateLead(rawInput: ResolveLeadInput): Promise<ResolveLeadResult> {
+  /*
+    The source is made to match the Lead Source options before anything is
+    written. Routes name their source in their own words ("WhatsApp",
+    "Meta"), the dropdown holds `whatsapp` / `meta`, and a value that is not
+    an option shows as blank on the lead and is dropped by every filter and
+    report — which is how some Meta leads looked as though they had no source.
+  */
+  const sourceOptions = await db
+    .select({ value: dropdownOptions.value, label: dropdownOptions.label })
+    .from(dropdownOptions)
+    .where(and(eq(dropdownOptions.category, "lead_source"), isNull(dropdownOptions.deletedAt)));
+  const input = { ...rawInput, source: canonicalSource(rawInput.source, sourceOptions) };
+
   const result = await resolveOrCreateLeadInTransaction(input);
 
   // Notified AFTER the transaction commits, never inside it. `db`'s pool is

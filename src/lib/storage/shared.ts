@@ -11,8 +11,18 @@
 
 export const ATTACHMENTS_BUCKET = "attachments";
 
-/** 20 MB. A scanned agreement or a phone photo fits; a video does not. */
-export const MAX_FILE_BYTES = 20 * 1024 * 1024;
+/**
+ * What a file sent through a Server Action can weigh: 4 MB.
+ *
+ * Vercel rejects any request body over 4.5 MB before it reaches the app, and
+ * Next's own Server Action limit (raised to 4 MB in next.config.ts — it is 1 MB
+ * by default) sits just under it. The earlier 20 MB figure was never reachable
+ * on this hosting; a bigger file failed with an error nobody could act on.
+ * Phone photos are shrunk in the browser to fit. A genuinely larger file needs
+ * a direct-to-storage upload, which is a separate piece of work.
+ */
+export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+export const MAX_FILE_BYTES = MAX_UPLOAD_BYTES;
 
 /**
  * Allow-list rather than a block-list. The bucket is private and files are

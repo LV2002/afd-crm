@@ -5,11 +5,11 @@ import { useActionState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { removeAttachment, uploadAttachment, type UploadState } from "@/lib/storage/actions";
 import { ALLOWED_EXTENSIONS, MAX_FILE_BYTES, type AttachmentRow } from "@/lib/storage/shared";
 
+import { CameraFileInput } from "./camera-file-input";
 import { OpenFileButton } from "./open-file-button";
 
 const initialState: UploadState = {};
@@ -100,13 +100,7 @@ export function SignedAgreementPanel({
             <Label htmlFor="signed-agreement-file">
               {agreement ? "Replace the signed agreement" : "Upload the signed agreement"}
             </Label>
-            <Input
-              id="signed-agreement-file"
-              name="file"
-              type="file"
-              accept={ALLOWED_EXTENSIONS}
-              required
-            />
+            <CameraFileInput id="signed-agreement-file" accept={ALLOWED_EXTENSIONS} required />
             <p className="text-xs font-medium text-muted-foreground">
               Maximum file size {MAX_FILE_BYTES / 1024 / 1024} MB · JPG, PNG, WebP, HEIC or PDF
               {agreement ? " · the newest upload is the one accounts sees" : ""}

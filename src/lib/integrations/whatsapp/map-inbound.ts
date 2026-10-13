@@ -20,6 +20,46 @@ export interface WhatsAppInboundMessage {
     button_reply?: { id?: string; title?: string };
     list_reply?: { id?: string; title?: string; description?: string };
   };
+  /**
+   * Present on the first message of a conversation that began with a tap on a
+   * Click-to-WhatsApp ad (or a post). Meta puts the ad's own id in
+   * `source_id` and a click id in `ctwa_clid`.
+   */
+  referral?: {
+    source_url?: string;
+    source_id?: string;
+    source_type?: string;
+    headline?: string;
+    ctwa_clid?: string;
+  };
+}
+
+export interface AdReferral {
+  /** The ad's id on Meta, when it is an ad rather than a post. */
+  adId: string | null;
+  headline: string | null;
+  clickId: string | null;
+}
+
+/**
+ * Did this message start with a tap on a Meta ad?
+ *
+ * Meta counts a Click-to-WhatsApp conversation as a lead in Ads Manager, but
+ * the message arrives on the ordinary WhatsApp webhook, where nothing said it
+ * came from an ad — so the lead was filed under "WhatsApp" and Meta's own
+ * numbers and the CRM's disagreed. `referral` is how Meta says it, and a
+ * message carrying an ad id or click id is an ad lead.
+ */
+export function adReferralOf(message: Pick<WhatsAppInboundMessage, "referral">): AdReferral | null {
+  const referral = message.referral;
+  if (!referral) return null;
+  const isAd = referral.source_type === "ad" || Boolean(referral.ctwa_clid);
+  if (!isAd) return null;
+  return {
+    adId: referral.source_type === "ad" ? (referral.source_id ?? null) : null,
+    headline: referral.headline?.trim() || null,
+    clickId: referral.ctwa_clid ?? null,
+  };
 }
 
 export interface WhatsAppContact {

@@ -1,7 +1,6 @@
 "use client";
 
-import { Paperclip } from "lucide-react";
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { FormMessage } from "@/components/layout/form-message";
@@ -11,7 +10,7 @@ import { cn } from "@/lib/utils";
 import type { WhatsAppThreadMessage } from "@/lib/whatsapp/get-thread";
 
 import { InboundMedia } from "@/components/whatsapp/inbound-media";
-import { WHATSAPP_MEDIA_EXTENSIONS, validateWhatsAppMedia } from "@/lib/whatsapp/media";
+import { MediaPicker } from "@/components/whatsapp/media-picker";
 import {
   sendWhatsAppMedia,
   sendWhatsAppMessage,
@@ -97,8 +96,7 @@ export function WhatsAppPanel({
   withinWindow: boolean;
 }) {
   const [body, setBody] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [templateName, setTemplateName] = useState("");
   const [languageCode, setLanguageCode] = useState("en_US");
   const [bodyParam, setBodyParam] = useState("");
@@ -125,18 +123,8 @@ export function WhatsAppPanel({
             className="flex flex-col gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              const file = fileInputRef.current?.files?.[0] ?? null;
-
-              // The same check the Server Action runs, so a 40 MB video is
-              // refused here rather than after uploading it twice.
-              if (file) {
-                const invalid = validateWhatsAppMedia(file);
-                if (invalid) {
-                  setState({ error: invalid });
-                  return;
-                }
-              }
-
+              // The file was checked as it was chosen (MediaPicker), with the
+              // same rule the Server Action applies.
               startTransition(async () => {
                 let result: WhatsAppSendState;
                 if (file) {
@@ -150,8 +138,7 @@ export function WhatsAppPanel({
                 setState(result);
                 if (!result.error) {
                   setBody("");
-                  setFileName(null);
-                  if (fileInputRef.current) fileInputRef.current.value = "";
+                  setFile(null);
                 }
               });
             }}
@@ -160,51 +147,22 @@ export function WhatsAppPanel({
               <Textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                placeholder={fileName ? "Add a caption (optional)…" : "Type a message…"}
+                placeholder={file ? "Add a caption (optional)…" : "Type a message…"}
                 className="min-h-10 flex-1"
                 rows={2}
               />
               <div className="flex flex-col gap-1 self-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  aria-label="Attach a photo, video or PDF"
-                >
-                  <Paperclip className="size-4" />
-                </Button>
-                <Button type="submit" disabled={isPending || (!body.trim() && !fileName)}>
+                <MediaPicker
+                  file={file}
+                  onChange={setFile}
+                  onError={(message) => setState(message ? { error: message } : {})}
+                  disabled={isPending}
+                />
+                <Button type="submit" disabled={isPending || (!body.trim() && !file)}>
                   Send
                 </Button>
               </div>
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={WHATSAPP_MEDIA_EXTENSIONS}
-              className="hidden"
-              onChange={(e) => {
-                setState({});
-                setFileName(e.target.files?.[0]?.name ?? null);
-              }}
-            />
-            {fileName && (
-              <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Paperclip className="size-3" />
-                {fileName}
-                <button
-                  type="button"
-                  className="underline"
-                  onClick={() => {
-                    setFileName(null);
-                    if (fileInputRef.current) fileInputRef.current.value = "";
-                  }}
-                >
-                  remove
-                </button>
-              </p>
-            )}
             <FormMessage error={state.error} success={state.success} />
           </form>
         ) : (
