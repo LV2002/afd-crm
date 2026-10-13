@@ -8628,3 +8628,8 @@ Stubbed: no automated browser test — the camera cannot be driven in CI; try it
 - Upload limit is an honest 4 MB everywhere (Server Action body limit raised from the 1 MB default).
 
 Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. Not testable in CI against Meta.
+
+## Meta source on Click-to-WhatsApp leads
+
+- WhatsApp messages that began with a Meta ad now create/attach the lead as source Meta, with the
+  ad id (`adReferralOf`, tests added). Not covered: Instagram ad DMs; existing mislabelled leads.

@@ -4670,3 +4670,21 @@ Leon: file sending on WhatsApp Business (the counsellors' own numbers) and the W
   (4 MB) caps every upload. The old 20 MB figure was never reachable on this hosting. Images are
   shrunk in the browser. **Assumption:** 4 MB is acceptable for now; larger videos and scanned PDFs
   need a direct-to-storage upload, which is separate work.
+
+## 2026-10-13 · Click-to-WhatsApp ad conversations are Meta leads
+
+Leon: some leads Ads Manager counts as Meta arrive in the CRM without the Meta source.
+The Lead Ads webhook always stamps `meta`; the gap was Click-to-WhatsApp. Meta counts that
+conversation as a lead, but it arrived on the plain WhatsApp webhook, filed as "WhatsApp" — and
+on the broadcast number not created at all.
+
+- A message whose `referral` says it came from an ad (or carries a `ctwa_clid`) now goes through
+  `resolveOrCreateLead()` as source `meta`, `adPlatform` meta, with the ad id, on **any** number.
+  For somebody already known it records a new enquiry and last touch (first-touch is never
+  overwritten, as before).
+- **Reverses, narrowly,** the broadcast-number rule "a reply there must not create a lead":
+  that rule is about replies to a campaign button. Tapping an ad and writing is an enquiry.
+- **Not done:** Instagram DMs from ads (different referral shape, unverified), and leads that
+  already exist under "WhatsApp" are not rewritten.
+- **Assumption:** this is the cause for Leon's missing sources; he has not yet confirmed it from a
+  lead's Tracking tab. Lead-form leads were checked in code and always carry `meta`.
