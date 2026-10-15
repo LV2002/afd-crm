@@ -4791,3 +4791,13 @@ account **Ledger** statement had no actions at all — so a test fee payment cou
   something nobody could see — the pre-fix behaviour whenever the value belonged to a deleted option).
 - **Assumption:** the "nid_pg already exists but I can't see it" report was that deleted-option case, fixed in the previous release; if
   it still happens after this one, the screen now names the option it collides with.
+
+## 2026-10-15 · The Interested exams list (0104)
+
+Leon's list: NID UG, NID PG, NIFT UG, NIFT PG, UCEED, CEED, NATA, JEE 2, BFA, MFA, KSDAT, GAT, PF, Others.
+- Stored values are what leads and students remember, so the existing options keep theirs and only get new wording:
+  `nid` → "NID UG", `nift_mdes` → "NIFT PG" (MDes is NIFT's postgraduate course), `jee_paper_2` → "JEE 2". Leads that chose "NID" or
+  "NIFT MDes" still count and now read as NID UG / NIFT PG. **Assumption:** every earlier "NID" lead was UG.
+- New rows: `nid_pg`, `bfa`, `mfa`, `ksdat`, `gat`, `pf`, `others`. A removed row of the same value is brought back (this is the "nid_pg already
+  exists" case). Options an admin added by hand are kept, sorted after the fourteen.
+- Students' target exams use the same list, so they change too. "Others" has no "specify" box (unlike Country); say if it needs one.

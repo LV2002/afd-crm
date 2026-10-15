@@ -8679,3 +8679,7 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Country on the new-lead form; clearer duplicate options
 
 - New lead form offers Country (+ specify for Others). Dropdown add: revive a removed option, name the clash, handle a missed unique violation. Tests added.
+
+## Interested exams list (migration 0104)
+
+- Exam options now: NID UG, NID PG, NIFT UG, NIFT PG, UCEED, CEED, NATA, JEE 2, BFA, MFA, KSDAT, GAT, PF, Others (existing values kept). Test added.
