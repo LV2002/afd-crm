@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
@@ -10,6 +11,8 @@ import {
 } from "@/lib/identity/assert-lead-visible";
 import { getDropdownOptions } from "@/lib/fields/resolve-field-options";
 import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
+import { db } from "@/lib/db/client";
+import { leads } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 
 const optionalText = z.string().trim().max(200).optional().or(z.literal(""));
@@ -134,6 +137,36 @@ export async function createLeadManually(_prevState: FormState, formData: FormDa
     return { error: "That is not one of the lead sources. Pick one from the list." };
   }
 
+  /*
+    Country, when the field is set up and one was chosen.
+
+    Checked against the field's own options rather than accepted as typed, and
+    "Others" needs the country's name — the same two rules as on the lead page.
+    Written below onto a NEW lead only, into the custom slot: a duplicate that
+    attaches to somebody already in the CRM must not have their profile
+    rewritten by whatever the counsellor typed this time.
+  */
+  const countryRaw = String(formData.get("country") ?? "").trim();
+  const countryOther = String(formData.get("countryOther") ?? "").trim().slice(0, 100);
+  let countryCustom: Record<string, string> | null = null;
+  if (countryRaw) {
+    const { data: countryField } = await supabase
+      .from("field_definitions")
+      .select("options")
+      .eq("entity", "lead")
+      .eq("key", "country")
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .maybeSingle<{ options: Array<{ value: string; label: string }> | null }>();
+    if (!(countryField?.options ?? []).some((option) => option.value === countryRaw)) {
+      return { error: "That is not one of the countries. Pick one from the list." };
+    }
+    if (countryRaw === "others" && !countryOther) {
+      return { error: "Type the country's name — you chose Others." };
+    }
+    countryCustom = { country: countryRaw, ...(countryRaw === "others" ? { country_other: countryOther } : {}) };
+  }
+
   const interestedExams = formData.getAll("interestedExams").map(String).filter(Boolean);
   const coursesInterested = formData.getAll("coursesInterested").map(String).filter(Boolean);
 
@@ -156,6 +189,14 @@ export async function createLeadManually(_prevState: FormState, formData: FormDa
 
   if ("error" in result) {
     return { error: result.error };
+  }
+
+  if (countryCustom && result.isNewLead) {
+    // Merged into the existing custom values, never replacing them.
+    await db
+      .update(leads)
+      .set({ custom: sql`coalesce(${leads.custom}, '{}'::jsonb) || ${JSON.stringify(countryCustom)}::jsonb` })
+      .where(eq(leads.id, result.leadId));
   }
 
   /*

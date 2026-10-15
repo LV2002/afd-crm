@@ -8675,3 +8675,7 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Reverse from the finance ledger
 
 - Ledger and Transactions: **Reverse** on fee payments (via the payment, both ledgers together; reversal or refund) and on the Ledger statement for plain entries. Permissions unchanged (`payment.refund`, `finance.manage`).
+
+## Country on the new-lead form; clearer duplicate options
+
+- New lead form offers Country (+ specify for Others). Dropdown add: revive a removed option, name the clash, handle a missed unique violation. Tests added.

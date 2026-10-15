@@ -66,12 +66,16 @@ export async function createOption(
   */
   const { data: existing } = await supabase
     .from("dropdown_options")
-    .select("id, deleted_at")
+    .select("id, label, is_active, deleted_at")
     .eq("category", category)
     .eq("value", parsed.data.value)
-    .maybeSingle<{ id: string; deleted_at: string | null }>();
+    .maybeSingle<{ id: string; label: string; is_active: boolean; deleted_at: string | null }>();
   if (existing && !existing.deleted_at) {
-    return { error: `There is already an option with the value "${parsed.data.value}". Edit that one, or pick a different value.` };
+    return {
+      error: `"${existing.label}" already uses the value "${parsed.data.value}"${
+        existing.is_active ? "" : " (it is switched off — flip its switch to use it)"
+      }. Edit that one, or pick a different value.`,
+    };
   }
 
   const { count } = await supabase
@@ -107,7 +111,7 @@ export async function createOption(
     metadata = meaning.metadata;
   }
 
-  const { data, error } = existing
+  let { data, error } = existing
     ? await supabase
         .from("dropdown_options")
         .update({
@@ -134,8 +138,41 @@ export async function createOption(
         .select("id")
         .single();
 
-  if (error) {
-    return { error: error.message };
+  /*
+    A unique-key clash that the lookup above did not see — two people adding the
+    same option at once, or a row the lookup could not read. Looked up again
+    and a removed one brought back, rather than showing a raw database
+    message that says "already exists" about something nobody can see.
+  */
+  if (error?.code === "23505" && !existing) {
+    const { data: again } = await supabase
+      .from("dropdown_options")
+      .select("id, label, deleted_at")
+      .eq("category", category)
+      .eq("value", parsed.data.value)
+      .maybeSingle<{ id: string; label: string; deleted_at: string | null }>();
+    if (again?.deleted_at) {
+      const revived = await supabase
+        .from("dropdown_options")
+        .update({
+          label: parsed.data.label,
+          color: parsed.data.color || null,
+          sort_order: count ?? 0,
+          deleted_at: null,
+          is_active: true,
+        })
+        .eq("id", again.id)
+        .select("id")
+        .single();
+      data = revived.data;
+      error = revived.error;
+    } else if (again) {
+      return { error: `"${again.label}" already uses the value "${parsed.data.value}". Edit that one, or pick a different value.` };
+    }
+  }
+
+  if (error || !data) {
+    return { error: error?.message ?? "Could not add that option." };
   }
 
   await writeAuditLog(supabase, {
@@ -148,7 +185,11 @@ export async function createOption(
 
   revalidatePath(`/settings/dropdowns/${category}`);
   revalidatePath("/settings/temperatures");
-  return { success: "Added." };
+  return {
+    success: existing?.deleted_at
+      ? `Brought back "${parsed.data.label}", which had been removed earlier.`
+      : "Added.",
+  };
 }
 
 export async function updateOption(
