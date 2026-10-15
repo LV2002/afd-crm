@@ -42,6 +42,8 @@ import { LeadFilters, type FilterFieldWithOptions } from "./lead-filters";
 import { unfinishedLeadsFilter } from "@/lib/leads/finished-filter";
 import { terminalValuesOf } from "@/lib/leads/temperature-kinds";
 import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
+import { getMyDayQueueForUser } from "@/lib/my-day/get-queue";
+import { QUEUE_LABELS, parseQueueKey } from "@/lib/my-day/queue-link";
 import { RememberLeadFilters } from "./remember-filters";
 import { RevealPhoneButton } from "./reveal-phone-button";
 
@@ -131,6 +133,45 @@ export default async function LeadsPage({
     taggedLeadIds = (matchRows ?? []).map((r) => r.lead_id);
   }
 
+  /*
+    A bucket from the dashboard's "Your day" card (?queue=due_today).
+
+    The card's sections are built from several signals at once, none of which
+    the list can filter on by itself, so the leads page asks the same queue
+    builder for the same bucket and shows exactly those leads. `for` is whose
+    day it is, when a manager opened it from a counsellor's dashboard; it
+    defaults to the person looking. Read through the RLS-bound client, so a
+    manager only ever resolves a queue they could already see.
+  */
+  const queueKey = parseQueueKey(asParam(params.queue));
+  const queueForParam = asParam(params.for);
+  const queueForId =
+    queueForParam && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(queueForParam)
+      ? queueForParam
+      : user.id;
+  let queueLeadIds: string[] | null = null;
+  let queueOwnerName: string | null = null;
+  if (queueKey) {
+    const { queue } = await getMyDayQueueForUser(supabase, queueForId);
+    const bucket =
+      queueKey === "overdue"
+        ? queue.overdue
+        : queueKey === "due_today"
+          ? queue.dueToday
+          : queueKey === "new"
+            ? queue.newAssignments
+            : queue.atRisk;
+    queueLeadIds = bucket.map((item) => item.lead.id);
+    if (queueForId !== user.id) {
+      const { data: owner } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", queueForId)
+        .maybeSingle<{ full_name: string | null }>();
+      queueOwnerName = owner?.full_name ?? null;
+    }
+  }
+
   // A core field is a real leads column; a non-core (custom) field's value
   // lives inside the `custom` jsonb blob instead — select that once rather
   // than trying to select a column named after the custom key, which
@@ -178,6 +219,9 @@ export default async function LeadsPage({
   if (taggedLeadIds !== null) {
     query = query.in("id", taggedLeadIds);
   }
+  if (queueLeadIds !== null) {
+    query = query.in("id", queueLeadIds);
+  }
 
   const {
     data: rows,
@@ -205,7 +249,11 @@ export default async function LeadsPage({
   // Any narrowing at all, so the empty state can tell "you filtered
   // everything out" apart from "this CRM is new".
   const hasAnyFilter =
-    Boolean(search) || Boolean(tagFilter) || dateFilters.active || Object.keys(filterValues).length > 0;
+    Boolean(search) ||
+    Boolean(tagFilter) ||
+    queueKey !== null ||
+    dateFilters.active ||
+    Object.keys(filterValues).length > 0;
 
   // The name leads the card and the temperature sits opposite it;
   // everything else the admin has put on the list follows as
@@ -318,6 +366,19 @@ export default async function LeadsPage({
       </div>
 
       <RememberLeadFilters />
+
+      {queueKey && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-primary-subtle px-4 py-3 text-sm">
+          <p>
+            Showing <strong>{QUEUE_LABELS[queueKey]}</strong> from{" "}
+            {queueOwnerName ? `${queueOwnerName}'s day` : "your day"} —{" "}
+            {queueLeadIds?.length ?? 0} {(queueLeadIds?.length ?? 0) === 1 ? "lead" : "leads"}.
+          </p>
+          <Link href="/leads" className="font-medium hover:underline">
+            Show every lead →
+          </Link>
+        </div>
+      )}
 
       <LeadFilters
         filterFields={filterFieldsWithOptions}

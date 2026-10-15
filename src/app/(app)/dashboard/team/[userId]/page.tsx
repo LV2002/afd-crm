@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AccessDenied } from "@/components/layout/access-denied";
@@ -6,6 +7,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { canSeeTeam } from "@/lib/dashboard/can-see-team";
 import { getCounsellors } from "@/lib/dashboard/get-counsellors";
 import { formatDateIST } from "@/lib/format/date";
+import { temperatureHref } from "@/lib/my-day/queue-link";
 import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 import { createClient } from "@/lib/supabase/server";
 
@@ -137,7 +139,11 @@ export default async function CounsellorPage({
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="min-w-0">
-          <MyDayWidget userId={userId} canRevealPhone={can(viewer, "lead.reveal_phone")} />
+          <MyDayWidget
+            userId={userId}
+            canRevealPhone={can(viewer, "lead.reveal_phone")}
+            forOtherUser
+          />
         </div>
 
         <div className="flex min-w-0 flex-col gap-6">
@@ -195,6 +201,7 @@ export default async function CounsellorPage({
                       color={option.color}
                       count={countByTemperature.get(option.value) ?? 0}
                       total={leads.length}
+                      href={temperatureHref(option.value, userId)}
                     />
                   ))
                 )}
@@ -225,15 +232,18 @@ function Row({
   color,
   count,
   total,
+  href,
 }: {
   label: string;
   color: string | null;
   count: number;
   total: number;
+  /** Opens the leads list filtered to this temperature (and this counsellor). */
+  href?: string;
 }) {
   const share = total > 0 ? Math.round((count / total) * 100) : 0;
-  return (
-    <div className="flex items-center gap-2 text-sm">
+  const content = (
+    <>
       <span className="w-40 shrink-0 truncate text-muted-foreground">{label}</span>
       <span className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
         <span
@@ -242,6 +252,18 @@ function Row({
         />
       </span>
       <span className="w-8 shrink-0 text-right tabular-nums">{count}</span>
-    </div>
+    </>
+  );
+  const rowClass = "flex items-center gap-2 text-sm";
+  return href ? (
+    <Link
+      href={href}
+      className={`${rowClass} -mx-1 rounded-md px-1 py-0.5 hover:bg-muted/60`}
+      aria-label={`${label}: ${count} — show these leads`}
+    >
+      {content}
+    </Link>
+  ) : (
+    <div className={rowClass}>{content}</div>
   );
 }

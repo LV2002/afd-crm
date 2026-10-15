@@ -4736,3 +4736,17 @@ Leon: the dropped students were all workflow tests and were counting as dropped 
   admission's payment count and net, so the money can be reversed in Accounts first if it should come out too.
 - **Why the lead too, by default:** it stays at Took admission otherwise and still counts as a conversion.
 - **Assumption:** admins want this per batch with a reason, not a one-click "delete all dropped".
+
+## 2026-10-15 · Dashboard "N more →" and pipeline rows open a filtered list
+
+Leon: "3 more →" on Your day opened every lead; he wants only that section's leads, and the temperatures on a
+counsellor's pipeline clickable the same way.
+
+- The leads page did not even read the old `?mine=1`. Each section now links to `/leads?queue=<bucket>` (and `&for=<user>`
+  when a manager is looking at a counsellor's dashboard). The page asks the same queue builder for the same bucket, so the
+  list is exactly what the card counted — the buckets mix tasks, follow-ups, SLA and "never contacted", none of which is a
+  filterable column. A banner names the bucket with "Show every lead →".
+- Pipeline rows on the counsellor view link to `/leads?f_temperature=<value>&f_assigned_to=<user>` (the existing filters).
+  "No temperature yet" is not linked: the filter cannot express null.
+- **Assumption:** "the counsellor dashboard / pipeline card on the right" is the manager's view of one counsellor
+  (`/dashboard/team/<id>`), the only place a temperature breakdown exists. A counsellor's own dashboard has the Your day links only.
