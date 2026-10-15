@@ -4720,3 +4720,19 @@ lead's Lead Source and Sub-source were blank. So the source arrived correctly an
   (append-only, never touched), spelled as the matching option; empty sub-sources likewise. Only NULL/empty
   values are written. Verified on fixture leads.
 - **Not recoverable:** a source the lead *changed to* by hand and then lost, if the enquiry says otherwise.
+
+## 2026-10-15 · Removing test admissions that were dropped
+
+Leon: the dropped students were all workflow tests and were counting as dropped admissions in his reports.
+
+- New admin-only screen **Settings → Remove Dropped Admissions** (`/settings/test-admissions`): lists dropped
+  admissions with their payments, takes a reason and a typed "remove". Requires org-wide `settings.manage` and
+  org-wide `lead.delete`. Audited per admission (`enrolment.remove_dropped`).
+- It **soft-deletes** the admission, the student record and (checked by default) the lead, releasing the lead's
+  phone number as a normal delete does. Nothing is destroyed; all of it is recoverable. Only already-DROPPED
+  admissions are accepted; a live one must be dropped first.
+- **Payments are never touched** (append-only ledger, non-negotiable #7). Reports that start from the admission or
+  the lead stop counting them; a total taken straight off the ledger still would. The screen says so and shows each
+  admission's payment count and net, so the money can be reversed in Accounts first if it should come out too.
+- **Why the lead too, by default:** it stays at Took admission otherwise and still counts as a conversion.
+- **Assumption:** admins want this per batch with a reason, not a one-click "delete all dropped".

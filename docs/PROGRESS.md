@@ -8656,3 +8656,8 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
   accepted-but-unsigned deliveries as rejected. Now `rejected` means refused at the door (bad signature/key,
   status failed), and the red banner/row appears only when the NEWEST delivery on a channel was refused.
   Older refusals show muted on their row ("N earlier deliveries were refused (last …); the newest was accepted").
+
+## Remove dropped (test) admissions
+
+- Settings → Remove Dropped Admissions: soft-deletes selected dropped admissions, their student records and (optionally) leads,
+  from every list and report; payments stay on the ledger and are listed. Admin-only, reason + typed confirmation, audited. Tests added.
