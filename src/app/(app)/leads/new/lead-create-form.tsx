@@ -1,7 +1,7 @@
 "use client";
 
 import { UserPlus } from "lucide-react";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
@@ -53,15 +53,19 @@ export function LeadCreateForm({
   examOptions,
   courseOptions,
   sourceOptions,
+  countryOptions,
   showCenterPicker,
 }: {
   centers: FieldOption[];
   examOptions: FieldOption[];
   courseOptions: FieldOption[];
   sourceOptions: FieldOption[];
+  /** Null when the Country field is not set up, so the picker is not offered. */
+  countryOptions: FieldOption[] | null;
   showCenterPicker: boolean;
 }) {
   const [state, formAction, pending] = useActionState(createLeadManually, initialState);
+  const [country, setCountry] = useState("");
 
   return (
     <form action={formAction} className="flex max-w-2xl flex-col gap-6">
@@ -123,6 +127,32 @@ export function LeadCreateForm({
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Where they are
         </h3>
+
+        {countryOptions && countryOptions.length > 0 && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Country"
+              htmlFor="country"
+              hint="Leave blank for India."
+            >
+              <Combobox
+                id="country"
+                name="country"
+                value={country}
+                onChange={setCountry}
+                options={countryOptions}
+                placeholder="Choose a country"
+                clearable
+              />
+            </Field>
+            {/* Only when it is "Others": the counsellor types the country's name. */}
+            {country === "others" && (
+              <Field label="Country (specify)" htmlFor="countryOther" required>
+                <Input id="countryOther" name="countryOther" required autoComplete="off" placeholder="Bahrain" />
+              </Field>
+            )}
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <StateDistrictFields

@@ -27,6 +27,19 @@ export default async function NewLeadPage() {
       .returns<Array<{ id: string; name: string }>>(),
   ]);
 
+  // The Country field's own options, when the field exists and is switched on.
+  // A custom field keeps its options on its definition, so an admin edits them
+  // in Settings → Custom Fields; no field, or switched off, means no picker.
+  const { data: countryField } = await supabase
+    .from("field_definitions")
+    .select("options")
+    .eq("entity", "lead")
+    .eq("key", "country")
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .maybeSingle<{ options: Array<{ value: string; label: string }> | null }>();
+  const countryOptions = countryField?.options ?? null;
+
   const scope = scopeFor(user, "lead.create");
   const centers = (centerRows.data ?? []).map((c) => ({ value: c.id, label: c.name }));
 
@@ -43,6 +56,7 @@ export default async function NewLeadPage() {
         examOptions={examOptions}
         courseOptions={courseOptions}
         sourceOptions={sourceOptions}
+        countryOptions={countryOptions}
         showCenterPicker={scope !== "own"}
       />
     </div>

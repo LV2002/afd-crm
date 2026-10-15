@@ -4779,3 +4779,25 @@ account **Ledger** statement had no actions at all — so a test fee payment cou
 - Ledger and Transactions now both show **Reverse** on a fee entry that came in (`in`, not already reversed), which goes through the
   payment's own reversal (`reversePaymentAction`, `payment.refund`): reversal or refund, both ledgers written together.
 - The Ledger statement also gets Reverse / Correct on non-fee entries (`finance.manage`), as Transactions has.
+
+## 2026-10-15 · Country on the quick "new lead" form; clearer "already exists" on dropdowns
+
+- Leon could not see Country when creating a lead: 0103 added it to the lead PAGE, but the quick new-lead form is a fixed set of
+  fields. It now offers Country (from the field's own options; hidden if the field is switched off) and, for Others, a required
+  "Country (specify)". Validated against the field's options; written into the lead's `custom` jsonb, merged not replaced, and only
+  onto a NEW lead (a duplicate attaching to someone already in the CRM is not rewritten).
+- Dropdowns: adding an option whose value belongs to a removed one revives it and says so; a clash with a live one names it and
+  says if it is switched off; a duplicate-key error the lookup missed is looked up again instead of shown raw ("already exists" for
+  something nobody could see — the pre-fix behaviour whenever the value belonged to a deleted option).
+- **Assumption:** the "nid_pg already exists but I can't see it" report was that deleted-option case, fixed in the previous release; if
+  it still happens after this one, the screen now names the option it collides with.
+
+## 2026-10-15 · The Interested exams list (0104)
+
+Leon's list: NID UG, NID PG, NIFT UG, NIFT PG, UCEED, CEED, NATA, JEE 2, BFA, MFA, KSDAT, GAT, PF, Others.
+- Stored values are what leads and students remember, so the existing options keep theirs and only get new wording:
+  `nid` → "NID UG", `nift_mdes` → "NIFT PG" (MDes is NIFT's postgraduate course), `jee_paper_2` → "JEE 2". Leads that chose "NID" or
+  "NIFT MDes" still count and now read as NID UG / NIFT PG. **Assumption:** every earlier "NID" lead was UG.
+- New rows: `nid_pg`, `bfa`, `mfa`, `ksdat`, `gat`, `pf`, `others`. A removed row of the same value is brought back (this is the "nid_pg already
+  exists" case). Options an admin added by hand are kept, sorted after the fourteen.
+- Students' target exams use the same list, so they change too. "Others" has no "specify" box (unlike Country); say if it needs one.

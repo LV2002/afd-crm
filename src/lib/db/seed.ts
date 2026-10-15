@@ -346,13 +346,23 @@ const DROPDOWN_SEEDS: DropdownSeed[] = [
     label: "Exam",
     isSystem: true,
     options: [
-      { value: "nid", label: "NID" },
+      // Same list, same stored values, as migration 0104 (keep the two in step).
+      // `nid`, `nift_mdes` and `jee_paper_2` keep their values so leads that
+      // chose them before the wording changed still count.
+      { value: "nid", label: "NID UG" },
+      { value: "nid_pg", label: "NID PG" },
       { value: "nift_ug", label: "NIFT UG" },
-      { value: "nift_mdes", label: "NIFT MDes" },
+      { value: "nift_mdes", label: "NIFT PG" },
       { value: "uceed", label: "UCEED" },
       { value: "ceed", label: "CEED" },
       { value: "nata", label: "NATA" },
-      { value: "jee_paper_2", label: "JEE Paper 2" },
+      { value: "jee_paper_2", label: "JEE 2" },
+      { value: "bfa", label: "BFA" },
+      { value: "mfa", label: "MFA" },
+      { value: "ksdat", label: "KSDAT" },
+      { value: "gat", label: "GAT" },
+      { value: "pf", label: "PF" },
+      { value: "others", label: "Others" },
     ],
   },
   {
