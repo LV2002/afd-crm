@@ -8,6 +8,7 @@ import { formatDateIST } from "@/lib/format/date";
 import { maskPhone } from "@/lib/leads/mask-phone";
 import type { TemperatureOption } from "@/lib/leads/temperature-kinds";
 import { getMyDayQueueForUser } from "@/lib/my-day/get-queue";
+import { queueHref, type QueueKey } from "@/lib/my-day/queue-link";
 import { batchNameLookup } from "@/lib/leads/batch-name-lookup";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,7 +26,7 @@ import { RevealPhoneButton } from "../leads/reveal-phone-button";
  * Only the first few of each bucket are drawn. A counsellor with sixty
  * overdue leads does not need sixty rows on a landing page; they need to
  * see that it is sixty and get to the list. Each section links through to
- * `/leads` with the filter already applied.
+ * `/leads` showing exactly the leads that section counted (`queueHref`).
  */
 
 /** Enough to act on without turning the landing page into a list view. */
@@ -34,9 +35,12 @@ const PREVIEW_ROWS = 5;
 export async function MyDayWidget({
   userId,
   canRevealPhone,
+  forOtherUser = false,
 }: {
   userId: string;
   canRevealPhone: boolean;
+  /** A manager looking at somebody else's day: the links must open THEIR leads. */
+  forOtherUser?: boolean;
 }) {
   const supabase = await createClient();
   const { queue, temperatureByValue, centerIds } = await getMyDayQueueForUser(supabase, userId);
@@ -48,11 +52,11 @@ export async function MyDayWidget({
     queue.newAssignments.length +
     queue.atRisk.length;
 
-  const sections: Array<{ title: string; hint: string; items: MyDayItem[] }> = [
-    { title: "Overdue", hint: "Past their follow-up or task date", items: queue.overdue },
-    { title: "Due today", hint: "Before the day is out", items: queue.dueToday },
-    { title: "New", hint: "Not contacted yet", items: queue.newAssignments },
-    { title: "At risk", hint: "Hot with no next step, or an SLA breach", items: queue.atRisk },
+  const sections: Array<{ key: QueueKey; title: string; hint: string; items: MyDayItem[] }> = [
+    { key: "overdue", title: "Overdue", hint: "Past their follow-up or task date", items: queue.overdue },
+    { key: "due_today", title: "Due today", hint: "Before the day is out", items: queue.dueToday },
+    { key: "new", title: "New", hint: "Not contacted yet", items: queue.newAssignments },
+    { key: "at_risk", title: "At risk", hint: "Hot with no next step, or an SLA breach", items: queue.atRisk },
   ];
 
   return (
@@ -96,7 +100,10 @@ export async function MyDayWidget({
               </div>
 
               {section.items.length > PREVIEW_ROWS ? (
-                <Link href="/leads?mine=1" className="text-sm font-medium hover:underline">
+                <Link
+                  href={queueHref(section.key, forOtherUser ? userId : null)}
+                  className="text-sm font-medium hover:underline"
+                >
                   {section.items.length - PREVIEW_ROWS} more →
                 </Link>
               ) : null}

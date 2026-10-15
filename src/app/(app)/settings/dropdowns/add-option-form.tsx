@@ -21,13 +21,19 @@ export function AddOptionForm({ category }: { category: string }) {
         <label className="text-xs text-muted-foreground" htmlFor={`${category}-new-value`}>
           Value
         </label>
-        <Input id={`${category}-new-value`} name="value" placeholder="very_hot" className="w-36" required />
+        <Input
+          id={`${category}-new-value`}
+          name="value"
+          placeholder="made from the label"
+          className="w-36"
+          title="Leave blank and it is made from the label: Saudi Arabia becomes saudi_arabia."
+        />
       </div>
       <div className="flex flex-col gap-1">
         <label className="text-xs text-muted-foreground" htmlFor={`${category}-new-label`}>
           Label
         </label>
-        <Input id={`${category}-new-label`} name="label" placeholder="Very Hot" className="w-40" required />
+        <Input id={`${category}-new-label`} name="label" placeholder="Saudi Arabia" className="w-40" required />
       </div>
       <div className="flex flex-col gap-1">
         <label className="text-xs text-muted-foreground" htmlFor={`${category}-new-color`}>

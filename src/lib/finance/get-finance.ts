@@ -221,3 +221,24 @@ export async function getFinanceConfig(supabase: SupabaseClient): Promise<OrgFin
     currency: data?.currency ?? "INR",
   };
 }
+
+/**
+ * Which admission each fee payment belongs to, for the ledger's Reverse button.
+ *
+ * A fee entry's reversal goes through the payment, and the payment's reversal is
+ * scoped to its admission. Read through the caller's own client, so a payment
+ * they may not see simply has no entry here and no button.
+ */
+export async function enrolmentIdsForPayments(
+  supabase: SupabaseClient,
+  paymentIds: string[],
+): Promise<Map<string, string>> {
+  const unique = [...new Set(paymentIds)];
+  if (unique.length === 0) return new Map();
+  const { data } = await supabase
+    .from("payments")
+    .select("id, enrolment_id")
+    .in("id", unique)
+    .returns<Array<{ id: string; enrolment_id: string }>>();
+  return new Map((data ?? []).map((row) => [row.id, row.enrolment_id]));
+}

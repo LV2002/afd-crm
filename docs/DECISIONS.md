@@ -4720,3 +4720,62 @@ lead's Lead Source and Sub-source were blank. So the source arrived correctly an
   (append-only, never touched), spelled as the matching option; empty sub-sources likewise. Only NULL/empty
   values are written. Verified on fixture leads.
 - **Not recoverable:** a source the lead *changed to* by hand and then lost, if the enquiry says otherwise.
+
+## 2026-10-15 · Removing test admissions that were dropped
+
+Leon: the dropped students were all workflow tests and were counting as dropped admissions in his reports.
+
+- New admin-only screen **Settings → Remove Dropped Admissions** (`/settings/test-admissions`): lists dropped
+  admissions with their payments, takes a reason and a typed "remove". Requires org-wide `settings.manage` and
+  org-wide `lead.delete`. Audited per admission (`enrolment.remove_dropped`).
+- It **soft-deletes** the admission, the student record and (checked by default) the lead, releasing the lead's
+  phone number as a normal delete does. Nothing is destroyed; all of it is recoverable. Only already-DROPPED
+  admissions are accepted; a live one must be dropped first.
+- **Payments are never touched** (append-only ledger, non-negotiable #7). Reports that start from the admission or
+  the lead stop counting them; a total taken straight off the ledger still would. The screen says so and shows each
+  admission's payment count and net, so the money can be reversed in Accounts first if it should come out too.
+- **Why the lead too, by default:** it stays at Took admission otherwise and still counts as a conversion.
+- **Assumption:** admins want this per batch with a reason, not a one-click "delete all dropped".
+
+## 2026-10-15 · Dashboard "N more →" and pipeline rows open a filtered list
+
+Leon: "3 more →" on Your day opened every lead; he wants only that section's leads, and the temperatures on a
+counsellor's pipeline clickable the same way.
+
+- The leads page did not even read the old `?mine=1`. Each section now links to `/leads?queue=<bucket>` (and `&for=<user>`
+  when a manager is looking at a counsellor's dashboard). The page asks the same queue builder for the same bucket, so the
+  list is exactly what the card counted — the buckets mix tasks, follow-ups, SLA and "never contacted", none of which is a
+  filterable column. A banner names the bucket with "Show every lead →".
+- Pipeline rows on the counsellor view link to `/leads?f_temperature=<value>&f_assigned_to=<user>` (the existing filters).
+  "No temperature yet" is not linked: the filter cannot express null.
+- **Assumption:** "the counsellor dashboard / pipeline card on the right" is the manager's view of one counsellor
+  (`/dashboard/team/<id>`), the only place a temperature breakdown exists. A counsellor's own dashboard has the Your day links only.
+
+## 2026-10-15 · Dropdown editor fixes, and a Country field on leads
+
+**Dropdown settings "glitch"** (Leon: could not reorder, add, or edit value/label). Not reproducible without his data, but the code had
+four real defects that match, now fixed:
+- **Reorder** swapped two stored `sort_order` numbers, a no-op when they were equal (every source a custom endpoint added was
+  written as 100) and it counted deleted options the screen hides. It now renumbers the visible list 0..n-1 and returns an error if it cannot.
+- **Edit** re-submitted the stored value and re-validated it, so an option whose value was never typed here (a custom endpoint
+  stores its source as written, "Google Ads") failed the pattern and refused every edit, even a label-only one. An unchanged value is
+  now kept as is; only a changed one must be well-formed, and a clash gets a plain message.
+- **Add** needed a hand-invented machine value ("saudi_arabia") and failed with a raw duplicate-key error when the value belonged to a
+  deleted option. The value is now optional (made from the label), and a deleted option with that value is brought back.
+- Move and permission failures were silent; they now say so.
+- **Assumption:** these are what he hit. If a specific category still misbehaves, the exact message is what is needed.
+
+**Country on a lead (0103).** Two custom fields, no schema change: `country` (select: India, UAE, Oman, Muscat, Kuwait, Saudi Arabia,
+Others — options editable in Settings → Custom Fields) and `country_other` ("Country (specify)", typed when Others). Same shape as
+State / State (specify). Filterable on the leads list. **India added first although not requested** so a lead can be marked home; a lead
+with no country is still treated as India. "Muscat" listed as asked (it is Oman's capital). Not on the quick "new lead" form, which is a fixed
+set of fields; set it on the lead page.
+
+## 2026-10-15 · Reverse from the ledger itself
+
+Leon found no Reverse in the ledger. The Transactions screen had Reverse/Correct on plain entries but deliberately nothing on
+**fee** rows (their cash side belongs to a receipt, so reversing the entry alone would leave the two ledgers disagreeing), and the
+account **Ledger** statement had no actions at all — so a test fee payment could not be undone from either.
+- Ledger and Transactions now both show **Reverse** on a fee entry that came in (`in`, not already reversed), which goes through the
+  payment's own reversal (`reversePaymentAction`, `payment.refund`): reversal or refund, both ledgers written together.
+- The Ledger statement also gets Reverse / Correct on non-fee entries (`finance.manage`), as Transactions has.

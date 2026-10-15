@@ -82,7 +82,11 @@ export function OptionRow({
         required
         readOnly={isMeaningCategory}
         aria-readonly={isMeaningCategory}
-        title={isMeaningCategory ? "The value is how leads remember this temperature, so it can't be renamed. Change the label instead." : undefined}
+        title={
+          isMeaningCategory
+            ? "The value is how leads remember this temperature, so it can't be renamed. Change the label instead."
+            : "The value is how leads remember this option. Changing it does not update leads that already use the old one — change the label if you only want different wording."
+        }
       />
       <Input name="label" defaultValue={option.label} className="w-40 flex-1" required />
       {isMeaningCategory && (

@@ -164,6 +164,13 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["config.export", "lead.export", "config.import", "lead.import"],
   },
   {
+    href: "/settings/test-admissions",
+    label: "Remove Dropped Admissions",
+    description: "Take test admissions that were dropped out of the lists and reports",
+    // The page itself requires org-wide settings.manage AND lead.delete.
+    permissions: ["settings.manage"],
+  },
+  {
     href: "/settings/config",
     label: "Config Export/Import",
     description: "Export configuration as a bundle, or bootstrap a fresh instance from one",
