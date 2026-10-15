@@ -8,6 +8,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { INTERESTED_METADATA_KEY } from "@/lib/leads/interested-temperature";
 import { kindOf } from "@/lib/leads/temperature-kinds";
 import { applyTemperatureMeaning, kindChangeError } from "@/lib/leads/temperature-metadata";
+import { OPTION_VALUE_PATTERN, movedOrder, slugifyValue } from "@/lib/dropdowns/option-helpers";
 import { createClient } from "@/lib/supabase/server";
 
 export interface OptionFormState {
@@ -20,7 +21,7 @@ const optionSchema = z.object({
     .string()
     .trim()
     .toLowerCase()
-    .regex(/^[a-z][a-z0-9_]*$/, "Use lowercase letters, numbers and underscores"),
+    .regex(OPTION_VALUE_PATTERN, "The value can only use lowercase letters, numbers and underscores, and must start with a letter — for example saudi_arabia"),
   label: z.string().trim().min(1, "Label is required"),
   color: z
     .string()
@@ -40,9 +41,13 @@ export async function createOption(
     return { error: "You don't have permission to do that." };
   }
 
+  // The value is optional: left blank it is made from the label, so nobody has
+  // to invent "saudi_arabia" to add Saudi Arabia.
+  const typedValue = String(formData.get("value") ?? "").trim();
+  const labelText = String(formData.get("label") ?? "").trim();
   const parsed = optionSchema.safeParse({
-    value: formData.get("value"),
-    label: formData.get("label"),
+    value: typedValue || slugifyValue(labelText),
+    label: labelText,
     color: formData.get("color"),
   });
   if (!parsed.success) {
@@ -50,6 +55,25 @@ export async function createOption(
   }
 
   const supabase = await createClient();
+
+  /*
+    The same value may already be there — alive, or deleted.
+
+    (category, value) is unique, and a deleted option still holds its value, so
+    adding "Kuwait" back after deleting it used to fail with a raw database
+    "duplicate key" message. A deleted one is brought back instead of
+    colliding with itself; a live one says so plainly.
+  */
+  const { data: existing } = await supabase
+    .from("dropdown_options")
+    .select("id, deleted_at")
+    .eq("category", category)
+    .eq("value", parsed.data.value)
+    .maybeSingle<{ id: string; deleted_at: string | null }>();
+  if (existing && !existing.deleted_at) {
+    return { error: `There is already an option with the value "${parsed.data.value}". Edit that one, or pick a different value.` };
+  }
+
   const { count } = await supabase
     .from("dropdown_options")
     .select("id", { count: "exact", head: true })
@@ -83,18 +107,32 @@ export async function createOption(
     metadata = meaning.metadata;
   }
 
-  const { data, error } = await supabase
-    .from("dropdown_options")
-    .insert({
-      category,
-      value: parsed.data.value,
-      label: parsed.data.label,
-      color: parsed.data.color || null,
-      sort_order: count ?? 0,
-      ...(metadata ? { metadata } : {}),
-    })
-    .select("id")
-    .single();
+  const { data, error } = existing
+    ? await supabase
+        .from("dropdown_options")
+        .update({
+          label: parsed.data.label,
+          color: parsed.data.color || null,
+          sort_order: count ?? 0,
+          deleted_at: null,
+          is_active: true,
+          ...(metadata ? { metadata } : {}),
+        })
+        .eq("id", existing.id)
+        .select("id")
+        .single()
+    : await supabase
+        .from("dropdown_options")
+        .insert({
+          category,
+          value: parsed.data.value,
+          label: parsed.data.label,
+          color: parsed.data.color || null,
+          sort_order: count ?? 0,
+          ...(metadata ? { metadata } : {}),
+        })
+        .select("id")
+        .single();
 
   if (error) {
     return { error: error.message };
@@ -142,13 +180,38 @@ export async function updateOption(
     the label is what people read — so for temperatures the posted value
     is ignored and the stored one kept.
   */
+  /*
+    An UNCHANGED value is kept as it is, not re-validated.
+
+    Some options were never typed into this screen: a custom endpoint adds its
+    source name exactly as the admin wrote it ("Google Ads"), which is not a
+    legal value. Saving such an option re-submitted that value, failed the
+    pattern, and refused every edit to it — even a label change that touched
+    nothing else. Only a value somebody actually changes has to be well-formed.
+  */
+  const postedValue = String(formData.get("value") ?? "").trim();
+  const keepValue = category === "temperature" || postedValue === current.value;
   const parsed = optionSchema.safeParse({
-    value: category === "temperature" ? current.value : formData.get("value"),
+    value: keepValue ? "keep_current_value" : postedValue,
     label: formData.get("label"),
     color: formData.get("color"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  }
+  const nextValue = keepValue ? current.value : parsed.data.value;
+
+  if (!keepValue) {
+    const { data: clash } = await supabase
+      .from("dropdown_options")
+      .select("id")
+      .eq("category", category)
+      .eq("value", nextValue)
+      .neq("id", optionId)
+      .maybeSingle<{ id: string }>();
+    if (clash) {
+      return { error: `Another option already has the value "${nextValue}". Pick a different one.` };
+    }
   }
 
   /*
@@ -197,7 +260,7 @@ export async function updateOption(
   const { error } = await supabase
     .from("dropdown_options")
     .update({
-      value: parsed.data.value,
+      value: nextValue,
       label: parsed.data.label,
       color: parsed.data.color || null,
       metadata,
@@ -213,7 +276,7 @@ export async function updateOption(
     action: "dropdown_option.update",
     entityType: "dropdown_options",
     entityId: optionId,
-    after: { ...parsed.data, metadata },
+    after: { ...parsed.data, value: nextValue, metadata },
   });
 
   revalidatePath(`/settings/dropdowns/${category}`);
@@ -311,32 +374,46 @@ export async function moveOption(
   optionId: string,
   category: string,
   direction: "up" | "down",
-): Promise<void> {
+): Promise<{ error?: string }> {
   const user = await getCurrentUser();
-  if (!user || !can(user, "settings.manage")) return;
+  if (!user || !can(user, "settings.manage")) {
+    return { error: "You don't have permission to reorder these." };
+  }
 
   const supabase = await createClient();
-  const { data: options } = await supabase
+  // Only the options the screen shows. Including deleted ones meant a move
+  // could swap with a row nobody can see, and look like it did nothing.
+  const { data: options, error: readError } = await supabase
     .from("dropdown_options")
     .select("id, sort_order")
     .eq("category", category)
+    .is("deleted_at", null)
     .order("sort_order")
+    .order("created_at")
     .returns<Array<{ id: string; sort_order: number }>>();
+  if (readError || !options) return { error: readError?.message ?? "Could not read the options." };
 
-  if (!options) return;
+  const order = movedOrder(
+    options.map((option) => option.id),
+    optionId,
+    direction,
+  );
+  if (!order) return {};
 
-  const index = options.findIndex((o) => o.id === optionId);
-  const swapIndex = direction === "up" ? index - 1 : index + 1;
-  if (index === -1 || swapIndex < 0 || swapIndex >= options.length) return;
-
-  const current = options[index];
-  const swap = options[swapIndex];
-
-  await supabase.from("dropdown_options").update({ sort_order: swap.sort_order }).eq("id", current.id);
-  await supabase.from("dropdown_options").update({ sort_order: current.sort_order }).eq("id", swap.id);
+  // Written back as 0..n-1 rather than swapping two numbers: equal sort
+  // orders (every source a custom endpoint added was 100) made a swap a no-op.
+  const failures: string[] = [];
+  for (const [position, id] of order.entries()) {
+    const previous = options.find((option) => option.id === id);
+    if (previous && previous.sort_order === position) continue;
+    const { error } = await supabase.from("dropdown_options").update({ sort_order: position }).eq("id", id);
+    if (error) failures.push(error.message);
+  }
+  if (failures.length > 0) return { error: `Could not reorder: ${failures[0]}` };
 
   revalidatePath(`/settings/dropdowns/${category}`);
   revalidatePath("/settings/temperatures");
+  return {};
 }
 
 const categorySchema = z.object({

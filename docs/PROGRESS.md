@@ -8666,3 +8666,8 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 
 - "N more →" on Overdue / Due today / New / At risk opens the leads list showing exactly that bucket (`?queue=`); the
   temperature rows on a counsellor's pipeline open the list filtered to that temperature and counsellor. Unit tests + e2e added.
+
+## Dropdown editor fixes; Country on leads (migration 0103)
+
+- Reorder, add and edit in Settings → Dropdowns fixed (renumbering, unchanged value kept, value made from label, deleted option revived, errors surfaced). Helpers tested.
+- Lead **Country** (India/UAE/Oman/Muscat/Kuwait/Saudi Arabia/Others) + **Country (specify)** custom fields, in Personal before State, filterable. Test added.

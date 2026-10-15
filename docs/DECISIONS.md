@@ -4750,3 +4750,23 @@ counsellor's pipeline clickable the same way.
   "No temperature yet" is not linked: the filter cannot express null.
 - **Assumption:** "the counsellor dashboard / pipeline card on the right" is the manager's view of one counsellor
   (`/dashboard/team/<id>`), the only place a temperature breakdown exists. A counsellor's own dashboard has the Your day links only.
+
+## 2026-10-15 · Dropdown editor fixes, and a Country field on leads
+
+**Dropdown settings "glitch"** (Leon: could not reorder, add, or edit value/label). Not reproducible without his data, but the code had
+four real defects that match, now fixed:
+- **Reorder** swapped two stored `sort_order` numbers, a no-op when they were equal (every source a custom endpoint added was
+  written as 100) and it counted deleted options the screen hides. It now renumbers the visible list 0..n-1 and returns an error if it cannot.
+- **Edit** re-submitted the stored value and re-validated it, so an option whose value was never typed here (a custom endpoint
+  stores its source as written, "Google Ads") failed the pattern and refused every edit, even a label-only one. An unchanged value is
+  now kept as is; only a changed one must be well-formed, and a clash gets a plain message.
+- **Add** needed a hand-invented machine value ("saudi_arabia") and failed with a raw duplicate-key error when the value belonged to a
+  deleted option. The value is now optional (made from the label), and a deleted option with that value is brought back.
+- Move and permission failures were silent; they now say so.
+- **Assumption:** these are what he hit. If a specific category still misbehaves, the exact message is what is needed.
+
+**Country on a lead (0103).** Two custom fields, no schema change: `country` (select: India, UAE, Oman, Muscat, Kuwait, Saudi Arabia,
+Others — options editable in Settings → Custom Fields) and `country_other` ("Country (specify)", typed when Others). Same shape as
+State / State (specify). Filterable on the leads list. **India added first although not requested** so a lead can be marked home; a lead
+with no country is still treated as India. "Muscat" listed as asked (it is Oman's capital). Not on the quick "new lead" form, which is a fixed
+set of fields; set it on the lead page.

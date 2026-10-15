@@ -614,6 +614,35 @@ const LEAD_FIELD_SEEDS: FieldSeed[] = [
   { key: "email", label: "Email", type: "email", section: "Personal" },
   { key: "dob", label: "Date of Birth", type: "date", section: "Personal" },
   { key: "city", label: "City", type: "text", section: "Personal", showInFilters: true },
+  // Leads from abroad — the Gulf mostly — so the state/district pair below
+  // is not the whole story. Custom fields (no column), options an admin edits
+  // in Settings → Custom Fields. Migration 0103 adds the same two to an
+  // instance that already has data; keep the two in step.
+  {
+    key: "country",
+    label: "Country",
+    type: "select",
+    section: "Personal",
+    showInFilters: true,
+    isCore: false,
+    options: [
+      { value: "india", label: "India" },
+      { value: "uae", label: "UAE" },
+      { value: "oman", label: "Oman" },
+      { value: "muscat", label: "Muscat" },
+      { value: "kuwait", label: "Kuwait" },
+      { value: "saudi_arabia", label: "Saudi Arabia" },
+      { value: "others", label: "Others" },
+    ],
+  },
+  {
+    key: "country_other",
+    label: "Country (specify)",
+    type: "text",
+    section: "Personal",
+    isCore: false,
+    helpText: "Fill this in when Country is Others — type the country's name.",
+  },
   { key: "state", label: "State", type: "select", section: "Personal", showInFilters: true },
   { key: "state_other", label: "State (specify)", type: "text", section: "Personal" },
   { key: "district", label: "District", type: "select", section: "Personal", showInFilters: true },
