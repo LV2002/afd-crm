@@ -10,9 +10,18 @@ import {
 } from "@/components/ui/table";
 import { formatDateIST } from "@/lib/format/date";
 import { formatINR } from "@/lib/format/currency";
-import { getAccountsWithBalances, getLedgerEntries, reversedIds } from "@/lib/finance/get-finance";
+import { can, getCurrentUser } from "@/lib/auth/session";
+import {
+  enrolmentIdsForPayments,
+  getAccountsWithBalances,
+  getLedgerEntries,
+  reversedIds,
+} from "@/lib/finance/get-finance";
 import { runningBalances, signedAmount } from "@/lib/finance/ledger-math";
 import { createClient } from "@/lib/supabase/server";
+
+import { FeeEntryActions } from "../fee-entry-actions";
+import { EntryActions } from "../transactions/entry-actions";
 
 /**
  * One account's statement, with a running balance.
@@ -44,6 +53,16 @@ export default async function AccountLedgerPage({
 
   const entries = await getLedgerEntries(supabase, { accountId: selected.id, from, to });
   const reversed = reversedIds(entries);
+
+  // Reverse / correct from the statement itself, as on Transactions: an entry
+  // is undone from the row you are looking at, not from another screen.
+  const user = await getCurrentUser();
+  const canManage = Boolean(user && can(user, "finance.manage"));
+  const canRefund = Boolean(user && can(user, "payment.refund"));
+  const paymentToEnrolment = await enrolmentIdsForPayments(
+    supabase,
+    entries.flatMap((entry) => (entry.payment_id ? [entry.payment_id] : [])),
+  );
 
   // The opening figure for THIS view. With no date filter it is the
   // account's own opening balance; filtered, the statement starts partway
@@ -112,6 +131,7 @@ export default async function AccountLedgerPage({
                 <TableHead className="text-right">In</TableHead>
                 <TableHead className="text-right">Out</TableHead>
                 <TableHead className="text-right">Balance</TableHead>
+                {(canManage || canRefund) && <TableHead />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -121,6 +141,7 @@ export default async function AccountLedgerPage({
                   amountPaise: entry.amount_paise,
                 });
                 const isReversed = reversed.has(entry.id);
+                const isReversal = Boolean(entry.reverses_transaction_id);
                 return (
                   <TableRow key={entry.id} className={isReversed ? "opacity-50" : undefined}>
                     <TableCell className="text-muted-foreground">{entry.txn_no}</TableCell>
@@ -147,6 +168,31 @@ export default async function AccountLedgerPage({
                     >
                       {formatINR(balances[index])}
                     </TableCell>
+                    {(canManage || canRefund) && (
+                      <TableCell className="text-right">
+                        {!isReversed && !isReversal && entry.kind !== "fee" && canManage && (
+                          <EntryActions
+                            transactionId={entry.id}
+                            txnNo={entry.txn_no}
+                            accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
+                          />
+                        )}
+                        {!isReversed &&
+                          !isReversal &&
+                          entry.kind === "fee" &&
+                          entry.direction === "in" &&
+                          canRefund &&
+                          entry.payment_id &&
+                          paymentToEnrolment.get(entry.payment_id) && (
+                            <FeeEntryActions
+                              enrolmentId={paymentToEnrolment.get(entry.payment_id)!}
+                              paymentId={entry.payment_id}
+                              txnNo={entry.txn_no}
+                              accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
+                            />
+                          )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}

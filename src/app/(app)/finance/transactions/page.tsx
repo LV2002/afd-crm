@@ -12,11 +12,17 @@ import {
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { formatDateIST } from "@/lib/format/date";
 import { formatINR } from "@/lib/format/currency";
-import { getAccountsWithBalances, getLedgerEntries, reversedIds } from "@/lib/finance/get-finance";
+import {
+  enrolmentIdsForPayments,
+  getAccountsWithBalances,
+  getLedgerEntries,
+  reversedIds,
+} from "@/lib/finance/get-finance";
 import { signedAmount } from "@/lib/finance/ledger-math";
 import { createClient } from "@/lib/supabase/server";
 
 import { EntryActions } from "./entry-actions";
+import { FeeEntryActions } from "../fee-entry-actions";
 
 /**
  * Everything, newest first — the workbook's Transactions sheet.
@@ -50,6 +56,13 @@ export default async function FinanceTransactionsPage({
   const accountNames = new Map(accounts.map((a) => [a.id, a.name]));
   const newestFirst = entries.slice().reverse();
   const canManage = Boolean(user && can(user, "finance.manage"));
+  // A fee row is undone through its payment, which is its own permission:
+  // taking money is not the same authority as giving it back.
+  const canRefund = Boolean(user && can(user, "payment.refund"));
+  const paymentToEnrolment = await enrolmentIdsForPayments(
+    supabase,
+    entries.flatMap((entry) => (entry.payment_id ? [entry.payment_id] : [])),
+  );
   // A receipt is a different permission from running the ledger: an
   // accountant who may read payments may fetch one for a family, whether
   // or not they are allowed to reverse anything.
@@ -72,7 +85,7 @@ export default async function FinanceTransactionsPage({
                 <TableHead>Category</TableHead>
                 <TableHead>Account</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
-                {canManage && <TableHead />}
+                {(canManage || canRefund) && <TableHead />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -143,19 +156,32 @@ export default async function FinanceTransactionsPage({
                     >
                       {formatINR(signed)}
                     </TableCell>
-                    {canManage && (
+                    {(canManage || canRefund) && (
                       <TableCell className="text-right">
-                        {/* A fee row's cash side belongs to a receipt in
-                            the payments ledger. Reversing it here would
-                            leave the two disagreeing, so it is not
-                            offered — a fee is corrected on the enrolment. */}
-                        {!isReversed && !isReversal && entry.kind !== "fee" && (
+                        {!isReversed && !isReversal && entry.kind !== "fee" && canManage && (
                           <EntryActions
                             transactionId={entry.id}
                             txnNo={entry.txn_no}
                             accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
                           />
                         )}
+                        {/* A fee row's cash side belongs to a receipt in the
+                            payments ledger, so it is undone through the
+                            payment — both ledgers move together. */}
+                        {!isReversed &&
+                          !isReversal &&
+                          entry.kind === "fee" &&
+                          entry.direction === "in" &&
+                          canRefund &&
+                          entry.payment_id &&
+                          paymentToEnrolment.get(entry.payment_id) && (
+                            <FeeEntryActions
+                              enrolmentId={paymentToEnrolment.get(entry.payment_id)!}
+                              paymentId={entry.payment_id}
+                              txnNo={entry.txn_no}
+                              accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
+                            />
+                          )}
                       </TableCell>
                     )}
                   </TableRow>

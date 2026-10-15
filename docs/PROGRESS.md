@@ -8671,3 +8671,7 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 
 - Reorder, add and edit in Settings → Dropdowns fixed (renumbering, unchanged value kept, value made from label, deleted option revived, errors surfaced). Helpers tested.
 - Lead **Country** (India/UAE/Oman/Muscat/Kuwait/Saudi Arabia/Others) + **Country (specify)** custom fields, in Personal before State, filterable. Test added.
+
+## Reverse from the finance ledger
+
+- Ledger and Transactions: **Reverse** on fee payments (via the payment, both ledgers together; reversal or refund) and on the Ledger statement for plain entries. Permissions unchanged (`payment.refund`, `finance.manage`).

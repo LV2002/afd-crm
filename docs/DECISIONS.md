@@ -4770,3 +4770,12 @@ Others — options editable in Settings → Custom Fields) and `country_other` (
 State / State (specify). Filterable on the leads list. **India added first although not requested** so a lead can be marked home; a lead
 with no country is still treated as India. "Muscat" listed as asked (it is Oman's capital). Not on the quick "new lead" form, which is a fixed
 set of fields; set it on the lead page.
+
+## 2026-10-15 · Reverse from the ledger itself
+
+Leon found no Reverse in the ledger. The Transactions screen had Reverse/Correct on plain entries but deliberately nothing on
+**fee** rows (their cash side belongs to a receipt, so reversing the entry alone would leave the two ledgers disagreeing), and the
+account **Ledger** statement had no actions at all — so a test fee payment could not be undone from either.
+- Ledger and Transactions now both show **Reverse** on a fee entry that came in (`in`, not already reversed), which goes through the
+  payment's own reversal (`reversePaymentAction`, `payment.refund`): reversal or refund, both ledgers written together.
+- The Ledger statement also gets Reverse / Correct on non-fee entries (`finance.manage`), as Transactions has.
