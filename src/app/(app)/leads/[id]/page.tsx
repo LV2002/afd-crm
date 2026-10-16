@@ -21,6 +21,8 @@ import { formatINR } from "@/lib/format/currency";
 import { createClient } from "@/lib/supabase/server";
 
 import { DeleteLeadPanel } from "./delete-lead-panel";
+import { EnquiryDatePanel } from "./enquiry-date-panel";
+import { toISTInputValue } from "@/lib/leads/enquiry-date";
 import { SignedAgreementPanel } from "@/components/files/signed-agreement-panel";
 import { FeePlanPanel } from "@/components/enrolment/fee-plan-panel";
 import { PendingDiscount } from "@/components/enrolment/pending-discount";
@@ -267,6 +269,14 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         `admissionStands` locks it: a lead with a confirmed, undropped
         admission is Took admission until Accounts drops the admission.
       */}
+      {can(user, "lead.update") && row.created_at ? (
+        <EnquiryDatePanel
+          leadId={id}
+          shown={formatDateIST(String(row.created_at), "d MMM yyyy, h:mm a")}
+          inputValue={toISTInputValue(String(row.created_at))}
+        />
+      ) : null}
+
       <LeadStatusBar
         leadId={id}
         options={temperatureOptions}
