@@ -17,6 +17,7 @@ import { NOT_PROVIDED, parseFieldValue } from "@/lib/fields/parse-field-value";
 import { captureError } from "@/lib/errors/capture";
 import { isFrameworkControlFlow } from "@/lib/errors/request-error";
 import { parseRupeesToPaise } from "@/lib/format/currency";
+import { parseEnquiryDate } from "@/lib/leads/enquiry-date";
 import { needsFollowUp } from "@/lib/leads/interaction-follow-up";
 import { firstContactTemperature, indexByValue, valuesOfKinds } from "@/lib/leads/temperature-kinds";
 import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
@@ -201,6 +202,64 @@ export async function updateLead(leadId: string, _prevState: FormState, formData
 
   revalidatePath(`/leads/${leadId}`);
   return { success: "Saved." };
+}
+
+/**
+ * Correct the date and time a lead's enquiry came in.
+ *
+ * Writes `leads.created_at` — the "Arrived" the lists, reports, cohorts and
+ * response-time targets all read. The `enquiries` rows are left alone: they
+ * are the append-only record of when each message actually reached the
+ * system, and `created_at` is the business's account of when the person
+ * enquired. The old value goes into the audit row, so a correction is never
+ * a silent rewrite of history.
+ */
+export async function setEnquiryDate(_prevState: FormState, formData: FormData): Promise<FormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "lead.update")) {
+    return { error: "You don't have permission to do that." };
+  }
+
+  const leadId = String(formData.get("leadId") ?? "");
+  if (!leadId) return { error: "Missing lead." };
+
+  const parsed = parseEnquiryDate(String(formData.get("enquiryAt") ?? ""));
+  if (!parsed.ok) return { error: parsed.message };
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("leads")
+    .select("created_at")
+    .eq("id", leadId)
+    .is("deleted_at", null)
+    .maybeSingle<{ created_at: string }>();
+  if (!existing) return { error: "Lead not found." };
+
+  const next = parsed.at.toISOString();
+  if (new Date(existing.created_at).getTime() === parsed.at.getTime()) {
+    return { success: "That is already the enquiry date." };
+  }
+
+  const { data: updated, error } = await supabase
+    .from("leads")
+    .update({ created_at: next })
+    .eq("id", leadId)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!updated || updated.length === 0) return { error: "You can't change this lead." };
+
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "lead.enquiry_date_changed",
+    entityType: "leads",
+    entityId: leadId,
+    before: { created_at: existing.created_at },
+    after: { created_at: next },
+  });
+
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/leads");
+  return { success: "Enquiry date updated." };
 }
 
 const interactionSchema = {

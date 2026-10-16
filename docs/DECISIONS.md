@@ -4801,3 +4801,7 @@ Leon's list: NID UG, NID PG, NIFT UG, NIFT PG, UCEED, CEED, NATA, JEE 2, BFA, MF
 - New rows: `nid_pg`, `bfa`, `mfa`, `ksdat`, `gat`, `pf`, `others`. A removed row of the same value is brought back (this is the "nid_pg already
   exists" case). Options an admin added by hand are kept, sorted after the fourteen.
 - Students' target exams use the same list, so they change too. "Others" has no "specify" box (unlike Country); say if it needs one.
+
+## 2026-10-16 — Changing the enquiry date
+
+Assumption: "enquiry date" is `leads.created_at` (shown as Arrived), which lists, reports and the first-response SLA clock read. Changing it writes only that column; `enquiries.received_at` stays, because those rows are the append-only record of when messages reached the system (and have no update policy). Gated on `lead.update`, audited with the old value, future dates refused. Side effect: moving a lead earlier can make its first-response SLA look overdue, because the clock starts from the new date.

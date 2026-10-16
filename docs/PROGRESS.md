@@ -8683,3 +8683,7 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Interested exams list (migration 0104)
 
 - Exam options now: NID UG, NID PG, NIFT UG, NIFT PG, UCEED, CEED, NATA, JEE 2, BFA, MFA, KSDAT, GAT, PF, Others (existing values kept). Test added.
+
+## Change a lead's enquiry date
+
+- Lead page: **Enquiry came in … · Change** (anyone who can edit the lead) sets the real date and time of an enquiry entered late. Read and written in IST, future dates refused, old value kept in the audit row (`lead.enquiry_date_changed`). Unit tests added.
