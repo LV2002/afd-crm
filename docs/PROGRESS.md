@@ -8687,3 +8687,7 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Change a lead's enquiry date
 
 - Lead page: **Enquiry came in … · Change** (anyone who can edit the lead) sets the real date and time of an enquiry entered late. Read and written in IST, future dates refused, old value kept in the audit row (`lead.enquiry_date_changed`). Unit tests added.
+
+## Lead profile tabs: edits no longer lost or bounced
+
+- Fixed: after each autosave the lead's edit form was rebuilt, which threw the person back to the first tab and reset any box ticked while the save ran (Preferences multi-selects especially). The form is no longer rebuilt after a save, and a change made during a save is queued and saved right after.
