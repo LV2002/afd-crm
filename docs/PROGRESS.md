@@ -8691,3 +8691,7 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Lead profile tabs: edits no longer lost or bounced
 
 - Fixed: after each autosave the lead's edit form was rebuilt, which threw the person back to the first tab and reset any box ticked while the save ran (Preferences multi-selects especially). The form is no longer rebuilt after a save, and a change made during a save is queued and saved right after.
+
+## Lead profile: a saved tick no longer unticks itself
+
+- Root cause: React 19 resets an uncontrolled form to its loaded values after every form *action*; autosave therefore put each box back after saving. The form now submits through `onSubmit` (same server action, no reset).
