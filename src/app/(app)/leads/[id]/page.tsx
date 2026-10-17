@@ -310,7 +310,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         <div className="order-2 min-w-0 lg:order-1 lg:col-span-2">
           {can(user, "lead.update") ? (
             <LeadEditForm
-              key={String(row.updated_at)}
               leadId={id}
               sections={sections}
               values={values}

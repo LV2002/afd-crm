@@ -65,13 +65,33 @@ export function LeadEditForm({
   const formRef = useRef<HTMLFormElement>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
+  /*
+    A change made while a save is still in flight used to be dropped
+    (`if (pending) return`) — tick two exams in a row on Preferences and the
+    second never reached the server, and the page then redrew the saved
+    values over it. It is remembered instead and saved the moment the
+    first one finishes.
+  */
+  const queuedRef = useRef(false);
+
   function autosave() {
     const form = formRef.current;
-    if (!form || pending) return;
+    if (!form) return;
+    if (pending) {
+      queuedRef.current = true;
+      return;
+    }
     // `requestSubmit`, never `submit`: it runs the action React has bound
     // to the form, and respects a field that is still invalid.
     form.requestSubmit();
   }
+
+  useEffect(() => {
+    if (!pending && queuedRef.current) {
+      queuedRef.current = false;
+      formRef.current?.requestSubmit();
+    }
+  }, [pending]);
 
   useEffect(() => {
     if (state.success) setSavedAt(Date.now());
