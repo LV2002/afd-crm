@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Label } from "@/components/ui/label";
@@ -100,7 +100,21 @@ export function LeadEditForm({
   return (
     <form
       ref={formRef}
-      action={formAction}
+      /*
+        `onSubmit`, not `action={formAction}`.
+
+        React 19 resets an uncontrolled form to its default values after
+        every form *action* finishes. With autosave that meant each save
+        put every box back to what the page loaded with: tick an exam on
+        Preferences, it saves, and the tick vanishes. Submitting by hand
+        runs the same server action without the reset, so what is on screen
+        stays what the person left it as.
+      */
+      onSubmit={(event) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        startTransition(() => formAction(data));
+      }}
       className="flex flex-col gap-4"
       onBlur={(event) => {
         // Only when focus actually leaves the control — React's onBlur
