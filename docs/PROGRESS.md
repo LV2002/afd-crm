@@ -8699,3 +8699,7 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Live lists: new leads appear without a refresh (migration 0105)
 
 - Dashboard, Leads, Follow-ups and Unassigned now update themselves: Supabase Realtime on `leads` (insert/reassign) refreshes the page in place and shows a "New lead" toast with an Open button; a tab refreshes when looked at again after 30s away; a 60s poll covers dropped sockets. Not on a lead's own page, settings or finance, so nobody is refreshed mid-edit. Migration 0105 adds `leads` to the `supabase_realtime` publication (no-op where there is none).
+
+## Storage gauge on Platform Health
+
+- Settings → Health has a **Storage** panel: file storage and database size against the plan, amber at 70%, red at 90%, with what to do. Measured by the database (`pg_database_size`, `storage.objects`). Limits default to the Supabase free plan; set `STORAGE_LIMIT_MB` / `DATABASE_LIMIT_MB` in Vercel after upgrading. Unit tests for the thresholds.

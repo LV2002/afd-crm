@@ -4809,3 +4809,7 @@ Assumption: "enquiry date" is `leads.created_at` (shown as Arrived), which lists
 ## 2026-10-18 — Live refresh
 
 Realtime over polling as the main mechanism: it costs no serverless invocations per open tab and honours RLS (a counsellor is told about their own leads only). A slow 60s poll and refresh-on-return remain as the safety net. Restricted to list screens (`lib/leads/live-refresh-paths.ts`) because `router.refresh()` under an open edit form is worse than a stale number. Requires Realtime enabled for the project (the Supabase default).
+
+## 2026-10-18 — Storage gauge limits come from env
+
+Plan sizes are deployment settings, not business data, so `STORAGE_LIMIT_MB` / `DATABASE_LIMIT_MB` env vars (free-plan defaults) rather than a table. Not alerted by email yet — the gauge is on the page an admin already checks; a nightly alert at 70% is the obvious next step.
