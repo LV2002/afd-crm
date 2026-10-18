@@ -13,8 +13,10 @@ import type { CronTier } from "@/lib/cron/record-run";
 import { emailConfigured } from "@/lib/email/send";
 import { resolveAlertRecipients } from "@/lib/errors/alert-recipients";
 import { formatDateIST } from "@/lib/format/date";
+import { getStorageReport } from "@/lib/health/storage-usage";
 
 import { CronTierPanel, type CronJobRow, type CronRun } from "./cron-tier-panel";
+import { StoragePanel } from "./storage-panel";
 import { ResolveButton } from "./resolve-button";
 import { RunFrequentButton } from "./run-frequent-button";
 import { RunNightlyButton } from "./run-nightly-button";
@@ -37,7 +39,7 @@ export default async function HealthPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "settings.manage")) return <AccessDenied />;
 
-  const [open, recentlyFixed, migrations, drift] = await Promise.all([
+  const [open, recentlyFixed, migrations, drift, storage] = await Promise.all([
     db
       .select()
       .from(errorEvents)
@@ -51,6 +53,7 @@ export default async function HealthPage() {
       .limit(5),
     getMigrationStatus(),
     getSchemaDrift(),
+    getStorageReport(),
   ]);
 
   const driftSummary = drift.error ? null : describeDifference(drift);
@@ -276,6 +279,11 @@ export default async function HealthPage() {
           </p>
         )}
       </div>
+
+      <section className="flex flex-col gap-3">
+        <h3 className="font-semibold">Storage</h3>
+        <StoragePanel report={storage} />
+      </section>
 
       <section className="flex flex-col gap-3">
         <h3 className="font-semibold">
