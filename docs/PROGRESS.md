@@ -8695,3 +8695,7 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Lead profile: a saved tick no longer unticks itself
 
 - Root cause: React 19 resets an uncontrolled form to its loaded values after every form *action*; autosave therefore put each box back after saving. The form now submits through `onSubmit` (same server action, no reset).
+
+## Live lists: new leads appear without a refresh (migration 0105)
+
+- Dashboard, Leads, Follow-ups and Unassigned now update themselves: Supabase Realtime on `leads` (insert/reassign) refreshes the page in place and shows a "New lead" toast with an Open button; a tab refreshes when looked at again after 30s away; a 60s poll covers dropped sockets. Not on a lead's own page, settings or finance, so nobody is refreshed mid-edit. Migration 0105 adds `leads` to the `supabase_realtime` publication (no-op where there is none).

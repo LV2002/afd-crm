@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { CommandPalette } from "@/components/layout/command-palette";
+import { LiveRefresh } from "@/components/layout/live-refresh";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { MobileNavWithBadges, SidebarWithBadges } from "@/components/layout/nav-with-badges";
 import { NotificationBell } from "@/components/layout/notification-bell";
@@ -126,6 +127,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             honest acknowledgement: something happened, here is what.
           */}
           <Toaster />
+          <LiveRefresh />
 
           <div className="app-print-letterhead hidden text-black print:block">
             <DocumentFooter

@@ -4805,3 +4805,7 @@ Leon's list: NID UG, NID PG, NIFT UG, NIFT PG, UCEED, CEED, NATA, JEE 2, BFA, MF
 ## 2026-10-16 — Changing the enquiry date
 
 Assumption: "enquiry date" is `leads.created_at` (shown as Arrived), which lists, reports and the first-response SLA clock read. Changing it writes only that column; `enquiries.received_at` stays, because those rows are the append-only record of when messages reached the system (and have no update policy). Gated on `lead.update`, audited with the old value, future dates refused. Side effect: moving a lead earlier can make its first-response SLA look overdue, because the clock starts from the new date.
+
+## 2026-10-18 — Live refresh
+
+Realtime over polling as the main mechanism: it costs no serverless invocations per open tab and honours RLS (a counsellor is told about their own leads only). A slow 60s poll and refresh-on-return remain as the safety net. Restricted to list screens (`lib/leads/live-refresh-paths.ts`) because `router.refresh()` under an open edit form is worse than a stale number. Requires Realtime enabled for the project (the Supabase default).
