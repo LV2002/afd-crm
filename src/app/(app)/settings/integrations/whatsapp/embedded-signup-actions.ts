@@ -20,6 +20,7 @@ import {
   subscribeAppToWaba,
 } from "@/lib/integrations/whatsapp/client";
 import { createClient } from "@/lib/supabase/server";
+import { insertOrReviveNumber } from "@/lib/whatsapp/register-number";
 
 /**
  * Finishing what the Embedded Signup popup started.
@@ -155,21 +156,18 @@ async function run(input: z.input<typeof schema>): Promise<EmbeddedSignupState> 
     displayPhoneNumber = null;
   }
 
-  const [created] = await db
-    .insert(whatsappNumbers)
-    .values({
-      phoneNumberId,
-      label,
-      displayPhoneNumber,
-      mode: "coexistence",
-      counsellorId,
-      // A stranger messaging a counsellor's own phone to ask about NIFT
-      // coaching is the highest-intent enquiry this institute gets. That
-      // is the whole reason for Coexistence, so it is on by default here
-      // — and still an editable box on the row afterwards.
-      createsLeads: true,
-    })
-    .returning({ id: whatsappNumbers.id });
+  const created = await insertOrReviveNumber({
+    phoneNumberId,
+    label,
+    displayPhoneNumber,
+    mode: "coexistence",
+    counsellorId,
+    // A stranger messaging a counsellor's own phone to ask about NIFT
+    // coaching is the highest-intent enquiry this institute gets.
+    // That is the whole reason for Coexistence, so it is on by default
+    // here — and still an editable box on the row afterwards.
+    createsLeads: true,
+  });
 
   const supabase = await createClient();
   await writeAuditLog(supabase, {

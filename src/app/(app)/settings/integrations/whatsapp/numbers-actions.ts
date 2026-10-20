@@ -8,6 +8,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { whatsappNumbers } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
+import { insertOrReviveNumber } from "@/lib/whatsapp/register-number";
 
 export interface NumberFormState {
   error?: string;
@@ -87,7 +88,7 @@ export async function saveWhatsAppNumber(
       return { error: `That Phone number ID is already registered as "${clash.label}".` };
     }
 
-    await db.insert(whatsappNumbers).values(values);
+    await insertOrReviveNumber(values);
   }
 
   const supabase = await createClient();
