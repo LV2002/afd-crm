@@ -8,6 +8,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { whatsappNumbers } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
+import { clearAllWhatsAppMessages } from "@/lib/whatsapp/clear-messages";
 import { insertOrReviveNumber } from "@/lib/whatsapp/register-number";
 
 export interface NumberFormState {
@@ -177,4 +178,40 @@ export async function deleteWhatsAppNumber(id: string): Promise<NumberFormState>
 
   revalidatePath("/settings/integrations/whatsapp");
   return { success: `Unregistered ${row.label}. Its messages stay on their leads.` };
+}
+
+/**
+ * Hides every WhatsApp message so the inbox starts empty.
+ *
+ * Asks for the word CLEAR to be typed, because the button that does this
+ * sits on a settings page people visit while fixing something else.
+ * Soft: the rows keep their `deleted_at` and are recoverable, and the
+ * audit row says how many were hidden and by whom.
+ */
+export async function clearWhatsAppMessages(
+  _prev: NumberFormState,
+  formData: FormData,
+): Promise<NumberFormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "settings.manage")) {
+    return { error: "You don't have permission to do that." };
+  }
+  if (String(formData.get("confirm") ?? "").trim().toUpperCase() !== "CLEAR") {
+    return { error: "Type CLEAR to confirm." };
+  }
+
+  const hidden = await clearAllWhatsAppMessages();
+
+  const supabase = await createClient();
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "whatsapp_messages.cleared",
+    entityType: "whatsapp_messages",
+    after: { hidden },
+  });
+
+  revalidatePath("/settings/integrations/whatsapp");
+  revalidatePath("/whatsapp");
+  revalidatePath("/leads");
+  return { success: `Hid ${hidden} ${hidden === 1 ? "message" : "messages"}. The inbox starts empty.` };
 }

@@ -2,9 +2,11 @@ import { AccessDenied } from "@/components/layout/access-denied";
 import { RecentDeliveries } from "@/components/integrations/recent-deliveries";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { recentWebhookDeliveries } from "@/lib/integrations/recent-deliveries";
+import { countLiveWhatsAppMessages } from "@/lib/whatsapp/clear-messages";
 import { createClient } from "@/lib/supabase/server";
 
 import { getEmbeddedSignupSettings, getWhatsAppConnectionStatus } from "./actions";
+import { ClearMessagesPanel } from "./clear-messages-panel";
 import { EmbeddedSignupButton } from "./embedded-signup-button";
 import { WhatsAppCredentialsForm } from "./whatsapp-credentials-form";
 import {
@@ -20,6 +22,7 @@ export default async function WhatsAppIntegrationPage() {
   const supabase = await createClient();
   const deliveries = await recentWebhookDeliveries(supabase, "whatsapp");
 
+  const messageCount = await countLiveWhatsAppMessages();
   const status = await getWhatsAppConnectionStatus();
   const embeddedSignup = await getEmbeddedSignupSettings();
 
@@ -187,6 +190,11 @@ export default async function WhatsAppIntegrationPage() {
           deliveries={deliveries}
           emptyHint="Meta has never called this CRM for WhatsApp. Check the Callback URL and Verify Token in App Dashboard → WhatsApp → Configuration, and that the messages field is subscribed."
         />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">Start over</h2>
+        <ClearMessagesPanel messageCount={messageCount} />
       </section>
     </div>
   );
