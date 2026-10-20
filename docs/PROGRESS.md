@@ -8703,3 +8703,7 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Storage gauge on Platform Health
 
 - Settings → Health has a **Storage** panel: file storage and database size against the plan, amber at 70%, red at 90%, with what to do. Measured by the database (`pg_database_size`, `storage.objects`). Limits default to the Supabase free plan; set `STORAGE_LIMIT_MB` / `DATABASE_LIMIT_MB` in Vercel after upgrading. Unit tests for the thresholds.
+
+## Re-registering a removed WhatsApp number no longer crashes
+
+- Settings → Integrations → WhatsApp: deleting the integration soft-deletes its numbers, and `phone_number_id` is unique across removed rows, so registering the same ID again threw a raw database error ("This screen didn't load"). A removed row is now revived with the new details (manual register and Embedded Signup both). Test added.
