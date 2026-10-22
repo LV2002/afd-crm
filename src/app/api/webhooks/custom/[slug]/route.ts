@@ -156,7 +156,16 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
 
   // Already handled on an earlier delivery. Most senders retry on a
   // non-2xx, and a retried submission must not become a second lead.
-  if (!inserted) return NextResponse.json({ ok: true, duplicate: true });
+  if (!inserted) {
+    // Not silent: the stored delivery remembers it was seen again, so a
+    // sender whose ids collide shows up as "arrived 12 more times" in the
+    // delivery log instead of as leads that quietly never appeared.
+    await db
+      .update(webhookEvents)
+      .set({ duplicateCount: sql`${webhookEvents.duplicateCount} + 1`, lastDuplicateAt: new Date() })
+      .where(and(eq(webhookEvents.source, "custom"), eq(webhookEvents.externalId, externalId)));
+    return NextResponse.json({ ok: true, duplicate: true });
+  }
 
   const mapped = mapFormPayload(payload, (webhook.fieldAliases ?? undefined) as ExtraAliases | undefined);
 

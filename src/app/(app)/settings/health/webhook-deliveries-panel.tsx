@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Badge } from "@/components/ui/badge";
 import { formatDateIST } from "@/lib/format/date";
 
@@ -77,10 +79,18 @@ export function WebhookDeliveriesPanel({ sources }: { sources: WebhookSourceHeal
         </div>
       )}
 
+      <p className="text-sm text-muted-foreground">
+        Each custom endpoint is its own row.{" "}
+        <Link href="/settings/health/deliveries" className="underline underline-offset-2">
+          See every delivery, with what became of it
+        </Link>
+        .
+      </p>
+
       <div className="flex flex-col gap-2">
         {sources.map((source) => (
           <div
-            key={source.source}
+            key={source.key}
             className={
               source.rejectedLatest
                 ? "flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-lg border border-destructive/50 bg-destructive/5 p-3"
@@ -88,7 +98,7 @@ export function WebhookDeliveriesPanel({ sources }: { sources: WebhookSourceHeal
             }
           >
             <div className="min-w-0">
-              <p className="text-sm font-medium">{label(source.source)}</p>
+              <p className="text-sm font-medium">{source.endpointName ?? label(source.source)}</p>
               {source.lastAt && (
                 <p className="text-xs text-muted-foreground">
                   Last: {formatDateIST(source.lastAt, "d MMM, h:mm a")}
@@ -115,6 +125,12 @@ export function WebhookDeliveriesPanel({ sources }: { sources: WebhookSourceHeal
                 </Badge>
               )}
               {source.failed > 0 && <Badge variant="secondary">{source.failed} failed</Badge>}
+              <Link
+                href={`/settings/health/deliveries?endpoint=${encodeURIComponent(source.key)}`}
+                className="text-xs underline underline-offset-2 hover:text-foreground"
+              >
+                Every delivery
+              </Link>
             </div>
           </div>
         ))}

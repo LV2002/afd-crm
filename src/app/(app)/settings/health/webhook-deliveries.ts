@@ -3,7 +3,7 @@ import "server-only";
 import { desc, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
-import { webhookEvents } from "@/lib/db/schema";
+import { customWebhooks, webhookEvents } from "@/lib/db/schema";
 
 /**
  * What each inbound channel has actually delivered lately.
@@ -35,6 +35,14 @@ import { webhookEvents } from "@/lib/db/schema";
  */
 export interface WebhookSourceHealth {
   source: string;
+  /**
+   * The endpoint's own name for a custom endpoint, so "Google Ads" and
+   * "Shiksha" are two rows and not one "Custom endpoints" that hides which
+   * of them has gone quiet. Null for the built-in channels.
+   */
+  endpointName: string | null;
+  /** The key the delivery log filters on. */
+  key: string;
   total: number;
   /**
    * Deliveries that were turned away at the door: a bad signature or key, and
@@ -59,6 +67,8 @@ export async function recentWebhookDeliveries(days = 7): Promise<WebhookSourceHe
   const rows = await db
     .select({
       source: webhookEvents.source,
+      customWebhookId: webhookEvents.customWebhookId,
+      endpointName: sql<string | null>`max(${customWebhooks.name})`,
       total: sql<number>`count(*)`,
       rejected: sql<number>`count(*) filter (where ${webhookEvents.signatureOk} = false and ${webhookEvents.status} = 'failed')`,
       rejectedLatest: sql<boolean>`(array_agg(${webhookEvents.signatureOk} = false and ${webhookEvents.status} = 'failed' order by ${webhookEvents.receivedAt} desc))[1]`,
@@ -74,12 +84,15 @@ export async function recentWebhookDeliveries(days = 7): Promise<WebhookSourceHe
       )[1]`,
     })
     .from(webhookEvents)
+    .leftJoin(customWebhooks, sql`${customWebhooks.id} = ${webhookEvents.customWebhookId}`)
     .where(sql`${webhookEvents.receivedAt} > now() - make_interval(days => ${days})`)
-    .groupBy(webhookEvents.source)
+    .groupBy(webhookEvents.source, webhookEvents.customWebhookId)
     .orderBy(desc(sql`max(${webhookEvents.receivedAt})`));
 
   return rows.map((row) => ({
     source: row.source,
+    endpointName: row.customWebhookId ? (row.endpointName ?? "Custom endpoint (removed)") : null,
+    key: row.customWebhookId ? `custom:${row.customWebhookId}` : row.source,
     total: Number(row.total),
     rejected: Number(row.rejected),
     rejectedLatest: row.rejectedLatest === true,
