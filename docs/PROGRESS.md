@@ -8713,3 +8713,8 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 - Settings → Health → Inbound deliveries: each custom endpoint is now its own row (Google Ads, Shiksha, …) instead of one merged "Custom endpoints".
 - New **Settings → Health → Every delivery** page: each delivery with its endpoint, who it was (phone masked), and what became of it — New lead / Added to an existing lead / Refused / Could not become a lead (with the reason) / Waiting / Processed — filterable by endpoint, outcome and period. No row = the sender never reached the CRM.
 - A delivery sent again after it was stored (a retry, or a sender whose ids collide) is counted on the original (`duplicate_count`), no longer ignored silently.
+
+## Source badge on the lead page; "AFD academic year"
+
+- Lead page: a plain, non-clickable badge beside the lead's name shows where they came from (the Lead Source, labelled as the dropdown labels it; "Source unknown" when blank), so a counsellor need not open Tracking before ringing.
+- The admission form on the lead page now says **AFD academic year** (label and the "required" message). Other screens that say "Academic year" (fee structures, batches, change plan) are unchanged.

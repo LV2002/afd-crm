@@ -245,11 +245,34 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const hasSignedAgreement = signedAgreement !== null;
   const referred = referredRows ?? [];
 
+  const sourceValue = typeof row.last_touch_source === "string" ? row.last_touch_source.trim() : "";
+  const sourceLabel =
+    sourceValue === ""
+      ? null
+      : (optionsByKey.lead_source?.find((option) => option.value === sourceValue)?.label ?? sourceValue);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-semibold">{row.student_name}</h1>
+          <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xl font-semibold">
+            {row.student_name}
+            {/*
+              Where they came from, beside the name: a counsellor ringing
+              a lead wants it in view, not a tab away under Tracking.
+              A plain badge — not a link or a control. It reads the same
+              value as the Lead Source field (the last-touch source),
+              labelled the way the dropdown labels it.
+            */}
+            <Badge
+              variant={sourceLabel ? "secondary" : "outline"}
+              className="text-xs font-medium"
+              title="Where this lead came from"
+              aria-label={`Source: ${sourceLabel ?? "unknown"}`}
+            >
+              {sourceLabel ?? "Source unknown"}
+            </Badge>
+          </h1>
           <p className="text-sm text-muted-foreground">Lead #{row.lead_number}</p>
         </div>
         <div className="flex flex-wrap gap-2">
