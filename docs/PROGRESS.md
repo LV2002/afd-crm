@@ -8707,3 +8707,9 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Re-registering a removed WhatsApp number no longer crashes
 
 - Settings → Integrations → WhatsApp: deleting the integration soft-deletes its numbers, and `phone_number_id` is unique across removed rows, so registering the same ID again threw a raw database error ("This screen didn't load"). A removed row is now revived with the new details (manual register and Embedded Signup both). Test added.
+
+## Delivery log per endpoint (migration 0106)
+
+- Settings → Health → Inbound deliveries: each custom endpoint is now its own row (Google Ads, Shiksha, …) instead of one merged "Custom endpoints".
+- New **Settings → Health → Every delivery** page: each delivery with its endpoint, who it was (phone masked), and what became of it — New lead / Added to an existing lead / Refused / Could not become a lead (with the reason) / Waiting / Processed — filterable by endpoint, outcome and period. No row = the sender never reached the CRM.
+- A delivery sent again after it was stored (a retry, or a sender whose ids collide) is counted on the original (`duplicate_count`), no longer ignored silently.

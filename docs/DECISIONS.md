@@ -4813,3 +4813,7 @@ Realtime over polling as the main mechanism: it costs no serverless invocations 
 ## 2026-10-18 — Storage gauge limits come from env
 
 Plan sizes are deployment settings, not business data, so `STORAGE_LIMIT_MB` / `DATABASE_LIMIT_MB` env vars (free-plan defaults) rather than a table. Not alerted by email yet — the gauge is on the page an admin already checks; a nightly alert at 70% is the obvious next step.
+
+## 2026-10-22 — Delivery log
+
+"Nine leads from Google Ads, three in the CRM" has four possible causes (never sent, refused, failed to parse, or already a lead — an enquiry added to an existing person, which is correct under non-negotiable #2). The log tells them apart by joining each delivery to its enquiry through `dedupe_key`. Unknown endpoint tokens remain unrecorded on purpose (see the custom handler), so a wrong URL looks like "no row", and the page says so. Phone numbers are masked even though the page is admin-only.

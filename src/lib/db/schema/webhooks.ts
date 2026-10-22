@@ -76,6 +76,9 @@ export const webhookEvents = pgTable(
     status: webhookStatusEnum("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
     lastError: text("last_error"),
+    /** Times this same delivery was sent again after it was stored (migration 0106). */
+    duplicateCount: integer("duplicate_count").notNull().default(0),
+    lastDuplicateAt: timestamp("last_duplicate_at", { withTimezone: true }),
     /**
      * Which custom endpoint this came in on, for `source = 'custom'`.
      *
