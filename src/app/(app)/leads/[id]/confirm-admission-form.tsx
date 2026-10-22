@@ -91,7 +91,7 @@ export function ConfirmAdmissionForm({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="admission-academic-year">Academic year</Label>
+          <Label htmlFor="admission-academic-year">AFD academic year</Label>
           <Combobox
             id="admission-academic-year"
             name="academicYear"

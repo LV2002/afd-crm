@@ -569,7 +569,7 @@ async function runConfirmAdmission(
   if (typeof course !== "string" || !course) return { error: "Course is required." };
   if (typeof mode !== "string" || !mode) return { error: "Mode is required." };
   if (typeof academicYear !== "string" || !academicYear.trim()) {
-    return { error: "Academic year is required." };
+    return { error: "AFD academic year is required." };
   }
 
   const batchIdRaw = formData.get("batchId");
