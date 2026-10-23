@@ -145,12 +145,6 @@ export function LeadCreateForm({
                 clearable
               />
             </Field>
-            {/* Only when it is "Others": the counsellor types the country's name. */}
-            {country === "others" && (
-              <Field label="Country (specify)" htmlFor="countryOther" required>
-                <Input id="countryOther" name="countryOther" required autoComplete="off" placeholder="Bahrain" />
-              </Field>
-            )}
           </div>
         )}
 
