@@ -77,6 +77,13 @@ describe("describeWhatsAppDelivery", () => {
       describeWhatsAppDelivery({ id: "wamid.1", status: "delivered", recipient_id: "919847012345" }, new Map()),
     ).toContain("Receipt: delivered");
 
+    expect(
+      describeWhatsAppDelivery(
+        { id: "wamid.9", status: "failed", recipient_id: "919847012345", errors: [{ code: 131042, title: "Business eligibility payment issue" }] },
+        new Map(),
+      ),
+    ).toContain("131042 Business eligibility payment issue");
+
     const message = { id: "wamid.2", from: "919847012345", type: "text", text: { body: "Hello, fees?" } };
     expect(describeWhatsAppDelivery(message, new Map([["wamid.2", false]]))).toContain("saved in Chats");
     expect(describeWhatsAppDelivery(message, new Map([["wamid.2", true]]))).toContain("saved, but hidden");

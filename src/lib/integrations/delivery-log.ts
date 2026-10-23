@@ -189,7 +189,13 @@ export function describeWhatsAppDelivery(
   const id = typeof raw.id === "string" ? raw.id : null;
 
   if (typeof raw.status === "string" && typeof raw.recipient_id === "string") {
-    return `Receipt: ${raw.status} (to ${maskPhone(`+${raw.recipient_id}`)})`;
+    // A failed receipt carries Meta's reason; showing it here saves a trip
+    // to the lead's chat to find out why a broadcast did not deliver.
+    const first = Array.isArray(raw.errors) ? (raw.errors[0] as Record<string, unknown> | undefined) : undefined;
+    const reason = first
+      ? ` — ${[first.code, first.title ?? first.message].filter((part) => part !== undefined && part !== null).join(" ")}`
+      : "";
+    return `Receipt: ${raw.status} (to ${maskPhone(`+${raw.recipient_id}`)})${reason}`;
   }
 
   if (typeof raw.from === "string") {
