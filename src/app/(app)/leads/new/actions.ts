@@ -140,14 +140,14 @@ export async function createLeadManually(_prevState: FormState, formData: FormDa
   /*
     Country, when the field is set up and one was chosen.
 
-    Checked against the field's own options rather than accepted as typed, and
-    "Others" needs the country's name — the same two rules as on the lead page.
+    Checked against the field's own options rather than accepted as typed.
+    There is no "specify" box any more (removed at Leon's request,
+    2026-10-23): "Others" is just "Others".
     Written below onto a NEW lead only, into the custom slot: a duplicate that
     attaches to somebody already in the CRM must not have their profile
     rewritten by whatever the counsellor typed this time.
   */
   const countryRaw = String(formData.get("country") ?? "").trim();
-  const countryOther = String(formData.get("countryOther") ?? "").trim().slice(0, 100);
   let countryCustom: Record<string, string> | null = null;
   if (countryRaw) {
     const { data: countryField } = await supabase
@@ -161,10 +161,7 @@ export async function createLeadManually(_prevState: FormState, formData: FormDa
     if (!(countryField?.options ?? []).some((option) => option.value === countryRaw)) {
       return { error: "That is not one of the countries. Pick one from the list." };
     }
-    if (countryRaw === "others" && !countryOther) {
-      return { error: "Type the country's name — you chose Others." };
-    }
-    countryCustom = { country: countryRaw, ...(countryRaw === "others" ? { country_other: countryOther } : {}) };
+    countryCustom = { country: countryRaw };
   }
 
   const interestedExams = formData.getAll("interestedExams").map(String).filter(Boolean);

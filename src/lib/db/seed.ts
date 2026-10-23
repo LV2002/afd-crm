@@ -620,14 +620,13 @@ const LEAD_FIELD_SEEDS: FieldSeed[] = [
   { key: "student_name", label: "Student Name", type: "text", section: "Personal", isRequired: true, showInList: true },
   { key: "father_name", label: "Father's Name", type: "text", section: "Personal" },
   { key: "primary_phone", label: "Primary Phone", type: "phone", section: "Personal", isRequired: true, showInList: true, showInFilters: true },
-  { key: "alternate_phone", label: "Alternate Phone", type: "phone", section: "Personal" },
   { key: "email", label: "Email", type: "email", section: "Personal" },
   { key: "dob", label: "Date of Birth", type: "date", section: "Personal" },
-  { key: "city", label: "City", type: "text", section: "Personal", showInFilters: true },
   // Leads from abroad — the Gulf mostly — so the state/district pair below
-  // is not the whole story. Custom fields (no column), options an admin edits
-  // in Settings → Custom Fields. Migration 0103 adds the same two to an
-  // instance that already has data; keep the two in step.
+  // is not the whole story. A custom field (no column), options an admin
+  // edits in Settings → Custom Fields. Migration 0103 adds it to an
+  // instance that already has data; keep the two in step. (The "specify"
+  // boxes and Alternate Phone were switched off by migration 0107.)
   {
     key: "country",
     label: "Country",
@@ -645,19 +644,12 @@ const LEAD_FIELD_SEEDS: FieldSeed[] = [
       { value: "others", label: "Others" },
     ],
   },
-  {
-    key: "country_other",
-    label: "Country (specify)",
-    type: "text",
-    section: "Personal",
-    isCore: false,
-    helpText: "Fill this in when Country is Others — type the country's name.",
-  },
-  { key: "state", label: "State", type: "select", section: "Personal", showInFilters: true },
-  { key: "state_other", label: "State (specify)", type: "text", section: "Personal" },
-  { key: "district", label: "District", type: "select", section: "Personal", showInFilters: true },
   { key: "pincode", label: "Pincode", type: "text", section: "Personal" },
   { key: "parents_occupation", label: "Parents' Occupation", type: "text", section: "Personal" },
+  // City, State and District sit together at the bottom (migration 0107).
+  { key: "city", label: "City", type: "text", section: "Personal", showInFilters: true },
+  { key: "state", label: "State", type: "select", section: "Personal", showInFilters: true },
+  { key: "district", label: "District", type: "select", section: "Personal", showInFilters: true },
 
   // Education
   { key: "education_status", label: "Education Status", type: "select", section: "Education", showInFilters: true, options: [] },

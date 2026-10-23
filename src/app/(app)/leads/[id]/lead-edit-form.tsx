@@ -1,6 +1,12 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useRef, useState } from "react";
+import {
+  startTransition,
+  useActionState,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Label } from "@/components/ui/label";
@@ -35,10 +41,20 @@ export function LeadEditForm({
   optionsByKey: Record<string, FieldOption[]>;
   canRevealPhone: boolean;
   /** Resolved server-side so a referrer already on the record shows as a name. */
-  leadRefLabel?: { id: string; name: string; phone: string; hint: string } | null;
+  leadRefLabel?: {
+    id: string;
+    name: string;
+    phone: string;
+    hint: string;
+  } | null;
 }) {
-  const [state, formAction, pending] = useActionState(updateLead.bind(null, leadId), initialState);
-  const [activeSection, setActiveSection] = useState(sections[0]?.section ?? "");
+  const [state, formAction, pending] = useActionState(
+    updateLead.bind(null, leadId),
+    initialState,
+  );
+  const [activeSection, setActiveSection] = useState(
+    sections[0]?.section ?? "",
+  );
 
   /*
     Autosave, because Save changes was being missed.
@@ -120,7 +136,10 @@ export function LeadEditForm({
         // Only when focus actually leaves the control — React's onBlur
         // bubbles, so moving between two inputs inside one field would
         // otherwise fire twice.
-        if (event.target instanceof HTMLElement && event.target.closest("form") === formRef.current) {
+        if (
+          event.target instanceof HTMLElement &&
+          event.target.closest("form") === formRef.current
+        ) {
           autosave();
         }
       }}
@@ -130,7 +149,9 @@ export function LeadEditForm({
         // in. Everything else has settled by the time it fires `change`.
         const isFreeText =
           target instanceof HTMLInputElement &&
-          !["checkbox", "radio", "date", "datetime-local", "file"].includes(target.type);
+          !["checkbox", "radio", "date", "datetime-local", "file"].includes(
+            target.type,
+          );
         if (!isFreeText && !(target instanceof HTMLTextAreaElement)) autosave();
       }}
     >
@@ -154,7 +175,8 @@ export function LeadEditForm({
 
       {sections.map((section) => {
         const hasStateDistrict =
-          section.fields.some((f) => f.key === "state") && section.fields.some((f) => f.key === "district");
+          section.fields.some((f) => f.key === "state") &&
+          section.fields.some((f) => f.key === "district");
 
         return (
           <div
@@ -172,49 +194,69 @@ export function LeadEditForm({
               section.section === activeSection ? "grid" : "hidden",
             )}
           >
-            {hasStateDistrict && (
-              <StateDistrictFields
-                stateName="state"
-                districtName="district"
-                defaultState={(values.state as string) ?? ""}
-                defaultDistrict={(values.district as string) ?? ""}
-              />
-            )}
             {section.fields
-              .filter((field) => !(hasStateDistrict && (field.key === "state" || field.key === "district")))
-              .map((field) => (
-                <div key={field.id} className="flex flex-col gap-2">
-                  <Label>{field.label}</Label>
-                  {field.type === "phone" ? (
-                    <PhoneField
-                      leadId={leadId}
-                      name={field.key}
-                      // Already masked by the page when this user may not
-                      // reveal, so what arrives here is either the real
-                      // number or a stand-in, and `isReal` says which.
-                      value={values[field.key] as string | null}
-                      isReal={canRevealPhone}
-                      // Editing a number you may not read would mean
-                      // overwriting a value you cannot see; `updateLead`
-                      // enforces the same pairing server-side.
-                      canEdit={field.isEditable && canRevealPhone}
-                      showChat={field.key === "whatsapp_phone" || field.key === "primary_phone"}
-                    />
-                  ) : field.isEditable ? (
-                    <DynamicFieldInput
-                      field={field}
-                      name={field.key}
-                      defaultValue={values[field.key]}
-                      options={optionsByKey[field.key] ?? []}
-                      leadRefLabel={field.type === "lead_ref" ? (leadRefLabel ?? null) : null}
-                      excludeLeadId={leadId}
-                    />
-                  ) : (
-                    <p className="text-sm text-muted-foreground">{String(values[field.key] ?? "—")}</p>
-                  )}
-                  {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
-                </div>
-              ))}
+              .filter(
+                (field) => !(hasStateDistrict && field.key === "district"),
+              )
+              .map((field) =>
+                hasStateDistrict && field.key === "state" ? (
+                  // State and District are one cascading pair, drawn where
+                  // State sits in the section's order — which migration 0107
+                  // puts at the bottom, beside City.
+                  <StateDistrictFields
+                    key="state-district"
+                    stateName="state"
+                    districtName="district"
+                    defaultState={(values.state as string) ?? ""}
+                    defaultDistrict={(values.district as string) ?? ""}
+                  />
+                ) : (
+                  <div key={field.id} className="flex flex-col gap-2">
+                    <Label>{field.label}</Label>
+                    {field.type === "phone" ? (
+                      <PhoneField
+                        leadId={leadId}
+                        name={field.key}
+                        // Already masked by the page when this user may not
+                        // reveal, so what arrives here is either the real
+                        // number or a stand-in, and `isReal` says which.
+                        value={values[field.key] as string | null}
+                        isReal={canRevealPhone}
+                        // Editing a number you may not read would mean
+                        // overwriting a value you cannot see; `updateLead`
+                        // enforces the same pairing server-side.
+                        canEdit={field.isEditable && canRevealPhone}
+                        showChat={
+                          field.key === "whatsapp_phone" ||
+                          field.key === "primary_phone"
+                        }
+                      />
+                    ) : field.isEditable ? (
+                      <DynamicFieldInput
+                        field={field}
+                        name={field.key}
+                        defaultValue={values[field.key]}
+                        options={optionsByKey[field.key] ?? []}
+                        leadRefLabel={
+                          field.type === "lead_ref"
+                            ? (leadRefLabel ?? null)
+                            : null
+                        }
+                        excludeLeadId={leadId}
+                      />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        {String(values[field.key] ?? "—")}
+                      </p>
+                    )}
+                    {field.helpText && (
+                      <p className="text-xs text-muted-foreground">
+                        {field.helpText}
+                      </p>
+                    )}
+                  </div>
+                ),
+              )}
           </div>
         );
       })}
