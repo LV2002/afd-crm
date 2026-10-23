@@ -183,7 +183,7 @@ export function EmbeddedSignupButton({
         <p className="mt-1">
           Save the <strong>App ID</strong> and the <strong>Embedded Signup Configuration ID</strong>{" "}
           in Credentials above, and this becomes a button. The Configuration ID is created in the
-          Meta App Dashboard under <strong>WhatsApp → Configuration → Embedded Signup</strong>;
+          Meta App Dashboard under <strong>Facebook Login for Business → Configurations</strong> (create one from the WhatsApp Embedded Signup template);
           neither value is secret.
         </p>
       </div>

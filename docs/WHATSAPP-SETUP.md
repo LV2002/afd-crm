@@ -314,7 +314,27 @@ secret:
 | Field                                | Where it comes from                                            |
 | ------------------------------------ | -------------------------------------------------------------- |
 | **App ID**                           | App Dashboard → Settings → Basic, the number at the top        |
-| **Embedded Signup Configuration ID** | App Dashboard → **WhatsApp → Configuration → Embedded Signup** |
+| **Embedded Signup Configuration ID** | App Dashboard → **Facebook Login for Business → Configurations** (see 4.2a) |
+
+### 4.2a Creating the Configuration ID
+
+It is not under WhatsApp in Meta's menu. In the **App Dashboard** of your app:
+
+1. Left menu → **Facebook Login for Business** → **Configurations** → **Create configuration**.
+2. Name it ("AFD CRM signup"). Choose the template **WhatsApp Embedded Signup** (if offered), or
+   build it by hand with the same choices below.
+3. Login variation / products: **WhatsApp Embedded Signup**.
+4. Access token: **Business integration system user access token**, with **no expiry** if
+   asked. Assets: **WhatsApp accounts**.
+5. Permissions: **`whatsapp_business_management`** and **`whatsapp_business_messaging`**.
+6. Save, then copy the **Configuration ID** into Credentials.
+
+Also under **Facebook Login for Business → Settings**, switch on **Client OAuth login** and
+**Web OAuth login**, and add `https://afd-crm-one.vercel.app` (and its domain
+`afd-crm-one.vercel.app`) to **Allowed domains for the JavaScript SDK** and the valid OAuth
+redirect URIs. Without that the popup opens and Meta refuses to continue. Meta renames
+these screens from time to time; the names above are what they were called when this was
+written.
 
 Then: give the number a label, say whose phone it is, and press **Connect with Meta**.
 
