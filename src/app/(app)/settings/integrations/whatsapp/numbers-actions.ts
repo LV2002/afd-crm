@@ -7,6 +7,7 @@ import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { whatsappNumbers } from "@/lib/db/schema";
+import { getIntegrationCredential } from "@/lib/integrations/credentials";
 import { createClient } from "@/lib/supabase/server";
 import { clearAllWhatsAppMessages } from "@/lib/whatsapp/clear-messages";
 import { insertOrReviveNumber } from "@/lib/whatsapp/register-number";
@@ -42,7 +43,6 @@ export async function saveWhatsAppNumber(
   const phoneNumberId = String(formData.get("phoneNumberId") ?? "").trim();
   const label = String(formData.get("label") ?? "").trim();
   const displayPhoneNumber = String(formData.get("displayPhoneNumber") ?? "").trim() || null;
-  const modeRaw = String(formData.get("mode") ?? "api").trim();
   const counsellorId = String(formData.get("counsellorId") ?? "").trim() || null;
   const createsLeads = formData.get("createsLeads") === "on";
 
@@ -50,10 +50,21 @@ export async function saveWhatsAppNumber(
     return { error: "Paste the Phone number ID from Meta — it is the only thing a webhook names." };
   }
   if (!label) return { error: "Give it a label you will recognise: whose phone, or which desk." };
-  if (modeRaw !== "api" && modeRaw !== "coexistence") {
-    return { error: "Pick whether this number is API-only or on Coexistence." };
+
+  /*
+    One API number, and it is the one in Credentials. Everything registered
+    here is a Coexistence number — a counsellor's own phone — so a Phone
+    number ID that matches the API number is refused with a pointer, rather
+    than registering the same line twice under two different sets of rules.
+  */
+  const apiNumberId = await getIntegrationCredential("whatsapp", "phone_number_id");
+  if (apiNumberId && apiNumberId === phoneNumberId) {
+    return {
+      error:
+        "That is the Business API number — it is set in Credentials above, and there is only one. Numbers listed here are Coexistence numbers (a counsellor's own phone).",
+    };
   }
-  if (modeRaw === "coexistence" && !counsellorId) {
+  if (!counsellorId) {
     return {
       error:
         "A Coexistence number needs an owner. Messages sent from the phone are attributed to them, and leads from it are assigned to them.",
@@ -64,7 +75,7 @@ export async function saveWhatsAppNumber(
     phoneNumberId,
     label,
     displayPhoneNumber,
-    mode: modeRaw,
+    mode: "coexistence",
     counsellorId,
     createsLeads,
   } as const;
@@ -76,9 +87,15 @@ export async function saveWhatsAppNumber(
       .where(and(eq(whatsappNumbers.id, id), isNull(whatsappNumbers.deletedAt)));
     if (!existing) return { error: "That number is no longer registered." };
 
+    // A number registered as API-only before this screen was Coexistence-only
+    // keeps that mode; saving other details must not silently convert it.
+    const [current] = await db
+      .select({ mode: whatsappNumbers.mode })
+      .from(whatsappNumbers)
+      .where(eq(whatsappNumbers.id, id));
     await db
       .update(whatsappNumbers)
-      .set({ ...values, updatedAt: new Date() })
+      .set({ ...values, mode: current?.mode ?? values.mode, updatedAt: new Date() })
       .where(eq(whatsappNumbers.id, id));
   } else {
     const [clash] = await db

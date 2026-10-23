@@ -1,9 +1,16 @@
 "use server";
 
+import { isNull } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { reportActionFailure } from "@/lib/errors/action-failure";
+import { db } from "@/lib/db/client";
+import { whatsappNumbers } from "@/lib/db/schema";
+import { clearAllWhatsAppMessages } from "@/lib/whatsapp/clear-messages";
 import {
+  deleteIntegrationCredential,
   getIntegrationCredential,
   getIntegrationCredentials,
   hasIntegrationCredential,
@@ -185,4 +192,60 @@ export async function testWhatsAppConnection(): Promise<TestConnectionResult> {
         : "Could not reach the WhatsApp Cloud API.";
     return { ok: false, message };
   }
+}
+
+/**
+ * Start the whole WhatsApp integration over.
+ *
+ * Removes every WhatsApp credential (secret, verify token, access token,
+ * phone number id, account id, app id, signup configuration id), unregisters
+ * every number, and hides every message — so the next setup begins from a
+ * blank screen with nothing left over from a half-working one.
+ *
+ * What it does NOT do, because it cannot: anything inside Meta. The app,
+ * the WhatsApp account, the webhook subscription and the numbers' own
+ * registration live there and are reset there. And what it leaves in the
+ * CRM is deliberate: leads, the delivery history on the Health page
+ * (evidence), and the opt-out list — somebody who said STOP stays stopped.
+ *
+ * Numbers and messages are hidden, not erased, so an administrator can
+ * restore them; credentials are removed outright, since a secret is
+ * configuration and not a record.
+ */
+export async function resetWhatsAppIntegration(
+  _prev: WhatsAppFormState,
+  formData: FormData,
+): Promise<WhatsAppFormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "settings.manage")) {
+    return { error: "You don't have permission to do that." };
+  }
+  if (String(formData.get("confirm") ?? "").trim().toUpperCase() !== "RESET") {
+    return { error: "Type RESET to confirm." };
+  }
+
+  for (const key of WHATSAPP_KEYS) {
+    await deleteIntegrationCredential("whatsapp", key);
+  }
+
+  const unregistered = await db
+    .update(whatsappNumbers)
+    .set({ deletedAt: new Date(), isActive: false, updatedAt: new Date() })
+    .where(isNull(whatsappNumbers.deletedAt))
+    .returning({ id: whatsappNumbers.id });
+  const hidden = await clearAllWhatsAppMessages();
+
+  const supabase = await createClient();
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "whatsapp.integration_reset",
+    entityType: "integration_credentials",
+    after: { provider: "whatsapp", credentialsRemoved: WHATSAPP_KEYS.length, numbersUnregistered: unregistered.length, messagesHidden: hidden },
+  });
+
+  revalidatePath("/settings/integrations/whatsapp");
+  revalidatePath("/whatsapp");
+  return {
+    success: `Reset. Removed the saved credentials, unregistered ${unregistered.length} ${unregistered.length === 1 ? "number" : "numbers"} and hid ${hidden} ${hidden === 1 ? "message" : "messages"}. Start again from step 1 of the setup guide.`,
+  };
 }

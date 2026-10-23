@@ -49,6 +49,14 @@ builds on it.
 
 ---
 
+## Starting over
+
+If a setup went wrong and you want a clean slate:
+**Settings → Integrations → WhatsApp → Start over → Reset WhatsApp integration** (type
+RESET). It removes the saved credentials, unregisters every number and hides every message,
+so you begin again at Part 1. It does not touch anything inside Meta, and it keeps your
+leads, the opt-out list and the delivery history on the Health page.
+
 ## Before you start
 
 Have ready:
@@ -150,21 +158,16 @@ _and_ delivery/read receipts; Meta puts both under it.
 You do **not** need a template-status field: the Templates screen reads their status live
 from Meta each time it loads.
 
-### 1.7 Register the number in the CRM
+### 1.7 The one API number needs no registering
 
-**Settings → Integrations → WhatsApp → Numbers → Register your first number:**
+The Business API number is the **Phone Number ID in Credentials** (1.5) — that is the whole
+of it, and there is only one. The **Numbers** list below Credentials is for Coexistence
+numbers only (Part 4); it shows the API number as a read-only line at the top and refuses to
+register the same ID a second time.
 
-- Label: something you'll recognise — "AFD main number"
-- Phone number ID: from 1.4
-- Number: the actual number, for display
-- Whose phone: **Nobody — a shared number**
-- What this number is: **API only**
-- _A message from somebody new creates a lead_: **leave unticked**
-
-That last box is the one to get right. On the broadcast number a reply is almost always
-someone who tapped a button on a campaign and is already in the CRM. Replies from numbers
-nobody has entered show up under **"Not in the CRM"** on the WhatsApp screen, where a
-counsellor can look at them and decide — rather than filling the pipeline with noise.
+Replies from people nobody has entered show up under **"Not in the CRM"** on the WhatsApp
+screen, where a counsellor can look at them and decide — rather than filling the pipeline
+with noise from a broadcast number.
 
 ### 1.8 Send yourself a test
 
@@ -192,47 +195,9 @@ the live ones will go:
 - WhatsApp Business Account ID — the test WABA's, same screen
 - Access Token — the console's token
 
-Press **Test** straight afterwards. It reads the number back from Meta,
-so "Connected — +1 555 … " means the first three are right. Then
-register it under **Numbers** with the same Phone Number ID: without
-that row the CRM still works, but the per-number settings (whose phone,
-whether a stranger's reply becomes a lead) have nothing to attach to.
-
-The App Secret and Verify Token are not part of the switch. They belong
-to the Meta app, not to a number, and they are what make inbound work at
-all — set them once and leave them.
-
-**What actually bites**
-
-- **The console's token lasts 24 hours.** Everything works, then stops
-  dead tomorrow with 401s and an inbox that goes quiet. A System User
-  token is the fix if the test WABA can be assigned to one; Meta owns
-  that account, so it may not be assignable, and then re-pasting the
-  token daily is the only option. Live with it, or treat it as one more
-  reason to get the real number working.
-- **A test number reaches five pre-verified recipients and nobody else.**
-  Fine for a demo and a screencast. Do not let a broadcast run while the
-  CRM is pointed at it — every message to anybody else fails, and you
-  get a day's worth of failures for nothing.
-
-**Switching to the live number later** is those same three credential
-fields plus the Phone Number ID on the registered number row. The
-webhook does not move: it is configured per app, not per number, so
-inbound keeps working across the switch without touching Meta.
-
-The test conversations stay in the inbox. Threads are keyed to the
-person who messaged, not to the number they messaged, so they sit there
-looking like ordinary history. Use an obviously invented lead name and
-they are easy to spot and ignore.
-
-### 1.9 The 24-hour rule, which is Meta's and cannot be changed
-
-A free-form message is only allowed within **24 hours** of the person's last message to
-you. After that, the only thing you may send is an **approved template**. The CRM greys
-the box out and says so rather than letting a counsellor type into a void.
-
-Tell the team this plainly: _if they haven't messaged us today, you can only send a
-template._ Every WhatsApp CRM in the world works this way and it surprises everyone once.
+Press **Test** straight afterwards. It reads the number back from Meta, so
+"Connected — +1 555 … " means the first three are right. Nothing needs registering under
+**Numbers** — that list is for Coexistence numbers only.
 
 ---
 

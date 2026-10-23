@@ -1,12 +1,14 @@
 import { AccessDenied } from "@/components/layout/access-denied";
 import { RecentDeliveries } from "@/components/integrations/recent-deliveries";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { getIntegrationCredential } from "@/lib/integrations/credentials";
 import { recentWebhookDeliveries } from "@/lib/integrations/recent-deliveries";
 import { countLiveWhatsAppMessages } from "@/lib/whatsapp/clear-messages";
 import { createClient } from "@/lib/supabase/server";
 
 import { getEmbeddedSignupSettings, getWhatsAppConnectionStatus } from "./actions";
 import { ClearMessagesPanel } from "./clear-messages-panel";
+import { ResetIntegrationPanel } from "./reset-integration-panel";
 import { EmbeddedSignupButton } from "./embedded-signup-button";
 import { WhatsAppCredentialsForm } from "./whatsapp-credentials-form";
 import {
@@ -23,6 +25,8 @@ export default async function WhatsAppIntegrationPage() {
   const deliveries = await recentWebhookDeliveries(supabase, "whatsapp");
 
   const messageCount = await countLiveWhatsAppMessages();
+  // Not a secret — an id every webhook names — and shown so the one API number is visible.
+  const apiNumberId = await getIntegrationCredential("whatsapp", "phone_number_id");
   const status = await getWhatsAppConnectionStatus();
   const embeddedSignup = await getEmbeddedSignupSettings();
 
@@ -126,7 +130,7 @@ export default async function WhatsAppIntegrationPage() {
           differs most between them is whether a message from somebody new creates a lead —
           right for a counsellor&apos;s own phone, wrong for the broadcast number.
         </p>
-        <WhatsAppNumbers numbers={numbers} counsellors={counsellors} />
+        <WhatsAppNumbers numbers={numbers} counsellors={counsellors} apiNumberId={apiNumberId} />
 
         <EmbeddedSignupButton
           appId={embeddedSignup.appId}
@@ -195,6 +199,7 @@ export default async function WhatsAppIntegrationPage() {
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">Start over</h2>
         <ClearMessagesPanel messageCount={messageCount} />
+        <ResetIntegrationPanel />
       </section>
     </div>
   );
