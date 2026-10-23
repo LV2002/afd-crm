@@ -26,6 +26,47 @@ export interface WhatsAppSendState {
 }
 
 /**
+ * Where a free-form reply leaves from.
+ *
+ * `"own"` is the default and the old rule: the sending counsellor's own
+ * Coexistence number. `"api"` is for the WhatsApp API inbox, where a
+ * customer wrote to the institute's Business API number and the reply
+ * should come back from that same number — Leon's change of rule on
+ * 2026-10-23, so one customer sees one conversation. It is gated on
+ * `whatsapp.campaign`, the permission that already decides who may speak
+ * as the institute, so a counsellor without it cannot send as the
+ * institute by editing a request.
+ *
+ * Resolved on the server from the session and this one argument; no number
+ * id ever comes from the browser.
+ */
+export type ReplyChannel = "own" | "api";
+
+async function replyRoute(
+  channel: ReplyChannel,
+  userId: string,
+  user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>,
+): Promise<
+  | { ok: true; windowNumberId: string | null; label: string; via: "own" | "api" }
+  | { ok: false; error: string }
+> {
+  if (channel === "api") {
+    if (!can(user, "whatsapp.campaign")) {
+      return {
+        ok: false,
+        error:
+          "Replies from the institute's Business API number are sent by whoever runs WhatsApp campaigns. Ask them, or message the student from your own number.",
+      };
+    }
+    // Rows on the API number carry no number id (see migration 0093).
+    return { ok: true, windowNumberId: null, label: "the institute's number", via: "api" };
+  }
+  const sender = await senderNumberFor(userId);
+  if (!sender) return { ok: false, error: NO_SENDER_NUMBER_MESSAGE };
+  return { ok: true, windowNumberId: sender.id, label: sender.label, via: "own" };
+}
+
+/**
  * Two-step write under RLS (see migration 0026's own comment): insert a
  * 'queued' row first — this is also where `whatsapp_messages_insert`
  * actually enforces "can this user send on this lead" — then call the
@@ -180,6 +221,7 @@ export async function sendWhatsAppMessage(
   leadId: string | null,
   toPhone: string,
   body: string,
+  channel: ReplyChannel = "own",
 ): Promise<WhatsAppSendState> {
   if (!body.trim()) return { error: "Message can't be empty." };
 
@@ -198,24 +240,23 @@ export async function sendWhatsAppMessage(
     somebody to type a reply that is then rejected, which is the one
     failure worth a query to avoid.
   */
-  const sender = await senderNumberFor(user.id);
-  if (!sender) return { error: NO_SENDER_NUMBER_MESSAGE };
+  const route = await replyRoute(channel, user.id, user);
+  if (!route.ok) return { error: route.error };
 
   const supabase = await createClient();
   const withinWindow = leadId
-    ? await isWithinCustomerServiceWindow(supabase, leadId, sender.id)
-    : await isWithinCustomerServiceWindowForPhone(supabase, toPhone, sender.id);
+    ? await isWithinCustomerServiceWindow(supabase, leadId, route.windowNumberId)
+    : await isWithinCustomerServiceWindowForPhone(supabase, toPhone, route.windowNumberId);
   if (!withinWindow) {
     // Outside the window the only API route is a paid template, which is
     // deliberately not a counsellor's decision (see sendWhatsAppTemplate)
     // — so the honest instruction is the one Leon gave: use your phone.
     return {
-      error: `${leadId ? "This lead hasn't" : "They haven't"} messaged ${sender.label} in the last 24 hours, so WhatsApp won't accept a reply from here. Message them from the WhatsApp Business app on your phone — the window reopens as soon as they write back.`,
+      error: `${leadId ? "This lead hasn't" : "They haven't"} messaged ${route.label} in the last 24 hours, so WhatsApp won't accept a reply from here. ${channel === "api" ? "Send an approved template to reopen the conversation." : "Message them from the WhatsApp Business app on your phone — the window reopens as soon as they write back."}`,
     };
   }
 
-  // "own": a counsellor's reply always leaves from their own number.
-  return recordAndSend(leadId, toPhone, "own", { messageType: "text", body: body.trim(), templateName: null }, (phoneNumberId, accessToken) =>
+  return recordAndSend(leadId, toPhone, route.via, { messageType: "text", body: body.trim(), templateName: null }, (phoneNumberId, accessToken) =>
     sendTextMessage(phoneNumberId, accessToken, toPhone, body.trim()),
   );
 }
@@ -283,6 +324,7 @@ export async function sendWhatsAppMedia(
   leadId: string | null,
   toPhone: string,
   formData: FormData,
+  channel: ReplyChannel = "own",
 ): Promise<WhatsAppSendState> {
   const file = formData.get("file");
   if (!(file instanceof File)) return { error: "Choose a file to send." };
@@ -301,24 +343,23 @@ export async function sendWhatsAppMedia(
   const user = await getCurrentUser();
   if (!user) return { error: "You don't have permission to do that." };
 
-  // "own": a counsellor's file leaves from their own number, like their text.
-  const sender = await senderNumberFor(user.id);
-  if (!sender) return { error: NO_SENDER_NUMBER_MESSAGE };
+  const route = await replyRoute(channel, user.id, user);
+  if (!route.ok) return { error: route.error };
 
   const supabase = await createClient();
   const withinWindow = leadId
-    ? await isWithinCustomerServiceWindow(supabase, leadId, sender.id)
-    : await isWithinCustomerServiceWindowForPhone(supabase, toPhone, sender.id);
+    ? await isWithinCustomerServiceWindow(supabase, leadId, route.windowNumberId)
+    : await isWithinCustomerServiceWindowForPhone(supabase, toPhone, route.windowNumberId);
   if (!withinWindow) {
     return {
-      error: `${leadId ? "This lead hasn't" : "They haven't"} messaged ${sender.label} in the last 24 hours, so WhatsApp won't accept a file from here. Send it from the WhatsApp Business app on your phone — the window reopens as soon as they write back.`,
+      error: `${leadId ? "This lead hasn't" : "They haven't"} messaged ${route.label} in the last 24 hours, so WhatsApp won't accept a file from here. ${channel === "api" ? "Send an approved template to reopen the conversation." : "Send it from the WhatsApp Business app on your phone — the window reopens as soon as they write back."}`,
     };
   }
 
   return recordAndSend(
     leadId,
     toPhone,
-    "own",
+    route.via,
     {
       messageType: "media",
       // The caption is the message's readable content, so it goes in the

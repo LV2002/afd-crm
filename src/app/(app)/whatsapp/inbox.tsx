@@ -122,11 +122,20 @@ export async function WhatsAppInbox({
   const askedForLeadId =
     !selected && selectedKey?.startsWith("lead:") ? selectedKey.slice("lead:".length) : null;
 
+  // The API inbox answers from the institute's own number (Leon, 2026-10-23);
+  // the personal inbox from the replying counsellor's. Everything that
+  // differs between the two is this one value.
+  const channel = scope.includeUnassigned ? "api" : "own";
+  const canReply = can(user, channel === "api" ? "whatsapp.campaign" : "whatsapp.send");
+  // On the API number the window belongs to that number alone (rows with no
+  // number id); on a personal inbox the old "any number" read stands.
+  const windowNumberId = channel === "api" ? null : undefined;
+
   const [messages, withinWindow] = selected
     ? selected.leadId
       ? await Promise.all([
           getWhatsAppThread(supabase, selected.leadId),
-          isWithinCustomerServiceWindow(supabase, selected.leadId),
+          isWithinCustomerServiceWindow(supabase, selected.leadId, windowNumberId),
         ])
       : await Promise.all([
           getWhatsAppThreadByPhone(supabase, selected.phone),
@@ -134,7 +143,7 @@ export async function WhatsAppInbox({
           // could do rather than of the conversation: an unmatched thread
           // exists because somebody wrote to us, so the window is usually
           // wide open.
-          isWithinCustomerServiceWindowForPhone(supabase, selected.phone),
+          isWithinCustomerServiceWindowForPhone(supabase, selected.phone, windowNumberId),
         ])
     : [[], false];
 
@@ -291,16 +300,18 @@ export async function WhatsAppInbox({
                   leadId={selected.leadId}
                   toPhone={selected.phone}
                   messages={messages}
-                  canSend={can(user, "whatsapp.send")}
+                  canSend={canReply}
                   withinWindow={withinWindow}
+                  channel={channel}
                 />
               ) : (
                 <UnmatchedThread
                   phone={selected.phone}
                   messages={messages}
-                  canSend={can(user, "whatsapp.send")}
+                  canSend={canReply}
                   canCreateLead={can(user, "lead.create")}
                   withinWindow={withinWindow}
+                  channel={channel}
                 />
               )}
             </>

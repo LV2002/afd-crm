@@ -13,6 +13,7 @@ import { MediaPicker } from "@/components/whatsapp/media-picker";
 import {
   sendWhatsAppMedia,
   sendWhatsAppMessage,
+  type ReplyChannel,
   type WhatsAppSendState,
 } from "@/lib/whatsapp/send-actions";
 
@@ -51,12 +52,15 @@ export function UnmatchedThread({
   canSend,
   canCreateLead,
   withinWindow,
+  channel = "own",
 }: {
   phone: string;
   messages: WhatsAppThreadMessage[];
   canSend: boolean;
   canCreateLead: boolean;
   withinWindow: boolean;
+  /** Which number a reply leaves from: the sender's own, or the institute's API number. */
+  channel?: ReplyChannel;
 }) {
   const [body, setBody] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -163,9 +167,9 @@ export function UnmatchedThread({
                   const formData = new FormData();
                   formData.append("file", file);
                   formData.append("caption", body);
-                  result = await sendWhatsAppMedia(null, phone, formData);
+                  result = await sendWhatsAppMedia(null, phone, formData, channel);
                 } else {
-                  result = await sendWhatsAppMessage(null, phone, body);
+                  result = await sendWhatsAppMessage(null, phone, body, channel);
                 }
                 setSendState(result);
                 if (!result.error) {
