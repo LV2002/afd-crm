@@ -83,7 +83,7 @@ const KEYWORD_ALIASES: Array<{ phrase: string; fieldKey: string }> = [
   { phrase: "occupation", fieldKey: "parents_occupation" },
 
   { phrase: "alternate", fieldKey: "alternate_phone" },
-  { phrase: "whatsappnumber", fieldKey: "alternate_phone" },
+  { phrase: "whatsappnumber", fieldKey: "whatsapp_phone" },
 
   { phrase: "dateofbirth", fieldKey: "dob" },
   { phrase: "dob", fieldKey: "dob" },

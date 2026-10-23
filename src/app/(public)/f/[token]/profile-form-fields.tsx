@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircle2 } from "lucide-react";
-import { useActionState } from "react";
+import { startTransition, useActionState, useEffect, useRef } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
@@ -120,6 +120,13 @@ export function ProfileFormFields({
   fields: ProfileFormField[];
 }) {
   const [state, action, pending] = useActionState(submitProfileForm, initialState);
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  // A long form: the message is at the bottom, and a student who pressed
+  // Submit from the middle would not see why nothing happened.
+  useEffect(() => {
+    if (state.error) errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [state]);
 
   if (state.success) {
     return (
@@ -138,7 +145,25 @@ export function ProfileFormFields({
   const sections = [...new Set(fields.map((f) => f.section))];
 
   return (
-    <form action={action} className="flex flex-col gap-6">
+    <form
+      /*
+        `onSubmit`, not `action={action}`.
+
+        React 19 resets an uncontrolled form to its blank starting values
+        after every form *action* finishes — including when the server
+        answered with an error. A student who mistyped one field lost the
+        whole form and had to attach their documents again. Submitting
+        by hand runs the same server action without the reset, so when a
+        value is refused everything typed and every file chosen stays where
+        it was, and only the message appears.
+      */
+      onSubmit={(event) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        startTransition(() => action(data));
+      }}
+      className="flex flex-col gap-6"
+    >
       <input type="hidden" name="token" value={token} />
 
       <div className="hidden" aria-hidden="true">
@@ -161,7 +186,7 @@ export function ProfileFormFields({
         </section>
       ))}
 
-      {state.error && <FormMessage error={state.error} />}
+      <div ref={errorRef}>{state.error && <FormMessage error={state.error} />}</div>
 
       <Button type="submit" disabled={pending} className="w-full">
         {pending ? "Submitting…" : "Submit my details"}

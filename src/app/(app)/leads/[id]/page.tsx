@@ -245,6 +245,13 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const hasSignedAgreement = signedAgreement !== null;
   const referred = referredRows ?? [];
 
+  const badgeLabels = (raw: unknown, key: string): string[] =>
+    (Array.isArray(raw) ? raw : [])
+      .filter((value): value is string => typeof value === "string" && value.trim() !== "")
+      .map((value) => optionsByKey[key]?.find((option) => option.value === value)?.label ?? value);
+  const examBadges = badgeLabels(row.interested_exams, "interested_exams");
+  const courseBadges = badgeLabels(row.courses_interested, "courses_interested");
+
   const sourceValue = typeof row.last_touch_source === "string" ? row.last_touch_source.trim() : "";
   const sourceLabel =
     sourceValue === ""
@@ -272,6 +279,17 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             >
               {sourceLabel ?? "Source unknown"}
             </Badge>
+            {/* The exams and courses they asked about, from the Preferences tab. */}
+            {examBadges.map((label) => (
+              <Badge key={`exam-${label}`} variant="outline" className="text-xs font-medium" title="Interested exam">
+                {label}
+              </Badge>
+            ))}
+            {courseBadges.map((label) => (
+              <Badge key={`course-${label}`} variant="outline" className="text-xs font-medium" title="Interested course">
+                {label}
+              </Badge>
+            ))}
           </h1>
           <p className="text-sm text-muted-foreground">Lead #{row.lead_number}</p>
         </div>

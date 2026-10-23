@@ -8718,3 +8718,10 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 
 - Lead page: a plain, non-clickable badge beside the lead's name shows where they came from (the Lead Source, labelled as the dropdown labels it; "Source unknown" when blank), so a counsellor need not open Tracking before ringing.
 - The admission form on the lead page now says **AFD academic year** (label and the "required" message). Other screens that say "Academic year" (fee structures, batches, change plan) are unchanged.
+
+## Student profile form keeps its data on error; lead page tidy-up (migration 0107)
+
+- Public student profile form (`/f/<token>`): a refused submission no longer clears the form or the chosen files — it submits through `onSubmit` (React 19 resets a form after a form *action*), and the error message scrolls into view.
+- Lead page: the exams and courses they are interested in show as badges beside the name, next to the source badge.
+- Lead Personal tab (migration 0107): Alternate Phone, Country (specify) and State (specify) switched off (hidden, data kept, re-enable under Custom Fields); City, State and District together at the bottom; WhatsApp Number stays. Meta "WhatsApp number" answers now fill WhatsApp Number instead of the hidden Alternate Phone. The seed matches.
+- The new-lead form still has its own "Country (specify)" box for Others; unchanged.
