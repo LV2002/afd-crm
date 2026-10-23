@@ -58,13 +58,9 @@ function NumberForm({
   counsellors: CounsellorOption[];
 }) {
   const [state, action, pending] = useActionState(saveWhatsAppNumber, initialState);
-  const [mode, setMode] = useState<"api" | "coexistence">(number?.mode ?? "api");
-  const [createsLeads, setCreatesLeads] = useState(number?.createsLeads ?? false);
-
-  function chooseMode(next: "api" | "coexistence") {
-    setMode(next);
-    setCreatesLeads(next === "coexistence");
-  }
+  // A counsellor's own phone: a stranger asking about coaching is a real
+  // enquiry, so a new number starts out creating leads.
+  const [createsLeads, setCreatesLeads] = useState(number?.createsLeads ?? true);
 
   const id = number?.id ?? "new";
 
@@ -111,14 +107,15 @@ function NumberForm({
           </p>
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor={`counsellor-${id}`}>Whose phone</Label>
+          <Label htmlFor={`counsellor-${id}`}>Whose phone (required)</Label>
           <select
             id={`counsellor-${id}`}
             name="counsellorId"
             defaultValue={number?.counsellorId ?? ""}
+            required={number?.mode !== "api"}
             className="h-9 rounded-md border bg-transparent px-3 text-sm"
           >
-            <option value="">Nobody — a shared number</option>
+            <option value="">Choose the counsellor…</option>
             {counsellors.map((person) => (
               <option key={person.id} value={person.id}>
                 {person.name}
@@ -128,43 +125,6 @@ function NumberForm({
         </div>
       </div>
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className="text-sm font-medium">What this number is</legend>
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="radio"
-            name="mode"
-            value="api"
-            checked={mode === "api"}
-            onChange={() => chooseMode("api")}
-            className="mt-1"
-          />
-          <span>
-            API only — the institute&apos;s own number
-            <span className="block text-xs text-muted-foreground">
-              Sends campaigns and receives the replies. Not in use by the WhatsApp Business app
-              on anybody&apos;s phone.
-            </span>
-          </span>
-        </label>
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="radio"
-            name="mode"
-            value="coexistence"
-            checked={mode === "coexistence"}
-            onChange={() => chooseMode("coexistence")}
-            className="mt-1"
-          />
-          <span>
-            Coexistence — a phone and the API, same number
-            <span className="block text-xs text-muted-foreground">
-              The counsellor keeps their phone and their chats; everything mirrors into the CRM.
-              Needs an owner above.
-            </span>
-          </span>
-        </label>
-      </fieldset>
 
       <label className="flex items-start gap-2 text-sm">
         <Checkbox
@@ -176,8 +136,7 @@ function NumberForm({
           A message from somebody new creates a lead
           <span className="block text-xs text-muted-foreground">
             Right for a counsellor&apos;s own number: a stranger asking about coaching is a real
-            enquiry. Wrong for the broadcast number, where a reply is somebody who pressed a
-            button on a campaign.
+            enquiry.
           </span>
         </span>
       </label>
@@ -186,7 +145,7 @@ function NumberForm({
 
       <Button type="submit" size="sm" disabled={pending} className="w-fit">
         {number ? <Save className="size-4" /> : <Plus className="size-4" />}
-        {pending ? "Saving…" : number ? "Save changes" : "Register this number"}
+        {pending ? "Saving…" : number ? "Save changes" : "Add this Coexistence number"}
       </Button>
     </form>
   );
@@ -195,14 +154,39 @@ function NumberForm({
 export function WhatsAppNumbers({
   numbers,
   counsellors,
+  apiNumberId,
 }: {
   numbers: WhatsAppNumberView[];
   counsellors: CounsellorOption[];
+  /** The one Business API number, from Credentials — shown, not edited, here. */
+  apiNumberId: string | null;
 }) {
   const [open, setOpen] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col gap-4">
+      {/*
+        The single Business API number lives in Credentials above — never
+        here — so there is exactly one place to set it. Shown as a
+        read-only line so the list is the whole picture.
+      */}
+      <div className="flex flex-col gap-1 rounded-lg border bg-muted/30 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-medium">Business API number</h3>
+          <Badge variant="outline">Campaigns &amp; broadcasts</Badge>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {apiNumberId ? (
+            <>
+              Phone number ID <span className="font-mono">{apiNumberId}</span>, set under Credentials
+              above. There is only one.
+            </>
+          ) : (
+            <>Not set yet — enter its Phone Number ID under Credentials above.</>
+          )}
+        </p>
+      </div>
+
       {numbers.map((number) => (
         <div key={number.id} className="flex flex-col gap-3 rounded-lg border p-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -272,8 +256,13 @@ export function WhatsAppNumbers({
 
       <div className="flex flex-col gap-3 rounded-lg border border-dashed p-4">
         <h3 className="font-medium">
-          {numbers.length === 0 ? "Register your first number" : "Register another number"}
+          {numbers.length === 0 ? "Add your first Coexistence number" : "Add another Coexistence number"}
         </h3>
+        <p className="text-sm text-muted-foreground">
+          A counsellor&apos;s own phone, running the WhatsApp Business app and the API at once. The
+          Connect with Meta button below does this for you; use this form only to record a number
+          that is already connected.
+        </p>
         <NumberForm counsellors={counsellors} />
       </div>
     </div>

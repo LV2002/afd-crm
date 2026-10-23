@@ -8725,3 +8725,14 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 - Lead page: the exams and courses they are interested in show as badges beside the name, next to the source badge.
 - Lead Personal tab (migration 0107): Alternate Phone, Country (specify) and State (specify) switched off (hidden, data kept, re-enable under Custom Fields); City, State and District together at the bottom; WhatsApp Number stays. Meta "WhatsApp number" answers now fill WhatsApp Number instead of the hidden Alternate Phone. The seed matches.
 - The new-lead form's "Country (specify)" box is removed too: Others is just Others.
+
+## Start the WhatsApp inbox over
+
+- Settings → Integrations → WhatsApp → **Start over → Clear all messages** (type CLEAR): hides every WhatsApp message on every number from the inbox and from leads' pages. Soft (`deleted_at`), audited as `whatsapp_messages.cleared`, recoverable. Numbers, credentials, leads and delivery history are untouched. Test added.
+
+## WhatsApp: one API number, Coexistence-only list, reset (and the lost Clear-messages control, restored)
+
+- Settings → Integrations → WhatsApp: the single Business API number is the Phone Number ID in Credentials; the **Numbers** list is Coexistence-only (owner required, creates leads by default, refuses the API number's ID) and shows the API number as a read-only line.
+- **Start over → Reset WhatsApp integration** (type RESET) removes the saved WhatsApp credentials, unregisters all numbers, hides all messages; leads, opt-outs and delivery history are kept. Audited.
+- The **Clear all messages** control from the earlier PR had been dropped by a branch reset before merge; it is back in this PR.
+- `docs/WHATSAPP-SETUP.md` corrected (the API number is no longer registered under Numbers) and gains a "Starting over" section.
