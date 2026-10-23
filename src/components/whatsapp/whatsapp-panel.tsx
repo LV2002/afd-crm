@@ -15,6 +15,7 @@ import {
   sendWhatsAppMedia,
   sendWhatsAppMessage,
   sendWhatsAppTemplate,
+  type ReplyChannel,
   type WhatsAppSendState,
 } from "@/lib/whatsapp/send-actions";
 
@@ -88,12 +89,15 @@ export function WhatsAppPanel({
   messages,
   canSend,
   withinWindow,
+  channel = "own",
 }: {
   leadId: string;
   toPhone: string;
   messages: WhatsAppThreadMessage[];
   canSend: boolean;
   withinWindow: boolean;
+  /** Which number a reply leaves from: the sender's own, or the institute's API number. */
+  channel?: ReplyChannel;
 }) {
   const [body, setBody] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -131,9 +135,9 @@ export function WhatsAppPanel({
                   const formData = new FormData();
                   formData.append("file", file);
                   formData.append("caption", body);
-                  result = await sendWhatsAppMedia(leadId, toPhone, formData);
+                  result = await sendWhatsAppMedia(leadId, toPhone, formData, channel);
                 } else {
-                  result = await sendWhatsAppMessage(leadId, toPhone, body);
+                  result = await sendWhatsAppMessage(leadId, toPhone, body, channel);
                 }
                 setState(result);
                 if (!result.error) {

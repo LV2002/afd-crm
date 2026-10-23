@@ -8740,3 +8740,7 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Delivery log says what each WhatsApp delivery was
 
 - Settings → Health → Every delivery: a WhatsApp row now says whether it was a delivery receipt ("Receipt: delivered") or a customer's message ("Message from +91 98••••3456: 'text' — saved in Chats / saved, but hidden / not saved to Chats"), so "processed but no chat" can be told apart. Test added.
+
+## Reply from the API number on the WhatsApp API tab
+
+- Chats → WhatsApp API: a reply (text or file) now goes out from the Business API number inside the 24-hour window, for people with the campaign permission. The WhatsApp tab still replies from the counsellor's own number. Outside the window it says to send an approved template.

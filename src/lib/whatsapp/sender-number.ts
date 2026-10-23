@@ -8,8 +8,14 @@ import { whatsappNumbers } from "@/lib/db/schema";
 /**
  * The number a counsellor's own messages leave from.
  *
- * Leon's rule, and it is absolute: *"if the counsellor wants to send a
- * message it should go out from their number. Never from the API."*
+ * Leon's rule: *"if the counsellor wants to send a message it should go out
+ * from their number. Never from the API."*
+ *
+ * One exception, added at his request on 2026-10-23: on the **WhatsApp API
+ * inbox**, where a customer wrote to the institute's Business API number, a
+ * reply goes back out from that number so they see one conversation. That is
+ * `channel: "api"` in send-actions.ts, gated on `whatsapp.campaign`. This
+ * function still governs every other free-form reply.
  *
  * So a free-form reply is sent from the Coexistence number registered to
  * the person typing it — not from the thread's number, and not from the

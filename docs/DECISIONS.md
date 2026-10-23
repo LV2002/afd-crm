@@ -4817,3 +4817,7 @@ Plan sizes are deployment settings, not business data, so `STORAGE_LIMIT_MB` / `
 ## 2026-10-22 — Delivery log
 
 "Nine leads from Google Ads, three in the CRM" has four possible causes (never sent, refused, failed to parse, or already a lead — an enquiry added to an existing person, which is correct under non-negotiable #2). The log tells them apart by joining each delivery to its enquiry through `dedupe_key`. Unknown endpoint tokens remain unrecorded on purpose (see the custom handler), so a wrong URL looks like "no row", and the page says so. Phone numbers are masked even though the page is admin-only.
+
+## 2026-10-23 — Replies on the WhatsApp API tab leave from the API number
+
+Leon's earlier rule was that a counsellor's message never leaves from the Business API number. With the API number now receiving real customer messages, he asked for replies on the **WhatsApp API** tab to go out from that same number, so a customer sees one conversation. Implemented as a `channel` on the send actions: `"api"` on that tab only, gated on `whatsapp.campaign` (the permission that already means "may speak as the institute"), window read for the API number alone, upload and send with the API number's id. The **WhatsApp** tab and everything else still send from the replying counsellor's own Coexistence number.

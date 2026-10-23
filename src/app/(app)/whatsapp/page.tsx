@@ -42,10 +42,12 @@ export default async function WhatsAppApiInboxPage({
       basePath="/whatsapp"
       intro={
         <>
-          Replies to what the institute&apos;s broadcast number has sent out. Nothing here
-          creates a lead — a reply is matched to a lead you already have, and the assigned
-          counsellor is told. Answering happens on the <strong>WhatsApp</strong> tab, from the
-          counsellor&apos;s own number, never from this one.
+          Messages to the institute&apos;s Business API number. A message from somebody who is
+          already a lead attaches to that lead and the assigned counsellor is told; one from
+          somebody new waits here under <strong>Not in the CRM</strong> until it is made a lead.
+          Replies on this tab go out from this same number, inside WhatsApp&apos;s 24-hour window,
+          and are sent by whoever runs WhatsApp campaigns. A counsellor&apos;s own conversations
+          are on the <strong>WhatsApp</strong> tab.
         </>
       }
     />
