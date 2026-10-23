@@ -1,8 +1,9 @@
 import "server-only";
 
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
+import { whatsappMessages } from "@/lib/db/schema";
 import { mapFormPayload } from "@/lib/integrations/form-payload/map-fields";
 import { maskPhone } from "@/lib/leads/mask-phone";
 
@@ -20,6 +21,8 @@ export interface DeliveryLogRow {
   /** Read from the payload where it is a form, phone masked. */
   who: string | null;
   phone: string | null;
+  /** For WhatsApp: whether the delivery was a customer's message or a delivery receipt, and what became of it. */
+  detail: string | null;
   leadId: string | null;
   leadNumber: number | null;
   duplicates: number;
@@ -88,7 +91,26 @@ export async function getDeliveryLog(options: {
     limit ${limit}
   `);
 
-  return rowsOf(result).map((r) => {
+  const rows = rowsOf(result);
+
+  // Which WhatsApp messages were actually written to the inbox. A delivery
+  // can be "processed" and still show nothing on screen — it may have been
+  // a delivery receipt rather than a message, or the message may be hidden
+  // — and the log should say which, not leave it to be guessed.
+  const messageIds = rows
+    .filter((r) => String(r.source) === "whatsapp")
+    .map((r) => (r.raw as Record<string, unknown> | null)?.id)
+    .filter((id): id is string => typeof id === "string");
+  const stored = new Map<string, boolean>(); // wa message id -> hidden?
+  if (messageIds.length > 0) {
+    const found = await db
+      .select({ id: whatsappMessages.waMessageId, deletedAt: whatsappMessages.deletedAt })
+      .from(whatsappMessages)
+      .where(inArray(whatsappMessages.waMessageId, messageIds));
+    for (const row of found) if (row.id) stored.set(row.id, row.deletedAt !== null);
+  }
+
+  return rows.map((r) => {
     const source = String(r.source);
     const customId = (r.custom_webhook_id as string | null) ?? null;
     const raw = (r.raw ?? {}) as Record<string, unknown>;
@@ -109,6 +131,7 @@ export async function getDeliveryLog(options: {
       }
     }
 
+    const detail = source === "whatsapp" ? describeWhatsAppDelivery(raw, stored) : null;
     const enquiry = r.lead_id ? { wasDuplicate: r.was_duplicate === true } : null;
     return {
       id: String(r.id),
@@ -121,6 +144,7 @@ export async function getDeliveryLog(options: {
         enquiry,
       }),
       reason: (r.last_error as string | null) ?? null,
+      detail,
       who,
       phone,
       leadId: (r.lead_id as string | null) ?? null,
@@ -147,4 +171,33 @@ export async function getDeliveryChannels(): Promise<Array<{ key: string; label:
     key: String(r.key),
     label: r.key && String(r.key).startsWith("custom:") ? String(r.label) : (SOURCE_LABELS[String(r.key)] ?? String(r.key)),
   }));
+}
+
+/**
+ * What a stored WhatsApp delivery was, in a line.
+ *
+ * Two very different things arrive on the same webhook: a customer's
+ * message, and a delivery receipt ("sent", "delivered", "read") for a
+ * message the CRM sent. Both are "processed", and only the first one
+ * becomes a chat — so a person who sent a message from their phone and
+ * sees nothing needs to know which kind they are looking at.
+ */
+export function describeWhatsAppDelivery(
+  raw: Record<string, unknown>,
+  stored: ReadonlyMap<string, boolean>,
+): string | null {
+  const id = typeof raw.id === "string" ? raw.id : null;
+
+  if (typeof raw.status === "string" && typeof raw.recipient_id === "string") {
+    return `Receipt: ${raw.status} (to ${maskPhone(`+${raw.recipient_id}`)})`;
+  }
+
+  if (typeof raw.from === "string") {
+    const text = (raw.text as { body?: unknown } | undefined)?.body;
+    const what = typeof text === "string" && text.trim() ? `“${text.trim().slice(0, 60)}”` : String(raw.type ?? "message");
+    const state = id === null || !stored.has(id) ? "not saved to Chats" : stored.get(id) ? "saved, but hidden" : "saved in Chats";
+    return `Message from ${maskPhone(`+${raw.from}`)}: ${what} — ${state}`;
+  }
+
+  return null;
 }

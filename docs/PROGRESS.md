@@ -8736,3 +8736,7 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 - **Start over → Reset WhatsApp integration** (type RESET) removes the saved WhatsApp credentials, unregisters all numbers, hides all messages; leads, opt-outs and delivery history are kept. Audited.
 - The **Clear all messages** control from the earlier PR had been dropped by a branch reset before merge; it is back in this PR.
 - `docs/WHATSAPP-SETUP.md` corrected (the API number is no longer registered under Numbers) and gains a "Starting over" section.
+
+## Delivery log says what each WhatsApp delivery was
+
+- Settings → Health → Every delivery: a WhatsApp row now says whether it was a delivery receipt ("Receipt: delivered") or a customer's message ("Message from +91 98••••3456: 'text' — saved in Chats / saved, but hidden / not saved to Chats"), so "processed but no chat" can be told apart. Test added.
