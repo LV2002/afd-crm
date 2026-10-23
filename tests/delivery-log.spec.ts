@@ -68,3 +68,19 @@ describe("getDeliveryLog", () => {
     expect(failed?.duplicates).toBe(3);
   });
 });
+
+describe("describeWhatsAppDelivery", () => {
+  it("tells a delivery receipt from a customer's message, and whether it was saved", async () => {
+    const { describeWhatsAppDelivery } = await import("../src/lib/integrations/delivery-log");
+
+    expect(
+      describeWhatsAppDelivery({ id: "wamid.1", status: "delivered", recipient_id: "919847012345" }, new Map()),
+    ).toContain("Receipt: delivered");
+
+    const message = { id: "wamid.2", from: "919847012345", type: "text", text: { body: "Hello, fees?" } };
+    expect(describeWhatsAppDelivery(message, new Map([["wamid.2", false]]))).toContain("saved in Chats");
+    expect(describeWhatsAppDelivery(message, new Map([["wamid.2", true]]))).toContain("saved, but hidden");
+    expect(describeWhatsAppDelivery(message, new Map())).toContain("not saved to Chats");
+    expect(describeWhatsAppDelivery(message, new Map())).toContain("Hello, fees?");
+  });
+});

@@ -164,6 +164,8 @@ export default async function DeliveriesPage({
                         <span className="font-medium">{row.who}</span>
                         {row.phone && <span className="block text-xs text-muted-foreground">{row.phone}</span>}
                       </>
+                    ) : row.detail ? (
+                      <span className="text-xs">{row.detail}</span>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
