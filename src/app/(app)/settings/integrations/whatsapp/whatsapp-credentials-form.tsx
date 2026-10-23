@@ -56,7 +56,7 @@ const FIELDS: Array<{ key: keyof WhatsAppConnectionStatus["configured"]; label: 
   {
     key: "embedded_signup_config_id",
     label: "Embedded Signup Configuration ID",
-    help: "Meta App Dashboard → WhatsApp → Configuration → Embedded Signup. Not a secret. Without it there is no way to onboard a counsellor's own number: Embedded Signup is a dialog an application opens, not a page you can navigate to in Meta.",
+    help: "Meta App Dashboard → Facebook Login for Business → Configurations (create one from the WhatsApp Embedded Signup template). Not a secret. Without it there is no way to onboard a counsellor's own number: Embedded Signup is a dialog an application opens, not a page you can navigate to in Meta.",
   },
 ];
 

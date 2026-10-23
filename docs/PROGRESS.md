@@ -8744,3 +8744,11 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Reply from the API number on the WhatsApp API tab
 
 - Chats → WhatsApp API: a reply (text or file) now goes out from the Business API number inside the 24-hour window, for people with the campaign permission. The WhatsApp tab still replies from the counsellor's own number. Outside the window it says to send an approved template.
+
+## Failed WhatsApp receipts show Meta's reason in the delivery log
+
+- Settings → Health → Every delivery: a "Receipt: failed" row now ends with Meta's error code and title (e.g. `131042 Business eligibility payment issue`), so a failed broadcast's cause is on the log, not only in the lead's chat. Test added.
+
+## Where the Embedded Signup Configuration ID is created
+
+- The screens and `docs/WHATSAPP-SETUP.md` said it lives under WhatsApp → Configuration → Embedded Signup, which is not where Meta puts it. They now say Facebook Login for Business → Configurations, and the setup guide has a step-by-step (4.2a) including the allowed-domains settings the popup needs.
