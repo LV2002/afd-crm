@@ -351,6 +351,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         <div className="order-2 min-w-0 lg:order-1 lg:col-span-2">
           {can(user, "lead.update") ? (
             <LeadEditForm
+              // Rebuilt when another action moves the follow-up date or the
+              // owner, so the autosave can never write a stale one back.
+              version={`${String(row.next_followup_at ?? "")}|${String(row.assigned_to ?? "")}`}
               leadId={id}
               sections={sections}
               values={values}

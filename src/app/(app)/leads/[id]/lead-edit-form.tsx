@@ -22,19 +22,7 @@ import { StateDistrictFields } from "./state-district-fields";
 
 const initialState: FormState = {};
 
-/**
- * One <form> for every section, tabs just show/hide sections with CSS —
- * switching tabs never drops what you typed in another one, and there's
- * only ever one submit to reason about.
- */
-export function LeadEditForm({
-  leadId,
-  sections,
-  values,
-  optionsByKey,
-  canRevealPhone,
-  leadRefLabel,
-}: {
+type LeadEditFormProps = {
   leadId: string;
   sections: FieldSection[];
   values: Record<string, unknown>;
@@ -47,13 +35,55 @@ export function LeadEditForm({
     phone: string;
     hint: string;
   } | null;
+};
+
+/**
+ * The profile form, rebuilt whenever something OUTSIDE it changes the lead.
+ *
+ * The form autosaves the whole of itself, so its boxes must never hold a
+ * stale value: logging an interaction moves the lead's next follow-up date
+ * on the server, and a form still showing the old date would write it
+ * straight back the next time anybody tabbed out of any field — a
+ * follow-up that was just completed reappearing as pending. So the form is
+ * keyed on `version`, which the page builds from the things other actions
+ * change (the follow-up date, the owner). Autosaving some other field does
+ * not change it, so typing is never interrupted; the active tab lives out
+ * here, above the key, so a rebuild does not throw the person back to the
+ * first one.
+ */
+export function LeadEditForm({ version, ...props }: LeadEditFormProps & { version: string }) {
+  const [activeSection, setActiveSection] = useState(props.sections[0]?.section ?? "");
+  return (
+    <LeadEditFormBody
+      key={version}
+      {...props}
+      activeSection={activeSection}
+      setActiveSection={setActiveSection}
+    />
+  );
+}
+
+/**
+ * One <form> for every section, tabs just show/hide sections with CSS —
+ * switching tabs never drops what you typed in another one, and there's
+ * only ever one submit to reason about.
+ */
+function LeadEditFormBody({
+  leadId,
+  sections,
+  values,
+  optionsByKey,
+  canRevealPhone,
+  leadRefLabel,
+  activeSection,
+  setActiveSection,
+}: LeadEditFormProps & {
+  activeSection: string;
+  setActiveSection: (section: string) => void;
 }) {
   const [state, formAction, pending] = useActionState(
     updateLead.bind(null, leadId),
     initialState,
-  );
-  const [activeSection, setActiveSection] = useState(
-    sections[0]?.section ?? "",
   );
 
   /*

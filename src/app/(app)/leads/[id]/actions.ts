@@ -18,7 +18,7 @@ import { captureError } from "@/lib/errors/capture";
 import { isFrameworkControlFlow } from "@/lib/errors/request-error";
 import { parseRupeesToPaise } from "@/lib/format/currency";
 import { parseEnquiryDate } from "@/lib/leads/enquiry-date";
-import { needsFollowUp } from "@/lib/leads/interaction-follow-up";
+import { needsFollowUp, nextFollowupUpdate } from "@/lib/leads/interaction-follow-up";
 import { firstContactTemperature, indexByValue, valuesOfKinds } from "@/lib/leads/temperature-kinds";
 import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 import { temperatureOverrideFor } from "@/lib/leads/temperature-override";
@@ -338,8 +338,24 @@ export async function logInteraction(leadId: string, _prevState: FormState, form
   // The interaction log's own next_followup_at is the counsellor's stated
   // plan — mirror it onto the lead so "My Day" (Phase 2) and the list can
   // surface it without joining interactions.
-  if (nextFollowupAtRaw) {
-    await supabase.from("leads").update({ next_followup_at: nextFollowupAtRaw }).eq("id", leadId);
+  const followupChange = nextFollowupUpdate(
+    typeof outcome === "string" ? outcome : null,
+    typeof nextFollowupAtRaw === "string" && nextFollowupAtRaw ? nextFollowupAtRaw : null,
+  );
+  if (followupChange) {
+    const { error: followupError } = await supabase
+      .from("leads")
+      .update({ next_followup_at: "set" in followupChange ? followupChange.set : null })
+      .eq("id", leadId);
+    // The interaction is saved either way; but a follow-up date that did
+    // not move is exactly the "still pending" the counsellor would otherwise
+    // find out about on the 14th, so say so now.
+    if (followupError) {
+      return {
+        success: "Interaction logged.",
+        error: `…but the lead's next follow-up could not be updated: ${followupError.message}`,
+      };
+    }
   }
 
   const nowIso = new Date().toISOString();
