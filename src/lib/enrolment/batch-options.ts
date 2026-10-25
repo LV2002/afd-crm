@@ -28,7 +28,7 @@ export async function getBatchOptionsForCentre(
 
   const { data } = await supabase
     .from("batches")
-    .select("id, name, course, academic_year, capacity, student_batches(id)")
+    .select("id, name, course, mode, academic_year, fee_paise, capacity, student_batches(id)")
     .eq("center_id", centerId)
     .eq("is_active", true)
     .is("deleted_at", null)
@@ -38,7 +38,9 @@ export async function getBatchOptionsForCentre(
         id: string;
         name: string;
         course: string;
+        mode: string;
         academic_year: string;
+        fee_paise: number | null;
         capacity: number | null;
         student_batches: Array<{ id: string }> | null;
       }>
@@ -48,7 +50,9 @@ export async function getBatchOptionsForCentre(
     id: row.id,
     name: row.name,
     course: row.course,
+    mode: row.mode,
     academicYear: row.academic_year,
+    feePaise: row.fee_paise,
     spacesLeft:
       row.capacity === null
         ? null

@@ -379,7 +379,7 @@ be.
   joining date — "the Kochi Foundation students who joined in July" is one row
   of controls.
 - **Print** a one-page student profile from their record.
-- **Settings → Batches** — create class groups and put students in them.
+- **Settings → Courses & Batches** — add courses (online or hybrid), then the batches under each, with their centre, academic year and fee, and put students in them.
   A batch is defined once a term and then referred to constantly, which makes
   it setup rather than a daily workspace. Counsellors pick the batch when they
   confirm the admission, and it follows the student through to their record.

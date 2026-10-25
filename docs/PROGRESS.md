@@ -8761,3 +8761,23 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 
 - Cause: the lead profile form autosaves ALL its fields, including Next Follow-up, and no longer rebuilt itself after other actions (since the autosave fix). Logging an interaction moved the lead's date to the new one, but a form still showing the old date wrote it back the next time any field was left. The form is now rebuilt when the follow-up date or owner changes elsewhere (keyed on them; the active tab is kept above the key).
 - Logging an interaction that finishes the conversation (converted, not interested, dropped, wrong target audience) now clears the lead's follow-up date, instead of leaving the old one overdue. A failed follow-up update is reported instead of ignored. Test added.
+
+## Courses & batches: one page, with the fee on the batch
+
+- **Settings → Courses & Batches** (`/settings/courses`) replaces the separate Batches and Fee Structures entries. Each course shows its mode (Online / Hybrid) with its batches underneath: centre, academic year, fee, seats. "New course" and "Add batch" (pre-fills the course) are on the page; the old `/settings/batches` list redirects here.
+- Mode belongs to the **course**, not the batch (migration 0108): `dropdown_options.metadata.mode` on the course row. A batch's mode is always its course's; changing a course's mode moves its batches. Offline is retired (inactive, not deleted); existing courses/batches were migrated (hybrid if anything under them was hybrid/offline, else online).
+- Each batch has one **centre**, one **academic year** and an optional **fee** (`batches.fee_paise`, backfilled from the matching fee structure).
+- **Admission and Course & batch panel**: choosing a batch sets mode, year and fee; the mode/year pickers only appear when no batch is chosen. Fee order: typed manual override, then batch fee, then the legacy `fee_structures` row. Discounts and offers work as before.
+- Stubbed: legacy Fee Structures page kept as a fallback (renamed "legacy"); no UI yet to bulk-copy a batch to next year.
+
+## AFD academic year in reports and the students list
+
+- Every batch already carries one AFD academic year, and an admission takes it from its batch. It is now usable for reporting: **Insights → Explore** has an "AFD academic year (admitted)" filter and breakdown (so 2026-27 vs 2027-28 intake by source, centre, course, counsellor…), and the **Students** list has an "AFD year" filter (by the student's batch). Leads not yet admitted show as "Not set" in Insights. A lead with several enrolments counts under their standing (not dropped) one, most recent first.
+- Stubbed: the other Insights tabs (Sources, Timing, Segments…) and Finance reports don't have the year filter yet.
+
+## Old admission paths retired; student profile form rebranded
+
+- **Admission now runs entirely on the batch.** Confirming an admission requires a batch (it sets mode, academic year and fee); the mode and year pickers and the `fee_structures` lookup are gone. The only fee override left is "Custom fee (optional)" for a negotiated price. A batch with no fee refuses the admission with a message pointing at Settings → Courses & Batches. The Course & batch panel likewise lost its mode/year pickers (the batch decides; with no batch the admission keeps what it had).
+- The Settings → Fee Structures page, its nav entry and actions are removed. The `fee_structures` table and config-bundle field are left in place so no data or old bundle is destroyed; nothing reads them. Audit rows for old fee structures now link to Courses & Batches.
+- **Student profile form** (`/f/<token>`) redesigned: branded header with the institute logo, name and tagline from Settings → Organisation, an accent bar and headings in the brand colour, a card layout, consistent 40px controls, wide fields (text areas, multi-selects, uploads, anything with help text) on their own row, and the centre's contact line at the foot. The logo is signed server-side for the page (`getPublicBrand`) because the visitor has no session.
+- Not checked visually in a browser in this session.

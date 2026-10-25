@@ -110,19 +110,19 @@ export async function changeEnrolmentPlan(
   }
 
   const course = String(formData.get("course") ?? "").trim();
-  const mode = String(formData.get("mode") ?? "").trim();
-  const academicYear = String(formData.get("academicYear") ?? "").trim();
+  // Mode and year follow the batch; with no batch the admission keeps the
+  // ones it already has.
+  let mode = row.mode;
+  let academicYear = row.academicYear;
   const batchIdRaw = String(formData.get("batchId") ?? "").trim();
   const batchId = batchIdRaw === "" ? null : batchIdRaw;
   const reason = String(formData.get("reason") ?? "").trim();
 
   if (!course) return { error: "Pick a course." };
-  if (!mode) return { error: "Pick a mode." };
-  if (!academicYear) return { error: "Pick an academic year." };
 
   // A batch at another centre is a mis-click every time — the same rule
   // the roster already enforces when academics add somebody to a batch
-  // from Settings → Batches.
+  // from Settings → Courses & Batches.
   let batchName: string | null = null;
   if (batchId) {
     const [batch] = await db
@@ -131,6 +131,8 @@ export async function changeEnrolmentPlan(
         name: batches.name,
         centerId: batches.centerId,
         isActive: batches.isActive,
+        mode: batches.mode,
+        academicYear: batches.academicYear,
       })
       .from(batches)
       .where(and(eq(batches.id, batchId), isNull(batches.deletedAt)));
@@ -143,7 +145,14 @@ export async function changeEnrolmentPlan(
       return { error: "That batch is no longer running. Reactivate it first, or pick another." };
     }
     batchName = batch.name;
+    // A batch is online or hybrid, and runs in one academic year; the
+    // enrolment follows it rather than carrying a second opinion.
+    mode = batch.mode;
+    academicYear = batch.academicYear;
   }
+
+  if (!mode) return { error: "Pick a mode." };
+  if (!academicYear) return { error: "Pick an academic year." };
 
   /*
     The course is academics' to move, and only theirs.

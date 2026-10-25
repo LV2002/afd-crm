@@ -14,9 +14,9 @@ import {
 } from "@/components/ui/table";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { batchCapacity, describeBatch } from "@/lib/batches/roster";
-import { activeDropdownValues } from "@/lib/config/dropdown-values";
 import { db } from "@/lib/db/client";
 import { batches, centers, studentBatches, students } from "@/lib/db/schema";
+import { courseChoices } from "@/lib/enrolment/course-catalog";
 import { formatDateIST } from "@/lib/format/date";
 
 import { BatchForm } from "../batch-form";
@@ -47,6 +47,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
       centerName: centers.name,
       course: batches.course,
       mode: batches.mode,
+      feePaise: batches.feePaise,
       academicYear: batches.academicYear,
       startDate: batches.startDate,
       endDate: batches.endDate,
@@ -98,17 +99,14 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
     .from(centers)
     .where(isNull(centers.deletedAt))
     .orderBy(asc(centers.name));
-  const [courses, modes] = await Promise.all([
-    activeDropdownValues("course"),
-    activeDropdownValues("preferred_mode"),
-  ]);
+  const courses = await courseChoices();
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <Link href="/settings/batches" className="text-xs text-muted-foreground hover:underline">
-            ← All batches
+          <Link href="/settings/courses" className="text-xs text-muted-foreground hover:underline">
+            ← Courses & batches
           </Link>
           <h1 className="text-2xl font-semibold">{batch.name}</h1>
           <p className="text-sm text-muted-foreground">
@@ -205,7 +203,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
             name: batch.name,
             centerId: batch.centerId,
             course: batch.course,
-            mode: batch.mode,
+            fee: batch.feePaise === null ? "" : String(batch.feePaise / 100),
             academicYear: batch.academicYear,
             startDate: batch.startDate ?? "",
             endDate: batch.endDate ?? "",
@@ -214,7 +212,6 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
           }}
           centers={allCentres}
           courses={courses}
-          modes={modes}
         />
       </div>
     </div>

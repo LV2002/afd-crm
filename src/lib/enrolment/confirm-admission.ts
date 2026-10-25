@@ -1,7 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { DbExecutor } from "@/lib/db/client";
-import { dropdownOptions, enrolments, feeStructures, leads } from "@/lib/db/schema";
+import { batches, dropdownOptions, enrolments, leads } from "@/lib/db/schema";
 
 export interface ConfirmAdmissionInput {
   leadId: string;
@@ -21,7 +21,7 @@ export interface ConfirmAdmissionInput {
    * take an admission.
    */
   batchId?: string | null;
-  /** Overrides the fee_structures lookup when no matching row exists yet. */
+  /** A custom fee, used instead of the batch's own — for a negotiated or one-off price. */
   totalFeePaiseOverride?: number | null;
   discountPaise?: number;
   confirmedBy: string | null;
@@ -88,33 +88,19 @@ export async function confirmAdmission(
     throw new Error("confirmAdmission: this lead already has an enrolment");
   }
 
+  // Fee order: a custom figure typed on the form, otherwise the batch's own fee.
   let totalFeePaise = input.totalFeePaiseOverride ?? null;
+  if (totalFeePaise === null && input.batchId) {
+    const [batch] = await tx
+      .select({ feePaise: batches.feePaise })
+      .from(batches)
+      .where(eq(batches.id, input.batchId));
+    totalFeePaise = batch?.feePaise ?? null;
+  }
   if (totalFeePaise === null) {
-    const [structure] = await tx
-      .select({ baseFeePaise: feeStructures.baseFeePaise })
-      .from(feeStructures)
-      .where(
-        and(
-          eq(feeStructures.course, input.course),
-          eq(feeStructures.centerId, input.centerId),
-          eq(feeStructures.mode, input.mode),
-          eq(feeStructures.academicYear, input.academicYear),
-          eq(feeStructures.isActive, true),
-          isNull(feeStructures.deletedAt),
-        ),
-      );
-    if (!structure) {
-      // Written for the counsellor who sees it on the form, not for the
-      // developer who wrote it. The old wording ended "provide
-      // totalFeePaiseOverride", which names a function argument nobody
-      // outside this file has ever heard of; the field it means is
-      // labelled "Manual fee override" two inches further up the screen.
-      throw new Error(
-        `No fee is set up for ${input.course} / ${input.mode} / ${input.academicYear} at this centre. ` +
-          `Add it in Settings → Fee Structures, or type the amount into "Manual fee override".`,
-      );
-    }
-    totalFeePaise = structure.baseFeePaise;
+    throw new Error(
+      "This batch has no fee yet. Set it in Settings → Courses & Batches, or type a custom fee into \"Custom fee\".",
+    );
   }
 
   const netFeePaise = totalFeePaise - discountPaise;

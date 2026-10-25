@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  bigint,
   boolean,
   date,
   integer,
@@ -110,6 +111,16 @@ export const batches = pgTable("batches", {
   startDate: date("start_date"),
   endDate: date("end_date"),
   capacity: integer("capacity"),
+  /**
+   * What this batch costs, in paise. Null means not priced yet.
+   *
+   * The fee belongs to the batch (Courses & Batches, migration 0108): a
+   * student joins a batch, and the batch says which course, which mode,
+   * which year, which centre and what it costs. This replaces looking the
+   * fee up by course + centre + mode + year in `fee_structures`, which is
+   * kept only as a fallback for admissions into no batch.
+   */
+  feePaise: bigint("fee_paise", { mode: "number" }),
   isActive: boolean("is_active").notNull().default(true),
   ...timestamps(),
   ...softDelete(),

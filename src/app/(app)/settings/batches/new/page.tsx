@@ -2,9 +2,9 @@ import { asc, isNull } from "drizzle-orm";
 
 import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser } from "@/lib/auth/session";
-import { activeDropdownValues } from "@/lib/config/dropdown-values";
 import { db } from "@/lib/db/client";
 import { centers } from "@/lib/db/schema";
+import { courseChoices } from "@/lib/enrolment/course-catalog";
 
 import { BatchForm } from "../batch-form";
 
@@ -15,7 +15,11 @@ import { BatchForm } from "../batch-form";
  */
 export const dynamic = "force-dynamic";
 
-export default async function NewBatchPage() {
+export default async function NewBatchPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ course?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user || !can(user, "batch.manage")) return <AccessDenied />;
 
@@ -30,10 +34,9 @@ export default async function NewBatchPage() {
       ? allCentres
       : allCentres.filter((centre) => user.centerIds.includes(centre.id));
 
-  const [courses, modes] = await Promise.all([
-    activeDropdownValues("course"),
-    activeDropdownValues("preferred_mode"),
-  ]);
+  const courses = await courseChoices();
+  const { course: wanted } = await searchParams;
+  const course = courses.find((c) => c.value === wanted) ?? courses[0];
 
   return (
     <div className="flex flex-col gap-4">
@@ -48,8 +51,8 @@ export default async function NewBatchPage() {
         values={{
           name: "",
           centerId: centres[0]?.id ?? "",
-          course: courses[0] ?? "",
-          mode: modes[0] ?? "",
+          course: course?.value ?? "",
+          fee: "",
           academicYear: "",
           startDate: "",
           endDate: "",
@@ -58,7 +61,6 @@ export default async function NewBatchPage() {
         }}
         centers={centres}
         courses={courses}
-        modes={modes}
       />
     </div>
   );

@@ -65,6 +65,7 @@ export default async function StudentsPage({
   const course = one("course");
   const batchId = one("batch");
   const status = one("status");
+  const year = one("year");
   // Anything that is not an ISO date is dropped rather than passed to
   // Postgres, which would otherwise reject the whole query and blank the
   // page over a typed URL.
@@ -87,6 +88,18 @@ export default async function StudentsPage({
   if (centerId) query = query.eq("center_id", centerId);
   if (course) query = query.eq("current_course", course);
   if (batchId) query = query.eq("current_batch_id", batchId);
+  if (year) {
+    // The AFD academic year is a property of the batch, so "2027-28
+    // students" are the ones sitting in a 2027-28 batch. Somebody not yet
+    // in any batch has no year to match.
+    const { data: yearBatches } = await supabase
+      .from("batches")
+      .select("id")
+      .eq("academic_year", year)
+      .is("deleted_at", null)
+      .returns<Array<{ id: string }>>();
+    query = query.in("current_batch_id", (yearBatches ?? []).map((b) => b.id));
+  }
   if (joinedFrom) query = query.gte("joined_at", `${joinedFrom}T00:00:00+05:30`);
   // Exclusive upper bound on the next day, so "to 15 July" includes
   // everybody who joined during the 15th rather than only at midnight.
@@ -135,7 +148,7 @@ export default async function StudentsPage({
 
   const total = (rows ?? []).length;
   const anyFilter = Boolean(
-    search || centerId || course || batchId || status || joinedFrom || joinedTo,
+    search || centerId || course || batchId || status || year || joinedFrom || joinedTo,
   );
 
   return (
@@ -152,7 +165,11 @@ export default async function StudentsPage({
       </div>
 
       <StudentFilters
-        values={{ search, centerId, course, batchId, status, joinedFrom, joinedTo }}
+        values={{ search, centerId, course, batchId, status, year, joinedFrom, joinedTo }}
+        years={[...new Set((batchRows ?? []).map((row) => row.academic_year))]
+          .sort()
+          .reverse()
+          .map((value) => ({ value, label: value }))}
         centres={(centreRows ?? []).map((row) => ({ value: row.id, label: row.name }))}
         courses={(courseRows ?? []).map((row) => ({ value: row.value, label: row.label }))}
         batches={(batchRows ?? []).map((row) => ({

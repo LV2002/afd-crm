@@ -133,7 +133,7 @@ const ENTITY_HREFS: Record<string, (id: string) => string> = {
   assignment_rules: (id) => `/settings/rules/${id}`,
   dropdown_options: () => "/settings/dropdowns",
   field_definitions: () => "/settings/fields",
-  fee_structures: () => "/settings/fee-structures",
+  fee_structures: () => "/settings/courses",
   sla_policies: () => "/settings/sla",
   temperature_rules: () => "/settings/temperatures",
   org_settings: () => "/settings/organization",
