@@ -8,7 +8,6 @@ import { Combobox } from "@/components/ui/combobox";
 import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { academicYearOptions } from "@/lib/enrolment/academic-year";
 import { changeEnrolmentPlan, type PlanFormState } from "@/lib/enrolment/plan-actions";
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 
@@ -129,34 +128,6 @@ export function ChangePlanPanel({
             </>
           )}
         </div>
-        {!chosen && (
-          <>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="plan-mode">Mode</Label>
-              <Combobox
-                id="plan-mode"
-                name="mode"
-                required
-                defaultValue={current.mode}
-                options={modes}
-                placeholder="Select mode"
-                searchPlaceholder="Type to search…"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="plan-academic-year">Academic year</Label>
-              <Combobox
-                id="plan-academic-year"
-                name="academicYear"
-                required
-                defaultValue={current.academicYear}
-                options={academicYearOptions()}
-                placeholder="Select year"
-                searchPlaceholder="Type to search…"
-              />
-            </div>
-          </>
-        )}
         <div className="flex flex-col gap-2">
           <Label htmlFor="plan-batch">Batch</Label>
           {/*

@@ -36,7 +36,7 @@ function Field({ field }: { field: ProfileFormField }) {
             name={field.key}
             required={required}
             defaultValue=""
-            className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs md:text-sm"
+            className="flex h-10 w-full rounded-md border border-input bg-card px-3 text-base shadow-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring sm:text-[0.9375rem]"
           >
             <option value="" disabled>
               Select…
@@ -50,9 +50,12 @@ function Field({ field }: { field: ProfileFormField }) {
         );
       case "multiselect":
         return (
-          <div className="flex flex-col gap-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             {field.options.map((option) => (
-              <label key={option.value} className="flex items-center gap-2 text-sm">
+              <label
+                key={option.value}
+                className="flex min-h-10 items-center gap-2 rounded-md border bg-card px-3 text-sm"
+              >
                 <Checkbox name={field.key} value={option.value} />
                 {option.label}
               </label>
@@ -60,7 +63,14 @@ function Field({ field }: { field: ProfileFormField }) {
           </div>
         );
       case "boolean":
-        return <Checkbox id={id} name={field.key} />;
+        return (
+          <label
+            htmlFor={id}
+            className="flex min-h-10 items-center gap-2 rounded-md border bg-card px-3 text-sm"
+          >
+            <Checkbox id={id} name={field.key} /> Yes
+          </label>
+        );
       case "date":
         return <Input id={id} name={field.key} type="date" required={required} />;
       case "number":
@@ -94,9 +104,17 @@ function Field({ field }: { field: ProfileFormField }) {
     }
   })();
 
+  // Wide controls take the whole row; the rest sit two to a row. Mixing them
+  // in one two-column grid is what made the old form look ragged.
+  const wide =
+    field.type === "long_text" ||
+    field.type === "multiselect" ||
+    field.type === "file" ||
+    Boolean(field.helpText);
+
   return (
-    <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>
+    <div className={`flex flex-col gap-1.5 ${wide ? "sm:col-span-2" : ""}`}>
+      <Label htmlFor={id} className="text-sm font-medium">
         {field.label}
         {required && <span className="text-destructive"> *</span>}
       </Label>
@@ -115,9 +133,12 @@ function Field({ field }: { field: ProfileFormField }) {
 export function ProfileFormFields({
   token,
   fields,
+  accent,
 }: {
   token: string;
   fields: ProfileFormField[];
+  /** The institute's brand colour, for section headings and the submit button. */
+  accent: string;
 }) {
   const [state, action, pending] = useActionState(submitProfileForm, initialState);
   const errorRef = useRef<HTMLDivElement>(null);
@@ -162,7 +183,7 @@ export function ProfileFormFields({
         const data = new FormData(event.currentTarget);
         startTransition(() => action(data));
       }}
-      className="flex flex-col gap-6"
+      className="flex flex-col gap-8"
     >
       <input type="hidden" name="token" value={token} />
 
@@ -172,11 +193,14 @@ export function ProfileFormFields({
       </div>
 
       {sections.map((section) => (
-        <section key={section} className="flex flex-col gap-4 rounded-lg border p-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        <section key={section} className="flex flex-col gap-4">
+          <h2
+            className="border-b pb-2 text-xs font-semibold uppercase tracking-widest"
+            style={{ color: accent, borderColor: `${accent}33` }}
+          >
             {section}
           </h2>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid items-start gap-x-4 gap-y-5 sm:grid-cols-2">
             {fields
               .filter((f) => f.section === section)
               .map((field) => (
@@ -188,7 +212,13 @@ export function ProfileFormFields({
 
       <div ref={errorRef}>{state.error && <FormMessage error={state.error} />}</div>
 
-      <Button type="submit" disabled={pending} className="w-full">
+      <Button
+        type="submit"
+        disabled={pending}
+        size="lg"
+        className="w-full text-white"
+        style={{ backgroundColor: accent }}
+      >
         {pending ? "Submitting…" : "Submit my details"}
       </Button>
       <p className="text-xs text-muted-foreground">

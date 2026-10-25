@@ -21,7 +21,7 @@ export interface SyncedEnrolment {
 /**
  * Points a student's live enrolment at the batch they are actually in.
  *
- * Settings → Batches has always written `student_batches` (the history)
+ * Settings → Courses & Batches has always written `student_batches` (the history)
  * and `students.current_batch_id` (the pointer the roster reads) — but
  * not `enrolments.batch_id`, which is what the admission record, the
  * printed agreement and the accounts screens read. So a student moved

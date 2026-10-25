@@ -8,7 +8,6 @@ import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { MoneyInput } from "@/components/ui/smart-inputs";
 import { Label } from "@/components/ui/label";
 import { formatINR } from "@/lib/format/currency";
-import { academicYearOptions } from "@/lib/enrolment/academic-year";
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 
 import { confirmAdmissionAction, type FormState } from "./actions";
@@ -18,9 +17,8 @@ const initialState: FormState = {};
 /**
  * Gate 1, sales -> accounts. Irreversible via this form once submitted —
  * there is no "un-confirm" button, matching CLAUDE.md's "irreversible
- * without an admin override." A manual fee override is offered because
- * fee_structures coverage is admin-maintained and won't always have a row
- * for every course/mode/year combination from day one.
+ * without an admin override." The batch sets the mode, academic year and fee;
+ * a custom fee is there for a negotiated price.
  */
 export interface AdmissionBatchOption {
   id: string;
@@ -89,6 +87,7 @@ export function ConfirmAdmissionForm({
         <Combobox
           id="admission-batch"
           name="batchId"
+          required
           options={batchesForCourse.map((batch) => ({
             value: batch.id,
             label:
@@ -104,43 +103,17 @@ export function ConfirmAdmissionForm({
           <p className="text-xs text-muted-foreground">
             {modeLabel(modes, chosen.mode)} · {chosen.academicYear} ·{" "}
             {chosen.feePaise === null
-              ? "no fee set on this batch — enter one below"
+              ? "no fee set on this batch — type a custom fee below"
               : `fee ${formatINR(chosen.feePaise)}`}
           </p>
         ) : (
           <p className="text-xs text-muted-foreground">
             {course && batchesForCourse.length === 0
-              ? "No batch for this course yet — an admin adds them in Settings → Courses & Batches. Without one, enter the mode and year below."
-              : "The batch sets the mode, year and fee."}
+              ? "No batch for this course at this centre yet — an admin adds one in Settings → Courses & Batches."
+              : "The batch sets the mode, academic year and fee."}
           </p>
         )}
       </div>
-
-      {!chosen && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="admission-mode">Mode</Label>
-            <Combobox
-              id="admission-mode"
-              name="mode"
-              required
-              options={modes}
-              placeholder="Select mode"
-              searchPlaceholder="Type to search…"
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="admission-academic-year">AFD academic year</Label>
-            <Combobox
-              id="admission-academic-year"
-              name="academicYear"
-              options={academicYearOptions()}
-              placeholder="Choose a year"
-              required
-            />
-          </div>
-        </div>
-      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
@@ -148,11 +121,11 @@ export function ConfirmAdmissionForm({
           <MoneyInput id="admission-discount" name="discount" placeholder="0" />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="admission-fee-override">Manual fee override</Label>
+          <Label htmlFor="admission-fee-override">Custom fee (optional)</Label>
           <MoneyInput
             id="admission-fee-override"
             name="totalFeeOverride"
-            placeholder={chosen?.feePaise ? "Blank uses the batch fee" : "Blank uses the fee structure"}
+            placeholder="Blank uses the batch fee"
           />
         </div>
       </div>

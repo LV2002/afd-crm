@@ -585,24 +585,17 @@ async function runConfirmAdmission(
   const batchIdRaw = formData.get("batchId");
   const batchId = typeof batchIdRaw === "string" && batchIdRaw.trim() !== "" ? batchIdRaw.trim() : null;
 
-  // With a batch, the mode and academic year ARE the batch's (and the fee
-  // comes from it too, in confirmAdmission) — nobody types them twice. They
-  // are only asked for when the admission is taken before any batch exists.
-  let mode = formData.get("mode");
-  let academicYear = formData.get("academicYear");
-  if (!batchId) {
-    if (typeof mode !== "string" || !mode) return { error: "Mode is required." };
-    if (typeof academicYear !== "string" || !academicYear.trim()) {
-      return { error: "AFD academic year is required." };
-    }
-  }
+  if (!batchId) return { error: "Pick the batch — it sets the mode, year and fee." };
+  // The batch decides mode and academic year (filled in below).
+  let mode = "";
+  let academicYear = "";
 
   const discountPaise = parseRupeesToPaise(formData.get("discount")) ?? 0;
   const feeOverrideRaw = formData.get("totalFeeOverride");
   const totalFeePaiseOverride =
     typeof feeOverrideRaw === "string" && feeOverrideRaw.trim() !== "" ? parseRupeesToPaise(feeOverrideRaw) : null;
   if (typeof feeOverrideRaw === "string" && feeOverrideRaw.trim() !== "" && totalFeePaiseOverride === null) {
-    return { error: "Manual fee override must be a valid amount." };
+    return { error: "Custom fee must be a valid amount." };
   }
 
   const [lead] = await db.select().from(leads).where(eq(leads.id, leadId));
@@ -624,7 +617,7 @@ async function runConfirmAdmission(
   // deactivated while the form sat open) or simply wrong. Checked here rather
   // than trusted, because a wrong batch is invisible afterwards — the
   // enrolment looks complete either way.
-  if (batchId) {
+  {
     const [batch] = await db
       .select({
         centerId: batches.centerId,
@@ -649,9 +642,6 @@ async function runConfirmAdmission(
     academicYear = batch.academicYear;
   }
 
-  if (typeof mode !== "string" || typeof academicYear !== "string") {
-    return { error: "Could not work out the mode and academic year." };
-  }
 
   // The same authority check the fee panel applies. Confirming an
   // admission is the OTHER way a discount gets set, and leaving it open
@@ -682,7 +672,7 @@ async function runConfirmAdmission(
 
       if (discountOutcome.pendingDiscountPaise !== null) {
         // Re-checked against the fee confirmAdmission actually resolved,
-        // which may have come from fee_structures rather than the form —
+        // which may have come from the batch rather than the form —
         // a percentage limit is meaningless against a fee of zero.
         const recheck = resolveDiscount({
           limit: await getDiscountLimit(user),

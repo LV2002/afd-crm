@@ -4825,3 +4825,7 @@ Leon's earlier rule was that a counsellor's message never leaves from the Busine
 ## 2026-10-25 — Mode lives on the course; fee and year on the batch
 
 Leon asked for a Courses page with batches beneath and a fee per batch, and for offline to go ("online and hybrid"). Assumptions: a course is institute-wide (no centre, no year); a batch belongs to one centre and one academic year; a batch has no mode of its own (it takes its course's), so nobody picks mode twice. Mode is stored in the course's `dropdown_options.metadata` rather than a new table, so every list that already reads courses keeps working and config export carries it. `fee_structures` stays as a fallback for batches with no fee — nothing was deleted. Enrolments already taken keep the mode they were taken with.
+
+## 2026-10-25 — Batch required at admission; fee structures retired
+
+With fee and year on the batch (see above), the fee_structures lookup and the free mode/year pickers were a second way to say the same thing, and the cause of the old "no fee structure" failures. Admission now requires a batch. Kept: the table and config-bundle slot (nothing deleted), and a custom-fee field for negotiated prices. The public profile form reads the brand through the service-role client solely to sign the logo URL, since the visitor is anonymous and the logo bucket is private.

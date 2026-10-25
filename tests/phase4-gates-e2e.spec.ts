@@ -25,7 +25,6 @@ const {
   batches,
   centers,
   enrolments,
-  feeStructures,
   leads,
   payments,
   receipts,
@@ -65,7 +64,6 @@ async function sweep() {
   }
   await db.delete(students).where(like(students.fullName, `${MARKER}%`));
   await db.delete(leads).where(like(leads.studentName, `${MARKER}%`));
-  await db.delete(feeStructures).where(like(feeStructures.course, `${MARKER}%`));
   await db.delete(batches).where(like(batches.name, `${MARKER}%`));
   await db.delete(centers).where(like(centers.name, `${MARKER}%`));
 }
@@ -83,14 +81,6 @@ afterAll(async () => {
 describe("Phase 4 lifecycle chain", () => {
   it("takes a lead from admission confirmed through to a created student record", async () => {
     const course = testName("course");
-    await db.insert(feeStructures).values({
-      course,
-      centerId,
-      mode: "offline",
-      academicYear: "2026-27",
-      baseFeePaise: 18000000,
-    });
-
     const [batch] = await db
       .insert(batches)
       .values({
@@ -99,6 +89,7 @@ describe("Phase 4 lifecycle chain", () => {
         course,
         mode: "offline",
         academicYear: "2026-27",
+        feePaise: 18000000,
       })
       .returning({ id: batches.id });
 
@@ -201,13 +192,6 @@ describe("Phase 4 lifecycle chain", () => {
     // have set up next year's. Refusing the admission for want of a batch
     // would stop the only thing that actually matters happening.
     const course = testName("course");
-    await db.insert(feeStructures).values({
-      course,
-      centerId,
-      mode: "offline",
-      academicYear: "2026-27",
-      baseFeePaise: 9000000,
-    });
 
     const [lead] = await db
       .insert(leads)
@@ -225,6 +209,7 @@ describe("Phase 4 lifecycle chain", () => {
         centerId,
         mode: "offline",
         academicYear: "2026-27",
+        totalFeePaiseOverride: 9000000,
         confirmedBy: null,
       }),
     );

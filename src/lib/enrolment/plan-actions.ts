@@ -110,8 +110,10 @@ export async function changeEnrolmentPlan(
   }
 
   const course = String(formData.get("course") ?? "").trim();
-  let mode = String(formData.get("mode") ?? "").trim();
-  let academicYear = String(formData.get("academicYear") ?? "").trim();
+  // Mode and year follow the batch; with no batch the admission keeps the
+  // ones it already has.
+  let mode = row.mode;
+  let academicYear = row.academicYear;
   const batchIdRaw = String(formData.get("batchId") ?? "").trim();
   const batchId = batchIdRaw === "" ? null : batchIdRaw;
   const reason = String(formData.get("reason") ?? "").trim();
@@ -120,7 +122,7 @@ export async function changeEnrolmentPlan(
 
   // A batch at another centre is a mis-click every time — the same rule
   // the roster already enforces when academics add somebody to a batch
-  // from Settings → Batches.
+  // from Settings → Courses & Batches.
   let batchName: string | null = null;
   if (batchId) {
     const [batch] = await db

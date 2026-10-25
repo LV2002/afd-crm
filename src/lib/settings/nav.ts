@@ -68,18 +68,11 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   {
     // Courses and batches are one screen: a batch is a course running at a
     // centre for a year, and carries the fee. Replaced the separate Batches
-    // and Fee Structures entries (fee structures remain as a fallback for
-    // batches with no fee set).
+    // and Fee Structures entries.
     href: "/settings/courses",
     label: "Courses & Batches",
     description: "What we teach, online or hybrid, and each batch's centre, year and fee",
     permissions: ["settings.manage", "batch.manage"],
-  },
-  {
-    href: "/settings/fee-structures",
-    label: "Fee Structures (legacy)",
-    description: "Older fee table, used only when a batch has no fee of its own",
-    permissions: ["settings.manage"],
   },
   {
     href: "/settings/payment-reminders",

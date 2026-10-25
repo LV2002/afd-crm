@@ -165,7 +165,7 @@ export const NOTIFICATION_EVENTS = [
     // message saying both, not two saying half each. `changes` carries
     // the detail: "Course: Foundation → DWO · Batch: Kochi A → Kochi B".
     //
-    // Also fired by Settings → Batches, so moving somebody between class
+    // Also fired by Settings → Courses & Batches, so moving somebody between class
     // groups reads the same wherever it was done.
     key: "enrolment.plan_changed",
     label: "Course or batch changed",

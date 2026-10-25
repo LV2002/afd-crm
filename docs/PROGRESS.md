@@ -8774,3 +8774,10 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 
 - Every batch already carries one AFD academic year, and an admission takes it from its batch. It is now usable for reporting: **Insights → Explore** has an "AFD academic year (admitted)" filter and breakdown (so 2026-27 vs 2027-28 intake by source, centre, course, counsellor…), and the **Students** list has an "AFD year" filter (by the student's batch). Leads not yet admitted show as "Not set" in Insights. A lead with several enrolments counts under their standing (not dropped) one, most recent first.
 - Stubbed: the other Insights tabs (Sources, Timing, Segments…) and Finance reports don't have the year filter yet.
+
+## Old admission paths retired; student profile form rebranded
+
+- **Admission now runs entirely on the batch.** Confirming an admission requires a batch (it sets mode, academic year and fee); the mode and year pickers and the `fee_structures` lookup are gone. The only fee override left is "Custom fee (optional)" for a negotiated price. A batch with no fee refuses the admission with a message pointing at Settings → Courses & Batches. The Course & batch panel likewise lost its mode/year pickers (the batch decides; with no batch the admission keeps what it had).
+- The Settings → Fee Structures page, its nav entry and actions are removed. The `fee_structures` table and config-bundle field are left in place so no data or old bundle is destroyed; nothing reads them. Audit rows for old fee structures now link to Courses & Batches.
+- **Student profile form** (`/f/<token>`) redesigned: branded header with the institute logo, name and tagline from Settings → Organisation, an accent bar and headings in the brand colour, a card layout, consistent 40px controls, wide fields (text areas, multi-selects, uploads, anything with help text) on their own row, and the centre's contact line at the foot. The logo is signed server-side for the page (`getPublicBrand`) because the visitor has no session.
+- Not checked visually in a browser in this session.

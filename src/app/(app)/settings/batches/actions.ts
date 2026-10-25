@@ -80,8 +80,8 @@ export async function saveBatch(_prev: BatchFormState, formData: FormData): Prom
     return { error: "The batch cannot end before it starts." };
   }
 
-  // Blank means "no fee set yet": admission then falls back to the older
-  // fee structures, or asks for a manual figure.
+  // Blank means "no fee set yet": admission into this batch then needs a
+  // custom fee typed at the time.
   const feeRaw = String(formData.get("fee") ?? "").replace(/[,\s₹]/g, "");
   let feePaise: number | null = null;
   if (feeRaw !== "") {

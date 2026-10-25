@@ -61,15 +61,19 @@ async function makeLead(tag: string, phone: string) {
 }
 
 describe("confirmAdmission", () => {
-  it("looks up fee_structures and computes the net fee from a discount", async () => {
+  it("takes the batch fee and computes the net fee from a discount", async () => {
     const course = testName("course-lookup");
-    await db.insert(feeStructures).values({
-      course,
-      centerId,
-      mode: "offline",
-      academicYear: "2026-27",
-      baseFeePaise: 20000000,
-    });
+    const [batch] = await db
+      .insert(batches)
+      .values({
+        name: testName("batch-lookup"),
+        centerId,
+        course,
+        mode: "online",
+        academicYear: "2026-27",
+        feePaise: 20000000,
+      })
+      .returning({ id: batches.id });
     const leadId = await makeLead("lead1", "+919847200101");
 
     const result = await db.transaction((tx) =>
@@ -77,8 +81,9 @@ describe("confirmAdmission", () => {
         leadId,
         course,
         centerId,
-        mode: "offline",
+        mode: "online",
         academicYear: "2026-27",
+        batchId: batch.id,
         discountPaise: 500000,
         confirmedBy: null,
       }),
@@ -175,7 +180,7 @@ describe("confirmAdmission", () => {
     expect(result.netFeePaise).toBe(15000000);
   });
 
-  it("throws when no fee structure matches and no override is given", async () => {
+  it("throws when there is no batch fee and no custom fee", async () => {
     const leadId = await makeLead("lead3", "+919847200103");
 
     await expect(
@@ -189,7 +194,7 @@ describe("confirmAdmission", () => {
           confirmedBy: null,
         }),
       ),
-    ).rejects.toThrow(/No fee is set up for/);
+    ).rejects.toThrow(/no fee yet/);
   });
 
   it("throws when the discount exceeds the total fee", async () => {
@@ -240,15 +245,8 @@ describe("confirmAdmission", () => {
     ).rejects.toThrow(/already has an enrolment/);
   });
 
-  it("takes the fee from the batch, ahead of fee_structures, and lets a typed figure win", async () => {
+  it("takes the fee from the batch, and lets a typed figure win", async () => {
     const course = testName("batch-fee");
-    await db.insert(feeStructures).values({
-      course,
-      centerId,
-      mode: "online",
-      academicYear: "2026-27",
-      baseFeePaise: 9900000,
-    });
     const [batch] = await db
       .insert(batches)
       .values({
