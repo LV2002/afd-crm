@@ -70,6 +70,20 @@ const CREATED_AT_DIMENSION: PivotField = {
   isCore: true,
 };
 
+/**
+ * The academic year the lead was ADMITTED into — taken from their enrolment
+ * (which takes it from the batch), not a field on the lead. A lead who has
+ * not been admitted is "Not set", so this answers "how many joined for
+ * 2026-27 versus 2027-28" and, with the other filters, "from which source".
+ */
+const AFD_YEAR_KEY = "afd_academic_year";
+const AFD_YEAR_DIMENSION: PivotField = {
+  key: AFD_YEAR_KEY,
+  label: "AFD academic year (admitted)",
+  type: "select",
+  isCore: false,
+};
+
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
@@ -188,6 +202,7 @@ export default async function InsightsPage({
   const schema = await getFieldSchema(supabase, "lead", user);
   const dimensions: PivotField[] = [
     CREATED_AT_DIMENSION,
+    AFD_YEAR_DIMENSION,
     ...dimensionFields(
       schema.map((f) => ({ key: f.key, label: f.label, type: f.type, isCore: f.isCore })),
     ),
@@ -229,6 +244,7 @@ export default async function InsightsPage({
   const selection: Record<string, PgColumn> = { id: leads.id, temperature: leads.temperature };
   let needsCustom = false;
   for (const field of dimensions) {
+    if (field.key === AFD_YEAR_KEY) continue;
     if (!field.isCore) {
       needsCustom = true;
       continue;
@@ -261,9 +277,14 @@ export default async function InsightsPage({
     // conversion for as long as the record exists.
     droppedRows = await timedQuery("dropped", () =>
       db
-        .select({ leadId: enrolments.leadId })
+        .select({
+          leadId: enrolments.leadId,
+          droppedAt: enrolments.droppedAt,
+          academicYear: enrolments.academicYear,
+          confirmedAt: enrolments.salesToAccountsAt,
+        })
         .from(enrolments)
-        .where(and(isNotNull(enrolments.droppedAt), isNull(enrolments.deletedAt))),
+        .where(isNull(enrolments.deletedAt)),
     );
   } catch (error) {
     // Order matters: a deadline error also carries ETIMEDOUT, so check the
@@ -277,7 +298,24 @@ export default async function InsightsPage({
   // connection as the counts. resolveFieldOptions() would go through RLS,
   // and `profiles` is only readable to whoever holds users.manage — a
   // centre head would get a table of uuids where names belong.
+  // One year per lead: a standing admission beats a dropped one, and the
+  // most recent confirmation beats an older one.
+  const yearByLead = new Map<string, { year: string; live: boolean; at: number }>();
+  for (const row of droppedRows) {
+    const live = row.droppedAt === null;
+    const at = row.confirmedAt ? row.confirmedAt.getTime() : 0;
+    const existing = yearByLead.get(row.leadId);
+    if (!existing || (live && !existing.live) || (live === existing.live && at > existing.at)) {
+      yearByLead.set(row.leadId, { year: row.academicYear, live, at });
+    }
+  }
+  const yearOptions: FieldOption[] = [...new Set([...yearByLead.values()].map((y) => y.year))]
+    .sort()
+    .reverse()
+    .map((year) => ({ value: year, label: year }));
+
   const localOptions: Record<string, FieldOption[]> = {
+    [AFD_YEAR_KEY]: yearOptions,
     temperature: statusRows.map((s) => ({ value: s.value, label: s.label })),
     center_id: centerRows.map((c) => ({ value: c.id, label: c.name })),
   };
@@ -306,13 +344,19 @@ export default async function InsightsPage({
     const custom = (row.custom ?? null) as Record<string, unknown> | null;
     const values: Record<string, unknown> = {};
     for (const field of dimensions) {
+      if (field.key === AFD_YEAR_KEY) {
+        values[field.key] = yearByLead.get(String(row.id))?.year ?? null;
+        continue;
+      }
       values[field.key] = field.isCore ? (row[`v_${field.key}`] ?? null) : (custom?.[field.key] ?? null);
     }
     return { id: String(row.id), temperature: (row.temperature as string | null) ?? null, values };
   });
 
   const kindByTemperature = new Map(statusRows.map((s) => [s.value, s.kind]));
-  const droppedLeadIds = new Set(droppedRows.map((row) => row.leadId));
+  const droppedLeadIds = new Set(
+    droppedRows.filter((row) => row.droppedAt !== null).map((row) => row.leadId),
+  );
   const filtered = applyPivotFilters(pivotLeads, dimensions, filters);
   const totals = summarise(filtered, kindByTemperature, droppedLeadIds);
   const rows = groupLeads(

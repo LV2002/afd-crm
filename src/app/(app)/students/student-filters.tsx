@@ -18,6 +18,7 @@ export interface StudentFilterValues {
   course: string;
   batchId: string;
   status: string;
+  year: string;
   joinedFrom: string;
   joinedTo: string;
 }
@@ -41,12 +42,14 @@ export function StudentFilters({
   courses,
   batches,
   statuses,
+  years,
 }: {
   values: StudentFilterValues;
   centres: StudentFilterOption[];
   courses: StudentFilterOption[];
   batches: StudentFilterOption[];
   statuses: StudentFilterOption[];
+  years: StudentFilterOption[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -113,6 +116,16 @@ export function StudentFilters({
         value={values.batchId}
         onChange={(next) => updateParam("batch", next)}
         placeholder="Batch"
+        clearable
+      />
+
+      <Combobox
+        size="sm"
+        className="w-36"
+        options={years}
+        value={values.year}
+        onChange={(next) => updateParam("year", next)}
+        placeholder="AFD year"
         clearable
       />
 

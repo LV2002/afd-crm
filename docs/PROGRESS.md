@@ -8769,3 +8769,8 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 - Each batch has one **centre**, one **academic year** and an optional **fee** (`batches.fee_paise`, backfilled from the matching fee structure).
 - **Admission and Course & batch panel**: choosing a batch sets mode, year and fee; the mode/year pickers only appear when no batch is chosen. Fee order: typed manual override, then batch fee, then the legacy `fee_structures` row. Discounts and offers work as before.
 - Stubbed: legacy Fee Structures page kept as a fallback (renamed "legacy"); no UI yet to bulk-copy a batch to next year.
+
+## AFD academic year in reports and the students list
+
+- Every batch already carries one AFD academic year, and an admission takes it from its batch. It is now usable for reporting: **Insights → Explore** has an "AFD academic year (admitted)" filter and breakdown (so 2026-27 vs 2027-28 intake by source, centre, course, counsellor…), and the **Students** list has an "AFD year" filter (by the student's batch). Leads not yet admitted show as "Not set" in Insights. A lead with several enrolments counts under their standing (not dropped) one, most recent first.
+- Stubbed: the other Insights tabs (Sources, Timing, Segments…) and Finance reports don't have the year filter yet.
