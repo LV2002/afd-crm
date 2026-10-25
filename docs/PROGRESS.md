@@ -8752,3 +8752,7 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Where the Embedded Signup Configuration ID is created
 
 - The screens and `docs/WHATSAPP-SETUP.md` said it lives under WhatsApp → Configuration → Embedded Signup, which is not where Meta puts it. They now say Facebook Login for Business → Configurations, and the setup guide has a step-by-step (4.2a) including the allowed-domains settings the popup needs.
+
+## Fee plan: the discount is an offer plus an optional extra
+
+- Fees & instalment agreement: the three linked boxes (Discount, Discount name, Offer) are now one **Discount** block — pick an **Offer** (its amount is worked out and shown, pre-approved) and optionally add an **Extra discount** with a **Reason**; the total and its breakdown are shown. The server still receives one total and one joined name ("Early Bird + Sibling"), so approval limits, reports and existing plans are unchanged: the offer is the pre-approved floor, the extra goes for approval if it is over the person's limit. An existing plan is split back into offer + extra when opened. Pure helpers tested.

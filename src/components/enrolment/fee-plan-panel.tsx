@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/ui/smart-inputs";
 import { Textarea } from "@/components/ui/textarea";
 import { saveFeePlan, type FeeFormState } from "@/lib/enrolment/fee-actions";
+import { composeDiscountName, splitSavedDiscount } from "@/lib/enrolment/discount-parts";
 import { INSTALMENT_SLOTS } from "@/lib/enrolment/instalment-plan";
 import { describePromo, promoDiscountPaise, type Promo } from "@/lib/enrolment/promos";
 import { formatINR } from "@/lib/format/currency";
@@ -58,34 +59,46 @@ export function FeePlanPanel({
 }) {
   const [state, action, pending] = useActionState(saveFeePlan, initialState);
   const [fee, setFee] = useState(values.courseFee);
-  const [discount, setDiscount] = useState(values.discount);
-  const [discountName, setDiscountName] = useState(values.discountName);
   const [promoId, setPromoId] = useState(values.promoId);
-  const [amounts, setAmounts] = useState<Record<number, string>>(
-    Object.fromEntries(values.instalments.map((i) => [i.sequence, i.amount])),
-  );
 
   const chosenPromo = promos.find((promo) => promo.id === promoId) ?? null;
   const promoPaise = chosenPromo ? promoDiscountPaise(chosenPromo, toPaise(fee)) : 0;
 
-  /**
-   * Picking an offer fills the discount in rather than locking it.
-   *
-   * A counsellor can still type more — that goes above the offer and
-   * queues for approval like any other negotiated discount — and can
-   * still type less, because a student who talked themselves into a
-   * smaller discount is nobody's problem. The offer's amount is the
-   * pre-approved FLOOR, not a cage.
-   */
-  function choosePromo(nextId: string) {
-    setPromoId(nextId);
-    const promo = promos.find((entry) => entry.id === nextId);
-    if (!promo) return;
-    setDiscount(String(promoDiscountPaise(promo, toPaise(fee)) / 100));
-    setDiscountName(promo.name);
-  }
+  /*
+    One discount, in two parts.
 
-  const netPaise = Math.max(0, toPaise(fee) - toPaise(discount));
+    The offer is the part the institute has already agreed: its amount is
+    worked out from the fee and shown, not typed. The extra is whatever a
+    counsellor negotiates on top, with a reason. The server still receives a
+    single `discount` and a single `discountName` — the total, and the two
+    names joined — so what is saved, approved and reported is unchanged: an
+    offer is the pre-approved floor, and anything beyond it queues for
+    approval like any other negotiated discount.
+
+    Opening a plan that was saved before this split: the extra is whatever
+    the saved discount was beyond the offer's worth, and its reason is the
+    saved name with the offer's name taken off the front.
+  */
+  const savedPromo = promos.find((promo) => promo.id === values.promoId) ?? null;
+  const savedSplit = splitSavedDiscount({
+    discountPaise: toPaise(values.discount),
+    discountName: values.discountName,
+    offer: savedPromo
+      ? { name: savedPromo.name, paise: promoDiscountPaise(savedPromo, toPaise(values.courseFee)) }
+      : null,
+  });
+  const [extra, setExtra] = useState(savedSplit.extraPaise > 0 ? String(savedSplit.extraPaise / 100) : "");
+  const [extraReason, setExtraReason] = useState(savedSplit.reason);
+
+  const extraPaise = toPaise(extra);
+  const totalDiscountPaise = promoPaise + extraPaise;
+  const discountNameValue = composeDiscountName(chosenPromo?.name ?? null, extraPaise, extraReason);
+
+  const [amounts, setAmounts] = useState<Record<number, string>>(
+    Object.fromEntries(values.instalments.map((i) => [i.sequence, i.amount])),
+  );
+
+  const netPaise = Math.max(0, toPaise(fee) - totalDiscountPaise);
   const scheduledPaise = Object.values(amounts).reduce((sum, v) => sum + toPaise(v), 0);
   const shortfallPaise = netPaise - scheduledPaise;
   const planComplete = netPaise > 0 && shortfallPaise === 0;
@@ -106,7 +119,7 @@ export function FeePlanPanel({
       <form action={action} className="flex flex-col gap-4 rounded-lg border p-4">
         <input type="hidden" name="leadId" value={leadId} />
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
             <Label htmlFor="courseFee">Course fee</Label>
             {/* Every money field says the amount back in words as it is
@@ -123,17 +136,6 @@ export function FeePlanPanel({
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="discount">Discount</Label>
-            <MoneyInput
-              id="discount"
-              name="discount"
-              value={discount}
-              onValueChange={setDiscount}
-              disabled={!canEdit}
-              placeholder="0"
-            />
-          </div>
-          <div className="flex flex-col gap-2">
             <Label htmlFor="downPayment">Down payment</Label>
             <MoneyInput
               id="downPayment"
@@ -143,47 +145,84 @@ export function FeePlanPanel({
               placeholder="0"
             />
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="discountName">Discount name</Label>
-            <Input
-              id="discountName"
-              name="discountName"
-              value={discountName}
-              onChange={(e) => setDiscountName(e.target.value)}
-              disabled={!canEdit}
-              placeholder="e.g. Early Bird"
-            />
-          </div>
         </div>
 
-        {promos.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <Label>Offer</Label>
-            <input type="hidden" name="promoId" value={promoId} />
-            <Combobox
-              className="w-full sm:w-96"
-              value={promoId || NO_PROMO}
-              onChange={(value) => choosePromo(value === NO_PROMO ? "" : value)}
-              disabled={!canEdit}
-              options={[
-                { value: NO_PROMO, label: "No offer" },
-                ...promos.map((promo) => ({
-                  value: promo.id,
-                  label: promo.name,
-                  hint: describePromo(promo, formatINR),
-                })),
-              ]}
-              placeholder="No offer"
-              searchPlaceholder="Type an offer name…"
-            />
-            {chosenPromo && (
-              <p className="text-xs text-muted-foreground">
-                {formatINR(promoPaise)} on this fee, and it needs no approval — the institute is
-                already running this offer. Anything you type above it does.
-              </p>
-            )}
+        {/* What the server receives: the total, and the names joined. */}
+        <input type="hidden" name="discount" value={totalDiscountPaise > 0 ? String(totalDiscountPaise / 100) : ""} />
+        <input type="hidden" name="discountName" value={discountNameValue} />
+        <input type="hidden" name="promoId" value={promoId} />
+
+        <div className="flex flex-col gap-4 rounded-md border p-4">
+          <h3 className="text-sm font-medium">Discount</h3>
+
+          {promos.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <Label>Offer</Label>
+              <Combobox
+                className="w-full sm:w-96"
+                value={promoId || NO_PROMO}
+                onChange={(value) => setPromoId(value === NO_PROMO ? "" : value)}
+                disabled={!canEdit}
+                options={[
+                  { value: NO_PROMO, label: "No offer" },
+                  ...promos.map((promo) => ({
+                    value: promo.id,
+                    label: promo.name,
+                    hint: describePromo(promo, formatINR),
+                  })),
+                ]}
+                placeholder="No offer"
+                searchPlaceholder="Type an offer name…"
+              />
+              {chosenPromo && (
+                <p className="text-xs text-muted-foreground">
+                  {formatINR(promoPaise)} off this fee. It needs no approval — the institute is already
+                  running this offer.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="extraDiscount">
+                {promos.length > 0 ? "Extra discount (optional)" : "Discount"}
+              </Label>
+              <MoneyInput
+                id="extraDiscount"
+                value={extra}
+                onValueChange={setExtra}
+                disabled={!canEdit}
+                placeholder="0"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="extraReason">Reason for the extra discount</Label>
+              <Input
+                id="extraReason"
+                value={extraReason}
+                onChange={(e) => setExtraReason(e.target.value)}
+                disabled={!canEdit || extraPaise === 0}
+                placeholder="e.g. Sibling, scholarship"
+              />
+            </div>
           </div>
-        )}
+
+          <p className="text-sm">
+            <span className="font-medium">Total discount: {formatINR(totalDiscountPaise)}</span>
+            {promoPaise > 0 && extraPaise > 0 && (
+              <span className="text-muted-foreground">
+                {" "}
+                = {formatINR(promoPaise)} offer + {formatINR(extraPaise)} extra
+              </span>
+            )}
+            {extraPaise > 0 && (
+              <span className="block text-xs text-muted-foreground">
+                The extra part needs approval if it is more than you may give on your own.
+              </span>
+            )}
+          </p>
+        </div>
 
         <div className="rounded-md bg-muted/40 p-3 text-sm">
           <span className="font-medium">Payable: {formatINR(netPaise)}</span>
