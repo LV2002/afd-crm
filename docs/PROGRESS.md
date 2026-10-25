@@ -8756,3 +8756,8 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Fee plan: the discount is an offer plus an optional extra
 
 - Fees & instalment agreement: the three linked boxes (Discount, Discount name, Offer) are now one **Discount** block — pick an **Offer** (its amount is worked out and shown, pre-approved) and optionally add an **Extra discount** with a **Reason**; the total and its breakdown are shown. The server still receives one total and one joined name ("Early Bird + Sibling"), so approval limits, reports and existing plans are unchanged: the offer is the pre-approved floor, the extra goes for approval if it is over the person's limit. An existing plan is split back into offer + extra when opened. Pure helpers tested.
+
+## A completed follow-up no longer comes back as pending
+
+- Cause: the lead profile form autosaves ALL its fields, including Next Follow-up, and no longer rebuilt itself after other actions (since the autosave fix). Logging an interaction moved the lead's date to the new one, but a form still showing the old date wrote it back the next time any field was left. The form is now rebuilt when the follow-up date or owner changes elsewhere (keyed on them; the active tab is kept above the key).
+- Logging an interaction that finishes the conversation (converted, not interested, dropped, wrong target audience) now clears the lead's follow-up date, instead of leaving the old one overdue. A failed follow-up update is reported instead of ignored. Test added.

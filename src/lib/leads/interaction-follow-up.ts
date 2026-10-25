@@ -55,3 +55,27 @@ export const CONVERTED_OUTCOME = "converted";
 export function needsFollowUp(outcome: string | null | undefined): boolean {
   return !(NO_FOLLOW_UP_OUTCOMES as readonly string[]).includes(outcome ?? "");
 }
+
+/**
+ * What a logged interaction does to the lead's single "next follow-up".
+ *
+ * A lead carries ONE follow-up date, and the newest interaction owns it:
+ *
+ * - it names a date → that becomes the lead's follow-up, replacing the old
+ *   one, which is how "I called on the 15th and booked the 20th" closes the
+ *   14th;
+ * - it names none and the conversation is over (converted, not interested,
+ *   dropped, wrong target audience) → the date is cleared. Leaving the old
+ *   one meant a lead that had just said no sat in the follow-up queue as
+ *   overdue until somebody noticed;
+ * - it names none and the conversation is NOT over → impossible through the
+ *   form (a date is required), so nothing changes rather than guessing.
+ */
+export function nextFollowupUpdate(
+  outcome: string | null,
+  nextFollowupAt: string | null,
+): { set: string } | { clear: true } | null {
+  if (nextFollowupAt) return { set: nextFollowupAt };
+  if (!needsFollowUp(outcome)) return { clear: true };
+  return null;
+}

@@ -165,3 +165,21 @@ describe("the interactions CHECK constraint", () => {
     expect(row.id).toBeTruthy();
   });
 });
+
+import { nextFollowupUpdate } from "../src/lib/leads/interaction-follow-up";
+
+describe("nextFollowupUpdate", () => {
+  it("a new date replaces the old follow-up", () => {
+    expect(nextFollowupUpdate("call_back_later", "2026-10-20T10:00")).toEqual({ set: "2026-10-20T10:00" });
+  });
+
+  it("a finished conversation with no date clears the follow-up", () => {
+    for (const outcome of ["converted", "not_interested", "dropped", "wrong_target_audience"]) {
+      expect(nextFollowupUpdate(outcome, null)).toEqual({ clear: true });
+    }
+  });
+
+  it("an open conversation with no date changes nothing", () => {
+    expect(nextFollowupUpdate("connected", null)).toBeNull();
+  });
+});
