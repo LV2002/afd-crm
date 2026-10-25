@@ -1,7 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { DbExecutor } from "@/lib/db/client";
-import { dropdownOptions, enrolments, feeStructures, leads } from "@/lib/db/schema";
+import { batches, dropdownOptions, enrolments, feeStructures, leads } from "@/lib/db/schema";
 
 export interface ConfirmAdmissionInput {
   leadId: string;
@@ -88,7 +88,16 @@ export async function confirmAdmission(
     throw new Error("confirmAdmission: this lead already has an enrolment");
   }
 
+  // Fee order: a figure typed on the form, then the batch's own fee, then
+  // the older fee_structures table (kept for batches nobody has priced yet).
   let totalFeePaise = input.totalFeePaiseOverride ?? null;
+  if (totalFeePaise === null && input.batchId) {
+    const [batch] = await tx
+      .select({ feePaise: batches.feePaise })
+      .from(batches)
+      .where(eq(batches.id, input.batchId));
+    totalFeePaise = batch?.feePaise ?? null;
+  }
   if (totalFeePaise === null) {
     const [structure] = await tx
       .select({ baseFeePaise: feeStructures.baseFeePaise })
@@ -111,7 +120,7 @@ export async function confirmAdmission(
       // labelled "Manual fee override" two inches further up the screen.
       throw new Error(
         `No fee is set up for ${input.course} / ${input.mode} / ${input.academicYear} at this centre. ` +
-          `Add it in Settings → Fee Structures, or type the amount into "Manual fee override".`,
+          `Set the batch's fee in Settings → Courses & Batches, or type the amount into "Manual fee override".`,
       );
     }
     totalFeePaise = structure.baseFeePaise;

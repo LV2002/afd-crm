@@ -8761,3 +8761,11 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 
 - Cause: the lead profile form autosaves ALL its fields, including Next Follow-up, and no longer rebuilt itself after other actions (since the autosave fix). Logging an interaction moved the lead's date to the new one, but a form still showing the old date wrote it back the next time any field was left. The form is now rebuilt when the follow-up date or owner changes elsewhere (keyed on them; the active tab is kept above the key).
 - Logging an interaction that finishes the conversation (converted, not interested, dropped, wrong target audience) now clears the lead's follow-up date, instead of leaving the old one overdue. A failed follow-up update is reported instead of ignored. Test added.
+
+## Courses & batches: one page, with the fee on the batch
+
+- **Settings → Courses & Batches** (`/settings/courses`) replaces the separate Batches and Fee Structures entries. Each course shows its mode (Online / Hybrid) with its batches underneath: centre, academic year, fee, seats. "New course" and "Add batch" (pre-fills the course) are on the page; the old `/settings/batches` list redirects here.
+- Mode belongs to the **course**, not the batch (migration 0108): `dropdown_options.metadata.mode` on the course row. A batch's mode is always its course's; changing a course's mode moves its batches. Offline is retired (inactive, not deleted); existing courses/batches were migrated (hybrid if anything under them was hybrid/offline, else online).
+- Each batch has one **centre**, one **academic year** and an optional **fee** (`batches.fee_paise`, backfilled from the matching fee structure).
+- **Admission and Course & batch panel**: choosing a batch sets mode, year and fee; the mode/year pickers only appear when no batch is chosen. Fee order: typed manual override, then batch fee, then the legacy `fee_structures` row. Discounts and offers work as before.
+- Stubbed: legacy Fee Structures page kept as a fallback (renamed "legacy"); no UI yet to bulk-copy a batch to next year.

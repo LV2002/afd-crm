@@ -66,19 +66,19 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["rules.manage"],
   },
   {
-    // Moved out of the left menu in September 2026. A batch is defined once
-    // a term and then referred to constantly — which makes it setup, not a
-    // daily workspace. Counsellors pick a batch when they confirm an
-    // admission; nobody needs a whole section for it.
-    href: "/settings/batches",
-    label: "Batches",
-    description: "Class groups, their timings and who is in them",
-    permissions: ["batch.manage"],
+    // Courses and batches are one screen: a batch is a course running at a
+    // centre for a year, and carries the fee. Replaced the separate Batches
+    // and Fee Structures entries (fee structures remain as a fallback for
+    // batches with no fee set).
+    href: "/settings/courses",
+    label: "Courses & Batches",
+    description: "What we teach, online or hybrid, and each batch's centre, year and fee",
+    permissions: ["settings.manage", "batch.manage"],
   },
   {
     href: "/settings/fee-structures",
-    label: "Fee Structures",
-    description: "Base fee by course, centre, mode and academic year",
+    label: "Fee Structures (legacy)",
+    description: "Older fee table, used only when a batch has no fee of its own",
     permissions: ["settings.manage"],
   },
   {

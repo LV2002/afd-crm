@@ -83,6 +83,8 @@ export function ChangePlanPanel({
     return matching;
   }, [batches, course, current.batchId]);
 
+  const chosen = options.find((batch) => batch.id === batchId) ?? null;
+
   if (!canEdit) return null;
 
   return (
@@ -127,30 +129,34 @@ export function ChangePlanPanel({
             </>
           )}
         </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="plan-mode">Mode</Label>
-          <Combobox
-            id="plan-mode"
-            name="mode"
-            required
-            defaultValue={current.mode}
-            options={modes}
-            placeholder="Select mode"
-            searchPlaceholder="Type to search…"
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="plan-academic-year">Academic year</Label>
-          <Combobox
-            id="plan-academic-year"
-            name="academicYear"
-            required
-            defaultValue={current.academicYear}
-            options={academicYearOptions()}
-            placeholder="Select year"
-            searchPlaceholder="Type to search…"
-          />
-        </div>
+        {!chosen && (
+          <>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="plan-mode">Mode</Label>
+              <Combobox
+                id="plan-mode"
+                name="mode"
+                required
+                defaultValue={current.mode}
+                options={modes}
+                placeholder="Select mode"
+                searchPlaceholder="Type to search…"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="plan-academic-year">Academic year</Label>
+              <Combobox
+                id="plan-academic-year"
+                name="academicYear"
+                required
+                defaultValue={current.academicYear}
+                options={academicYearOptions()}
+                placeholder="Select year"
+                searchPlaceholder="Type to search…"
+              />
+            </div>
+          </>
+        )}
         <div className="flex flex-col gap-2">
           <Label htmlFor="plan-batch">Batch</Label>
           {/*
@@ -173,6 +179,13 @@ export function ChangePlanPanel({
             placeholder="No batch"
             searchPlaceholder="Type to search…"
           />
+          {chosen && (
+            <p className="text-xs text-muted-foreground">
+              The batch sets the mode and year:{" "}
+              {modes.find((mode) => mode.value === chosen.mode)?.label ?? chosen.mode} ·{" "}
+              {chosen.academicYear}.
+            </p>
+          )}
         </div>
       </div>
 

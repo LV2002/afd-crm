@@ -20,7 +20,7 @@ if (!process.env.DATABASE_URL) {
 }
 
 const { db } = await import("../src/lib/db/client");
-const { centers, dropdownOptions, enrolments, feeStructures, leads } = await import("../src/lib/db/schema");
+const { batches, centers, dropdownOptions, enrolments, feeStructures, leads } = await import("../src/lib/db/schema");
 const { confirmAdmission } = await import("../src/lib/enrolment/confirm-admission");
 
 const MARKER = "ConfirmAdmissionTest";
@@ -37,6 +37,7 @@ async function sweep() {
     await db.delete(enrolments).where(eq(enrolments.leadId, lead.id));
   }
   await db.delete(leads).where(like(leads.studentName, `${MARKER}%`));
+  await db.delete(batches).where(like(batches.name, `${MARKER}%`));
   await db.delete(feeStructures).where(like(feeStructures.course, `${MARKER}%`));
   await db.delete(centers).where(like(centers.name, `${MARKER}%`));
 }
@@ -237,5 +238,56 @@ describe("confirmAdmission", () => {
         }),
       ),
     ).rejects.toThrow(/already has an enrolment/);
+  });
+
+  it("takes the fee from the batch, ahead of fee_structures, and lets a typed figure win", async () => {
+    const course = testName("batch-fee");
+    await db.insert(feeStructures).values({
+      course,
+      centerId,
+      mode: "online",
+      academicYear: "2026-27",
+      baseFeePaise: 9900000,
+    });
+    const [batch] = await db
+      .insert(batches)
+      .values({
+        name: testName("batch"),
+        centerId,
+        course,
+        mode: "online",
+        academicYear: "2026-27",
+        feePaise: 5000000,
+      })
+      .returning({ id: batches.id });
+
+    const leadA = await makeLead("batch-fee-a", "+919847200106");
+    const a = await db.transaction((tx) =>
+      confirmAdmission(tx, {
+        leadId: leadA,
+        course,
+        centerId,
+        mode: "online",
+        academicYear: "2026-27",
+        batchId: batch.id,
+        confirmedBy: null,
+      }),
+    );
+    expect(a.totalFeePaise).toBe(5000000);
+
+    const leadB = await makeLead("batch-fee-b", "+919847200107");
+    const b = await db.transaction((tx) =>
+      confirmAdmission(tx, {
+        leadId: leadB,
+        course,
+        centerId,
+        mode: "online",
+        academicYear: "2026-27",
+        batchId: batch.id,
+        totalFeePaiseOverride: 4000000,
+        confirmedBy: null,
+      }),
+    );
+    expect(b.totalFeePaise).toBe(4000000);
   });
 });

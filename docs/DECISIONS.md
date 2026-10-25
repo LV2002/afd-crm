@@ -4821,3 +4821,7 @@ Plan sizes are deployment settings, not business data, so `STORAGE_LIMIT_MB` / `
 ## 2026-10-23 — Replies on the WhatsApp API tab leave from the API number
 
 Leon's earlier rule was that a counsellor's message never leaves from the Business API number. With the API number now receiving real customer messages, he asked for replies on the **WhatsApp API** tab to go out from that same number, so a customer sees one conversation. Implemented as a `channel` on the send actions: `"api"` on that tab only, gated on `whatsapp.campaign` (the permission that already means "may speak as the institute"), window read for the API number alone, upload and send with the API number's id. The **WhatsApp** tab and everything else still send from the replying counsellor's own Coexistence number.
+
+## 2026-10-25 — Mode lives on the course; fee and year on the batch
+
+Leon asked for a Courses page with batches beneath and a fee per batch, and for offline to go ("online and hybrid"). Assumptions: a course is institute-wide (no centre, no year); a batch belongs to one centre and one academic year; a batch has no mode of its own (it takes its course's), so nobody picks mode twice. Mode is stored in the course's `dropdown_options.metadata` rather than a new table, so every list that already reads courses keeps working and config export carries it. `fee_structures` stays as a fallback for batches with no fee — nothing was deleted. Enrolments already taken keep the mode they were taken with.

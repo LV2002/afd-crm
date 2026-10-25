@@ -7,7 +7,9 @@ import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
+import { academicYearOptions } from "@/lib/enrolment/academic-year";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/smart-inputs";
 
 import { saveBatch, type BatchFormState } from "./actions";
 
@@ -18,7 +20,7 @@ export interface BatchFormValues {
   name: string;
   centerId: string;
   course: string;
-  mode: string;
+  fee: string;
   academicYear: string;
   startDate: string;
   endDate: string;
@@ -27,20 +29,20 @@ export interface BatchFormValues {
 }
 
 /**
- * Course and mode come from `dropdown_options`, not from a list in this
- * file — CLAUDE.md is explicit that the course list is admin-editable and
- * must never be hardcoded. The centre list is the same.
+ * Courses come from `dropdown_options`, not from a list in this file —
+ * CLAUDE.md is explicit that the course list is admin-editable and must
+ * never be hardcoded. The centre list is the same. There is no mode field:
+ * a batch is online or hybrid because its course is, and saveBatch reads it
+ * from the course.
  */
 export function BatchForm({
   values,
   centers,
   courses,
-  modes,
 }: {
   values: BatchFormValues;
   centers: Array<{ id: string; name: string }>;
-  courses: string[];
-  modes: string[];
+  courses: Array<{ value: string; label: string; mode: string }>;
 }) {
   const [state, action, pending] = useActionState(saveBatch, initialState);
 
@@ -74,12 +76,13 @@ export function BatchForm({
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="batch-year">Academic year</Label>
-          <Input
+          <Combobox
             id="batch-year"
             name="academicYear"
             required
             defaultValue={values.academicYear}
-            placeholder="2026-27"
+            options={academicYearOptions(values.academicYear || null)}
+            placeholder="Choose a year"
           />
         </div>
 
@@ -89,22 +92,18 @@ export function BatchForm({
             id="batch-course"
             name="course"
             defaultValue={values.course}
-            options={courses.map((course) => ({ value: course, label: course }))}
+            options={courses.map((course) => ({ value: course.value, label: course.label }))}
             placeholder="Choose a course"
             searchPlaceholder="Type a course…"
           />
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor="batch-mode">Mode</Label>
-          <Combobox
-            id="batch-mode"
-            name="mode"
-            defaultValue={values.mode}
-            options={modes.map((mode) => ({ value: mode, label: mode }))}
-            placeholder="Choose a mode"
-            searchPlaceholder="Type a mode…"
-          />
+          <Label htmlFor="batch-fee">Fee for this batch</Label>
+          <MoneyInput id="batch-fee" name="fee" defaultValue={values.fee} placeholder="Not set" />
+          <p className="text-xs text-muted-foreground">
+            What a family pays to join. Offers and discounts come off this at admission.
+          </p>
         </div>
 
         <div className="flex flex-col gap-2">

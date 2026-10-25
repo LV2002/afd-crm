@@ -370,14 +370,14 @@ const DROPDOWN_SEEDS: DropdownSeed[] = [
     label: "Course",
     isSystem: true,
     options: [
-      { value: "foundation", label: "Foundation" },
-      { value: "dwo", label: "DWO" },
-      { value: "dao", label: "DAO" },
-      { value: "drh", label: "DRH" },
-      { value: "crash", label: "Crash" },
-      { value: "repeat_batch", label: "Repeat Batch" },
-      { value: "mdes", label: "MDes" },
-      { value: "consultancy", label: "Consultancy" },
+      { value: "foundation", label: "Foundation", metadata: { mode: "online" } },
+      { value: "dwo", label: "DWO", metadata: { mode: "online" } },
+      { value: "dao", label: "DAO", metadata: { mode: "online" } },
+      { value: "drh", label: "DRH", metadata: { mode: "online" } },
+      { value: "crash", label: "Crash", metadata: { mode: "online" } },
+      { value: "repeat_batch", label: "Repeat Batch", metadata: { mode: "online" } },
+      { value: "mdes", label: "MDes", metadata: { mode: "online" } },
+      { value: "consultancy", label: "Consultancy", metadata: { mode: "online" } },
     ],
   },
   {
@@ -399,8 +399,8 @@ const DROPDOWN_SEEDS: DropdownSeed[] = [
     label: "Preferred mode",
     isSystem: false,
     options: [
+      // Offline was retired (migration 0108): a course is Online or Hybrid.
       { value: "online", label: "Online" },
-      { value: "offline", label: "Offline" },
       { value: "hybrid", label: "Hybrid" },
     ],
   },

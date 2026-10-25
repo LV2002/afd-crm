@@ -8,8 +8,10 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { checkAssignment, liveMemberCount } from "@/lib/batches/roster";
 import { db } from "@/lib/db/client";
 import { batches, studentBatches, students } from "@/lib/db/schema";
+import { courseModeOf } from "@/lib/enrolment/course-catalog";
 import { notify } from "@/lib/notifications/notify";
 import { syncEnrolmentBatch, type SyncedEnrolment } from "@/lib/enrolment/sync-batch";
+import { parseRupeesToPaise } from "@/lib/format/currency";
 import { createClient } from "@/lib/supabase/server";
 
 export interface BatchFormState {
@@ -42,13 +44,18 @@ export async function saveBatch(_prev: BatchFormState, formData: FormData): Prom
   const name = String(formData.get("name") ?? "").trim();
   const centerId = String(formData.get("centerId") ?? "").trim();
   const course = String(formData.get("course") ?? "").trim();
-  const mode = String(formData.get("mode") ?? "").trim();
   const academicYear = String(formData.get("academicYear") ?? "").trim();
 
   if (!name) return { error: "Give the batch a name." };
   if (!centerId) return { error: "Pick a centre." };
   if (!course) return { error: "Pick a course." };
-  if (!mode) return { error: "Pick a mode." };
+
+  // A batch has no mode of its own: it is online or hybrid because its
+  // course is. Reading it here keeps the two from ever disagreeing.
+  const mode = await courseModeOf(course);
+  if (!mode) {
+    return { error: "That course has no mode yet. Set it on the Courses page first." };
+  }
   if (!academicYear) return { error: "Enter the academic year." };
 
   // A centre head may only create batches at their own centres. `all`
@@ -73,9 +80,29 @@ export async function saveBatch(_prev: BatchFormState, formData: FormData): Prom
     return { error: "The batch cannot end before it starts." };
   }
 
+  // Blank means "no fee set yet": admission then falls back to the older
+  // fee structures, or asks for a manual figure.
+  const feeRaw = String(formData.get("fee") ?? "").replace(/[,\s₹]/g, "");
+  let feePaise: number | null = null;
+  if (feeRaw !== "") {
+    feePaise = parseRupeesToPaise(feeRaw);
+    if (feePaise === null || feePaise <= 0) return { error: "Enter the fee as an amount in rupees." };
+  }
+
   const isActive = formData.get("isActive") !== "off";
 
-  const values = { name, centerId, course, mode, academicYear, capacity, startDate, endDate, isActive };
+  const values = {
+    name,
+    centerId,
+    course,
+    mode,
+    academicYear,
+    feePaise,
+    capacity,
+    startDate,
+    endDate,
+    isActive,
+  };
 
   let savedId: string;
   if (batchId) {
@@ -109,6 +136,7 @@ export async function saveBatch(_prev: BatchFormState, formData: FormData): Prom
   });
 
   revalidatePath("/settings/batches");
+  revalidatePath("/settings/courses");
   revalidatePath(`/settings/batches/${savedId}`);
   return { success: batchId ? "Batch saved." : `Created ${name}.` };
 }

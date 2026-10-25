@@ -580,16 +580,22 @@ async function runConfirmAdmission(
   }
 
   const course = formData.get("course");
-  const mode = formData.get("mode");
-  const academicYear = formData.get("academicYear");
   if (typeof course !== "string" || !course) return { error: "Course is required." };
-  if (typeof mode !== "string" || !mode) return { error: "Mode is required." };
-  if (typeof academicYear !== "string" || !academicYear.trim()) {
-    return { error: "AFD academic year is required." };
-  }
 
   const batchIdRaw = formData.get("batchId");
   const batchId = typeof batchIdRaw === "string" && batchIdRaw.trim() !== "" ? batchIdRaw.trim() : null;
+
+  // With a batch, the mode and academic year ARE the batch's (and the fee
+  // comes from it too, in confirmAdmission) — nobody types them twice. They
+  // are only asked for when the admission is taken before any batch exists.
+  let mode = formData.get("mode");
+  let academicYear = formData.get("academicYear");
+  if (!batchId) {
+    if (typeof mode !== "string" || !mode) return { error: "Mode is required." };
+    if (typeof academicYear !== "string" || !academicYear.trim()) {
+      return { error: "AFD academic year is required." };
+    }
+  }
 
   const discountPaise = parseRupeesToPaise(formData.get("discount")) ?? 0;
   const feeOverrideRaw = formData.get("totalFeeOverride");
@@ -620,7 +626,13 @@ async function runConfirmAdmission(
   // enrolment looks complete either way.
   if (batchId) {
     const [batch] = await db
-      .select({ centerId: batches.centerId, course: batches.course, isActive: batches.isActive })
+      .select({
+        centerId: batches.centerId,
+        course: batches.course,
+        isActive: batches.isActive,
+        mode: batches.mode,
+        academicYear: batches.academicYear,
+      })
       .from(batches)
       .where(and(eq(batches.id, batchId), isNull(batches.deletedAt)));
 
@@ -633,6 +645,12 @@ async function runConfirmAdmission(
     if (batch.course !== course) {
       return { error: `That batch runs ${batch.course}, not ${course}.` };
     }
+    mode = batch.mode;
+    academicYear = batch.academicYear;
+  }
+
+  if (typeof mode !== "string" || typeof academicYear !== "string") {
+    return { error: "Could not work out the mode and academic year." };
   }
 
   // The same authority check the fee panel applies. Confirming an
