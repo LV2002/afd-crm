@@ -188,7 +188,7 @@ export default async function InstalmentAgreementPage({
                 />
               )}
               <FieldLine
-                label="Down Payment Paid:"
+                label="Down Payment (at joining):"
                 value={`₹ ${formatINR(toPaise(plan.values.downPayment)).replace("₹", "").trim()}`} accent={accent}
               />
             </div>

@@ -17,6 +17,7 @@ interface EnrolmentQueueRow {
   lead_id: string;
   course: string;
   net_fee_paise: number;
+  down_payment_paise: number;
   status: string;
   dropped_at: string | null;
   sales_to_accounts_at: string | null;
@@ -57,7 +58,7 @@ export default async function AccountsQueuePage({
   const { data: enrolmentRows, error } = await supabase
     .from("enrolments")
     .select(
-      "id, lead_id, course, net_fee_paise, status, dropped_at, sales_to_accounts_at, accounts_to_academics_at, leads(student_name, primary_phone), centers(name)",
+      "id, lead_id, course, net_fee_paise, down_payment_paise, status, dropped_at, sales_to_accounts_at, accounts_to_academics_at, leads(student_name, primary_phone), centers(name)",
     )
     .is("deleted_at", null)
     .order("sales_to_accounts_at", { ascending: true })
@@ -110,6 +111,8 @@ export default async function AccountsQueuePage({
       row.id,
       planStatus({
         netPaise: row.net_fee_paise,
+        downPaymentPaise: row.down_payment_paise,
+        downPaymentDueDate: (row.sales_to_accounts_at ?? today).slice(0, 10),
         instalments: instalmentsByEnrolment.get(row.id) ?? [],
         paidPaise: paidByEnrolmentId.get(row.id) ?? 0,
         asOf: today,

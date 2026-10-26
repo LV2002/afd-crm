@@ -79,6 +79,7 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
       id: enrolments.id,
       discountPaise: enrolments.discountPaise,
       netFeePaise: enrolments.netFeePaise,
+      downPaymentPaise: enrolments.downPaymentPaise,
       course: enrolments.course,
       centerId: enrolments.centerId,
     })
@@ -135,7 +136,7 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
     instalments.push({ sequence: slot, dueDate, amountPaise });
   }
 
-  const problems = validatePlan(totalFeePaise, discountPaise, instalments);
+  const problems = validatePlan(totalFeePaise, discountPaise, instalments, downPaymentPaise);
   if (problems.length > 0) return { error: problems[0] };
 
   // What this person may actually give. A discount above their ceiling is
@@ -243,7 +244,7 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
   // student now owes, so say so rather than writing a schedule that is
   // quietly short.
   if (outcome.needsApproval && instalments.length > 0) {
-    const scheduled = instalments.reduce((sum, i) => sum + i.amountPaise, 0);
+    const scheduled = instalments.reduce((sum, i) => sum + i.amountPaise, 0) + downPaymentPaise;
     if (scheduled < totalFeePaise - outcome.appliedDiscountPaise) {
       return {
         error: `${outcome.reason} Save the plan without the discount for now, or with instalments totalling the full fee — the discount can be applied once it is approved.`,
@@ -264,6 +265,7 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
     .where(eq(enrolmentInstalments.enrolmentId, enrolment.id));
   const wasReady = planStatus({
     netPaise: enrolment.netFeePaise,
+    downPaymentPaise: enrolment.downPaymentPaise,
     instalments: previousInstalments,
     paidPaise: 0,
     asOf: "",
@@ -377,6 +379,7 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
 
   const nowReady = planStatus({
     netPaise: newNetFeePaise,
+    downPaymentPaise,
     instalments,
     paidPaise: 0,
     asOf: "",
@@ -389,8 +392,11 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
         student_name: lead.studentName,
         course: enrolment.course,
         payable: formatINR(newNetFeePaise),
-        instalments: `${sorted.length} instalment${sorted.length === 1 ? "" : "s"}`,
-        first_due: sorted[0]?.dueDate ?? "—",
+        instalments:
+          sorted.length === 0
+            ? "one lump sum"
+            : `${sorted.length} instalment${sorted.length === 1 ? "" : "s"}${downPaymentPaise > 0 ? ` after a ${formatINR(downPaymentPaise)} down payment` : ""}`,
+        first_due: sorted[0]?.dueDate ?? "at joining",
         set_by: user.fullName,
       },
       href: `/accounts/${enrolment.id}`,

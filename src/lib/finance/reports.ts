@@ -2,7 +2,12 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { allocatePayments, type ReceivedPayment, type ScheduledInstalment } from "./allocate";
+import {
+  allocateWithDownPayment,
+  DOWN_PAYMENT_ID,
+  type ReceivedPayment,
+  type ScheduledInstalment,
+} from "./allocate";
 import { getLedgerEntries, type LedgerRow } from "./get-finance";
 import {
   ageingBucket,
@@ -210,7 +215,9 @@ export async function getCollections(
 ): Promise<CollectionsReport> {
   let enrolmentQuery = supabase
     .from("enrolments")
-    .select("id, course, center_id, lead_id, student_id, leads(student_name), students(full_name)")
+    .select(
+      "id, course, center_id, lead_id, student_id, down_payment_paise, sales_to_accounts_at, leads(student_name), students(full_name)",
+    )
     .is("deleted_at", null)
     // A student who left is not a debtor to chase. Their instalments stop
     // appearing here the moment they are marked dropped; what they already
@@ -225,6 +232,8 @@ export async function getCollections(
         id: string;
         course: string;
         center_id: string;
+        down_payment_paise: number;
+        sales_to_accounts_at: string | null;
         leads: { student_name: string } | null;
         students: { full_name: string } | null;
       }>
@@ -289,13 +298,18 @@ export async function getCollections(
     if (!schedule || schedule.length === 0) continue;
 
     const studentName = enrolment.students?.full_name ?? enrolment.leads?.student_name ?? "Unknown";
-    const result = allocatePayments(
+    // Down payment first, so the first money in settles it and not
+    // instalment 1; it is then left out of the instalment rows below.
+    const result = allocateWithDownPayment(
       schedule,
+      enrolment.down_payment_paise,
+      (enrolment.sales_to_accounts_at ?? options.asOf).slice(0, 10),
       paymentsByEnrolment.get(enrolment.id) ?? [],
       options.asOf,
     );
 
     for (const instalment of result.instalments) {
+      if (instalment.id === DOWN_PAYMENT_ID) continue;
       settlements.push({ dueDate: instalment.dueDate, settledOn: instalment.settledOn });
 
       if (instalment.settledOn) {

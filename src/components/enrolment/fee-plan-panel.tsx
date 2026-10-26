@@ -108,7 +108,8 @@ export function FeePlanPanel({
   );
 
   const netPaise = Math.max(0, toPaise(fee) - totalDiscountPaise);
-  const scheduledPaise = Object.values(amounts).reduce((sum, v) => sum + toPaise(v), 0);
+  const scheduledPaise =
+    toPaise(down) + Object.values(amounts).reduce((sum, v) => sum + toPaise(v), 0);
   const shortfallPaise = netPaise - scheduledPaise;
   const planComplete = netPaise > 0 && shortfallPaise === 0;
 
@@ -119,6 +120,14 @@ export function FeePlanPanel({
         admission confirmed before it can be entered.
       </p>
     );
+  }
+
+  // Paying in one go is entered as the down payment: the whole payable
+  // amount, and no instalments.
+  function payInFull() {
+    setDown(netPaise > 0 ? String(netPaise / 100) : "");
+    setAmounts({});
+    setDues({});
   }
 
   function fillSchedule() {
@@ -148,7 +157,7 @@ export function FeePlanPanel({
         >
           {planComplete
             ? "Plan complete. Once it is saved, accounts is told and collects by this agreement."
-            : "Set the fee, the discount and the instalments. Accounts is told when they add up to the payable amount."}
+            : "Set the fee, the discount and the instalments. Accounts is told when the down payment and instalments add up to the payable amount."}
         </p>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -168,7 +177,7 @@ export function FeePlanPanel({
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="downPayment">Down payment</Label>
+            <Label htmlFor="downPayment">Down payment (paid at joining)</Label>
             <MoneyInput
               id="downPayment"
               name="downPayment"
@@ -262,7 +271,7 @@ export function FeePlanPanel({
           {netPaise > 0 && (
             <span className={shortfallPaise === 0 ? " text-emerald-600" : " text-muted-foreground"}>
               {" · "}
-              Scheduled {formatINR(scheduledPaise)}
+              Down payment + instalments {formatINR(scheduledPaise)}
               {shortfallPaise > 0 && ` · ${formatINR(shortfallPaise)} not yet scheduled`}
               {shortfallPaise < 0 && ` · ${formatINR(-shortfallPaise)} over-scheduled`}
             </span>
@@ -271,6 +280,11 @@ export function FeePlanPanel({
 
         <div className="flex flex-col gap-3">
           <Label>Instalments</Label>
+          <p className="text-xs text-muted-foreground">
+            Paying in one go? Put the whole amount in <strong>Down payment</strong> and leave the
+            instalments blank. Paying in instalments? Enter them here; a down payment, if there is
+            one, is paid on top.
+          </p>
           {canEdit && netPaise > 0 && (
             <div className="flex flex-wrap items-end gap-3 rounded-md border border-dashed p-3">
               <div className="flex flex-col gap-1">
@@ -305,9 +319,12 @@ export function FeePlanPanel({
               <Button type="button" variant="outline" size="sm" onClick={fillSchedule}>
                 Fill the schedule
               </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={payInFull}>
+                Pay in full instead
+              </Button>
               <p className="basis-full text-xs text-muted-foreground">
-                Instalment 1 is the down payment, if there is one; the rest is split evenly, a month
-                apart. Adjust any row afterwards.
+                Splits what is left after the down payment evenly, a month apart. Adjust any row
+                afterwards.
               </p>
             </div>
           )}
@@ -334,7 +351,6 @@ export function FeePlanPanel({
             </div>
           ))}
           <p className="text-xs text-muted-foreground">
-            The instalments cover the whole payable amount — the down payment is part of instalment 1.
             Leave a row blank if it isn&apos;t used; fill in both the date and the amount, or neither.
           </p>
         </div>
@@ -388,7 +404,7 @@ export function FeePlanPanel({
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">
-          The instalments need to add up to the payable amount before the agreement can be printed.{" "}
+          The down payment and instalments need to add up to the payable amount before the agreement can be printed.{" "}
           {shortfallPaise > 0 && `${formatINR(shortfallPaise)} still to schedule.`}
         </p>
       )}

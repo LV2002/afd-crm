@@ -161,3 +161,38 @@ export function studentStanding(result: AllocationResult): "overpaid" | "paid" |
   if (result.instalments.some((i) => i.status === "overdue")) return "overdue";
   return "on_track";
 }
+
+/** Stand-in id for the down payment when it is laid out as the first line of a schedule. */
+export const DOWN_PAYMENT_ID = "down-payment";
+
+/**
+ * The agreed plan as accounts collects it: the down payment first (due on
+ * the day the admission was confirmed), then the instalments.
+ *
+ * A student pays one of two ways — a lump sum, which is entered as the down
+ * payment with no instalments, or instalments with an optional down payment
+ * on top. Either way the first money in settles the down payment, so it is
+ * laid out as sequence 0 and the same oldest-first rule does the rest.
+ * Callers that only want real instalments filter on `DOWN_PAYMENT_ID`.
+ */
+export function allocateWithDownPayment(
+  instalments: ScheduledInstalment[],
+  downPaymentPaise: number,
+  downPaymentDueDate: string,
+  paymentsIn: ReceivedPayment[],
+  asOf: string,
+): AllocationResult {
+  const schedule: ScheduledInstalment[] =
+    downPaymentPaise > 0
+      ? [
+          {
+            id: DOWN_PAYMENT_ID,
+            sequence: 0,
+            dueDate: downPaymentDueDate,
+            amountPaise: downPaymentPaise,
+          },
+          ...instalments,
+        ]
+      : instalments;
+  return allocatePayments(schedule, paymentsIn, asOf);
+}

@@ -26,10 +26,10 @@ export function addMonthsISO(date: string, months: number): string {
 /**
  * A starting schedule a counsellor can adjust.
  *
- * The instalments always cover the whole payable amount — the down payment
- * is instalment 1, due on the start date — so what the agreement prints adds
- * up to what the family owes. The rest is split evenly, monthly, with the
- * last instalment absorbing the rounding so nothing is ever a paisa out.
+ * The down payment is separate from the instalments — it is collected at
+ * joining, and the instalments split whatever is left of the payable
+ * amount, evenly and a month apart starting at `startDate`, with the last
+ * one absorbing the rounding so nothing is ever a paisa out.
  */
 export function suggestSchedule(input: {
   netPaise: number;
@@ -39,64 +39,75 @@ export function suggestSchedule(input: {
 }): ScheduleLine[] {
   const count = Math.min(Math.max(Math.floor(input.count), 1), INSTALMENT_SLOTS.length);
   const net = Math.max(0, Math.floor(input.netPaise));
-  if (net === 0) return [];
-
   const down = Math.min(Math.max(0, Math.floor(input.downPaymentPaise)), net);
+  const remaining = net - down;
+  if (remaining === 0) return [];
+
+  const each = Math.floor(remaining / count);
   const lines: ScheduleLine[] = [];
-
-  let remaining = net;
-  let slots = count;
-  let sequence = 1;
-  let month = 0;
-
-  if (down > 0 && count > 1) {
-    lines.push({ sequence: sequence++, dueDate: input.startDate, amountPaise: down });
-    remaining -= down;
-    slots -= 1;
-    month = 1;
-  }
-
-  const each = Math.floor(remaining / slots);
-  for (let i = 0; i < slots; i += 1) {
-    const last = i === slots - 1;
+  for (let i = 0; i < count; i += 1) {
+    const last = i === count - 1;
     lines.push({
-      sequence: sequence++,
-      dueDate: addMonthsISO(input.startDate, month + i),
-      amountPaise: last ? remaining - each * (slots - 1) : each,
+      sequence: i + 1,
+      dueDate: addMonthsISO(input.startDate, i),
+      amountPaise: last ? remaining - each * (count - 1) : each,
     });
   }
   return lines;
 }
 
 export interface PlanStatus {
-  /** A payable amount exists and the instalments add up to exactly it. */
+  /** A payable amount exists and the down payment plus instalments add up to exactly it. */
   ready: boolean;
   scheduledPaise: number;
-  /** First instalment not yet covered by what has been received, or null. */
-  nextDue: { sequence: number; dueDate: string; amountPaise: number; overdue: boolean } | null;
+  /** First amount (sequence 0 is the down payment) not yet covered by what has been received, or null. */
+  nextDue: {
+    sequence: number;
+    dueDate: string;
+    amountPaise: number;
+    /** What is still unpaid of that line — less than `amountPaise` after a part-payment. */
+    outstandingPaise: number;
+    overdue: boolean;
+  } | null;
 }
 
 /**
- * Where a plan stands. Money received is applied to the instalments in order,
- * the same way the agreed-plan table reads it, so "next due" is the first
- * instalment the running total has not yet reached.
+ * Where a plan stands. The down payment counts as the first amount due (on
+ * the day the admission was confirmed), then the instalments; money received
+ * is applied in that order, the same way the agreed-plan table reads it, so
+ * "next due" is the first line the running total has not yet reached.
  */
 export function planStatus(input: {
   netPaise: number;
+  downPaymentPaise?: number;
+  /** `YYYY-MM-DD` the down payment fell due; defaults to `asOf`. */
+  downPaymentDueDate?: string;
   instalments: ScheduleLine[];
   paidPaise: number;
   /** `YYYY-MM-DD`, the institute's today. */
   asOf: string;
 }): PlanStatus {
+  const down = input.downPaymentPaise ?? 0;
   const ordered = [...input.instalments].sort((a, b) => a.sequence - b.sequence);
-  const scheduledPaise = ordered.reduce((sum, i) => sum + i.amountPaise, 0);
+  const lines: ScheduleLine[] =
+    down > 0
+      ? [
+          { sequence: 0, dueDate: input.downPaymentDueDate ?? input.asOf, amountPaise: down },
+          ...ordered,
+        ]
+      : ordered;
+  const scheduledPaise = lines.reduce((sum, i) => sum + i.amountPaise, 0);
 
   let covered = 0;
   let nextDue: PlanStatus["nextDue"] = null;
-  for (const line of ordered) {
+  for (const line of lines) {
     covered += line.amountPaise;
     if (input.paidPaise < covered) {
-      nextDue = { ...line, overdue: line.dueDate < input.asOf };
+      nextDue = {
+        ...line,
+        outstandingPaise: covered - Math.max(0, input.paidPaise),
+        overdue: line.dueDate < input.asOf,
+      };
       break;
     }
   }
