@@ -116,3 +116,17 @@ describe("allocateWithDownPayment", () => {
     expect(result.outstandingPaise).toBe(3000000);
   });
 });
+
+import { effectiveDownPaymentDue } from "../src/lib/enrolment/plan-status";
+
+describe("effectiveDownPaymentDue", () => {
+  it("uses the date agreed with the family", () => {
+    expect(effectiveDownPaymentDue("2026-11-05", "2026-10-26T09:00:00Z", "2026-10-27")).toBe("2026-11-05");
+  });
+  it("falls back to the day the admission was confirmed, as every earlier plan read", () => {
+    expect(effectiveDownPaymentDue(null, "2026-10-26T09:00:00Z", "2026-10-27")).toBe("2026-10-26");
+  });
+  it("falls back to today when neither is known", () => {
+    expect(effectiveDownPaymentDue(null, null, "2026-10-27")).toBe("2026-10-27");
+  });
+});

@@ -1,5 +1,5 @@
 /**
- * The Country field on a lead (migration 0103) — needs a real database with
+ * The Country field on a lead (migration 0103; "Country (specify)" removed by 0107) — needs a real database with
  * migrations applied:   npm run db:migrate && npm test
  */
 import { config as loadEnv } from "dotenv";
@@ -43,21 +43,15 @@ describe("a lead's country", () => {
     ]);
   });
 
-  it("has a text box for naming the country when it is Others", async () => {
+  it("no longer asks for a separate name when it is Others", async () => {
+    // "Country (specify)" was removed from the lead form (0107 switches it
+    // off on existing databases; a fresh seed never creates it).
     const other = await field("country_other");
-    expect(other).toBeTruthy();
-    expect(other.type).toBe("text");
-    expect(other.isCore).toBe(false);
+    expect(other === undefined || other.isActive === false).toBe(true);
   });
 
-  it("sits in Personal, ahead of State, in a sensible order", async () => {
-    const [country, countryOther, state] = await Promise.all([
-      field("country"),
-      field("country_other"),
-      field("state"),
-    ]);
+  it("sits in Personal", async () => {
+    const country = await field("country");
     expect(country.section).toBe("Personal");
-    expect(country.sortOrder).toBeLessThan(countryOther.sortOrder);
-    expect(countryOther.sortOrder).toBeLessThan(state.sortOrder);
   });
 });

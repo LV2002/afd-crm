@@ -29,6 +29,7 @@ export interface FeePlanValues {
   discountName: string;
   promoId: string;
   downPayment: string;
+  downPaymentDue: string;
   feeNotes: string;
   instalments: Array<{ sequence: number; dueDate: string; amount: string }>;
 }
@@ -102,6 +103,7 @@ export function FeePlanPanel({
     Object.fromEntries(values.instalments.map((i) => [i.sequence, i.dueDate])),
   );
   const [down, setDown] = useState(values.downPayment);
+  const [downDue, setDownDue] = useState(values.downPaymentDue);
   const [planCount, setPlanCount] = useState("3");
   const [startDate, setStartDate] = useState(
     new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()),
@@ -174,17 +176,6 @@ export function FeePlanPanel({
               onValueChange={setFee}
               disabled={!canEdit}
               placeholder="45000"
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="downPayment">Down payment (paid at joining)</Label>
-            <MoneyInput
-              id="downPayment"
-              name="downPayment"
-              value={down}
-              onValueChange={setDown}
-              disabled={!canEdit}
-              placeholder="0"
             />
           </div>
         </div>
@@ -281,9 +272,10 @@ export function FeePlanPanel({
         <div className="flex flex-col gap-3">
           <Label>Instalments</Label>
           <p className="text-xs text-muted-foreground">
-            Paying in one go? Put the whole amount in <strong>Down payment</strong> and leave the
-            instalments blank. Paying in instalments? Enter them here; a down payment, if there is
-            one, is paid on top.
+            Paying in one go? Put the whole amount on the <strong>Lump sum / down payment</strong> line
+            with the date it should be paid by, and leave the instalments blank. Paying in
+            instalments? Enter them below; a down payment, if there is one, goes on that top line and
+            is paid on top. Leave its date blank if it is due when they join.
           </p>
           {canEdit && netPaise > 0 && (
             <div className="flex flex-wrap items-end gap-3 rounded-md border border-dashed p-3">
@@ -328,6 +320,27 @@ export function FeePlanPanel({
               </p>
             </div>
           )}
+          {/* The lump sum, or the amount paid up front, is the first line of the
+              schedule with a due date of its own — the same as an instalment. */}
+          <div className="grid gap-3 rounded-md bg-muted/40 p-2 sm:grid-cols-[8rem_1fr_1fr] sm:items-center">
+            <span className="text-sm font-medium">Lump sum / down payment</span>
+            <Input
+              name="downPaymentDue"
+              type="date"
+              value={downDue}
+              onChange={(e) => setDownDue(e.target.value)}
+              disabled={!canEdit}
+              aria-label="Lump sum or down payment due date"
+            />
+            <MoneyInput
+              id="downPayment"
+              name="downPayment"
+              value={down}
+              onValueChange={setDown}
+              disabled={!canEdit}
+              placeholder="Amount ₹ (0 if none)"
+            />
+          </div>
           {INSTALMENT_SLOTS.map((slot) => (
             <div key={slot} className="grid gap-3 sm:grid-cols-[3rem_1fr_1fr] sm:items-center">
               <span className="text-sm text-muted-foreground">#{slot}</span>

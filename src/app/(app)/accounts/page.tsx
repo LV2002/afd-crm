@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { formatDateIST } from "@/lib/format/date";
 import { formatINR } from "@/lib/format/currency";
-import { planStatus, type PlanStatus } from "@/lib/enrolment/plan-status";
+import { effectiveDownPaymentDue, planStatus, type PlanStatus } from "@/lib/enrolment/plan-status";
 import { maskPhone } from "@/lib/leads/mask-phone";
 import { createClient } from "@/lib/supabase/server";
 
@@ -18,6 +18,7 @@ interface EnrolmentQueueRow {
   course: string;
   net_fee_paise: number;
   down_payment_paise: number;
+  down_payment_due_date: string | null;
   status: string;
   dropped_at: string | null;
   sales_to_accounts_at: string | null;
@@ -58,7 +59,7 @@ export default async function AccountsQueuePage({
   const { data: enrolmentRows, error } = await supabase
     .from("enrolments")
     .select(
-      "id, lead_id, course, net_fee_paise, down_payment_paise, status, dropped_at, sales_to_accounts_at, accounts_to_academics_at, leads(student_name, primary_phone), centers(name)",
+      "id, lead_id, course, net_fee_paise, down_payment_paise, down_payment_due_date, status, dropped_at, sales_to_accounts_at, accounts_to_academics_at, leads(student_name, primary_phone), centers(name)",
     )
     .is("deleted_at", null)
     .order("sales_to_accounts_at", { ascending: true })
@@ -112,7 +113,7 @@ export default async function AccountsQueuePage({
       planStatus({
         netPaise: row.net_fee_paise,
         downPaymentPaise: row.down_payment_paise,
-        downPaymentDueDate: (row.sales_to_accounts_at ?? today).slice(0, 10),
+        downPaymentDueDate: effectiveDownPaymentDue(row.down_payment_due_date, row.sales_to_accounts_at, today),
         instalments: instalmentsByEnrolment.get(row.id) ?? [],
         paidPaise: paidByEnrolmentId.get(row.id) ?? 0,
         asOf: today,

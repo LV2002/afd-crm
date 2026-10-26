@@ -8801,3 +8801,8 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Down payment is separate from instalments (lump sum vs instalments)
 
 - Payable = down payment + instalments. A lump sum is the whole amount as the down payment with no instalments; the fee panel's completeness check, the "plan ready" notice, the accounts list and the save validation all count both. Accounts' Agreed fee plan lists the down payment as the first line ("Down") with what has been received against it, so a ₹30,000 lump sum with nothing received shows ₹30,000 still owed rather than ₹0. The Record a payment amount is pre-filled with the next amount due. Reminders and Collections allocate with the down payment first. See DECISIONS.md.
+
+## A due date for the lump sum / down payment
+
+- The down payment (which is also how a lump sum is entered) now has its own **due date**, set on a top "Lump sum / down payment" line of the instalment schedule (date + amount), instead of being treated as due the day the admission was confirmed. Migration 0109 adds `enrolments.down_payment_due_date`; blank keeps the old reading (due on confirmation), so nothing saved earlier changes. A date without an amount is refused.
+- The date drives "overdue" and "Next due" on Accounts → Admissions, the agreed-plan table, Finance → Collections (which now lists lump sums and down payments, as "Lump sum / down"), and the printed agreement ("pay by …"). Payment reminders still go only to real instalments (a reminder is keyed to an instalment row).
