@@ -14,7 +14,7 @@ import {
   payments,
   students,
 } from "@/lib/db/schema";
-import { allocatePayments } from "@/lib/finance/allocate";
+import { allocateWithDownPayment, DOWN_PAYMENT_ID } from "@/lib/finance/allocate";
 import {
   describeTiming,
   dueReminders,
@@ -93,6 +93,8 @@ async function run(request: Request) {
       centerId: enrolments.centerId,
       course: enrolments.course,
       studentId: enrolments.studentId,
+      downPaymentPaise: enrolments.downPaymentPaise,
+      confirmedAt: enrolments.salesToAccountsAt,
     })
     .from(enrolments)
     .where(and(isNull(enrolments.deletedAt), isNull(enrolments.droppedAt)));
@@ -134,7 +136,7 @@ async function run(request: Request) {
         dueDate: row.dueDate,
         amountPaise: row.amountPaise,
       }));
-    if (schedule.length === 0) continue;
+    if (schedule.length === 0 && enrolment.downPaymentPaise === 0) continue;
 
     const received = paymentRows
       .filter((row) => row.enrolmentId === enrolment.id)
@@ -147,7 +149,18 @@ async function run(request: Request) {
         receivedOn: row.receivedAt.toISOString().slice(0, 10),
       }));
 
-    for (const settled of allocatePayments(schedule, received, asOf).instalments) {
+    // The down payment is laid out first so the first money in settles it
+    // rather than instalment 1, then left out: a reminder is keyed to a real
+    // instalment row.
+    const allocated = allocateWithDownPayment(
+      schedule,
+      enrolment.downPaymentPaise,
+      (enrolment.confirmedAt ?? new Date()).toISOString().slice(0, 10),
+      received,
+      asOf,
+    );
+    for (const settled of allocated.instalments) {
+      if (settled.id === DOWN_PAYMENT_ID) continue;
       if (settled.outstandingPaise <= 0) continue;
       outstanding.push({
         instalmentId: settled.id,

@@ -24,6 +24,7 @@ import { OpenFileButton } from "@/components/files/open-file-button";
 import { getSignedAgreement } from "@/lib/storage/attachments";
 
 import { DropAdmissionForm } from "./drop-admission-form";
+import { planStatus } from "@/lib/enrolment/plan-status";
 import { RecordPaymentForm } from "./record-payment-form";
 import { ReversePaymentForm } from "./reverse-payment-form";
 
@@ -137,6 +138,18 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
     0,
   );
   const balancePaise = enrolment.net_fee_paise - paidPaise;
+  const nextDue = planStatus({
+    netPaise: enrolment.net_fee_paise,
+    downPaymentPaise: enrolment.down_payment_paise,
+    downPaymentDueDate: (enrolment.sales_to_accounts_at ?? new Date().toISOString()).slice(0, 10),
+    instalments: (instalmentRows ?? []).map((row) => ({
+      sequence: row.sequence,
+      dueDate: row.due_date,
+      amountPaise: row.amount_paise,
+    })),
+    paidPaise,
+    asOf: new Date().toISOString().slice(0, 10),
+  }).nextDue;
 
   // The agreement the instalments on this screen come from. Accounts hold
   // `file.read` at centre scope, so the same policy that shows it to the
@@ -254,6 +267,7 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
             discountPaise={enrolment.discount_paise}
             discountName={enrolment.discount_name}
             downPaymentPaise={enrolment.down_payment_paise}
+            downPaymentDueDate={(enrolment.sales_to_accounts_at ?? new Date().toISOString()).slice(0, 10)}
             netFeePaise={enrolment.net_fee_paise}
             feeNotes={enrolment.fee_notes}
             instalments={(instalmentRows ?? []).map((row) => ({
@@ -342,7 +356,18 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
               )}
             </div>
           )}
-          {canRecordPayment && <RecordPaymentForm enrolmentId={id} accounts={financeAccounts} />}
+          {canRecordPayment && (
+            <RecordPaymentForm
+              enrolmentId={id}
+              accounts={financeAccounts}
+              suggestedAmount={nextDue ? String(nextDue.outstandingPaise / 100) : undefined}
+              suggestedNote={
+                nextDue
+                  ? `${nextDue.sequence === 0 ? "Down payment" : `Instalment ${nextDue.sequence}`} due ${formatDateIST(`${nextDue.dueDate}T00:00:00Z`, "d MMM yyyy")} — filled in for you.`
+                  : undefined
+              }
+            />
+          )}
           {planOptions && !isDropped && (
             <ChangePlanPanel
               enrolmentId={id}

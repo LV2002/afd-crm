@@ -8785,3 +8785,19 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Batches missing from the admission form
 
 - The admission form and Course & batch panel read batches through the Supabase API, which returned an empty list — silently — whenever the API's schema cache lagged a migration (the new `fee_paise` column made the whole select fail). They now read on the direct database connection, so a batch that exists in Settings → Courses & Batches always appears for its centre. A lead with no centre now gets an explicit "set a centre first" message instead of an empty picker. Remember a batch is only offered for the lead's own centre and the chosen course.
+
+## Admission offers every running batch; the batch sets the centre
+
+- The Confirm admission form now lists all running batches for the chosen course, each labelled with its centre, instead of only batches at the lead's own centre (which gave an empty picker for a lead whose centre differed from the batch's, or who had none). The enrolment's centre is the batch's; a lead with no centre is given the batch's. The Course & batch panel after admission still offers the student's own centre's batches.
+
+## Admission → fee plan → accounts: audit and fixes
+
+- **Fee plan pre-fills after Confirm admission again.** The panel's inputs hold their own state and were first drawn (empty) before the admission existed, so the batch fee and any discount never appeared. It is now rebuilt whenever the saved plan changes.
+- **Fill the schedule**: pick 1–4 payments and a first due date; the instalments split what is left after the down payment, a month apart, the last absorbing rounding (`suggestSchedule`, tested). "Pay in full instead" puts the whole amount in the down payment.
+- **Plan status banner** on the fee panel (complete / not yet).
+- **Accountant is told when the plan is ready** — new notification `enrolment.fee_plan_ready` ("Fee plan ready"), sent when the instalments first add up to the payable amount, not on every save. `admission.confirmed` now says the fee plan follows. Admins can change both under Settings → Notifications.
+- **Accounts → Admissions list** has Fee plan (Ready / Not complete) and Next due (amount · date, red when overdue) columns.
+
+## Down payment is separate from instalments (lump sum vs instalments)
+
+- Payable = down payment + instalments. A lump sum is the whole amount as the down payment with no instalments; the fee panel's completeness check, the "plan ready" notice, the accounts list and the save validation all count both. Accounts' Agreed fee plan lists the down payment as the first line ("Down") with what has been received against it, so a ₹30,000 lump sum with nothing received shows ₹30,000 still owed rather than ₹0. The Record a payment amount is pre-filled with the next amount due. Reminders and Collections allocate with the down payment first. See DECISIONS.md.

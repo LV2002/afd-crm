@@ -25,8 +25,13 @@ const METHODS = [
 export function RecordPaymentForm({
   enrolmentId,
   accounts,
+  suggestedAmount,
+  suggestedNote,
 }: {
   enrolmentId: string;
+  /** The next amount due, in rupees, to save typing it. Blank when nothing is scheduled. */
+  suggestedAmount?: string;
+  suggestedNote?: string;
   /** Active finance accounts the money could have landed in. */
   accounts: Array<{ id: string; name: string }>;
 }) {
@@ -42,7 +47,8 @@ export function RecordPaymentForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="payment-amount">Amount</Label>
-          <MoneyInput id="payment-amount" name="amount" required />
+          <MoneyInput id="payment-amount" name="amount" required defaultValue={suggestedAmount} />
+          {suggestedNote && <p className="text-xs text-muted-foreground">{suggestedNote}</p>}
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="payment-method">Method</Label>

@@ -7,6 +7,7 @@ import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { enrolmentPromos, enrolmentInstalments, enrolments, leads, payments, promos } from "@/lib/db/schema";
+import { planStatus } from "./plan-status";
 import { formatINR } from "@/lib/format/currency";
 import { notify } from "@/lib/notifications/notify";
 import { createClient } from "@/lib/supabase/server";
@@ -78,6 +79,7 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
       id: enrolments.id,
       discountPaise: enrolments.discountPaise,
       netFeePaise: enrolments.netFeePaise,
+      downPaymentPaise: enrolments.downPaymentPaise,
       course: enrolments.course,
       centerId: enrolments.centerId,
     })
@@ -134,7 +136,7 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
     instalments.push({ sequence: slot, dueDate, amountPaise });
   }
 
-  const problems = validatePlan(totalFeePaise, discountPaise, instalments);
+  const problems = validatePlan(totalFeePaise, discountPaise, instalments, downPaymentPaise);
   if (problems.length > 0) return { error: problems[0] };
 
   // What this person may actually give. A discount above their ceiling is
@@ -242,13 +244,32 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
   // student now owes, so say so rather than writing a schedule that is
   // quietly short.
   if (outcome.needsApproval && instalments.length > 0) {
-    const scheduled = instalments.reduce((sum, i) => sum + i.amountPaise, 0);
+    const scheduled = instalments.reduce((sum, i) => sum + i.amountPaise, 0) + downPaymentPaise;
     if (scheduled < totalFeePaise - outcome.appliedDiscountPaise) {
       return {
         error: `${outcome.reason} Save the plan without the discount for now, or with instalments totalling the full fee — the discount can be applied once it is approved.`,
       };
     }
   }
+
+  // Whether the plan was already complete before this save, so the
+  // "fee plan ready" notice goes out when it BECOMES complete, not every
+  // time somebody nudges a date.
+  const previousInstalments = await db
+    .select({
+      sequence: enrolmentInstalments.sequence,
+      dueDate: enrolmentInstalments.dueDate,
+      amountPaise: enrolmentInstalments.amountPaise,
+    })
+    .from(enrolmentInstalments)
+    .where(eq(enrolmentInstalments.enrolmentId, enrolment.id));
+  const wasReady = planStatus({
+    netPaise: enrolment.netFeePaise,
+    downPaymentPaise: enrolment.downPaymentPaise,
+    instalments: previousInstalments,
+    paidPaise: 0,
+    asOf: "",
+  }).ready;
 
   await db.transaction(async (tx) => {
     await tx
@@ -351,6 +372,37 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
       entityType: "enrolments",
       entityId: enrolment.id,
       centerId: lead.centerId,
+      ownerId: lead.assignedTo,
+      actorId: user.id,
+    });
+  }
+
+  const nowReady = planStatus({
+    netPaise: newNetFeePaise,
+    downPaymentPaise,
+    instalments,
+    paidPaise: 0,
+    asOf: "",
+  }).ready;
+  if (nowReady && !wasReady) {
+    const sorted = [...instalments].sort((a, b) => a.sequence - b.sequence);
+    await notify({
+      eventKey: "enrolment.fee_plan_ready",
+      context: {
+        student_name: lead.studentName,
+        course: enrolment.course,
+        payable: formatINR(newNetFeePaise),
+        instalments:
+          sorted.length === 0
+            ? "one lump sum"
+            : `${sorted.length} instalment${sorted.length === 1 ? "" : "s"}${downPaymentPaise > 0 ? ` after a ${formatINR(downPaymentPaise)} down payment` : ""}`,
+        first_due: sorted[0]?.dueDate ?? "at joining",
+        set_by: user.fullName,
+      },
+      href: `/accounts/${enrolment.id}`,
+      entityType: "enrolments",
+      entityId: enrolment.id,
+      centerId: enrolment.centerId,
       ownerId: lead.assignedTo,
       actorId: user.id,
     });

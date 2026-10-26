@@ -7,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { allocatePayments, type ReceivedPayment } from "@/lib/finance/allocate";
+import { allocateWithDownPayment, DOWN_PAYMENT_ID, type ReceivedPayment } from "@/lib/finance/allocate";
 import { formatDateIST } from "@/lib/format/date";
 import { formatINR } from "@/lib/format/currency";
 
@@ -45,6 +45,7 @@ export function AgreedPlan({
   discountPaise,
   discountName,
   downPaymentPaise,
+  downPaymentDueDate,
   netFeePaise,
   feeNotes,
   instalments,
@@ -55,6 +56,8 @@ export function AgreedPlan({
   discountPaise: number;
   discountName: string | null;
   downPaymentPaise: number;
+  /** `YYYY-MM-DD` — the day the admission was confirmed, when the down payment fell due. */
+  downPaymentDueDate: string;
   netFeePaise: number;
   feeNotes: string | null;
   instalments: AgreedInstalment[];
@@ -62,13 +65,17 @@ export function AgreedPlan({
   /** `YYYY-MM-DD`, so "overdue" is decided once rather than per row. */
   asOf: string;
 }) {
-  const allocation = allocatePayments(
+  // The down payment is the first thing owed, then the instalments. A lump
+  // sum is simply a down payment with no instalments after it.
+  const allocation = allocateWithDownPayment(
     instalments.map((i) => ({
       id: i.id,
       sequence: i.sequence,
       dueDate: i.dueDate,
       amountPaise: i.amountPaise,
     })),
+    downPaymentPaise,
+    downPaymentDueDate,
     payments,
     asOf,
   );
@@ -76,7 +83,7 @@ export function AgreedPlan({
   // The plan can legitimately cover less than the net fee — a counsellor
   // may schedule part of it and agree the rest later. Showing the
   // shortfall beats pretending the schedule is the whole story.
-  const unscheduledPaise = netFeePaise - downPaymentPaise - allocation.scheduledPaise;
+  const unscheduledPaise = netFeePaise - allocation.scheduledPaise;
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-4">
@@ -90,14 +97,14 @@ export function AgreedPlan({
         />
         <Line label="Payable" value={formatINR(netFeePaise)} strong />
         <Line
-          label="Down payment agreed"
+          label="Down payment (paid at joining)"
           value={downPaymentPaise === 0 ? "—" : formatINR(downPaymentPaise)}
         />
       </dl>
 
-      {instalments.length === 0 ? (
+      {allocation.instalments.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No instalment schedule was set — the counsellor records one on the lead&apos;s page.
+          No down payment or instalments were set — the counsellor records the fee plan on the lead&apos;s page.
         </p>
       ) : (
         <Table>
@@ -114,7 +121,9 @@ export function AgreedPlan({
           <TableBody>
             {allocation.instalments.map((instalment) => (
               <TableRow key={instalment.id}>
-                <TableCell className="text-muted-foreground">{instalment.sequence}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {instalment.id === DOWN_PAYMENT_ID ? "Down" : instalment.sequence}
+                </TableCell>
                 <TableCell>
                   {formatDateIST(`${instalment.dueDate}T00:00:00Z`, "d MMM yyyy")}
                 </TableCell>

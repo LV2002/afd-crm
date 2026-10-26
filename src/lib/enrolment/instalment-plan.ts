@@ -69,6 +69,7 @@ export function validatePlan(
   totalFeePaise: number,
   discountPaise: number,
   instalments: InstalmentInput[],
+  downPaymentPaise = 0,
 ): PlanProblem[] {
   const problems: PlanProblem[] = [];
 
@@ -97,11 +98,13 @@ export function validatePlan(
     }
   }
 
-  const scheduled = instalments.reduce((sum, i) => sum + i.amountPaise, 0);
-  if (scheduled > totalFeePaise - discountPaise) {
+  // The down payment is separate from the instalments: a lump sum is all
+  // down payment, and instalments sit on top of whatever was paid up front.
+  const scheduled = instalments.reduce((sum, i) => sum + i.amountPaise, 0) + downPaymentPaise;
+  if (scheduled > netOf(totalFeePaise, discountPaise)) {
     // This one IS an error: scheduling more than is owed is always a typo,
     // and letting it through would print an agreement overcharging a student.
-    problems.push("The instalments add up to more than the amount payable.");
+    problems.push("The down payment and instalments add up to more than the amount payable.");
   }
 
   return problems;
@@ -119,4 +122,8 @@ export function rupeesToPaise(input: string): number | null {
   // Round rather than truncate: 0.1 + 0.2 style float error in the
   // multiplication would otherwise lose a paisa on some inputs.
   return Math.round(Number(cleaned) * 100);
+}
+
+function netOf(totalFeePaise: number, discountPaise: number): number {
+  return totalFeePaise - discountPaise;
 }

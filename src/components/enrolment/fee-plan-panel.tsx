@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { saveFeePlan, type FeeFormState } from "@/lib/enrolment/fee-actions";
 import { composeDiscountName, splitSavedDiscount } from "@/lib/enrolment/discount-parts";
 import { INSTALMENT_SLOTS } from "@/lib/enrolment/instalment-plan";
+import { suggestSchedule } from "@/lib/enrolment/plan-status";
 import { describePromo, promoDiscountPaise, type Promo } from "@/lib/enrolment/promos";
 import { formatINR } from "@/lib/format/currency";
 
@@ -97,9 +98,18 @@ export function FeePlanPanel({
   const [amounts, setAmounts] = useState<Record<number, string>>(
     Object.fromEntries(values.instalments.map((i) => [i.sequence, i.amount])),
   );
+  const [dues, setDues] = useState<Record<number, string>>(
+    Object.fromEntries(values.instalments.map((i) => [i.sequence, i.dueDate])),
+  );
+  const [down, setDown] = useState(values.downPayment);
+  const [planCount, setPlanCount] = useState("3");
+  const [startDate, setStartDate] = useState(
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()),
+  );
 
   const netPaise = Math.max(0, toPaise(fee) - totalDiscountPaise);
-  const scheduledPaise = Object.values(amounts).reduce((sum, v) => sum + toPaise(v), 0);
+  const scheduledPaise =
+    toPaise(down) + Object.values(amounts).reduce((sum, v) => sum + toPaise(v), 0);
   const shortfallPaise = netPaise - scheduledPaise;
   const planComplete = netPaise > 0 && shortfallPaise === 0;
 
@@ -112,12 +122,43 @@ export function FeePlanPanel({
     );
   }
 
-  const dueByslot = new Map(values.instalments.map((i) => [i.sequence, i.dueDate]));
+  // Paying in one go is entered as the down payment: the whole payable
+  // amount, and no instalments.
+  function payInFull() {
+    setDown(netPaise > 0 ? String(netPaise / 100) : "");
+    setAmounts({});
+    setDues({});
+  }
+
+  function fillSchedule() {
+    const lines = suggestSchedule({
+      netPaise,
+      downPaymentPaise: toPaise(down),
+      count: Number(planCount),
+      startDate,
+    });
+    setAmounts(Object.fromEntries(lines.map((l) => [l.sequence, String(l.amountPaise / 100)])));
+    setDues(Object.fromEntries(lines.map((l) => [l.sequence, l.dueDate])));
+  }
 
   return (
     <div className="flex flex-col gap-4">
       <form action={action} className="flex flex-col gap-4 rounded-lg border p-4">
         <input type="hidden" name="leadId" value={leadId} />
+
+        {/* Where this stands in the hand-over, so a counsellor knows whether
+            accounts has anything to follow yet. */}
+        <p
+          className={`rounded-md px-3 py-2 text-sm ${
+            planComplete
+              ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+              : "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+          }`}
+        >
+          {planComplete
+            ? "Plan complete. Once it is saved, accounts is told and collects by this agreement."
+            : "Set the fee, the discount and the instalments. Accounts is told when the down payment and instalments add up to the payable amount."}
+        </p>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
@@ -136,11 +177,12 @@ export function FeePlanPanel({
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="downPayment">Down payment</Label>
+            <Label htmlFor="downPayment">Down payment (paid at joining)</Label>
             <MoneyInput
               id="downPayment"
               name="downPayment"
-              defaultValue={values.downPayment}
+              value={down}
+              onValueChange={setDown}
               disabled={!canEdit}
               placeholder="0"
             />
@@ -229,7 +271,7 @@ export function FeePlanPanel({
           {netPaise > 0 && (
             <span className={shortfallPaise === 0 ? " text-emerald-600" : " text-muted-foreground"}>
               {" · "}
-              Scheduled {formatINR(scheduledPaise)}
+              Down payment + instalments {formatINR(scheduledPaise)}
               {shortfallPaise > 0 && ` · ${formatINR(shortfallPaise)} not yet scheduled`}
               {shortfallPaise < 0 && ` · ${formatINR(-shortfallPaise)} over-scheduled`}
             </span>
@@ -238,13 +280,62 @@ export function FeePlanPanel({
 
         <div className="flex flex-col gap-3">
           <Label>Instalments</Label>
+          <p className="text-xs text-muted-foreground">
+            Paying in one go? Put the whole amount in <strong>Down payment</strong> and leave the
+            instalments blank. Paying in instalments? Enter them here; a down payment, if there is
+            one, is paid on top.
+          </p>
+          {canEdit && netPaise > 0 && (
+            <div className="flex flex-wrap items-end gap-3 rounded-md border border-dashed p-3">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="planCount" className="text-xs text-muted-foreground">
+                  Split into
+                </Label>
+                <select
+                  id="planCount"
+                  value={planCount}
+                  onChange={(e) => setPlanCount(e.target.value)}
+                  className="h-10 rounded-md border border-input bg-card px-3 text-sm"
+                >
+                  {INSTALMENT_SLOTS.map((n) => (
+                    <option key={n} value={n}>
+                      {n === 1 ? "1 payment" : `${n} instalments`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="planStart" className="text-xs text-muted-foreground">
+                  First due
+                </Label>
+                <Input
+                  id="planStart"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-44"
+                />
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={fillSchedule}>
+                Fill the schedule
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={payInFull}>
+                Pay in full instead
+              </Button>
+              <p className="basis-full text-xs text-muted-foreground">
+                Splits what is left after the down payment evenly, a month apart. Adjust any row
+                afterwards.
+              </p>
+            </div>
+          )}
           {INSTALMENT_SLOTS.map((slot) => (
             <div key={slot} className="grid gap-3 sm:grid-cols-[3rem_1fr_1fr] sm:items-center">
               <span className="text-sm text-muted-foreground">#{slot}</span>
               <Input
                 name={`instalment_${slot}_due`}
                 type="date"
-                defaultValue={dueByslot.get(slot) ?? ""}
+                value={dues[slot] ?? ""}
+                onChange={(e) => setDues((d) => ({ ...d, [slot]: e.target.value }))}
                 disabled={!canEdit}
                 aria-label={`Instalment ${slot} due date`}
               />
@@ -260,8 +351,7 @@ export function FeePlanPanel({
             </div>
           ))}
           <p className="text-xs text-muted-foreground">
-            Leave a row blank if it isn&apos;t used. Fill in both the date and the amount, or
-            neither.
+            Leave a row blank if it isn&apos;t used; fill in both the date and the amount, or neither.
           </p>
         </div>
 
@@ -314,7 +404,7 @@ export function FeePlanPanel({
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">
-          The instalments need to add up to the payable amount before the agreement can be printed.{" "}
+          The down payment and instalments need to add up to the payable amount before the agreement can be printed.{" "}
           {shortfallPaise > 0 && `${formatINR(shortfallPaise)} still to schedule.`}
         </p>
       )}

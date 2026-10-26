@@ -23,6 +23,7 @@ const initialState: FormState = {};
 export interface AdmissionBatchOption {
   id: string;
   name: string;
+  centerName?: string | null;
   course: string;
   mode: string;
   academicYear: string;
@@ -35,14 +36,11 @@ export function ConfirmAdmissionForm({
   courses,
   modes,
   batches,
-  hasCentre,
 }: {
   leadId: string;
   courses: FieldOption[];
   modes: FieldOption[];
   batches: AdmissionBatchOption[];
-  /** False when the lead has no centre yet — no batch can be offered until it does. */
-  hasCentre: boolean;
 }) {
   const [state, formAction, pending] = useActionState(
     confirmAdmissionAction.bind(null, leadId),
@@ -95,8 +93,8 @@ export function ConfirmAdmissionForm({
             value: batch.id,
             label:
               batch.spacesLeft === null
-                ? `${batch.name} · ${batch.academicYear}`
-                : `${batch.name} · ${batch.academicYear} · ${batch.spacesLeft} left`,
+                ? `${batch.name} · ${batch.centerName ?? "—"} · ${batch.academicYear}`
+                : `${batch.name} · ${batch.centerName ?? "—"} · ${batch.academicYear} · ${batch.spacesLeft} left`,
           }))}
           placeholder={course ? "Choose a batch" : "Pick a course first"}
           searchPlaceholder="Type to search…"
@@ -104,17 +102,15 @@ export function ConfirmAdmissionForm({
         />
         {chosen ? (
           <p className="text-xs text-muted-foreground">
-            {modeLabel(modes, chosen.mode)} · {chosen.academicYear} ·{" "}
+            {modeLabel(modes, chosen.mode)} · {chosen.centerName ?? "—"} · {chosen.academicYear} ·{" "}
             {chosen.feePaise === null
               ? "no fee set on this batch — type a custom fee below"
               : `fee ${formatINR(chosen.feePaise)}`}
           </p>
         ) : (
           <p className="text-xs text-muted-foreground">
-            {!hasCentre
-              ? "This lead has no centre yet. Set one on the lead first — batches are offered for the lead's centre."
-              : course && batchesForCourse.length === 0
-              ? "No batch for this course at this centre yet — an admin adds one in Settings → Courses & Batches."
+            {course && batchesForCourse.length === 0
+              ? "No running batch for this course yet — an admin adds one in Settings → Courses & Batches."
               : "The batch sets the mode, academic year and fee."}
           </p>
         )}

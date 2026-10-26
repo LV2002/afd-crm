@@ -4829,3 +4829,7 @@ Leon asked for a Courses page with batches beneath and a fee per batch, and for 
 ## 2026-10-25 — Batch required at admission; fee structures retired
 
 With fee and year on the batch (see above), the fee_structures lookup and the free mode/year pickers were a second way to say the same thing, and the cause of the old "no fee structure" failures. Admission now requires a batch. Kept: the table and config-bundle slot (nothing deleted), and a custom-fee field for negotiated prices. The public profile form reads the brand through the service-role client solely to sign the logo URL, since the visitor is anonymous and the logo bucket is private.
+
+## 2026-10-26 — Down payment is separate from the instalments (supersedes the entry below it earlier today)
+
+Leon's rule: a student pays either a lump sum — entered as the down payment, with no instalments — or in instalments, with an optional down payment on top. So payable = down payment + instalments. An earlier change today treated the down payment as part of instalment 1; that was wrong and is reversed. For collection, the down payment is laid out as the first amount due (on the day the admission was confirmed) and the same oldest-first allocation settles it, then the instalments (`allocateWithDownPayment`). Payment reminders and the Collections report use it too but only list real instalments. Lump-sum plans have no instalment rows, so Collections (which lists instalments) does not show them; the Accounts → Admissions list does, with Next due.

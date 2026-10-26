@@ -3,7 +3,7 @@ import "server-only";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
-import { batches } from "@/lib/db/schema";
+import { batches, centers } from "@/lib/db/schema";
 
 import type { AdmissionBatchOption } from "@/app/(app)/leads/[id]/confirm-admission-form";
 
@@ -31,10 +31,26 @@ export async function getBatchOptionsForCentre(
   centerId: string | null,
 ): Promise<AdmissionBatchOption[]> {
   if (!centerId) return [];
+  return loadBatchOptions(eq(batches.centerId, centerId));
+}
 
+/**
+ * Every running batch, at any centre, for confirming an admission.
+ *
+ * The batch decides where the student studies, so the admission form offers
+ * all of them — each labelled with its centre — rather than only the lead's
+ * own. A lead's centre is where they enquired, which is often not where they
+ * end up, and a lead with no centre at all was getting an empty picker.
+ */
+export async function getAllBatchOptions(): Promise<AdmissionBatchOption[]> {
+  return loadBatchOptions(undefined);
+}
+
+async function loadBatchOptions(centreFilter: ReturnType<typeof eq> | undefined) {
   const rows = await db
     .select({
       id: batches.id,
+      centerName: centers.name,
       name: batches.name,
       course: batches.course,
       mode: batches.mode,
@@ -47,12 +63,14 @@ export async function getBatchOptionsForCentre(
       )`,
     })
     .from(batches)
-    .where(and(eq(batches.centerId, centerId), eq(batches.isActive, true), isNull(batches.deletedAt)))
+    .leftJoin(centers, eq(centers.id, batches.centerId))
+    .where(and(centreFilter, eq(batches.isActive, true), isNull(batches.deletedAt)))
     .orderBy(asc(batches.name));
 
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
+    centerName: row.centerName,
     course: row.course,
     mode: row.mode,
     academicYear: row.academicYear,
