@@ -130,6 +130,11 @@ export const enrolments = pgTable("enrolments", {
    * separately rather than folded into instalment 1.
    */
   downPaymentPaise: bigint("down_payment_paise", { mode: "number" }).notNull().default(0),
+  /**
+   * When the down payment (or lump sum) is due, as agreed with the family.
+   * Null reads as the day the admission was confirmed.
+   */
+  downPaymentDueDate: date("down_payment_due_date"),
   /** Anything the counsellor needs on the record — prints on the agreement. */
   feeNotes: text("fee_notes"),
   status: enrolmentStatusEnum("status").notNull().default("pending_payment"),

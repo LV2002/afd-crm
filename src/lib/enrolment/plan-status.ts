@@ -118,3 +118,20 @@ export function planStatus(input: {
     nextDue,
   };
 }
+
+/**
+ * When the down payment (or lump sum) is due: the date the counsellor agreed
+ * with the family, or — when none was given — the day the admission was
+ * confirmed, which is how every plan saved before the date existed reads.
+ */
+export function effectiveDownPaymentDue(
+  agreedDate: string | null | undefined,
+  confirmedAt: string | Date | null | undefined,
+  fallback: string,
+): string {
+  if (agreedDate) return agreedDate.slice(0, 10);
+  if (confirmedAt) {
+    return (confirmedAt instanceof Date ? confirmedAt.toISOString() : confirmedAt).slice(0, 10);
+  }
+  return fallback;
+}

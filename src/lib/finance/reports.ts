@@ -2,9 +2,9 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { effectiveDownPaymentDue } from "@/lib/enrolment/plan-status";
 import {
   allocateWithDownPayment,
-  DOWN_PAYMENT_ID,
   type ReceivedPayment,
   type ScheduledInstalment,
 } from "./allocate";
@@ -216,7 +216,7 @@ export async function getCollections(
   let enrolmentQuery = supabase
     .from("enrolments")
     .select(
-      "id, course, center_id, lead_id, student_id, down_payment_paise, sales_to_accounts_at, leads(student_name), students(full_name)",
+      "id, course, center_id, lead_id, student_id, down_payment_paise, down_payment_due_date, sales_to_accounts_at, leads(student_name), students(full_name)",
     )
     .is("deleted_at", null)
     // A student who left is not a debtor to chase. Their instalments stop
@@ -233,6 +233,7 @@ export async function getCollections(
         course: string;
         center_id: string;
         down_payment_paise: number;
+        down_payment_due_date: string | null;
         sales_to_accounts_at: string | null;
         leads: { student_name: string } | null;
         students: { full_name: string } | null;
@@ -294,22 +295,26 @@ export async function getCollections(
   const settlements: Array<{ dueDate: string; settledOn: string | null }> = [];
 
   for (const enrolment of enrolments ?? []) {
-    const schedule = instalmentsByEnrolment.get(enrolment.id);
-    if (!schedule || schedule.length === 0) continue;
+    const schedule = instalmentsByEnrolment.get(enrolment.id) ?? [];
+    // A lump sum has no instalments but still has a date it should be paid by.
+    if (schedule.length === 0 && enrolment.down_payment_paise === 0) continue;
 
     const studentName = enrolment.students?.full_name ?? enrolment.leads?.student_name ?? "Unknown";
-    // Down payment first, so the first money in settles it and not
-    // instalment 1; it is then left out of the instalment rows below.
+    // Down payment (or lump sum) first, so the first money in settles it and
+    // not instalment 1. It is listed as sequence 0.
     const result = allocateWithDownPayment(
       schedule,
       enrolment.down_payment_paise,
-      (enrolment.sales_to_accounts_at ?? options.asOf).slice(0, 10),
+      effectiveDownPaymentDue(
+        enrolment.down_payment_due_date,
+        enrolment.sales_to_accounts_at,
+        options.asOf,
+      ),
       paymentsByEnrolment.get(enrolment.id) ?? [],
       options.asOf,
     );
 
     for (const instalment of result.instalments) {
-      if (instalment.id === DOWN_PAYMENT_ID) continue;
       settlements.push({ dueDate: instalment.dueDate, settledOn: instalment.settledOn });
 
       if (instalment.settledOn) {

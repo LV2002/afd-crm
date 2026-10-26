@@ -24,7 +24,7 @@ import { OpenFileButton } from "@/components/files/open-file-button";
 import { getSignedAgreement } from "@/lib/storage/attachments";
 
 import { DropAdmissionForm } from "./drop-admission-form";
-import { planStatus } from "@/lib/enrolment/plan-status";
+import { effectiveDownPaymentDue, planStatus } from "@/lib/enrolment/plan-status";
 import { RecordPaymentForm } from "./record-payment-form";
 import { ReversePaymentForm } from "./reverse-payment-form";
 
@@ -40,6 +40,7 @@ interface EnrolmentDetail {
   discount_paise: number;
   discount_name: string | null;
   down_payment_paise: number;
+  down_payment_due_date: string | null;
   fee_notes: string | null;
   net_fee_paise: number;
   status: string;
@@ -76,7 +77,7 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
   const { data: enrolment } = await supabase
     .from("enrolments")
     .select(
-      "id, lead_id, course, batch_id, center_id, mode, academic_year, total_fee_paise, discount_paise, discount_name, down_payment_paise, fee_notes, net_fee_paise, status, dropped_at, drop_reason, pending_discount_paise, pending_discount_at, enrolled_at, sales_to_accounts_at, accounts_to_academics_at, student_id, leads(student_name, primary_phone), centers(name)",
+      "id, lead_id, course, batch_id, center_id, mode, academic_year, total_fee_paise, discount_paise, discount_name, down_payment_paise, down_payment_due_date, fee_notes, net_fee_paise, status, dropped_at, drop_reason, pending_discount_paise, pending_discount_at, enrolled_at, sales_to_accounts_at, accounts_to_academics_at, student_id, leads(student_name, primary_phone), centers(name)",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -141,7 +142,11 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
   const nextDue = planStatus({
     netPaise: enrolment.net_fee_paise,
     downPaymentPaise: enrolment.down_payment_paise,
-    downPaymentDueDate: (enrolment.sales_to_accounts_at ?? new Date().toISOString()).slice(0, 10),
+    downPaymentDueDate: effectiveDownPaymentDue(
+      enrolment.down_payment_due_date,
+      enrolment.sales_to_accounts_at,
+      new Date().toISOString().slice(0, 10),
+    ),
     instalments: (instalmentRows ?? []).map((row) => ({
       sequence: row.sequence,
       dueDate: row.due_date,
@@ -267,7 +272,11 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
             discountPaise={enrolment.discount_paise}
             discountName={enrolment.discount_name}
             downPaymentPaise={enrolment.down_payment_paise}
-            downPaymentDueDate={(enrolment.sales_to_accounts_at ?? new Date().toISOString()).slice(0, 10)}
+            downPaymentDueDate={effectiveDownPaymentDue(
+              enrolment.down_payment_due_date,
+              enrolment.sales_to_accounts_at,
+              new Date().toISOString().slice(0, 10),
+            )}
             netFeePaise={enrolment.net_fee_paise}
             feeNotes={enrolment.fee_notes}
             instalments={(instalmentRows ?? []).map((row) => ({

@@ -61,6 +61,7 @@ const EMPTY: FeePlanValues = {
   discountName: "",
   promoId: "",
   downPayment: "",
+  downPaymentDue: "",
   feeNotes: "",
   instalments: [],
 };
@@ -73,6 +74,7 @@ export async function getLeadFeePlan(leadId: string): Promise<LeadFeePlan> {
       discountPaise: enrolments.discountPaise,
       discountName: enrolments.discountName,
       downPaymentPaise: enrolments.downPaymentPaise,
+      downPaymentDueDate: enrolments.downPaymentDueDate,
       feeNotes: enrolments.feeNotes,
       pendingDiscountPaise: enrolments.pendingDiscountPaise,
       pendingDiscountBy: enrolments.pendingDiscountBy,
@@ -186,6 +188,7 @@ export async function getLeadFeePlan(leadId: string): Promise<LeadFeePlan> {
       discountName: enrolment.discountName ?? "",
       promoId: appliedPromoId ?? "",
       downPayment: paiseToInput(enrolment.downPaymentPaise),
+      downPaymentDue: enrolment.downPaymentDueDate ?? "",
       feeNotes: enrolment.feeNotes ?? "",
       instalments: instalments.map((i) => ({
         sequence: i.sequence,

@@ -14,6 +14,7 @@ import {
   payments,
   students,
 } from "@/lib/db/schema";
+import { effectiveDownPaymentDue } from "@/lib/enrolment/plan-status";
 import { allocateWithDownPayment, DOWN_PAYMENT_ID } from "@/lib/finance/allocate";
 import {
   describeTiming,
@@ -94,6 +95,7 @@ async function run(request: Request) {
       course: enrolments.course,
       studentId: enrolments.studentId,
       downPaymentPaise: enrolments.downPaymentPaise,
+      downPaymentDueDate: enrolments.downPaymentDueDate,
       confirmedAt: enrolments.salesToAccountsAt,
     })
     .from(enrolments)
@@ -155,7 +157,7 @@ async function run(request: Request) {
     const allocated = allocateWithDownPayment(
       schedule,
       enrolment.downPaymentPaise,
-      (enrolment.confirmedAt ?? new Date()).toISOString().slice(0, 10),
+      effectiveDownPaymentDue(enrolment.downPaymentDueDate, enrolment.confirmedAt, asOf),
       received,
       asOf,
     );

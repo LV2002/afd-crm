@@ -116,7 +116,9 @@ export default async function CollectionsPage() {
                       <StatusBadge status={row.status} />
                     </TableCell>
                     <TableCell className="text-muted-foreground">{row.course}</TableCell>
-                    <TableCell className="text-muted-foreground">#{row.sequence}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {row.sequence === 0 ? "Lump sum / down" : `#${row.sequence}`}
+                    </TableCell>
                     <TableCell className="text-right">{formatINR(row.amountPaise)}</TableCell>
                     <TableCell className="text-right text-muted-foreground">
                       {row.paidPaise === 0 ? "—" : formatINR(row.paidPaise)}

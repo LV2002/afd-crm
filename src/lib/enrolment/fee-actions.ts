@@ -119,6 +119,15 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
   if (downPaymentPaise === null) {
     return { error: "Enter the down payment as a number, or leave it blank." };
   }
+  const downDueRaw = String(formData.get("downPaymentDue") ?? "").trim();
+  if (downDueRaw !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(downDueRaw)) {
+    return { error: "The lump sum / down payment needs a valid due date." };
+  }
+  if (downDueRaw !== "" && downPaymentPaise === 0) {
+    return { error: "A due date is set on the lump sum / down payment line, but no amount. Add the amount or clear the date." };
+  }
+  // Blank is allowed: it keeps the old reading, due when the admission was confirmed.
+  const downPaymentDueDate = downDueRaw === "" ? null : downDueRaw;
   const feeNotes = String(formData.get("feeNotes") ?? "").trim() || null;
 
   const instalments: InstalmentInput[] = [];
@@ -279,6 +288,7 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
         discountPaise: outcome.appliedDiscountPaise,
         discountName,
         downPaymentPaise,
+        downPaymentDueDate,
         netFeePaise: newNetFeePaise,
         pendingDiscountPaise: outcome.pendingDiscountPaise,
         pendingDiscountName: outcome.pendingDiscountPaise === null ? null : discountName,
@@ -350,6 +360,7 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
       discountPendingPaise: outcome.pendingDiscountPaise,
       discountName,
       downPaymentPaise,
+      downPaymentDueDate,
       instalments,
       feeNotes,
     },
@@ -396,7 +407,7 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
           sorted.length === 0
             ? "one lump sum"
             : `${sorted.length} instalment${sorted.length === 1 ? "" : "s"}${downPaymentPaise > 0 ? ` after a ${formatINR(downPaymentPaise)} down payment` : ""}`,
-        first_due: sorted[0]?.dueDate ?? "at joining",
+        first_due: downPaymentPaise > 0 && downPaymentDueDate ? downPaymentDueDate : (sorted[0]?.dueDate ?? "at joining"),
         set_by: user.fullName,
       },
       href: `/accounts/${enrolment.id}`,
