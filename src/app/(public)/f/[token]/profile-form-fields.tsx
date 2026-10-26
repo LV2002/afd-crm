@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircle2 } from "lucide-react";
-import { startTransition, useActionState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,41 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProfileFormField } from "@/lib/profile-form/get-form";
-import { ALLOWED_EXTENSIONS, MAX_FILE_BYTES } from "@/lib/storage/shared";
+import { ALLOWED_EXTENSIONS, MAX_FILE_BYTES, MAX_UPLOAD_BYTES } from "@/lib/storage/shared";
 import { submitProfileForm, type ProfileSubmitState } from "@/lib/profile-form/submit";
 
-const initialState: ProfileSubmitState = {};
+/**
+ * One request carries every file, and the platform refuses a request over
+ * about 4 MB outright — as a crash, not a message. So a phone photo is
+ * shrunk in the browser first (a 5 MB camera shot becomes a few hundred KB,
+ * still perfectly clear for a face or an ID card), and the total is checked
+ * before anything is sent.
+ */
+const SHRINK_ABOVE_BYTES = 700 * 1024;
+const MAX_EDGE = 1800;
+// Room for the other answers and the multipart framing.
+const BODY_BUDGET_BYTES = MAX_UPLOAD_BYTES - 200 * 1024;
+
+async function shrinkImage(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.size <= SHRINK_ABOVE_BYTES) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.82),
+    );
+    if (!blob || blob.size >= file.size) return file;
+    const name = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+    return new File([blob], name, { type: "image/jpeg" });
+  } catch {
+    // An odd format the browser cannot decode: send it as it is.
+    return file;
+  }
+}
 
 /**
  * Plain HTML inputs rather than the app's DynamicFieldInput: a student
@@ -140,8 +171,45 @@ export function ProfileFormFields({
   /** The institute's brand colour, for section headings and the submit button. */
   accent: string;
 }) {
-  const [state, action, pending] = useActionState(submitProfileForm, initialState);
+  const [state, setState] = useState<ProfileSubmitState>({});
+  const [pending, setPending] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
+
+  async function submit(form: HTMLFormElement) {
+    setPending(true);
+    setState({});
+    try {
+      const data = new FormData(form);
+
+      // Shrink photos, then make sure the whole request will fit.
+      let total = 0;
+      for (const [key, value] of [...data.entries()]) {
+        if (value instanceof File && value.size > 0) {
+          const smaller = await shrinkImage(value);
+          data.set(key, smaller);
+          total += smaller.size;
+        }
+      }
+      if (total > BODY_BUDGET_BYTES) {
+        setState({
+          error: `Your files add up to ${(total / 1024 / 1024).toFixed(1)} MB and the limit is ${(BODY_BUDGET_BYTES / 1024 / 1024).toFixed(1)} MB in total. Please attach smaller photos or a PDF.`,
+        });
+        return;
+      }
+
+      setState(await submitProfileForm({}, data));
+    } catch {
+      // The request itself failed — a dropped connection, or the server
+      // refusing it. Say so on the page and keep everything typed; never
+      // let it take the form away.
+      setState({
+        error:
+          "We couldn't send your details just now. Nothing was lost — please check your connection and press Submit again. If it keeps happening, try smaller photos or tell your centre.",
+      });
+    } finally {
+      setPending(false);
+    }
+  }
 
   // A long form: the message is at the bottom, and a student who pressed
   // Submit from the middle would not see why nothing happened.
@@ -168,7 +236,7 @@ export function ProfileFormFields({
   return (
     <form
       /*
-        `onSubmit`, not `action={action}`.
+        `onSubmit`, not `action={…}`.
 
         React 19 resets an uncontrolled form to its blank starting values
         after every form *action* finishes — including when the server
@@ -180,8 +248,7 @@ export function ProfileFormFields({
       */
       onSubmit={(event) => {
         event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        startTransition(() => action(data));
+        void submit(event.currentTarget);
       }}
       className="flex flex-col gap-8"
     >
