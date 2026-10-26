@@ -90,3 +90,71 @@ export async function createProfileFormLink(
   revalidatePath(`/leads/${leadId}`);
   return { success: "Link created." };
 }
+
+/**
+ * Cancels a profile form link that has not been used.
+ *
+ * "Fill it in within a week" is how the link goes out; when the week passes
+ * and nothing has come back, the counsellor needs to be able to make that
+ * link dead rather than leave it live in a WhatsApp thread forever. The token
+ * is cleared, so the old address stops working at once (it reads "Form not
+ * found"), and the panel offers "Create profile form link" again — which
+ * mints a fresh, different token if the student does come back.
+ *
+ * Only for a form nobody has submitted. Once answers are in they are the
+ * student's record, and there is no link left to cancel.
+ */
+export async function cancelProfileFormLink(
+  _prev: ProfileFormState,
+  formData: FormData,
+): Promise<ProfileFormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "lead.update")) {
+    return { error: "You don't have permission to do that." };
+  }
+
+  const leadId = formData.get("leadId");
+  if (typeof leadId !== "string") return { error: "Missing lead reference." };
+
+  const [lead] = await db
+    .select({
+      id: leads.id,
+      centerId: leads.centerId,
+      assignedTo: leads.assignedTo,
+      profileFormToken: leads.profileFormToken,
+      profileFormSubmittedAt: leads.profileFormSubmittedAt,
+    })
+    .from(leads)
+    .where(and(eq(leads.id, leadId), isNull(leads.deletedAt)));
+  if (!lead) return { error: "Lead not found." };
+
+  const scope = scopeFor(user, "lead.update");
+  if (scope === "own" && lead.assignedTo !== user.id) {
+    return { error: "That lead isn't assigned to you." };
+  }
+  if (scope === "center" && (!lead.centerId || !user.centerIds.includes(lead.centerId))) {
+    return { error: "That lead isn't in your centre." };
+  }
+
+  if (lead.profileFormSubmittedAt) {
+    return { error: "This form has already been submitted, so there is no open link to cancel." };
+  }
+  if (!lead.profileFormToken) return { success: "There is no link to cancel." };
+
+  await db
+    .update(leads)
+    .set({ profileFormToken: null, profileFormSentAt: null, updatedAt: new Date() })
+    .where(eq(leads.id, leadId));
+
+  const supabase = await createClient();
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "lead.profile_form_link_cancelled",
+    entityType: "leads",
+    entityId: leadId,
+  });
+
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/profile-forms");
+  return { success: "Link cancelled. The old address no longer works." };
+}

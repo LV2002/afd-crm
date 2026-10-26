@@ -8,7 +8,12 @@ import { OpenFileButton } from "@/components/files/open-file-button";
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
 import { MarkReadButton } from "@/app/(app)/profile-forms/mark-read-button";
-import { createProfileFormLink, type ProfileFormState } from "@/lib/profile-form/actions";
+import { ConfirmSubmit } from "@/components/ui/confirm-submit";
+import {
+  cancelProfileFormLink,
+  createProfileFormLink,
+  type ProfileFormState,
+} from "@/lib/profile-form/actions";
 import type { ProfileFormFile } from "@/lib/profile-form/file-answers";
 
 const initialState: ProfileFormState = {};
@@ -40,6 +45,7 @@ export function ProfileFormPanel({
   canManage: boolean;
 }) {
   const [state, action, pending] = useActionState(createProfileFormLink, initialState);
+  const [cancelState, cancelAction, cancelling] = useActionState(cancelProfileFormLink, initialState);
   const [copied, setCopied] = useState(false);
 
   /**
@@ -133,6 +139,30 @@ export function ProfileFormPanel({
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">Not yet submitted.</p>
+          {canManage && (
+            <form action={cancelAction} className="flex flex-wrap items-center gap-2">
+              <input type="hidden" name="leadId" value={leadId} />
+              <ConfirmSubmit
+                label="Cancel this link"
+                size="sm"
+                variant="destructive"
+                pending={cancelling}
+                pendingLabel="Cancelling…"
+                title="Cancel this profile form link?"
+                body={
+                  <>
+                    The address you sent stops working straight away — if the student opens it they
+                    will see &ldquo;Form not found&rdquo;. Nothing they have not submitted is kept.
+                    <br />
+                    <br />
+                    You can create a new link afterwards if they come back.
+                  </>
+                }
+                confirmLabel="Yes, cancel the link"
+              />
+              {cancelState.error && <FormMessage error={cancelState.error} />}
+            </form>
+          )}
         </>
       ) : (
         <>
@@ -150,6 +180,7 @@ export function ProfileFormPanel({
             </form>
           )}
           {state.error && <FormMessage error={state.error} />}
+          {cancelState.success && <FormMessage success={cancelState.success} />}
         </>
       )}
     </div>

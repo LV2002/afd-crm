@@ -99,7 +99,19 @@ export async function submitProfileForm(
   // stored. The other order would lock a student out on a failed upload —
   // a second submission is refused by design — leaving them told "thank
   // you" with their ID proof nowhere.
-  const upload = await storeProfileFormUploads(form.leadId, uploads);
+  // A storage failure comes back as a message on the form, never as a thrown
+  // error: a throw out of a server action reaches the student as a blank
+  // "application error" page with everything they typed gone.
+  let upload: Awaited<ReturnType<typeof storeProfileFormUploads>>;
+  try {
+    upload = await storeProfileFormUploads(form.leadId, uploads);
+  } catch (error) {
+    console.error("profile form upload failed", error);
+    return {
+      error:
+        "We couldn't save your files just now. Please try again in a moment, or attach smaller photos.",
+    };
+  }
   if (!upload.ok) return { error: upload.error };
   for (const file of upload.stored) {
     // The filename is the answer; the file itself is in the lead's
@@ -132,18 +144,24 @@ export async function submitProfileForm(
     .where(eq(leads.id, form.leadId));
 
   if (lead) {
-    await notify({
-      eventKey: "profile_form.submitted",
-      context: {
-        lead_name: lead.studentName,
-        lead_number: lead.leadNumber,
+    try {
+      await notify({
+        eventKey: "profile_form.submitted",
+        context: {
+          lead_name: lead.studentName,
+          lead_number: lead.leadNumber,
         },
-      href: `/leads/${form.leadId}`,
-      entityType: "leads",
-      entityId: form.leadId,
-      centerId: lead.centerId,
-      ownerId: lead.assignedTo,
-    });
+        href: `/leads/${form.leadId}`,
+        entityType: "leads",
+        entityId: form.leadId,
+        centerId: lead.centerId,
+        ownerId: lead.assignedTo,
+      });
+    } catch (error) {
+      // The answers are saved; a notification that could not be sent must
+      // not turn the student's thank-you into an error.
+      console.error("profile form notification failed", error);
+    }
   }
 
   return { success: "Thank you — your details have been received." };
