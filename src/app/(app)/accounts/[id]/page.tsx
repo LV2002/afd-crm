@@ -164,7 +164,7 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
       ? Promise.all([
           getDropdownOptions(supabase, "course"),
           getDropdownOptions(supabase, "preferred_mode"),
-          getBatchOptionsForCentre(supabase, enrolment.center_id),
+          getBatchOptionsForCentre(enrolment.center_id),
         ])
       : Promise.resolve(null),
     canEditFee ? getLeadFeePlan(enrolment.lead_id) : Promise.resolve(null),

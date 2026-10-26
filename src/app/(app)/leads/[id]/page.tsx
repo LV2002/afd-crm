@@ -145,7 +145,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       needsAdmissionOptions ? getDropdownOptions(supabase, "course") : Promise.resolve([]),
       needsAdmissionOptions ? getDropdownOptions(supabase, "preferred_mode") : Promise.resolve([]),
       needsAdmissionOptions
-        ? getBatchOptionsForCentre(supabase, row.center_id as string | null)
+        ? getBatchOptionsForCentre(row.center_id as string | null)
         : Promise.resolve([]),
       supabase
         .from("enrolments")
@@ -551,6 +551,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                   courses={courseOptions}
                   modes={modeOptions}
                   batches={batchOptions}
+                  hasCentre={Boolean(row.center_id)}
                 />
               )}
 

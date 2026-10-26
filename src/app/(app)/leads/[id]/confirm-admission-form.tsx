@@ -35,11 +35,14 @@ export function ConfirmAdmissionForm({
   courses,
   modes,
   batches,
+  hasCentre,
 }: {
   leadId: string;
   courses: FieldOption[];
   modes: FieldOption[];
   batches: AdmissionBatchOption[];
+  /** False when the lead has no centre yet — no batch can be offered until it does. */
+  hasCentre: boolean;
 }) {
   const [state, formAction, pending] = useActionState(
     confirmAdmissionAction.bind(null, leadId),
@@ -108,7 +111,9 @@ export function ConfirmAdmissionForm({
           </p>
         ) : (
           <p className="text-xs text-muted-foreground">
-            {course && batchesForCourse.length === 0
+            {!hasCentre
+              ? "This lead has no centre yet. Set one on the lead first — batches are offered for the lead's centre."
+              : course && batchesForCourse.length === 0
               ? "No batch for this course at this centre yet — an admin adds one in Settings → Courses & Batches."
               : "The batch sets the mode, academic year and fee."}
           </p>

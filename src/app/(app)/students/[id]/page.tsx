@@ -118,7 +118,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
     ? await Promise.all([
         getDropdownOptions(supabase, "course"),
         getDropdownOptions(supabase, "preferred_mode"),
-        getBatchOptionsForCentre(supabase, enrolment.center_id),
+        getBatchOptionsForCentre(enrolment.center_id),
       ])
     : null;
 
