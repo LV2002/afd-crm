@@ -8781,3 +8781,7 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 - The Settings → Fee Structures page, its nav entry and actions are removed. The `fee_structures` table and config-bundle field are left in place so no data or old bundle is destroyed; nothing reads them. Audit rows for old fee structures now link to Courses & Batches.
 - **Student profile form** (`/f/<token>`) redesigned: branded header with the institute logo, name and tagline from Settings → Organisation, an accent bar and headings in the brand colour, a card layout, consistent 40px controls, wide fields (text areas, multi-selects, uploads, anything with help text) on their own row, and the centre's contact line at the foot. The logo is signed server-side for the page (`getPublicBrand`) because the visitor has no session.
 - Not checked visually in a browser in this session.
+
+## Batches missing from the admission form
+
+- The admission form and Course & batch panel read batches through the Supabase API, which returned an empty list — silently — whenever the API's schema cache lagged a migration (the new `fee_paise` column made the whole select fail). They now read on the direct database connection, so a batch that exists in Settings → Courses & Batches always appears for its centre. A lead with no centre now gets an explicit "set a centre first" message instead of an empty picker. Remember a batch is only offered for the lead's own centre and the chosen course.
