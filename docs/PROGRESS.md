@@ -8785,3 +8785,7 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Batches missing from the admission form
 
 - The admission form and Course & batch panel read batches through the Supabase API, which returned an empty list — silently — whenever the API's schema cache lagged a migration (the new `fee_paise` column made the whole select fail). They now read on the direct database connection, so a batch that exists in Settings → Courses & Batches always appears for its centre. A lead with no centre now gets an explicit "set a centre first" message instead of an empty picker. Remember a batch is only offered for the lead's own centre and the chosen course.
+
+## Admission offers every running batch; the batch sets the centre
+
+- The Confirm admission form now lists all running batches for the chosen course, each labelled with its centre, instead of only batches at the lead's own centre (which gave an empty picker for a lead whose centre differed from the batch's, or who had none). The enrolment's centre is the batch's; a lead with no centre is given the batch's. The Course & batch panel after admission still offers the student's own centre's batches.

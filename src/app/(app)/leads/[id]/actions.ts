@@ -589,6 +589,7 @@ async function runConfirmAdmission(
   // The batch decides mode and academic year (filled in below).
   let mode = "";
   let academicYear = "";
+  let batchCenterId = "";
 
   const discountPaise = parseRupeesToPaise(formData.get("discount")) ?? 0;
   const feeOverrideRaw = formData.get("totalFeeOverride");
@@ -608,11 +609,8 @@ async function runConfirmAdmission(
   if (scope === "center" && (!lead.centerId || !user.centerIds.includes(lead.centerId))) {
     return { error: "This lead is outside your access." };
   }
-  if (!lead.centerId) {
-    return { error: "This lead has no centre assigned yet — set one before confirming admission." };
-  }
 
-  // The picker only offers batches at this centre running this course, but a
+  // The picker offers running batches for this course, but a
   // posted form is not the picker: an id could be stale (the batch was
   // deactivated while the form sat open) or simply wrong. Checked here rather
   // than trusted, because a wrong batch is invisible afterwards — the
@@ -632,9 +630,9 @@ async function runConfirmAdmission(
     if (!batch || !batch.isActive) {
       return { error: "That batch is no longer available — pick another." };
     }
-    if (batch.centerId !== lead.centerId) {
-      return { error: "That batch is at a different centre." };
-    }
+    // The batch decides where the student studies, whatever centre the
+    // lead enquired at.
+    batchCenterId = batch.centerId;
     if (batch.course !== course) {
       return { error: `That batch runs ${batch.course}, not ${course}.` };
     }
@@ -658,11 +656,14 @@ async function runConfirmAdmission(
   let result;
   try {
     result = await db.transaction(async (tx) => {
+      if (!lead.centerId) {
+        await tx.update(leads).set({ centerId: batchCenterId }).where(eq(leads.id, leadId));
+      }
       const confirmed = await confirmAdmission(tx, {
         leadId,
         course,
         batchId,
-        centerId: lead.centerId!,
+        centerId: batchCenterId,
         mode,
         academicYear: academicYear.trim(),
         totalFeePaiseOverride,
@@ -730,7 +731,7 @@ async function runConfirmAdmission(
     href: `/accounts/${result.enrolmentId}`,
     entityType: "enrolments",
     entityId: result.enrolmentId,
-    centerId: lead.centerId,
+    centerId: batchCenterId,
     ownerId: lead.assignedTo,
     actorId: user.id,
   });

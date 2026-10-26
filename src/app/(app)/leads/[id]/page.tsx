@@ -29,7 +29,7 @@ import { PendingDiscount } from "@/components/enrolment/pending-discount";
 import { ProfileFormPanel } from "@/components/profile-form/profile-form-panel";
 import { listAttachments } from "@/lib/storage/attachments";
 import { currentSignedAgreement, otherDocuments, profileFormFiles } from "@/lib/storage/shared";
-import { getBatchOptionsForCentre } from "@/lib/enrolment/batch-options";
+import { getAllBatchOptions, getBatchOptionsForCentre } from "@/lib/enrolment/batch-options";
 import { getLeadFeePlan } from "@/lib/enrolment/get-fee-plan";
 import { getStudentFieldLabels } from "@/lib/profile-form/field-labels";
 
@@ -131,6 +131,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   // course-and-batch panel, so either permission is reason to load them.
   const canChangePlan = can(user, "enrolment.change_plan");
   const needsAdmissionOptions = canCreateEnrolment || canChangePlan;
+
+  const admissionBatchOptions = canCreateEnrolment ? await getAllBatchOptions() : [];
 
   const [
     interactionTypes,
@@ -550,8 +552,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                   leadId={id}
                   courses={courseOptions}
                   modes={modeOptions}
-                  batches={batchOptions}
-                  hasCentre={Boolean(row.center_id)}
+                  batches={admissionBatchOptions}
                 />
               )}
 
