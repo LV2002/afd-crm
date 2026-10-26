@@ -74,7 +74,6 @@ Student Profile Forms. — Chapter 4.
 |---|---|---|
 | WhatsApp Business inbox | `/whatsapp` | 10 |
 | Personal WhatsApp (explainer) | `/whatsapp/personal` | 10 |
-| Instagram DMs | `/whatsapp/instagram` | 10 |
 | Templates | `/whatsapp/templates` | 10 |
 | Broadcasts | `/whatsapp/broadcasts`, `/new` | 10 |
 | Automations (flows) | `/whatsapp/flows`, `/new`, `/[id]` | 10 |

@@ -158,38 +158,14 @@ export async function fetchMetaPageIdentity(pageAccessToken: string): Promise<Me
  * holds the Page token, which is the only thing the call needs.
  */
 /**
- * The fields a Page sends to this app.
+ * The fields a Page sends to this app: Lead Ads only.
  *
- * `leadgen` is Lead Ads. `messages` is what Instagram DMs ride on: the
- * Instagram account is linked to this Page, and Meta delivers its
- * messaging events only to an app the Page is subscribed to for that
- * field. Ticking the `instagram` object's `messages` field in the App
- * Dashboard is the other half and is not enough on its own, exactly as
- * `leadgen` was not.
- *
- * **This POST replaces the set, it does not add to it.** So the fields are
- * sent together, always. Subscribing for leads alone used to silently
- * unsubscribe a Page from messages, which made "Instagram DMs stopped
- * arriving" a consequence of pressing a button labelled Subscribe Page.
- *
- * ## Why the caller passes the fields, and why there are two lists
- *
- * Meta refuses the whole call when the token lacks a permission any one
- * field needs: a Page token without `pages_messaging` answers
- * `(#200) To subscribe to the messages field, one of these permissions is
- * needed: pages_messaging` — and subscribes **nothing**, leadgen included.
- * Sending both fields unconditionally therefore broke lead delivery for
- * anyone whose token predated Instagram, which is a worse bug than the one
- * it fixed.
- *
- * So the caller asks for everything, and falls back to `PAGE_LEAD_FIELDS`
- * when Meta refuses. Leads keep working on a token that cannot do
- * messages, and the refusal is reported rather than swallowed.
+ * **This POST replaces the set, it does not add to it** — so sending just
+ * `leadgen` also takes `messages` off a Page that had it. That is
+ * deliberate: the CRM no longer handles Instagram DMs or Messenger, and
+ * should not be sent them.
  */
-export const PAGE_SUBSCRIBED_FIELDS = ["leadgen", "messages"] as const;
-
-/** What a Page token can always subscribe, with no messaging permission. */
-export const PAGE_LEAD_FIELDS = ["leadgen"] as const;
+export const PAGE_SUBSCRIBED_FIELDS = ["leadgen"] as const;
 
 export async function subscribePageFields(
   pageId: string,

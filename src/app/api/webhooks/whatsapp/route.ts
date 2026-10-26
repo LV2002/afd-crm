@@ -184,6 +184,24 @@ export async function POST(request: Request) {
         continue;
       }
 
+      // A message to a number that is neither registered here nor the API
+      // number in Credentials is somebody else's inbox — typically a
+      // counsellor's Coexistence number that has not been added yet. It used
+      // to be filed with no number, which reads as the API number, so it
+      // turned up on the WhatsApp API tab. Now it is held back with a
+      // plain reason on Settings → Health → Every delivery, and appears on
+      // the right tab once the number is registered.
+      const arrivedOn = value.metadata?.phone_number_id;
+      if (!number && arrivedOn && (value.messages?.length ?? 0) > 0) {
+        const { phone_number_id: apiNumberId } = await getIntegrationCredentials("whatsapp", [
+          "phone_number_id",
+        ]);
+        if (apiNumberId && apiNumberId !== arrivedOn) {
+          await recordUnknownNumberDelivery("messages", value);
+          continue;
+        }
+      }
+
       for (const message of value.messages ?? []) {
         const externalId = `msg:${message.id}`;
         const [inserted] = await db

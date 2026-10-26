@@ -2,7 +2,7 @@
  * What a Meta token can actually do, said on screen.
  *
  * `debug_token` has always returned the permission list and `checkToken`
- * always threw it away, which is why "Instagram DMs arrive from staff and
+ * always threw it away, which is why "leads arrive from staff and
  * nobody else" could only be diagnosed through Meta's own Permissions and
  * Features page — slow, sometimes blank, and gated behind business
  * verification.
@@ -27,22 +27,28 @@ describe("comparing a token's permissions against what the CRM needs", () => {
     expect(describeMissingScopes(report)).toBeNull();
   });
 
-  it("names the Instagram messaging permission when it is absent", () => {
-    // The case this was built for.
-    const granted = ALL_PAGE.filter((scope) => scope !== "instagram_manage_messages");
+  it("names a missing permission together with what stops working", () => {
+    const granted = ALL_PAGE.filter((scope) => scope !== "leads_retrieval");
     const report = compareScopes(granted, PAGE_TOKEN_SCOPES);
-    expect(report?.missing.map((entry) => entry.scope)).toEqual(["instagram_manage_messages"]);
-    expect(describeMissingScopes(report)).toMatch(/Instagram DMs, in and out/);
-    expect(describeMissingScopes(report)).toMatch(/instagram_manage_messages/);
+    expect(report?.missing.map((entry) => entry.scope)).toEqual(["leads_retrieval"]);
+    expect(describeMissingScopes(report)).toMatch(/Lead Ads form/);
+    expect(describeMissingScopes(report)).toMatch(/leads_retrieval/);
   });
 
   it("leads with the consequence and keeps the permission name", () => {
-    // `pages_messaging` means nothing to somebody running a coaching
-    // institute; "Instagram DMs are delivered" does. The name still has
-    // to appear, because it is what gets typed into Meta's request form.
+    // The permission name means nothing to somebody running a coaching
+    // institute; what stops working does. The name still has to appear,
+    // because it is what gets typed into Meta's request form.
     const report = compareScopes(["pages_show_list"], PAGE_TOKEN_SCOPES);
     const text = describeMissingScopes(report)!;
-    expect(text.indexOf("Receiving Instagram DMs")).toBeLessThan(text.indexOf("pages_messaging"));
+    expect(text.indexOf("Subscribing the Page")).toBeLessThan(text.indexOf("pages_manage_metadata"));
+  });
+
+  it("no longer asks for any Instagram or Messenger permission", () => {
+    const names = PAGE_TOKEN_SCOPES.map((entry) => entry.scope);
+    expect(names).not.toContain("instagram_manage_messages");
+    expect(names).not.toContain("instagram_basic");
+    expect(names).not.toContain("pages_messaging");
   });
 
   it("treats an empty permission list as unknown, not as nothing granted", () => {
@@ -56,20 +62,17 @@ describe("comparing a token's permissions against what the CRM needs", () => {
 
   it("holds the ads token to different permissions", () => {
     // A Page token never carries ads_read, and an ads token never carries
-    // instagram_manage_messages. Checking both against one list would
-    // report a fault on every correctly configured instance.
+    // leads_retrieval. Checking both against one list would report a fault
+    // on every correctly configured instance.
     const report = compareScopes(["ads_read"], ADS_TOKEN_SCOPES);
     expect(report?.missing.map((entry) => entry.scope)).toEqual(["ads_management"]);
-    expect(ADS_TOKEN_SCOPES.map((entry) => entry.scope)).not.toContain("instagram_manage_messages");
+    expect(ADS_TOKEN_SCOPES.map((entry) => entry.scope)).not.toContain("leads_retrieval");
   });
 
-  it("covers every permission the Instagram and Lead Ads paths need", () => {
+  it("covers every permission the Lead Ads path needs", () => {
     // A permission missing from this list is one the CRM can never report
     // on, which is exactly the hole this closes.
     for (const scope of [
-      "pages_messaging",
-      "instagram_basic",
-      "instagram_manage_messages",
       "leads_retrieval",
       "pages_manage_metadata",
     ]) {

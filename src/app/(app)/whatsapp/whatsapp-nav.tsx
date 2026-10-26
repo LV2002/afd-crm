@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
  * Two rows, because there are two different questions.
  *
  * The top row is **which conversation channel** — the institute's
- * Business API number, a counsellor's own WhatsApp, Instagram. The second
+ * Business API number and a counsellor's own WhatsApp. The second
  * is what you want to do within the Business API channel, and only
  * applies there: there are no broadcast templates for somebody's personal
  * WhatsApp, and showing them under it would imply there could be.
@@ -30,12 +30,10 @@ interface Tab {
   because it is the daily work.
 
   **WhatsApp API** is the institute's broadcast number: campaign replies,
-  templates, automations. It is administrative, so it sits last, after
-  Instagram.
+  templates, automations. It is administrative, so it sits last.
 */
 const CHANNELS: Tab[] = [
   { href: "/whatsapp/personal", label: "WhatsApp" },
-  { href: "/whatsapp/instagram", label: "Instagram" },
   { href: "/whatsapp", label: "WhatsApp API" },
 ];
 
@@ -47,7 +45,7 @@ const BUSINESS_TABS: Tab[] = [
   { href: "/whatsapp/suppressions", label: "Opted out", needs: "campaign" },
 ];
 
-const OTHER_CHANNEL_PREFIXES = ["/whatsapp/personal", "/whatsapp/instagram"];
+const OTHER_CHANNEL_PREFIXES = ["/whatsapp/personal"];
 
 function TabLink({ tab, isActive }: { tab: Tab; isActive: boolean }) {
   return (
