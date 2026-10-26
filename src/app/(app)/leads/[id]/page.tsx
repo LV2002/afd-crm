@@ -487,6 +487,11 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                 />
               )}
               <FeePlanPanel
+                // Rebuilt whenever the saved plan changes — in particular when the
+                // admission is confirmed, which is what fills the fee in. Its inputs
+                // hold their own state, so without a new key they kept showing the
+                // empty plan they were first drawn with.
+                key={`${feePlan.enrolmentId}:${feePlan.values.courseFee}:${feePlan.values.discount}:${feePlan.values.downPayment}:${feePlan.values.instalments.map((i) => `${i.dueDate}=${i.amount}`).join(",")}`}
                 leadId={id}
                 values={feePlan.values}
                 // Accounts always; the counsellor too, until the first

@@ -140,7 +140,24 @@ export const NOTIFICATION_EVENTS = [
     variables: ["lead_name", "lead_number", "course", "counsellor_name", "center_name"],
     defaultTitle: "Admission confirmed: {{lead_name}}",
     defaultBody:
-      "{{counsellor_name}} confirmed {{lead_name}} for {{course}}. Ready for fee collection.",
+      "{{counsellor_name}} confirmed {{lead_name}} for {{course}}. The fee plan follows from the counsellor.",
+    defaultNotifyOwner: false,
+    defaultNotifyRoleCodes: ["accounts", "center_head"],
+  },
+  {
+    // The second half of the hand-over. `admission.confirmed` tells accounts
+    // a student exists; this tells them the agreement is written and ready
+    // to be followed. Fires when a plan first becomes complete (the
+    // instalments add up to the payable amount), not on every save.
+    key: "enrolment.fee_plan_ready",
+    label: "Fee plan ready",
+    description:
+      "The counsellor finished the fee and instalment agreement for a confirmed admission — the instalments add up to what the family owes. Accounts can follow it.",
+    category: "Admissions",
+    variables: ["student_name", "course", "payable", "instalments", "first_due", "set_by", "center_name"],
+    defaultTitle: "Fee plan ready: {{student_name}}",
+    defaultBody:
+      "{{set_by}} agreed {{payable}} for {{student_name}} ({{course}}) in {{instalments}}, first due {{first_due}}.",
     defaultNotifyOwner: false,
     defaultNotifyRoleCodes: ["accounts", "center_head"],
   },

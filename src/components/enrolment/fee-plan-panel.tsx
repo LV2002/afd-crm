@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { saveFeePlan, type FeeFormState } from "@/lib/enrolment/fee-actions";
 import { composeDiscountName, splitSavedDiscount } from "@/lib/enrolment/discount-parts";
 import { INSTALMENT_SLOTS } from "@/lib/enrolment/instalment-plan";
+import { suggestSchedule } from "@/lib/enrolment/plan-status";
 import { describePromo, promoDiscountPaise, type Promo } from "@/lib/enrolment/promos";
 import { formatINR } from "@/lib/format/currency";
 
@@ -97,6 +98,14 @@ export function FeePlanPanel({
   const [amounts, setAmounts] = useState<Record<number, string>>(
     Object.fromEntries(values.instalments.map((i) => [i.sequence, i.amount])),
   );
+  const [dues, setDues] = useState<Record<number, string>>(
+    Object.fromEntries(values.instalments.map((i) => [i.sequence, i.dueDate])),
+  );
+  const [down, setDown] = useState(values.downPayment);
+  const [planCount, setPlanCount] = useState("3");
+  const [startDate, setStartDate] = useState(
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()),
+  );
 
   const netPaise = Math.max(0, toPaise(fee) - totalDiscountPaise);
   const scheduledPaise = Object.values(amounts).reduce((sum, v) => sum + toPaise(v), 0);
@@ -112,12 +121,35 @@ export function FeePlanPanel({
     );
   }
 
-  const dueByslot = new Map(values.instalments.map((i) => [i.sequence, i.dueDate]));
+  function fillSchedule() {
+    const lines = suggestSchedule({
+      netPaise,
+      downPaymentPaise: toPaise(down),
+      count: Number(planCount),
+      startDate,
+    });
+    setAmounts(Object.fromEntries(lines.map((l) => [l.sequence, String(l.amountPaise / 100)])));
+    setDues(Object.fromEntries(lines.map((l) => [l.sequence, l.dueDate])));
+  }
 
   return (
     <div className="flex flex-col gap-4">
       <form action={action} className="flex flex-col gap-4 rounded-lg border p-4">
         <input type="hidden" name="leadId" value={leadId} />
+
+        {/* Where this stands in the hand-over, so a counsellor knows whether
+            accounts has anything to follow yet. */}
+        <p
+          className={`rounded-md px-3 py-2 text-sm ${
+            planComplete
+              ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+              : "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+          }`}
+        >
+          {planComplete
+            ? "Plan complete. Once it is saved, accounts is told and collects by this agreement."
+            : "Set the fee, the discount and the instalments. Accounts is told when they add up to the payable amount."}
+        </p>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
@@ -140,7 +172,8 @@ export function FeePlanPanel({
             <MoneyInput
               id="downPayment"
               name="downPayment"
-              defaultValue={values.downPayment}
+              value={down}
+              onValueChange={setDown}
               disabled={!canEdit}
               placeholder="0"
             />
@@ -238,13 +271,54 @@ export function FeePlanPanel({
 
         <div className="flex flex-col gap-3">
           <Label>Instalments</Label>
+          {canEdit && netPaise > 0 && (
+            <div className="flex flex-wrap items-end gap-3 rounded-md border border-dashed p-3">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="planCount" className="text-xs text-muted-foreground">
+                  Split into
+                </Label>
+                <select
+                  id="planCount"
+                  value={planCount}
+                  onChange={(e) => setPlanCount(e.target.value)}
+                  className="h-10 rounded-md border border-input bg-card px-3 text-sm"
+                >
+                  {INSTALMENT_SLOTS.map((n) => (
+                    <option key={n} value={n}>
+                      {n === 1 ? "1 payment" : `${n} instalments`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="planStart" className="text-xs text-muted-foreground">
+                  First due
+                </Label>
+                <Input
+                  id="planStart"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-44"
+                />
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={fillSchedule}>
+                Fill the schedule
+              </Button>
+              <p className="basis-full text-xs text-muted-foreground">
+                Instalment 1 is the down payment, if there is one; the rest is split evenly, a month
+                apart. Adjust any row afterwards.
+              </p>
+            </div>
+          )}
           {INSTALMENT_SLOTS.map((slot) => (
             <div key={slot} className="grid gap-3 sm:grid-cols-[3rem_1fr_1fr] sm:items-center">
               <span className="text-sm text-muted-foreground">#{slot}</span>
               <Input
                 name={`instalment_${slot}_due`}
                 type="date"
-                defaultValue={dueByslot.get(slot) ?? ""}
+                value={dues[slot] ?? ""}
+                onChange={(e) => setDues((d) => ({ ...d, [slot]: e.target.value }))}
                 disabled={!canEdit}
                 aria-label={`Instalment ${slot} due date`}
               />
@@ -260,8 +334,8 @@ export function FeePlanPanel({
             </div>
           ))}
           <p className="text-xs text-muted-foreground">
-            Leave a row blank if it isn&apos;t used. Fill in both the date and the amount, or
-            neither.
+            The instalments cover the whole payable amount — the down payment is part of instalment 1.
+            Leave a row blank if it isn&apos;t used; fill in both the date and the amount, or neither.
           </p>
         </div>
 

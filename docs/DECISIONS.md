@@ -4829,3 +4829,7 @@ Leon asked for a Courses page with batches beneath and a fee per batch, and for 
 ## 2026-10-25 — Batch required at admission; fee structures retired
 
 With fee and year on the batch (see above), the fee_structures lookup and the free mode/year pickers were a second way to say the same thing, and the cause of the old "no fee structure" failures. Admission now requires a batch. Kept: the table and config-bundle slot (nothing deleted), and a custom-fee field for negotiated prices. The public profile form reads the brand through the service-role client solely to sign the logo URL, since the visitor is anonymous and the logo bucket is private.
+
+## 2026-10-26 — Down payment sits inside the instalments
+
+The counsellor's panel, the printed agreement and payment allocation all treat the instalments as covering the whole payable amount; only the accountant's summary subtracted the down payment a second time. Decision: the down payment is instalment 1 (collected at joining). No data changed — plans that already add up to the payable amount stay complete. Anyone who entered the down payment as a separate amount on top of instalments would now see their instalments short by it, which the panel flags.

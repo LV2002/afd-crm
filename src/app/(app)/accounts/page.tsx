@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { formatDateIST } from "@/lib/format/date";
 import { formatINR } from "@/lib/format/currency";
+import { planStatus, type PlanStatus } from "@/lib/enrolment/plan-status";
 import { maskPhone } from "@/lib/leads/mask-phone";
 import { createClient } from "@/lib/supabase/server";
 
@@ -82,6 +83,39 @@ export default async function AccountsQueuePage({
       paidByEnrolmentId.set(p.enrolment_id, (paidByEnrolmentId.get(p.enrolment_id) ?? 0) + delta);
     }
   }
+
+  // The agreement the counsellor wrote, as accounts needs to read it from a
+  // list: is there one, and what is the next amount to chase.
+  const instalmentsByEnrolment = new Map<
+    string,
+    Array<{ sequence: number; dueDate: string; amountPaise: number }>
+  >();
+  if (enrolmentIds.length > 0) {
+    const { data: instalmentRows } = await supabase
+      .from("enrolment_instalments")
+      .select("enrolment_id, sequence, due_date, amount_paise")
+      .in("enrolment_id", enrolmentIds)
+      .returns<
+        Array<{ enrolment_id: string; sequence: number; due_date: string; amount_paise: number }>
+      >();
+    for (const i of instalmentRows ?? []) {
+      const list = instalmentsByEnrolment.get(i.enrolment_id) ?? [];
+      list.push({ sequence: i.sequence, dueDate: i.due_date, amountPaise: i.amount_paise });
+      instalmentsByEnrolment.set(i.enrolment_id, list);
+    }
+  }
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+  const statusById = new Map<string, PlanStatus>(
+    rows.map((row) => [
+      row.id,
+      planStatus({
+        netPaise: row.net_fee_paise,
+        instalments: instalmentsByEnrolment.get(row.id) ?? [],
+        paidPaise: paidByEnrolmentId.get(row.id) ?? 0,
+        asOf: today,
+      }),
+    ]),
+  );
 
   const sorted = [...rows].sort((a, b) => {
     const aWaiting = a.accounts_to_academics_at === null;
@@ -160,6 +194,8 @@ export default async function AccountsQueuePage({
             <TableHead>Net fee</TableHead>
             <TableHead>Paid</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Fee plan</TableHead>
+            <TableHead>Next due</TableHead>
             <TableHead>Confirmed</TableHead>
           </TableRow>
         </TableHeader>
@@ -193,13 +229,33 @@ export default async function AccountsQueuePage({
                     </Badge>
                   )}
                 </TableCell>
+                <TableCell>
+                  {statusById.get(row.id)?.ready ? (
+                    <Badge variant="secondary">Ready</Badge>
+                  ) : (
+                    <Badge variant="outline">Not complete</Badge>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {(() => {
+                    const next = statusById.get(row.id)?.nextDue;
+                    if (!next || row.dropped_at) return "—";
+                    return (
+                      <span className={next.overdue ? "font-medium text-destructive" : undefined}>
+                        {formatINR(next.amountPaise)} ·{" "}
+                        {formatDateIST(`${next.dueDate}T00:00:00Z`, "d MMM")}
+                        {next.overdue ? " · overdue" : ""}
+                      </span>
+                    );
+                  })()}
+                </TableCell>
                 <TableCell>{formatDateIST(row.sales_to_accounts_at, "d MMM yyyy")}</TableCell>
               </TableRow>
             );
           })}
           {visible.length === 0 && (
             <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground">
+              <TableCell colSpan={9} className="text-center text-muted-foreground">
                 {showDropped
                   ? "Nobody has dropped out."
                   : showAll

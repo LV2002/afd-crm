@@ -8789,3 +8789,12 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Admission offers every running batch; the batch sets the centre
 
 - The Confirm admission form now lists all running batches for the chosen course, each labelled with its centre, instead of only batches at the lead's own centre (which gave an empty picker for a lead whose centre differed from the batch's, or who had none). The enrolment's centre is the batch's; a lead with no centre is given the batch's. The Course & batch panel after admission still offers the student's own centre's batches.
+
+## Admission → fee plan → accounts: audit and fixes
+
+- **Fee plan pre-fills after Confirm admission again.** The panel's inputs hold their own state and were first drawn (empty) before the admission existed, so the batch fee and any discount never appeared. It is now rebuilt whenever the saved plan changes.
+- **Down payment is part of instalment 1.** The panel and printed agreement already made the instalments cover the whole payable amount, but the accountant's "Agreed fee plan" subtracted the down payment again and showed a negative shortfall. Fixed; labelled "(part of instalment 1)".
+- **Fill the schedule**: pick 1–4 payments and a first due date; instalment 1 is the down payment, the rest split evenly a month apart with the last absorbing rounding (`suggestSchedule`, tested). Rows stay editable.
+- **Plan status banner** on the fee panel (complete / not yet).
+- **Accountant is told when the plan is ready** — new notification `enrolment.fee_plan_ready` ("Fee plan ready"), sent when the instalments first add up to the payable amount, not on every save. `admission.confirmed` now says the fee plan follows. Admins can change both under Settings → Notifications.
+- **Accounts → Admissions list** has Fee plan (Ready / Not complete) and Next due (amount · date, red when overdue) columns.

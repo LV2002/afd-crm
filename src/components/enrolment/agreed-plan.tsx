@@ -76,7 +76,7 @@ export function AgreedPlan({
   // The plan can legitimately cover less than the net fee — a counsellor
   // may schedule part of it and agree the rest later. Showing the
   // shortfall beats pretending the schedule is the whole story.
-  const unscheduledPaise = netFeePaise - downPaymentPaise - allocation.scheduledPaise;
+  const unscheduledPaise = netFeePaise - allocation.scheduledPaise;
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-4">
@@ -90,7 +90,7 @@ export function AgreedPlan({
         />
         <Line label="Payable" value={formatINR(netFeePaise)} strong />
         <Line
-          label="Down payment agreed"
+          label="Down payment agreed (part of instalment 1)"
           value={downPaymentPaise === 0 ? "—" : formatINR(downPaymentPaise)}
         />
       </dl>

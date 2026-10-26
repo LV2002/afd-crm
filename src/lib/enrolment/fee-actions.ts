@@ -7,6 +7,7 @@ import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { enrolmentPromos, enrolmentInstalments, enrolments, leads, payments, promos } from "@/lib/db/schema";
+import { planStatus } from "./plan-status";
 import { formatINR } from "@/lib/format/currency";
 import { notify } from "@/lib/notifications/notify";
 import { createClient } from "@/lib/supabase/server";
@@ -250,6 +251,24 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
     }
   }
 
+  // Whether the plan was already complete before this save, so the
+  // "fee plan ready" notice goes out when it BECOMES complete, not every
+  // time somebody nudges a date.
+  const previousInstalments = await db
+    .select({
+      sequence: enrolmentInstalments.sequence,
+      dueDate: enrolmentInstalments.dueDate,
+      amountPaise: enrolmentInstalments.amountPaise,
+    })
+    .from(enrolmentInstalments)
+    .where(eq(enrolmentInstalments.enrolmentId, enrolment.id));
+  const wasReady = planStatus({
+    netPaise: enrolment.netFeePaise,
+    instalments: previousInstalments,
+    paidPaise: 0,
+    asOf: "",
+  }).ready;
+
   await db.transaction(async (tx) => {
     await tx
       .update(enrolments)
@@ -351,6 +370,33 @@ export async function saveFeePlan(_prev: FeeFormState, formData: FormData): Prom
       entityType: "enrolments",
       entityId: enrolment.id,
       centerId: lead.centerId,
+      ownerId: lead.assignedTo,
+      actorId: user.id,
+    });
+  }
+
+  const nowReady = planStatus({
+    netPaise: newNetFeePaise,
+    instalments,
+    paidPaise: 0,
+    asOf: "",
+  }).ready;
+  if (nowReady && !wasReady) {
+    const sorted = [...instalments].sort((a, b) => a.sequence - b.sequence);
+    await notify({
+      eventKey: "enrolment.fee_plan_ready",
+      context: {
+        student_name: lead.studentName,
+        course: enrolment.course,
+        payable: formatINR(newNetFeePaise),
+        instalments: `${sorted.length} instalment${sorted.length === 1 ? "" : "s"}`,
+        first_due: sorted[0]?.dueDate ?? "—",
+        set_by: user.fullName,
+      },
+      href: `/accounts/${enrolment.id}`,
+      entityType: "enrolments",
+      entityId: enrolment.id,
+      centerId: enrolment.centerId,
       ownerId: lead.assignedTo,
       actorId: user.id,
     });
