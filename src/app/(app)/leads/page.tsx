@@ -47,7 +47,8 @@ import { QUEUE_LABELS, parseQueueKey } from "@/lib/my-day/queue-link";
 import { RememberLeadFilters } from "./remember-filters";
 import { RevealPhoneButton } from "./reveal-phone-button";
 
-const PAGE_SIZE = 25;
+/** Rows per page a person may choose; the first is the default. */
+const PAGE_SIZES = [25, 50, 100] as const;
 
 /** A search param as a single string, since Next hands back `string | string[]`. */
 function asParam(value: string | string[] | undefined): string | undefined {
@@ -108,6 +109,8 @@ export default async function LeadsPage({
   const search = typeof params.search === "string" ? params.search : "";
   const filterValues = readFilterValues(params, filterableFields);
   const tagFilter = typeof params.tag === "string" ? params.tag : "";
+  const requestedSize = Number(Array.isArray(params.size) ? params.size[0] : params.size);
+  const PAGE_SIZE = (PAGE_SIZES as readonly number[]).includes(requestedSize) ? requestedSize : PAGE_SIZES[0];
   const page = Math.max(1, Number(params.page) || 1);
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -267,12 +270,13 @@ export default async function LeadsPage({
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  function pageHref(target: number) {
+  function pageHref(target: number, size: number = PAGE_SIZE) {
     const next = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
-      if (typeof value === "string" && key !== "page") next.set(key, value);
+      if (typeof value === "string" && key !== "page" && key !== "size") next.set(key, value);
     }
     next.set("page", String(target));
+    if (size !== PAGE_SIZES[0]) next.set("size", String(size));
     return `/leads?${next.toString()}`;
   }
 
@@ -461,19 +465,41 @@ export default async function LeadsPage({
         </TableBody>
       </Table>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Page {page} of {totalPages}
+      {total > PAGE_SIZES[0] && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+          <span className="flex items-center gap-1">
+            Show
+            {PAGE_SIZES.map((size) => (
+              <Link
+                key={size}
+                href={pageHref(1, size)}
+                aria-current={size === PAGE_SIZE ? "true" : undefined}
+                className={
+                  size === PAGE_SIZE
+                    ? "rounded-md bg-secondary px-2 py-1 font-medium text-secondary-foreground"
+                    : "rounded-md px-2 py-1 hover:bg-accent/50"
+                }
+              >
+                {size}
+              </Link>
+            ))}
+            per page
           </span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={page <= 1} asChild={page > 1}>
-              {page > 1 ? <Link href={pageHref(page - 1)}>Previous</Link> : <span>Previous</span>}
-            </Button>
-            <Button variant="outline" size="sm" disabled={page >= totalPages} asChild={page < totalPages}>
-              {page < totalPages ? <Link href={pageHref(page + 1)}>Next</Link> : <span>Next</span>}
-            </Button>
-          </div>
+          {totalPages > 1 && (
+            <span className="flex items-center gap-3">
+              <span>
+                Page {page} of {totalPages}
+              </span>
+              <span className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={page <= 1} asChild={page > 1}>
+                  {page > 1 ? <Link href={pageHref(page - 1)}>Previous</Link> : <span>Previous</span>}
+                </Button>
+                <Button variant="outline" size="sm" disabled={page >= totalPages} asChild={page < totalPages}>
+                  {page < totalPages ? <Link href={pageHref(page + 1)}>Next</Link> : <span>Next</span>}
+                </Button>
+              </span>
+            </span>
+          )}
         </div>
       )}
     </div>
