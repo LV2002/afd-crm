@@ -44,6 +44,13 @@ import { terminalValuesOf } from "@/lib/leads/temperature-kinds";
 import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 import { getMyDayQueueForUser } from "@/lib/my-day/get-queue";
 import { QUEUE_LABELS, parseQueueKey } from "@/lib/my-day/queue-link";
+import {
+  MEASURE_LABELS,
+  applyMeasure,
+  needsEnrolments,
+  parseMeasureKey,
+} from "@/lib/dashboard/measures";
+import { getMeasureContext } from "@/lib/dashboard/get-scoreboard";
 import { RememberLeadFilters } from "./remember-filters";
 import { RevealPhoneButton } from "./reveal-phone-button";
 
@@ -175,6 +182,33 @@ export default async function LeadsPage({
     }
   }
 
+  /*
+    A tile from a dashboard (?tile=overdue&for=<counsellor>|all).
+
+    The tile's own definition (lib/dashboard/measures.ts) is applied as
+    filters, so the list has exactly the rows the figure counted. `for` is
+    one counsellor, or `all` for everything the viewer may see; left out, it
+    is the viewer's own. Narrowing only — RLS still decides what exists.
+  */
+  const tileKey = parseMeasureKey(asParam(params.tile));
+  const tileForParam = asParam(params.for);
+  const tileOwner: string | "all" =
+    tileForParam === "all"
+      ? "all"
+      : tileForParam &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tileForParam)
+        ? tileForParam
+        : user.id;
+  let tileOwnerName: string | null = null;
+  if (tileKey && tileOwner !== "all" && tileOwner !== user.id) {
+    const { data: owner } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", tileOwner)
+      .maybeSingle<{ full_name: string | null }>();
+    tileOwnerName = owner?.full_name ?? null;
+  }
+
   // A core field is a real leads column; a non-core (custom) field's value
   // lives inside the `custom` jsonb blob instead — select that once rather
   // than trying to select a column named after the custom key, which
@@ -189,12 +223,25 @@ export default async function LeadsPage({
       ...(needsCustomColumn ? ["custom"] : []),
     ]),
   ).join(", ");
+  // The admission tiles filter on the lead's enrolment, which has to be
+  // joined for the filter to reach it.
+  const tileSelect = tileKey && needsEnrolments(tileKey) ? ", enrolments!inner(sales_to_accounts_at, dropped_at)" : "";
 
   let query = supabase
     .from("leads")
-    .select(selectColumns, { count: "exact" })
+    .select(`${selectColumns}${tileSelect}`, { count: "exact" })
     .is("deleted_at", null);
   query = applyLeadFilters(query, filterableFields, filterValues);
+  if (tileKey) {
+    const measureContext = await getMeasureContext(supabase);
+    query = applyMeasure(
+      query,
+      tileKey,
+      measureContext,
+      unfinishedLeadsFilter(measureContext.terminalTemperatures),
+    );
+    if (tileOwner !== "all") query = query.eq("assigned_to", tileOwner);
+  }
   query = applyLeadDateFilters(query, dateFilters);
   if (dateFilters.excludeFinished) {
     // "Overdue" means work somebody still owes a person. A student who
@@ -255,6 +302,7 @@ export default async function LeadsPage({
     Boolean(search) ||
     Boolean(tagFilter) ||
     queueKey !== null ||
+    tileKey !== null ||
     dateFilters.active ||
     Object.keys(filterValues).length > 0;
 
@@ -377,6 +425,23 @@ export default async function LeadsPage({
             Showing <strong>{QUEUE_LABELS[queueKey]}</strong> from{" "}
             {queueOwnerName ? `${queueOwnerName}'s day` : "your day"} —{" "}
             {queueLeadIds?.length ?? 0} {(queueLeadIds?.length ?? 0) === 1 ? "lead" : "leads"}.
+          </p>
+          <Link href="/leads" className="font-medium hover:underline">
+            Show every lead →
+          </Link>
+        </div>
+      )}
+
+      {tileKey && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-primary-subtle px-4 py-3 text-sm">
+          <p>
+            Showing <strong>{MEASURE_LABELS[tileKey]}</strong> —{" "}
+            {tileOwner === "all"
+              ? "every lead you can see"
+              : tileOwner === user.id
+                ? "your leads"
+                : `${tileOwnerName ?? "this counsellor"}'s leads`}
+            : {total} {total === 1 ? "lead" : "leads"}.
           </p>
           <Link href="/leads" className="font-medium hover:underline">
             Show every lead →

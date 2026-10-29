@@ -50,7 +50,7 @@ export async function AccountsWidget() {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <StatTile label="Awaiting first payment" value={awaitingFirstPayment ?? 0} />
+          <StatTile label="Awaiting first payment" value={awaitingFirstPayment ?? 0} href="/accounts" />
           <StatTile label="Collected today" value={formatINR(collectedToday)} />
           <StatTile label="Collected this month" value={formatINR(collectedThisMonth)} />
         </div>

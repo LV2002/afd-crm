@@ -8820,3 +8820,10 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Leads list: 25, 50 or 100 per page
 
 - The Leads list has a "Show 25 / 50 / 100 per page" control under the table (any time there are more than 25 leads). The choice is in the address (`?size=`), so it survives paging, filters and opening a lead and coming back; 25 stays the default. Changing it returns to page 1.
+
+## Managers see everyone's follow-ups; every dashboard figure opens its leads
+
+- **Follow-ups**: for anybody who can assign leads (centre head, co-admin, admin) the page now opens on **Everyone** — all follow-ups on every lead they can see — instead of only their own. "Mine" is one click away. In place of their own (empty) "Your day" they get a **By counsellor** table: overdue / today / later per person, each name opening just that counsellor's calls. Counsellors are unchanged.
+- **Dashboard figures are links**: every hero figure and tile on the counsellor dashboard, a counsellor's page (as their manager sees it), the centre/organisation cards and the team table opens the Leads page showing exactly those leads, with a banner saying what is being shown and whose. The year tiles are links too; the chart they used to drive now has its own "Chart shows" row. "Your day" section counts link as before.
+- One definition per figure (`src/lib/dashboard/measures.ts`) is used both to count on the dashboard and to filter the list, and `tests/dashboard-measures.spec.ts` requires the two to agree for every figure. "Follow-ups due" and "Nobody is on these" now count each lead once (they used to add two counts, which double-counted a lead that was both).
+- Not covered: Accounts and Academics tiles link to their own screens (/accounts, /students), not to leads.

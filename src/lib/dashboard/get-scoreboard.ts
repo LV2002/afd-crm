@@ -16,6 +16,7 @@ import {
   startOfTomorrowIST,
 } from "@/lib/format/date";
 
+import type { MeasureContext } from "./measures";
 import {
   buildCentreScoreboard,
   buildCounsellorScoreboard,
@@ -307,5 +308,23 @@ export async function getCentreView(supabase: SupabaseClient): Promise<CentreVie
     centre: buildCentreScoreboard({ leads, enrolments, terminalTemperatures, boundaries }),
     series: buildDailySeries({ leads, enrolments, days }),
     team: buildTeamScoreboard({ members, leads, enrolments, terminalTemperatures, boundaries }),
+  };
+}
+
+/**
+ * What a dashboard figure's list needs to reproduce the figure: today's and
+ * this month's boundaries (in IST), which temperatures are finished and
+ * which count as interested. The leads page reads this when it opens a tile.
+ */
+export async function getMeasureContext(supabase: SupabaseClient): Promise<MeasureContext> {
+  const [terminalTemperatures, interested, startMonth] = await Promise.all([
+    loadTerminalTemperatures(supabase),
+    interestedTemperatures(supabase),
+    cycleStartMonth(supabase),
+  ]);
+  return {
+    boundaries: boundariesNow(new Date(), startMonth),
+    terminalTemperatures,
+    interestedTemperatures: interested,
   };
 }

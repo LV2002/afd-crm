@@ -129,18 +129,18 @@ export default async function FollowUpsPage({
   /*
     Whose follow-ups.
 
-    Defaults to the signed-in person's own, which is the whole point of
-    the screen: a counsellor opening it wants their morning, not the
-    institute's. A centre head or admin can see everybody's — RLS
-    already decides what "everybody" means for them — but only by
-    asking, because a list of fifty other people's calls is not a work
-    queue, it is a report.
+    A counsellor's own. For somebody who manages others — a centre head,
+    co-admin or admin — it is EVERYONE'S that they can see, by default:
+    RLS decides what "everybody" means for them, and a manager opening
+    Follow-ups to find only their own (empty) list was exactly the problem
+    Leon reported, with one counsellor holding every lead and her manager
+    seeing nothing pending. They can still narrow to "Mine".
 
     A counsellor sees no switch at all: for them the two scopes return
     the same rows, so offering the choice would be offering nothing.
   */
   const seesOthers = can(user, "lead.assign");
-  const scope = asParam(params.scope) === "all" && seesOthers ? "all" : "mine";
+  const scope = seesOthers && asParam(params.scope) !== "mine" ? "all" : "mine";
 
   const filterableFields = fields.filter((field) => field.showInFilters);
   const optionBearingFields = fields.filter((field) => OPTION_BEARING_TYPES.has(field.type));
@@ -235,6 +235,61 @@ export default async function FollowUpsPage({
       droppedLeadIds(supabase, list.map((row) => row.id)),
     ]);
 
+  /*
+    A manager looking at everyone's follow-ups gets a count per counsellor
+    before the list: who is behind, and a click to see just their calls.
+    One light read of two columns, grouped in memory — the same rows the
+    list below is drawn from, and filtered the same way.
+  */
+  interface OwnerSummary {
+    ownerId: string | null;
+    name: string;
+    overdue: number;
+    today: number;
+    later: number;
+  }
+  let ownerSummaries: OwnerSummary[] = [];
+  if (seesOthers && scope === "all") {
+    let summaryQuery = supabase
+      .from("leads")
+      .select("assigned_to, next_followup_at")
+      .is("deleted_at", null)
+      .not("next_followup_at", "is", null);
+    if (unfinished) summaryQuery = summaryQuery.or(unfinished);
+    const { data: dated } = await summaryQuery.returns<
+      Array<{ assigned_to: string | null; next_followup_at: string }>
+    >();
+
+    const byOwner = new Map<string | null, { overdue: number; today: number; later: number }>();
+    for (const row of dated ?? []) {
+      const bucket = bucketFor(new Date(row.next_followup_at), bounds);
+      const entry = byOwner.get(row.assigned_to) ?? { overdue: 0, today: 0, later: 0 };
+      if (bucket === "overdue") entry.overdue += 1;
+      else if (bucket === "today") entry.today += 1;
+      else entry.later += 1;
+      byOwner.set(row.assigned_to, entry);
+    }
+
+    const ids = [...byOwner.keys()].filter((id): id is string => id !== null);
+    const { data: owners } =
+      ids.length > 0
+        ? await supabase
+            .from("profiles")
+            .select("id, full_name")
+            .in("id", ids)
+            .returns<Array<{ id: string; full_name: string | null }>>()
+        : { data: [] as Array<{ id: string; full_name: string | null }> };
+    const nameById = new Map((owners ?? []).map((o) => [o.id, o.full_name ?? "Unnamed"]));
+
+    ownerSummaries = [...byOwner.entries()]
+      .map(([ownerId, counts]) => ({
+        ownerId,
+        name: ownerId ? (nameById.get(ownerId) ?? "Unnamed") : "Unassigned",
+        ...counts,
+      }))
+      .sort((a, b) => b.overdue - a.overdue || b.today - a.today || a.name.localeCompare(b.name));
+  }
+
   const temperatureByValue = new Map(temperatureOptions.map((option) => [option.value, option]));
   const assigneeByValue = new Map(
     (optionsWithUsers.assigned_to ?? []).map((option) => [option.value, option] as const),
@@ -257,7 +312,7 @@ export default async function FollowUpsPage({
   }));
 
   const hasAnyFilter =
-    Boolean(search) || Object.keys(filterValues).length > 0 || scope === "all";
+    Boolean(search) || Object.keys(filterValues).length > 0 || (seesOthers && scope === "mine");
 
   return (
     <div className="flex flex-col gap-4">
@@ -278,7 +333,56 @@ export default async function FollowUpsPage({
           exists, and an anchor that hides its own target is worse than
           no anchor. */}
       <div id="your-day" className="scroll-mt-20">
-        <MyDayWidget userId={user.id} canRevealPhone={can(user, "lead.reveal_phone")} />
+        {seesOthers && scope === "all" ? (
+          <section className="flex flex-col gap-2 rounded-lg border p-4">
+            <div>
+              <h2 className="text-lg font-semibold">By counsellor</h2>
+              <p className="text-sm text-muted-foreground">
+                Booked follow-ups on every lead you can see. Click a number to see just those
+                calls.
+              </p>
+            </div>
+            {ownerSummaries.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No follow-ups are booked on anybody&apos;s leads.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Counsellor</TableHead>
+                      <TableHead className="text-right">Overdue</TableHead>
+                      <TableHead className="text-right">Today</TableHead>
+                      <TableHead className="text-right">Later</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ownerSummaries.map((row) => {
+                      const href = row.ownerId
+                        ? `/follow-ups?f_assigned_to=${row.ownerId}`
+                        : "/leads/orphans";
+                      return (
+                        <TableRow key={row.ownerId ?? "none"}>
+                          <TableCell className="font-medium">
+                            <Link href={href} className="hover:underline">
+                              {row.name}
+                            </Link>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {row.overdue > 0 ? <Badge variant="destructive">{row.overdue}</Badge> : <span className="text-muted-foreground">0</span>}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{row.today}</TableCell>
+                          <TableCell className="text-right tabular-nums">{row.later}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </section>
+        ) : (
+          <MyDayWidget userId={user.id} canRevealPhone={can(user, "lead.reveal_phone")} />
+        )}
       </div>
 
       <div className="border-t pt-4">

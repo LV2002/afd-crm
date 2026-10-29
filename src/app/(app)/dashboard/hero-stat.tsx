@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowDownRight, ArrowRight, ArrowUpRight } from "lucide-react";
+import Link from "next/link";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 
 /**
@@ -39,6 +40,8 @@ export interface HeroStatProps {
    * due" is the best news on the screen and should look like it.
    */
   tone?: "default" | "attention" | "good";
+  /** Opens the leads list behind this figure. */
+  href?: string;
 }
 
 function Delta({ value, previous }: { value: number; previous: number }) {
@@ -109,14 +112,15 @@ const TONE_INK: Record<NonNullable<HeroStatProps["tone"]>, string> = {
   good: "text-success-ink",
 };
 
-export function HeroStat({ label, value, previous, series, hint, tone = "default" }: HeroStatProps) {
+export function HeroStat({ label, value, previous, series, hint, tone = "default", href }: HeroStatProps) {
   const numeric = typeof value === "number" ? value : null;
   // At zero an `attention` figure is the good news, so it loses the red
   // rather than announcing nothing in the colour of a problem.
   const ink = tone === "attention" && numeric === 0 ? TONE_INK.good : TONE_INK[tone];
 
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm">
+  const box = "flex flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm";
+  const body = (
+    <>
       <span className="text-sm text-muted-foreground">{label}</span>
 
       <span className={`text-4xl font-semibold leading-none tabular-nums ${ink}`}>{value}</span>
@@ -128,6 +132,18 @@ export function HeroStat({ label, value, previous, series, hint, tone = "default
       {series && series.length > 1 ? <Sparkline series={series} label={label} /> : null}
 
       {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
-    </div>
+    </>
+  );
+
+  return href ? (
+    <Link
+      href={href}
+      aria-label={`${label}: ${value} — show these leads`}
+      className={`${box} transition hover:border-ring/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+    >
+      {body}
+    </Link>
+  ) : (
+    <div className={box}>{body}</div>
   );
 }

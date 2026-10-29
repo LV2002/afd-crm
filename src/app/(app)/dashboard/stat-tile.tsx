@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 /**
  * A secondary figure.
  *
@@ -41,21 +43,21 @@ export function StatTile({
   hint,
   compact = false,
   tone = "neutral",
+  href,
 }: {
   label: string;
   value: string | number;
   hint?: string;
   compact?: boolean;
   tone?: StatTone;
+  /** Opens the leads list behind this figure; the whole tile is the link. */
+  href?: string;
 }) {
   const palette = TONES[tone];
 
-  return (
-    <div
-      className={`flex h-full flex-col gap-1 rounded-lg border ${palette.box} ${
-        compact ? "p-3" : "p-4"
-      }`}
-    >
+  const classes = `flex h-full flex-col gap-1 rounded-lg border ${palette.box} ${compact ? "p-3" : "p-4"}`;
+  const body = (
+    <>
       <span className={compact ? "text-xs text-muted-foreground" : "text-sm text-muted-foreground"}>
         {label}
       </span>
@@ -67,6 +69,18 @@ export function StatTile({
         {value}
       </span>
       {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
-    </div>
+    </>
+  );
+
+  return href ? (
+    <Link
+      href={href}
+      aria-label={`${label}: ${value} — show these leads`}
+      className={`${classes} transition hover:ring-2 hover:ring-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+    >
+      {body}
+    </Link>
+  ) : (
+    <div className={classes}>{body}</div>
   );
 }
