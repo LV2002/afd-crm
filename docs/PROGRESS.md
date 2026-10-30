@@ -8833,3 +8833,8 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 - Chats now has **WhatsApp Business Chat** (the counsellors' own numbers, first and for everybody with WhatsApp access) and **WhatsApp API** (the institute's broadcast number, its inbox, templates, broadcasts, automations and opted-out list). Instagram is gone from Chats (PR #116).
 - The **WhatsApp API** tab and everything under it is shown only to people whose role holds the permission now labelled **Use the WhatsApp API** (`whatsapp.campaign` — the one that already gated templates, broadcasts and replying from the API number; relabelled, not new). Anybody else who opens `/whatsapp` is sent to WhatsApp Business Chat. To give it to specific people: Settings → Roles → create a role that is a copy of the counsellor role plus "Use the WhatsApp API", then put those people on it (or tick it on a role they already have).
 - Not changed: a counsellor still sees WhatsApp messages on the leads they own in each lead's own timeline, including a reply to a broadcast; the permission controls the API tab and tools, not the lead's history.
+
+## Schedules back on Vercel
+
+- With the project on Vercel Pro, `vercel.json` now schedules all three tiers: **frequent** every 10 minutes (`*/10 * * * *`), **hourly** at :25 past, **daily** at 10:00 IST. Vercel sends `Authorization: Bearer $CRON_SECRET` itself, which is what the routes already check. The daily run still repeats the other tiers as a safety net.
+- The two cron-job.org jobs are no longer needed — pause or delete them after seeing Vercel's runs (docs/CRON-SETUP.md). `tests/vercel-cron-schedule.spec.ts` keeps the file honest.

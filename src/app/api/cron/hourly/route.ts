@@ -22,9 +22,8 @@ export const dynamic = "force-dynamic";
  * cost 144 and buy nothing: neither platform updates spend that fast,
  * and the audience diff would find nothing new 140 times out of 144.
  *
- * Like the frequent tier, an external caller's route — see that file for
- * why none of this is in `vercel.json`. Every job here is also in the
- * daily run, so an hour's figures are never *lost* if this stops, only
+ * Scheduled by `vercel.json` like the other two tiers (see the frequent
+ * route). Every job here is also in the daily run, so an hour's figures are never *lost* if this stops, only
  * late.
  */
 export const maxDuration = 300;

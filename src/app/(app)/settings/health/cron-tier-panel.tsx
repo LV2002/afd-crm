@@ -53,8 +53,8 @@ export interface CronRun {
  * time it matters, and one that waits a day is no better than noticing
  * the broadcast never arrived.
  *
- * These numbers assume a punctual scheduler (cron-job.org, per
- * docs/CRON-SETUP.md). They were briefly looser to accommodate GitHub
+ * These numbers assume a punctual scheduler (Vercel Cron on the Pro plan,
+ * per docs/CRON-SETUP.md). They were briefly looser to accommodate GitHub
  * Actions, which queues scheduled workflows at low priority — if anybody
  * moves back to a scheduler like that, loosen them again rather than
  * living with a warning that is usually wrong.
