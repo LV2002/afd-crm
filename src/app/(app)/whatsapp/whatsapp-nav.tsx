@@ -25,7 +25,7 @@ interface Tab {
 /*
   Order is the point, not just the labels.
 
-  **WhatsApp** is a counsellor's own number — where the one-to-one
+  **WhatsApp Business Chat** is a counsellor's own number — where the one-to-one
   conversations happen and where every reply leaves from. It comes first
   because it is the daily work.
 
@@ -33,8 +33,11 @@ interface Tab {
   templates, automations. It is administrative, so it sits last.
 */
 const CHANNELS: Tab[] = [
-  { href: "/whatsapp/personal", label: "WhatsApp" },
-  { href: "/whatsapp", label: "WhatsApp API" },
+  { href: "/whatsapp/personal", label: "WhatsApp Business Chat" },
+  // Only for people granted the WhatsApp API (the `whatsapp.campaign`
+  // permission, held through a role): the institute's broadcast number,
+  // its templates, broadcasts and automations.
+  { href: "/whatsapp", label: "WhatsApp API", needs: "campaign" },
 ];
 
 const BUSINESS_TABS: Tab[] = [
@@ -74,7 +77,7 @@ export function WhatsAppNav({ canCampaign }: { canCampaign: boolean }) {
   return (
     <div className="flex flex-col gap-2 border-b pb-2">
       <nav className="flex flex-wrap gap-1">
-        {CHANNELS.map((channel) => {
+        {CHANNELS.filter((channel) => (channel.needs === "campaign" ? canCampaign : true)).map((channel) => {
           const isActive =
             channel.href === "/whatsapp"
               ? !onOtherChannel

@@ -119,9 +119,10 @@ export const PERMISSIONS = [
   },
   {
     code: "whatsapp.campaign",
-    label: "Run WhatsApp campaigns",
+    label: "Use the WhatsApp API",
     category: "WhatsApp",
-    description: "Build and send a bulk WhatsApp campaign.",
+    description:
+      "Open the WhatsApp API tab — the institute's broadcast number, its inbox, templates, broadcasts, automations and opted-out list — and reply from that number. Give it only to the people who should run it.",
   },
 
   // Enrolment
