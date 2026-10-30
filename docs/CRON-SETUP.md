@@ -1,8 +1,10 @@
 # The CRM's schedules
 
 **Who this is for:** Leon, or whoever administers the deployment.
-**What you have to do:** create two jobs on cron-job.org. About five minutes.
-**Cost:** nothing.
+**What you have to do:** make sure the project has a `CRON_SECRET` environment variable (Vercel → Settings → Environment Variables) and is on the **Pro** plan. Vercel then runs all three schedules itself from `vercel.json` — nothing to create anywhere else.
+**Cost:** included in Vercel Pro.
+
+> **Moving off cron-job.org.** Until now the ten-minute and hourly schedules were two jobs on cron-job.org, because the free Hobby plan allows one scheduled run a day. With `vercel.json` now scheduling all three, **pause or delete those two cron-job.org jobs** once you have seen Vercel's runs appear (Settings → Platform health → the schedule panel, or Vercel → the project → Cron Jobs). Leaving both on is harmless — the jobs are safe to run twice — but pointless. The cron-job.org instructions further down are kept only for anybody who runs this on a different host.
 
 ---
 

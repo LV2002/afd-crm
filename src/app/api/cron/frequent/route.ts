@@ -11,18 +11,14 @@ export const dynamic = "force-dynamic";
  * Every ten minutes: WhatsApp automations, scheduled broadcasts, and the
  * response-time sweep. See `lib/cron/jobs.ts` for why those three.
  *
- * ## Not in `vercel.json`, on purpose
+ * ## Scheduled by Vercel
  *
- * The Hobby plan allows a scheduled job to fire once a day, which is why
- * the daily run exists in the shape it does. This route is for an
- * *external* caller — a scheduler hitting the URL with the same
- * `Authorization: Bearer $CRON_SECRET` header Vercel's own cron sends.
- * Anything that can make an HTTP request works, and nothing about the
- * hosting plan limits how often a URL may be requested. See
- * `docs/CRON-SETUP.md` for the scheduler this instance uses.
- *
- * On a plan with minute-level cron, adding a `crons` entry pointing here
- * is the better answer and nothing in this file changes.
+ * `vercel.json` runs this every ten minutes. That needs a Vercel plan with
+ * minute-level cron (Pro); on the Hobby plan, which allows one run a day,
+ * this route was instead called by an outside scheduler with the same
+ * `Authorization: Bearer $CRON_SECRET` header Vercel's own cron sends — see
+ * `docs/CRON-SETUP.md`. Either caller works, because the route only checks
+ * that header.
  *
  * ## Overlapping runs
  *

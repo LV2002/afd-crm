@@ -48,8 +48,8 @@ export async function AcademicsWidget() {
             work. The other two are the state of the world; this one is a
             list of people expecting to hear from you.
           */}
-          <StatTile label="Waiting to be onboarded" value={waiting} />
-          <StatTile label="Active students" value={activeStudents ?? 0} />
+          <StatTile label="Waiting to be onboarded" value={waiting} href="/students/onboarding" />
+          <StatTile label="Active students" value={activeStudents ?? 0} href="/students" />
           <StatTile label="Joined this month" value={joinedThisMonth ?? 0} />
         </div>
         <div className="flex flex-wrap gap-4">

@@ -69,7 +69,7 @@ that is the system working, not a fault.
 | **Admissions** | Confirmed admissions and their fee collection | 7 |
 | **Students** | People who have paid and started | 8 |
 | **Finance** | The institute's own money | 9 |
-| **Chats** | WhatsApp and Instagram conversations | 10 |
+| **Chats** | WhatsApp conversations (counsellors' own numbers, and the API number) | 10 |
 | **Student Profile Forms** | Forms students have filled in | 8 |
 | **Insights** | Reports | 11 |
 | **Ad Performance** | What advertising cost and produced | 11 |

@@ -5,6 +5,7 @@ import { getCentreView } from "@/lib/dashboard/get-scoreboard";
 import { createClient } from "@/lib/supabase/server";
 
 import { DailyLeadsChart } from "./daily-leads-chart";
+import { measureHref } from "@/lib/dashboard/measures";
 import { HeroStat } from "./hero-stat";
 import { StatTile } from "./stat-tile";
 
@@ -42,22 +43,25 @@ export async function CentreWidget() {
         <div className="grid gap-3 sm:grid-cols-3">
           <HeroStat
             label="New leads this month"
+            href={measureHref("new_month", "all")}
             value={centre.newThisMonth}
             previous={centre.newLastMonth}
             series={fortnight.map((day) => day.leads)}
           />
           <HeroStat
             label="Admissions this month"
+            href={measureHref("admissions_month", "all")}
             value={centre.admissionsThisMonth}
             previous={centre.admissionsLastMonth}
             series={fortnight.map((day) => day.admissions)}
           />
           <HeroStat
             label="Nobody is on these"
-            value={centre.unassigned + centre.neverContacted}
+            href={measureHref("unowned_or_unanswered", "all")}
+            value={centre.unownedOrUnanswered}
             tone="attention"
             hint={
-              centre.unassigned + centre.neverContacted > 0
+              centre.unownedOrUnanswered > 0
                 ? `${centre.unassigned} unassigned · ${centre.neverContacted} never answered`
                 : "Every lead is owned and answered"
             }
@@ -71,10 +75,10 @@ export async function CentreWidget() {
             listed apart, because an unassigned lead and an unanswered one
             are different problems with different fixes. */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatTile label="Active leads" value={centre.activeLeads} compact />
-          <StatTile label="Unassigned" value={centre.unassigned} compact />
-          <StatTile label="Never contacted" value={centre.neverContacted} compact />
-          <StatTile label="Overdue follow-ups" value={centre.overdueFollowups} compact />
+          <StatTile label="Active leads" value={centre.activeLeads} href={measureHref("active", "all")} compact />
+          <StatTile label="Unassigned" value={centre.unassigned} href={measureHref("unassigned", "all")} compact />
+          <StatTile label="Never contacted" value={centre.neverContacted} href={measureHref("never_contacted", "all")} compact />
+          <StatTile label="Overdue follow-ups" value={centre.overdueFollowups} href={measureHref("overdue", "all")} compact />
           <StatTile
             label="Admission rate"
             value={
@@ -84,7 +88,7 @@ export async function CentreWidget() {
             }
             compact
           />
-          <StatTile label="SLA breached" value={centre.slaBreached} compact />
+          <StatTile label="SLA breached" value={centre.slaBreached} href={measureHref("sla_breached", "all")} compact />
         </div>
 
         <div className="flex flex-wrap gap-4">

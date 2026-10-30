@@ -1,5 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
+import { redirect } from "next/navigation";
 
+import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { whatsappNumbers } from "@/lib/db/schema";
 
@@ -22,6 +24,12 @@ export default async function WhatsAppApiInboxPage({
 }: {
   searchParams: Promise<InboxParams>;
 }) {
+  // The API tab is for the people who have been given the WhatsApp API.
+  // Everybody else lands on their Business Chat — and the Chats entry in the
+  // sidebar still points here, so this is where they are sent on.
+  const user = await getCurrentUser();
+  if (!user || !can(user, "whatsapp.campaign")) redirect("/whatsapp/personal");
+
   /*
     Everything that is not a counsellor's own number.
 
@@ -47,7 +55,7 @@ export default async function WhatsAppApiInboxPage({
           somebody new waits here under <strong>Not in the CRM</strong> until it is made a lead.
           Replies on this tab go out from this same number, inside WhatsApp&apos;s 24-hour window,
           and are sent by whoever runs WhatsApp campaigns. A counsellor&apos;s own conversations
-          are on the <strong>WhatsApp</strong> tab.
+          are on the <strong>WhatsApp Business Chat</strong> tab.
         </>
       }
     />

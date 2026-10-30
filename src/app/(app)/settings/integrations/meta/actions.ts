@@ -25,10 +25,8 @@ import {
   fetchPageSubscribedFields,
   MetaGraphApiError,
   subscribePageFields,
-  PAGE_LEAD_FIELDS,
   PAGE_SUBSCRIBED_FIELDS,
 } from "@/lib/integrations/meta/graph-client";
-import { fetchInstagramAccountIdentity } from "@/lib/integrations/instagram/graph-client";
 import { createClient } from "@/lib/supabase/server";
 
 export interface MetaFormState {
@@ -43,7 +41,6 @@ const META_KEYS = [
   "page_access_token",
   "ads_access_token",
   "ad_account_id",
-  "ig_user_id",
 ] as const;
 type MetaKey = (typeof META_KEYS)[number];
 
@@ -54,7 +51,6 @@ const KEY_LABELS: Record<MetaKey, string> = {
   page_access_token: "Page Access Token",
   ads_access_token: "Ads Access Token",
   ad_account_id: "Ad Account ID",
-  ig_user_id: "Instagram Account ID",
 };
 
 /**
@@ -298,25 +294,10 @@ export async function subscribeMetaPage(): Promise<TestConnectionResult> {
     }
 
     const page = await fetchMetaPageIdentity(pageToken);
-    /*
-      Ask for everything, settle for leads.
-
-      Meta rejects the entire call when the token lacks a permission any
-      one field needs — a Page token without `pages_messaging` answers
-      "(#200) To subscribe to the messages field, one of these permissions
-      is needed: pages_messaging" and subscribes nothing at all. So a
-      refusal is caught and retried with the lead field alone: a token that
-      cannot do Instagram must not cost this institute its leads, which is
-      what sending both fields unconditionally did.
-    */
-    let messagesRefusal: string | null = null;
-    try {
-      await subscribePageFields(page.id, pageToken, PAGE_SUBSCRIBED_FIELDS);
-    } catch (err) {
-      if (!(err instanceof MetaGraphApiError)) throw err;
-      messagesRefusal = err.message;
-      await subscribePageFields(page.id, pageToken, PAGE_LEAD_FIELDS);
-    }
+    // Leads only. This call REPLACES the Page's subscription, so pressing
+    // Subscribe Page also removes `messages` if an earlier version had added
+    // it — the CRM no longer receives Instagram or Messenger conversations.
+    await subscribePageFields(page.id, pageToken, PAGE_SUBSCRIBED_FIELDS);
 
     const fields = await fetchPageSubscribedFields(page.id, pageToken);
 
@@ -327,15 +308,9 @@ export async function subscribeMetaPage(): Promise<TestConnectionResult> {
       };
     }
 
-    // Not a failure: leads are the job here and they are working. But
-    // Instagram DMs are delivered on the Page's `messages` subscription,
-    // so a Page that did not take it is the whole reason DMs are silent —
-    // and silence is the one symptom this screen exists to explain.
     const messagesNote = fields.includes("messages")
-      ? " Instagram DMs linked to this Page will arrive too."
-      : messagesRefusal
-        ? ` Leads are unaffected, but Instagram DMs will not arrive: Meta refused the messages subscription — ${messagesRefusal} Generate a Page Access Token that also has pages_messaging, instagram_basic and instagram_manage_messages, save it above, and press this again.`
-        : " Instagram DMs will not arrive yet: Meta did not list `messages` as subscribed, which usually means the Instagram account is not linked to this Page.";
+      ? " Meta still lists `messages` as subscribed on this Page — remove it in the App Dashboard if you do not want conversations sent here."
+      : "";
 
     const supabase = await createClient();
     await writeAuditLog(supabase, {
@@ -401,51 +376,3 @@ export async function importPastMetaAdSpend(): Promise<BackfillState> {
   }
 }
 
-
-/**
- * Reads the institute's Instagram account, and says what came back.
- *
- * Two jobs. It proves the Page token can actually see the linked
- * Instagram account — which `Test connection` cannot, because
- * `debug_token` reports what a token *claims* rather than what it can
- * reach. And it is a real `instagram_basic` call, which Meta requires
- * before it will let the app request Advanced Access to that permission:
- * until one has succeeded, the button on App Review → Permissions and
- * Features stays greyed out and the API-calls column reads zero.
- *
- * Doing it from here rather than the Graph API Explorer is not laziness.
- * For a Business-owned Page the Explorer's user token lists no Pages at
- * all, so the same call by hand means creating a System User and
- * assigning assets first. The CRM already holds a token that works.
- */
-export async function testInstagramAccess(): Promise<TestConnectionResult> {
-  const user = await getCurrentUser();
-  if (!user || !can(user, "settings.manage")) {
-    return { ok: false, message: "You don't have permission to do that." };
-  }
-
-  const { page_access_token: pageAccessToken, ig_user_id: igUserId } =
-    await getIntegrationCredentials("meta", ["page_access_token", "ig_user_id"]);
-
-  if (!pageAccessToken) return { ok: false, message: "Set the Page Access Token first." };
-  if (!igUserId) {
-    return {
-      ok: false,
-      message:
-        "Set the Instagram Account ID first — it is on this screen, and Meta's own Business Settings lists it under the linked Instagram account.",
-    };
-  }
-
-  try {
-    const account = await fetchInstagramAccountIdentity(igUserId, pageAccessToken);
-    return {
-      ok: true,
-      message: `Read Instagram account ${account.username ? `@${account.username}` : account.id} successfully. That counts as the instagram_basic call Meta wants before it will let you request advanced access — the button there can take up to 24 hours to become active.`,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      message: `Meta refused: ${error instanceof Error ? error.message : "unknown error"}`,
-    };
-  }
-}

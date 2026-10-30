@@ -13,6 +13,7 @@ import {
 import { getCentreView } from "@/lib/dashboard/get-scoreboard";
 import { createClient } from "@/lib/supabase/server";
 
+import { measureHref } from "@/lib/dashboard/measures";
 import { StatTile } from "./stat-tile";
 
 /**
@@ -46,8 +47,8 @@ export async function TeamWidget() {
 
       <CardContent className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatTile label="New leads this month" value={centre.newThisMonth} />
-          <StatTile label="Admissions this month" value={centre.admissionsThisMonth} />
+          <StatTile label="New leads this month" value={centre.newThisMonth} href={measureHref("new_month", "all")} />
+          <StatTile label="Admissions this month" value={centre.admissionsThisMonth} href={measureHref("admissions_month", "all")} />
           <StatTile
             label="Admission rate"
             value={
@@ -59,6 +60,7 @@ export async function TeamWidget() {
           />
           <StatTile
             label="Never contacted"
+            href={measureHref("never_contacted", "all")}
             value={centre.neverContacted}
             hint={centre.neverContacted > 0 ? "Across the centre" : "All answered"}
           />
@@ -86,15 +88,25 @@ export async function TeamWidget() {
               <TableBody>
                 {team.map((row) => (
                   <TableRow key={row.userId}>
-                    <TableCell className="font-medium">{row.name}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {row.scoreboard.activeLeads}
+                    <TableCell className="font-medium">
+                      <Link href={`/dashboard/team/${row.userId}`} className="hover:underline">
+                        {row.name}
+                      </Link>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {row.scoreboard.newThisMonth}
+                      <Link href={measureHref("active", row.userId)} className="hover:underline">
+                        {row.scoreboard.activeLeads}
+                      </Link>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {row.scoreboard.admissionsThisMonth}
+                      <Link href={measureHref("new_month", row.userId)} className="hover:underline">
+                        {row.scoreboard.newThisMonth}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      <Link href={measureHref("admissions_month", row.userId)} className="hover:underline">
+                        {row.scoreboard.admissionsThisMonth}
+                      </Link>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {row.scoreboard.admissionsPerLeadThisMonth === null ? (
@@ -105,14 +117,18 @@ export async function TeamWidget() {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {row.scoreboard.neverContacted > 0 ? (
-                        <Badge variant="destructive">{row.scoreboard.neverContacted}</Badge>
+                        <Link href={measureHref("never_contacted", row.userId)}>
+                          <Badge variant="destructive">{row.scoreboard.neverContacted}</Badge>
+                        </Link>
                       ) : (
                         <span className="text-muted-foreground">0</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {row.scoreboard.overdueFollowups > 0 ? (
-                        <Badge variant="secondary">{row.scoreboard.overdueFollowups}</Badge>
+                        <Link href={measureHref("overdue", row.userId)}>
+                          <Badge variant="secondary">{row.scoreboard.overdueFollowups}</Badge>
+                        </Link>
                       ) : (
                         <span className="text-muted-foreground">0</span>
                       )}

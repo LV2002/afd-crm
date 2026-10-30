@@ -23,6 +23,8 @@
  * support.
  */
 
+import { matchesMeasure, type MeasureContext } from "./measures";
+
 export interface ScoreboardLead {
   id: string;
   assignedTo: string | null;
@@ -84,6 +86,12 @@ export interface CounsellorScoreboard {
   neverContacted: number;
   /** A follow-up date that has passed. */
   overdueFollowups: number;
+  /**
+   * Active leads that are overdue OR have never been answered — each lead
+   * once. The hero "Follow-ups due" figure; adding the two counts above
+   * would count a lead that is both twice.
+   */
+  attentionLeads: number;
   /** A follow-up falling today. */
   dueToday: number;
   /** Active leads the SLA sweep has flagged. */
@@ -197,6 +205,11 @@ export function buildCounsellorScoreboard(input: {
   const terminal = input.terminalTemperatures;
 
   const active = input.leads.filter((lead) => isActive(lead, terminal));
+  const measureContext: MeasureContext = {
+    boundaries: input.boundaries,
+    terminalTemperatures: terminal,
+    interestedTemperatures: input.interestedTemperatures ?? new Set<string>(),
+  };
   const leadIds = new Set(input.leads.map((lead) => lead.id));
 
   const newThisMonth = input.leads.filter((lead) =>
@@ -262,6 +275,9 @@ export function buildCounsellorScoreboard(input: {
     overdueFollowups: active.filter(
       (lead) =>
         lead.nextFollowupAt && new Date(lead.nextFollowupAt).getTime() < startOfToday.getTime(),
+    ).length,
+    attentionLeads: input.leads.filter((lead) =>
+      matchesMeasure("attention", lead, input.enrolments, measureContext),
     ).length,
     dueToday: active.filter((lead) =>
       within(lead.nextFollowupAt, startOfToday, startOfTomorrow),
@@ -449,6 +465,8 @@ export function buildTeamScoreboard(input: {
 export interface CentreScoreboard {
   activeLeads: number;
   unassigned: number;
+  /** Unassigned or never answered, each lead once — the "Nobody is on these" figure. */
+  unownedOrUnanswered: number;
   newThisMonth: number;
   admissionsThisMonth: number;
   admissionsPerLeadThisMonth: number | null;
@@ -474,6 +492,13 @@ export function buildCentreScoreboard(input: {
   return {
     activeLeads: whole.activeLeads,
     unassigned: input.leads.filter((lead) => !lead.assignedTo && isActive(lead, terminal)).length,
+    unownedOrUnanswered: input.leads.filter((lead) =>
+      matchesMeasure("unowned_or_unanswered", lead, input.enrolments, {
+        boundaries: input.boundaries,
+        terminalTemperatures: terminal,
+        interestedTemperatures: new Set<string>(),
+      }),
+    ).length,
     newThisMonth: whole.newThisMonth,
     admissionsThisMonth: whole.admissionsThisMonth,
     admissionsPerLeadThisMonth: whole.admissionsPerLeadThisMonth,

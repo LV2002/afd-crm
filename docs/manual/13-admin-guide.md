@@ -627,7 +627,6 @@ names** on the card, one per line, like `phone: mob, contact_no`.
 | Source | Address |
 |---|---|
 | Meta Lead Ads | `/api/webhooks/meta-leads` |
-| Instagram DMs | `/api/webhooks/instagram` |
 | WhatsApp (including Coexistence) | `/api/webhooks/whatsapp` |
 | Google lead forms | `/api/webhooks/google-leads` |
 | Your website | `/api/webhooks/website` |

@@ -20,10 +20,10 @@ export default async function WhatsAppLayout({ children }: { children: React.Rea
       <div>
         <h1 className="text-2xl font-semibold">Chats</h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
-          Every conversation with a student, by channel. The institute&apos;s WhatsApp Business
-          API number is the one that is live: replies to what you send are matched to the lead
-          they belong to, so the assigned counsellor hears about them. The other two tabs say
-          where they stand.
+          Every WhatsApp conversation with a student. <strong>WhatsApp Business Chat</strong> is
+          the counsellors&apos; own numbers; <strong>WhatsApp API</strong> is the institute&apos;s
+          broadcast number, with its templates, broadcasts and automations, and is only shown to
+          people who have been given access to it.
         </p>
       </div>
       <WhatsAppNav canCampaign={can(user, "whatsapp.campaign")} />

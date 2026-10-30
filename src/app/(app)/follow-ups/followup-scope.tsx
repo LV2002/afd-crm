@@ -24,7 +24,9 @@ export function FollowupScope({ scope }: { scope: "mine" | "all" }) {
 
   function set(next: "mine" | "all") {
     const params = new URLSearchParams(searchParams.toString());
-    if (next === "all") params.set("scope", "all");
+    // Everyone is the default for somebody who can see others, so it is
+    // the absence of the parameter; only "Mine" has to be said.
+    if (next === "mine") params.set("scope", "mine");
     else params.delete("scope");
     params.delete("page");
     startTransition(() => router.replace(`${pathname}?${params.toString()}`));

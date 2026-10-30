@@ -30,7 +30,7 @@ export function requireCronSecret(request: Request): NextResponse | null {
   const provided = request.headers.get("authorization");
   if (!provided) {
     return unauthorized(
-      "No Authorization header was sent. The scheduler must send `Authorization: Bearer <CRON_SECRET>` — on cron-job.org that is the Advanced tab, under Headers.",
+      "No Authorization header was sent. The scheduler must send `Authorization: Bearer <CRON_SECRET>`. Vercel's own cron sends it automatically once a `CRON_SECRET` environment variable is set on the project; on an outside scheduler such as cron-job.org it is the Advanced tab, under Headers.",
     );
   }
 

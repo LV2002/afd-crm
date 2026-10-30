@@ -51,9 +51,6 @@ export const PAGE_TOKEN_SCOPES: ScopeRequirement[] = [
   { scope: "pages_read_engagement", consequence: "Reading the Page at all" },
   { scope: "pages_manage_metadata", consequence: "Subscribing the Page, without which nothing is delivered" },
   { scope: "leads_retrieval", consequence: "Fetching a submitted Lead Ads form's answers" },
-  { scope: "pages_messaging", consequence: "Receiving Instagram DMs and Messenger messages" },
-  { scope: "instagram_basic", consequence: "Reading the linked Instagram account" },
-  { scope: "instagram_manage_messages", consequence: "Instagram DMs, in and out" },
 ];
 
 /** Permissions the Ads token needs. A Page token will not carry these. */

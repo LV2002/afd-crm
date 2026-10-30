@@ -6,6 +6,7 @@ import { formatDateIST } from "@/lib/format/date";
 import { interestedTemperatureLabels } from "@/lib/leads/interested-temperature";
 import { createClient } from "@/lib/supabase/server";
 
+import { measureHref } from "@/lib/dashboard/measures";
 import { HeroStat } from "./hero-stat";
 import { TargetProgress } from "./target-progress";
 import { YearTiles } from "./year-tiles";
@@ -84,12 +85,14 @@ export async function MyNumbersWidget({
         <div className="grid gap-3 sm:grid-cols-3">
           <HeroStat
             label="Total leads this month"
+            href={measureHref("new_month", userId)}
             value={board.newThisMonth}
             previous={board.newLastMonth}
             series={fortnight.map((day) => day.leads)}
           />
           <HeroStat
             label="Admissions this month"
+            href={measureHref("admissions_month", userId)}
             value={board.admissionsThisMonth}
             previous={board.admissionsLastMonth}
             series={fortnight.map((day) => day.admissions)}
@@ -97,10 +100,11 @@ export async function MyNumbersWidget({
           />
           <HeroStat
             label="Follow-ups due"
-            value={board.overdueFollowups + board.neverContacted}
+            href={measureHref("attention", userId)}
+            value={board.attentionLeads}
             tone="attention"
             hint={
-              board.overdueFollowups + board.neverContacted > 0
+              board.attentionLeads > 0
                 ? `${board.overdueFollowups} overdue · ${board.neverContacted} never answered`
                 : "Nothing overdue, nothing unanswered"
             }
@@ -116,6 +120,7 @@ export async function MyNumbersWidget({
         )}
 
         <YearTiles
+          owner={userId}
           year={board.year}
           series={series}
           cycleStartedOn={cycleStartedOn}

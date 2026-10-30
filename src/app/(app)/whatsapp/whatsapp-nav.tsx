@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
  * Two rows, because there are two different questions.
  *
  * The top row is **which conversation channel** — the institute's
- * Business API number, a counsellor's own WhatsApp, Instagram. The second
+ * Business API number and a counsellor's own WhatsApp. The second
  * is what you want to do within the Business API channel, and only
  * applies there: there are no broadcast templates for somebody's personal
  * WhatsApp, and showing them under it would imply there could be.
@@ -25,18 +25,19 @@ interface Tab {
 /*
   Order is the point, not just the labels.
 
-  **WhatsApp** is a counsellor's own number — where the one-to-one
+  **WhatsApp Business Chat** is a counsellor's own number — where the one-to-one
   conversations happen and where every reply leaves from. It comes first
   because it is the daily work.
 
   **WhatsApp API** is the institute's broadcast number: campaign replies,
-  templates, automations. It is administrative, so it sits last, after
-  Instagram.
+  templates, automations. It is administrative, so it sits last.
 */
 const CHANNELS: Tab[] = [
-  { href: "/whatsapp/personal", label: "WhatsApp" },
-  { href: "/whatsapp/instagram", label: "Instagram" },
-  { href: "/whatsapp", label: "WhatsApp API" },
+  { href: "/whatsapp/personal", label: "WhatsApp Business Chat" },
+  // Only for people granted the WhatsApp API (the `whatsapp.campaign`
+  // permission, held through a role): the institute's broadcast number,
+  // its templates, broadcasts and automations.
+  { href: "/whatsapp", label: "WhatsApp API", needs: "campaign" },
 ];
 
 const BUSINESS_TABS: Tab[] = [
@@ -47,7 +48,7 @@ const BUSINESS_TABS: Tab[] = [
   { href: "/whatsapp/suppressions", label: "Opted out", needs: "campaign" },
 ];
 
-const OTHER_CHANNEL_PREFIXES = ["/whatsapp/personal", "/whatsapp/instagram"];
+const OTHER_CHANNEL_PREFIXES = ["/whatsapp/personal"];
 
 function TabLink({ tab, isActive }: { tab: Tab; isActive: boolean }) {
   return (
@@ -76,7 +77,7 @@ export function WhatsAppNav({ canCampaign }: { canCampaign: boolean }) {
   return (
     <div className="flex flex-col gap-2 border-b pb-2">
       <nav className="flex flex-wrap gap-1">
-        {CHANNELS.map((channel) => {
+        {CHANNELS.filter((channel) => (channel.needs === "campaign" ? canCampaign : true)).map((channel) => {
           const isActive =
             channel.href === "/whatsapp"
               ? !onOtherChannel

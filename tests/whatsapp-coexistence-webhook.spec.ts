@@ -461,3 +461,41 @@ describe("a coexistence delivery for a number nobody registered", () => {
     expect(event.lastError).toContain("Settings");
   });
 });
+
+describe("an ordinary message to a number that is not the API number and not registered", () => {
+  it("is held back instead of landing on the WhatsApp API tab", async () => {
+    await setIntegrationCredential("whatsapp", "phone_number_id", API_PHONE_ID);
+    try {
+      const wamid = `wamid.${randomUUID()}`;
+      const response = await post(
+        envelope(
+          "messages",
+          {
+            contacts: [{ wa_id: "919847600777", profile: { name: `${MARKER} Stranger` } }],
+            messages: [
+              { id: wamid, from: "919847600777", timestamp: "1791100800", type: "text", text: { body: "hi" } },
+            ],
+          },
+          `${MARKER}-someone-elses-number`,
+        ),
+      );
+      expect(response.status).toBe(200);
+
+      // Nothing was stored as a message, so it cannot show on any inbox.
+      const stored = await db
+        .select({ id: whatsappMessages.id })
+        .from(whatsappMessages)
+        .where(eq(whatsappMessages.waMessageId, wamid));
+      expect(stored).toHaveLength(0);
+
+      const [event] = await db
+        .select()
+        .from(webhookEvents)
+        .where(like(webhookEvents.externalId, `unregistered:messages:%${MARKER}-someone-elses-number`));
+      expect(event.status).toBe("failed");
+      expect(event.lastError).toContain("not registered");
+    } finally {
+      await deleteIntegrationCredential("whatsapp", "phone_number_id");
+    }
+  });
+});

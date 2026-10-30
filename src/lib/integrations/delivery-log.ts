@@ -31,7 +31,7 @@ export interface DeliveryLogRow {
 
 const SOURCE_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp",
-  instagram: "Instagram DMs",
+  instagram: "Instagram DMs (retired)",
   meta_leads: "Meta Lead Ads",
   google_leads: "Google Lead Forms",
   website: "Website forms",

@@ -44,10 +44,18 @@ import { terminalValuesOf } from "@/lib/leads/temperature-kinds";
 import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 import { getMyDayQueueForUser } from "@/lib/my-day/get-queue";
 import { QUEUE_LABELS, parseQueueKey } from "@/lib/my-day/queue-link";
+import {
+  MEASURE_LABELS,
+  applyMeasure,
+  needsEnrolments,
+  parseMeasureKey,
+} from "@/lib/dashboard/measures";
+import { getMeasureContext } from "@/lib/dashboard/get-scoreboard";
 import { RememberLeadFilters } from "./remember-filters";
 import { RevealPhoneButton } from "./reveal-phone-button";
 
-const PAGE_SIZE = 25;
+/** Rows per page a person may choose; the first is the default. */
+const PAGE_SIZES = [25, 50, 100] as const;
 
 /** A search param as a single string, since Next hands back `string | string[]`. */
 function asParam(value: string | string[] | undefined): string | undefined {
@@ -108,6 +116,8 @@ export default async function LeadsPage({
   const search = typeof params.search === "string" ? params.search : "";
   const filterValues = readFilterValues(params, filterableFields);
   const tagFilter = typeof params.tag === "string" ? params.tag : "";
+  const requestedSize = Number(Array.isArray(params.size) ? params.size[0] : params.size);
+  const PAGE_SIZE = (PAGE_SIZES as readonly number[]).includes(requestedSize) ? requestedSize : PAGE_SIZES[0];
   const page = Math.max(1, Number(params.page) || 1);
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -172,6 +182,33 @@ export default async function LeadsPage({
     }
   }
 
+  /*
+    A tile from a dashboard (?tile=overdue&for=<counsellor>|all).
+
+    The tile's own definition (lib/dashboard/measures.ts) is applied as
+    filters, so the list has exactly the rows the figure counted. `for` is
+    one counsellor, or `all` for everything the viewer may see; left out, it
+    is the viewer's own. Narrowing only — RLS still decides what exists.
+  */
+  const tileKey = parseMeasureKey(asParam(params.tile));
+  const tileForParam = asParam(params.for);
+  const tileOwner: string | "all" =
+    tileForParam === "all"
+      ? "all"
+      : tileForParam &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tileForParam)
+        ? tileForParam
+        : user.id;
+  let tileOwnerName: string | null = null;
+  if (tileKey && tileOwner !== "all" && tileOwner !== user.id) {
+    const { data: owner } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", tileOwner)
+      .maybeSingle<{ full_name: string | null }>();
+    tileOwnerName = owner?.full_name ?? null;
+  }
+
   // A core field is a real leads column; a non-core (custom) field's value
   // lives inside the `custom` jsonb blob instead — select that once rather
   // than trying to select a column named after the custom key, which
@@ -186,12 +223,25 @@ export default async function LeadsPage({
       ...(needsCustomColumn ? ["custom"] : []),
     ]),
   ).join(", ");
+  // The admission tiles filter on the lead's enrolment, which has to be
+  // joined for the filter to reach it.
+  const tileSelect = tileKey && needsEnrolments(tileKey) ? ", enrolments!inner(sales_to_accounts_at, dropped_at)" : "";
 
   let query = supabase
     .from("leads")
-    .select(selectColumns, { count: "exact" })
+    .select(`${selectColumns}${tileSelect}`, { count: "exact" })
     .is("deleted_at", null);
   query = applyLeadFilters(query, filterableFields, filterValues);
+  if (tileKey) {
+    const measureContext = await getMeasureContext(supabase);
+    query = applyMeasure(
+      query,
+      tileKey,
+      measureContext,
+      unfinishedLeadsFilter(measureContext.terminalTemperatures),
+    );
+    if (tileOwner !== "all") query = query.eq("assigned_to", tileOwner);
+  }
   query = applyLeadDateFilters(query, dateFilters);
   if (dateFilters.excludeFinished) {
     // "Overdue" means work somebody still owes a person. A student who
@@ -252,6 +302,7 @@ export default async function LeadsPage({
     Boolean(search) ||
     Boolean(tagFilter) ||
     queueKey !== null ||
+    tileKey !== null ||
     dateFilters.active ||
     Object.keys(filterValues).length > 0;
 
@@ -267,12 +318,13 @@ export default async function LeadsPage({
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  function pageHref(target: number) {
+  function pageHref(target: number, size: number = PAGE_SIZE) {
     const next = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
-      if (typeof value === "string" && key !== "page") next.set(key, value);
+      if (typeof value === "string" && key !== "page" && key !== "size") next.set(key, value);
     }
     next.set("page", String(target));
+    if (size !== PAGE_SIZES[0]) next.set("size", String(size));
     return `/leads?${next.toString()}`;
   }
 
@@ -380,6 +432,23 @@ export default async function LeadsPage({
         </div>
       )}
 
+      {tileKey && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-primary-subtle px-4 py-3 text-sm">
+          <p>
+            Showing <strong>{MEASURE_LABELS[tileKey]}</strong> —{" "}
+            {tileOwner === "all"
+              ? "every lead you can see"
+              : tileOwner === user.id
+                ? "your leads"
+                : `${tileOwnerName ?? "this counsellor"}'s leads`}
+            : {total} {total === 1 ? "lead" : "leads"}.
+          </p>
+          <Link href="/leads" className="font-medium hover:underline">
+            Show every lead →
+          </Link>
+        </div>
+      )}
+
       <LeadFilters
         filterFields={filterFieldsWithOptions}
         searchValue={search}
@@ -461,19 +530,41 @@ export default async function LeadsPage({
         </TableBody>
       </Table>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Page {page} of {totalPages}
+      {total > PAGE_SIZES[0] && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+          <span className="flex items-center gap-1">
+            Show
+            {PAGE_SIZES.map((size) => (
+              <Link
+                key={size}
+                href={pageHref(1, size)}
+                aria-current={size === PAGE_SIZE ? "true" : undefined}
+                className={
+                  size === PAGE_SIZE
+                    ? "rounded-md bg-secondary px-2 py-1 font-medium text-secondary-foreground"
+                    : "rounded-md px-2 py-1 hover:bg-accent/50"
+                }
+              >
+                {size}
+              </Link>
+            ))}
+            per page
           </span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={page <= 1} asChild={page > 1}>
-              {page > 1 ? <Link href={pageHref(page - 1)}>Previous</Link> : <span>Previous</span>}
-            </Button>
-            <Button variant="outline" size="sm" disabled={page >= totalPages} asChild={page < totalPages}>
-              {page < totalPages ? <Link href={pageHref(page + 1)}>Next</Link> : <span>Next</span>}
-            </Button>
-          </div>
+          {totalPages > 1 && (
+            <span className="flex items-center gap-3">
+              <span>
+                Page {page} of {totalPages}
+              </span>
+              <span className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={page <= 1} asChild={page > 1}>
+                  {page > 1 ? <Link href={pageHref(page - 1)}>Previous</Link> : <span>Previous</span>}
+                </Button>
+                <Button variant="outline" size="sm" disabled={page >= totalPages} asChild={page < totalPages}>
+                  {page < totalPages ? <Link href={pageHref(page + 1)}>Next</Link> : <span>Next</span>}
+                </Button>
+              </span>
+            </span>
+          )}
         </div>
       )}
     </div>

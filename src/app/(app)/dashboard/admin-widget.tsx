@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { startOfMonthIST } from "@/lib/format/date";
 import { createClient } from "@/lib/supabase/server";
 
+import { measureHref } from "@/lib/dashboard/measures";
 import { StatTile } from "./stat-tile";
 
 export async function AdminWidget() {
@@ -32,8 +33,8 @@ export async function AdminWidget() {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
-          <StatTile label="New leads" value={newLeadsThisMonth ?? 0} />
-          <StatTile label="Admissions" value={admissionsThisMonth ?? 0} />
+          <StatTile label="New leads" value={newLeadsThisMonth ?? 0} href={measureHref("new_month", "all")} />
+          <StatTile label="Admissions" value={admissionsThisMonth ?? 0} href={measureHref("admissions_month", "all")} />
         </div>
         <div className="flex gap-4">
           <Link href="/insights" className="text-sm font-medium hover:underline">

@@ -8811,3 +8811,30 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 
 - Submitting the student form could end on a blank "Application error" page — most likely a request over the platform's ~4 MB body limit (a phone photo plus an ID photo), which the server refuses outright. Now: photos are shrunk in the browser before sending (a 20 MB camera image becomes well under 1 MB), the total is checked first with a plain message ("Your files add up to 5.0 MB and the limit is 3.8 MB…"), a failed request shows a message and keeps everything typed, and a storage or notification failure on the server comes back as a message rather than a thrown error.
 - **Cancel this link** on the lead's Student profile form panel (only while the form has not been submitted): clears the token so the sent address stops working at once ("Form not found"), writes an audit row (`lead.profile_form_link_cancelled`), and lets "Create profile form link" mint a fresh one if the student comes back.
+
+## Instagram DMs removed; stray WhatsApp numbers no longer land on the API tab
+
+- **Instagram DMs are gone from the CRM**: the Chats → Instagram tab, the `/api/webhooks/instagram` route, the Graph client, the Instagram Account ID field, the "Test Instagram access" button, the Instagram section on Settings → Integrations → Meta, and the Instagram permissions in the token check. "Subscribe Page" now subscribes the Page to **Lead Ads only**, which also takes the `messages` subscription off a Page that had it. "Instagram" as a lead *source* (ads, links) is unchanged. The two tables are left in the database, unused; `tests/no-instagram-dm.spec.ts` fails the build if code touches them. To finish it on Meta's side: press Subscribe Page once, and untick/remove the Instagram webhook subscription in the App Dashboard.
+- **WhatsApp API tab is only the API number.** A message to a number that is neither registered under Settings → Integrations → WhatsApp → Numbers nor the API number in Credentials used to be filed with "no number", which reads as the API number — so an unregistered Coexistence number's chats showed on the API tab. They are now held back and listed under Settings → Health → Every delivery with "not registered — add it", and appear on the **WhatsApp** tab once the number is registered. Messages already filed that way before this change stay where they are.
+
+## Leads list: 25, 50 or 100 per page
+
+- The Leads list has a "Show 25 / 50 / 100 per page" control under the table (any time there are more than 25 leads). The choice is in the address (`?size=`), so it survives paging, filters and opening a lead and coming back; 25 stays the default. Changing it returns to page 1.
+
+## Managers see everyone's follow-ups; every dashboard figure opens its leads
+
+- **Follow-ups**: for anybody who can assign leads (centre head, co-admin, admin) the page now opens on **Everyone** — all follow-ups on every lead they can see — instead of only their own. "Mine" is one click away. In place of their own (empty) "Your day" they get a **By counsellor** table: overdue / today / later per person, each name opening just that counsellor's calls. Counsellors are unchanged.
+- **Dashboard figures are links**: every hero figure and tile on the counsellor dashboard, a counsellor's page (as their manager sees it), the centre/organisation cards and the team table opens the Leads page showing exactly those leads, with a banner saying what is being shown and whose. The year tiles are links too; the chart they used to drive now has its own "Chart shows" row. "Your day" section counts link as before.
+- One definition per figure (`src/lib/dashboard/measures.ts`) is used both to count on the dashboard and to filter the list, and `tests/dashboard-measures.spec.ts` requires the two to agree for every figure. "Follow-ups due" and "Nobody is on these" now count each lead once (they used to add two counts, which double-counted a lead that was both).
+- Not covered: Accounts and Academics tiles link to their own screens (/accounts, /students), not to leads.
+
+## Chats tabs renamed; the WhatsApp API is for chosen people only
+
+- Chats now has **WhatsApp Business Chat** (the counsellors' own numbers, first and for everybody with WhatsApp access) and **WhatsApp API** (the institute's broadcast number, its inbox, templates, broadcasts, automations and opted-out list). Instagram is gone from Chats (PR #116).
+- The **WhatsApp API** tab and everything under it is shown only to people whose role holds the permission now labelled **Use the WhatsApp API** (`whatsapp.campaign` — the one that already gated templates, broadcasts and replying from the API number; relabelled, not new). Anybody else who opens `/whatsapp` is sent to WhatsApp Business Chat. To give it to specific people: Settings → Roles → create a role that is a copy of the counsellor role plus "Use the WhatsApp API", then put those people on it (or tick it on a role they already have).
+- Not changed: a counsellor still sees WhatsApp messages on the leads they own in each lead's own timeline, including a reply to a broadcast; the permission controls the API tab and tools, not the lead's history.
+
+## Schedules back on Vercel
+
+- With the project on Vercel Pro, `vercel.json` now schedules all three tiers: **frequent** every 10 minutes (`*/10 * * * *`), **hourly** at :25 past, **daily** at 10:00 IST. Vercel sends `Authorization: Bearer $CRON_SECRET` itself, which is what the routes already check. The daily run still repeats the other tiers as a safety net.
+- The two cron-job.org jobs are no longer needed — pause or delete them after seeing Vercel's runs (docs/CRON-SETUP.md). `tests/vercel-cron-schedule.spec.ts` keeps the file honest.

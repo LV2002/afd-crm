@@ -83,7 +83,9 @@ export async function MyDayWidget({
             <section key={section.title} className="flex flex-col gap-2">
               <div className="flex items-baseline gap-2">
                 <h3 className="font-medium">{section.title}</h3>
-                <Badge variant="secondary">{section.items.length}</Badge>
+                <Link href={queueHref(section.key, forOtherUser ? userId : null)} aria-label={`${section.title}: show these leads`}>
+                  <Badge variant="secondary">{section.items.length}</Badge>
+                </Link>
                 <span className="text-xs text-muted-foreground">{section.hint}</span>
               </div>
 

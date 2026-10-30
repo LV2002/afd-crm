@@ -8,7 +8,7 @@ import type { WebhookSourceHealth } from "./webhook-deliveries";
 /** What each channel is called on screen. The enum values are not English. */
 const SOURCE_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp",
-  instagram: "Instagram DMs",
+  instagram: "Instagram DMs (retired)",
   meta_leads: "Meta Lead Ads",
   google_leads: "Google Lead Forms",
   website: "Website forms",
@@ -44,7 +44,7 @@ export function WebhookDeliveriesPanel({ sources }: { sources: WebhookSourceHeal
       <div className="rounded-lg border p-4">
         <p className="text-[0.9375rem]">
           <strong>Nothing has arrived in the last seven days</strong> — no WhatsApp message, no
-          Instagram DM, no ad lead, no website form.
+          ad lead, no website form.
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
           If that is wrong, the callbacks are not reaching the CRM at all, which is a setting on
@@ -72,7 +72,7 @@ export function WebhookDeliveriesPanel({ sources }: { sources: WebhookSourceHeal
           <p className="mt-2 text-muted-foreground">
             Almost always the <strong>App secret</strong> stored in the CRM not matching the Meta
             app that is sending. Each integration holds its own copy: WhatsApp&apos;s is on{" "}
-            <strong>Settings → Integrations → WhatsApp</strong>, and Instagram and Lead Ads share
+            <strong>Settings → Integrations → WhatsApp</strong>, and Lead Ads uses
             the one on <strong>Settings → Integrations → Meta</strong>. Setting one does not set
             the other, which is the usual way this happens.
           </p>

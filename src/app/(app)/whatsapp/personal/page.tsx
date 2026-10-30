@@ -18,7 +18,7 @@ import { WhatsAppInbox, type InboxParams } from "../inbox";
  * it was typed on.
  *
  * It is the first tab because it is the daily work. The broadcast
- * number's inbox sits last, after Instagram, with the rest of the
+ * number's inbox sits last, with the rest of the
  * campaign tooling.
  *
  * ## While no number is connected
