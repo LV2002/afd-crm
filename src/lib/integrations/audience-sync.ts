@@ -18,6 +18,12 @@ export interface RetargetingCandidate {
   createdAt: string | Date | null;
   /** The last thing that happened on the lead — a call logged, a message, a stage change. */
   lastActivityAt: string | Date | null;
+  /**
+   * They have taken admission: an enrolment has been confirmed on this lead.
+   * Required rather than optional so no caller can forget to ask — a family
+   * that has already paid should not keep being shown ads for the course.
+   */
+  hasAdmission: boolean;
 }
 
 export interface RetargetingWindow {
@@ -98,6 +104,12 @@ export function isRetargetingEligible(
   window: RetargetingWindow = { windowDays: DEFAULT_RETARGETING_WINDOW_DAYS },
 ): boolean {
   if (lead.deletedAt) return false;
+  // Already a student. Excluded for good, even if they later drop: an
+  // audience is for people the institute still needs to win, and a family
+  // that enrolled — or withdrew — is not one. Because the sync diffs
+  // against who was uploaded before, becoming ineligible here is also what
+  // takes them back OUT of the Meta and Google audiences on the next run.
+  if (lead.hasAdmission) return false;
   if (lead.doNotContact) return false;
   if (lead.optedOutChannels && lead.optedOutChannels.length > 0) return false;
   if (lead.consentStatus !== "given") return false;

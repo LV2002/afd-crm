@@ -26,6 +26,7 @@ function candidate(overrides: Partial<RetargetingCandidate> = {}): RetargetingCa
     email: null,
     createdAt: daysAgo(10),
     lastActivityAt: daysAgo(10),
+    hasAdmission: false,
     ...overrides,
   };
 }
@@ -40,6 +41,10 @@ describe("isRetargetingEligible", () => {
 
   it("excludes a soft-deleted lead", () => {
     expect(isRetargetingEligible(candidate({ deletedAt: new Date() }), WINDOW)).toBe(false);
+  });
+
+  it("excludes somebody who has taken admission, however recently they enquired", () => {
+    expect(isRetargetingEligible(candidate({ hasAdmission: true }), WINDOW)).toBe(false);
   });
 
   it("excludes a do-not-contact lead", () => {
