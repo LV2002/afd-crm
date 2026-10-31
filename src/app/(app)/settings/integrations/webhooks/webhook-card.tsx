@@ -17,8 +17,10 @@ import {
   samplePayload,
 } from "@/lib/integrations/custom-webhook/setup-guide";
 
+import { SourcePicker, type SourceChoice } from "./source-picker";
 import {
   deleteCustomWebhook,
+  relabelPastLeads,
   rotateCustomWebhookCredentials,
   saveCustomWebhook,
   setCustomWebhookActive,
@@ -32,6 +34,8 @@ export interface CustomWebhookView {
   name: string;
   slug: string;
   source: string;
+  /** The Lead source option's label, when the stored value is one. */
+  sourceLabel: string;
   subSource: string | null;
   centerId: string | null;
   signingSecret: string;
@@ -132,12 +136,15 @@ export function WebhookCard({
   webhook,
   centers,
   aliasFields,
+  sourceOptions,
 }: {
   webhook: CustomWebhookView;
   centers: Array<{ id: string; name: string }>;
   aliasFields: string[];
+  sourceOptions: SourceChoice[];
 }) {
   const [state, action, pending] = useActionState(saveCustomWebhook, initialState);
+  const [relabelState, relabelAction, relabelling] = useActionState(relabelPastLeads, initialState);
   const [open, setOpen] = useState(false);
   const [requireSignature, setRequireSignature] = useState(webhook.requireSignature);
   const [requireAuthToken, setRequireAuthToken] = useState(webhook.authToken !== null);
@@ -181,9 +188,32 @@ export function WebhookCard({
               ))}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Leads arrive as <strong>{webhook.source}</strong>
+            Leads arrive as <strong>{webhook.sourceLabel}</strong>
             {webhook.subSource ? ` · ${webhook.subSource}` : ""}
           </p>
+          {/* Leads that arrived here before this endpoint was linked to the
+              right source sit under whatever name they came in with. */}
+          <form action={relabelAction} className="mt-1 flex flex-wrap items-center gap-2">
+            <input type="hidden" name="id" value={webhook.id} />
+            <ConfirmSubmit
+              label="Re-label past leads"
+              size="sm"
+              pending={relabelling}
+              pendingLabel="Re-labelling…"
+              title={`Re-label past leads as ${webhook.sourceLabel}?`}
+              body={
+                <>
+                  Every lead that came in through this endpoint is changed to the source{" "}
+                  <strong>{webhook.sourceLabel}</strong> — on the enquiry, and on the lead where its
+                  first or latest source was the old name. Nothing else about them changes, and the
+                  change is written to the audit log.
+                </>
+              }
+              confirmLabel="Yes, re-label them"
+            />
+            {relabelState.error && <FormMessage error={relabelState.error} />}
+            {relabelState.success && <FormMessage success={relabelState.success} />}
+          </form>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {webhook.deliveries === 0
               ? "Nothing has been posted here yet."
@@ -284,19 +314,11 @@ export function WebhookCard({
                 <Label htmlFor={`name-${webhook.id}`}>Name</Label>
                 <Input id={`name-${webhook.id}`} name="name" defaultValue={webhook.name} required />
               </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor={`source-${webhook.id}`}>Source name</Label>
-                <Input
-                  id={`source-${webhook.id}`}
-                  name="source"
-                  defaultValue={webhook.source}
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  What the reports group these leads under. Added to the Lead source dropdown
-                  automatically.
-                </p>
-              </div>
+              <SourcePicker
+                idPrefix={webhook.id}
+                options={sourceOptions}
+                currentValue={webhook.source}
+              />
               <div className="flex flex-col gap-2">
                 <Label htmlFor={`sub-${webhook.id}`}>Sub-source (optional)</Label>
                 <Input

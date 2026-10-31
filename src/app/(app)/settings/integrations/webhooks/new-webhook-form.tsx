@@ -6,6 +6,7 @@ import { useActionState } from "react";
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SourcePicker, type SourceChoice } from "./source-picker";
 import { Label } from "@/components/ui/label";
 
 import { saveCustomWebhook, type WebhookFormState } from "./actions";
@@ -24,7 +25,13 @@ const initialState: WebhookFormState = {};
  * right answer, and the one place to turn it off is beside the warning
  * that says what it costs.
  */
-export function NewWebhookForm({ centers }: { centers: Array<{ id: string; name: string }> }) {
+export function NewWebhookForm({
+  centers,
+  sourceOptions,
+}: {
+  centers: Array<{ id: string; name: string }>;
+  sourceOptions: SourceChoice[];
+}) {
   const [state, action, pending] = useActionState(saveCustomWebhook, initialState);
 
   return (
@@ -37,14 +44,7 @@ export function NewWebhookForm({ centers }: { centers: Array<{ id: string; name:
             For you, on this screen. Something you will recognise in six months.
           </p>
         </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="new-source">Source name</Label>
-          <Input id="new-source" name="source" required placeholder="Knorish" />
-          <p className="text-xs text-muted-foreground">
-            Stamped on every lead from this endpoint, and added to the Lead source dropdown so the
-            reports can group by it.
-          </p>
-        </div>
+        <SourcePicker idPrefix="new" options={sourceOptions} />
       </div>
 
       {/*

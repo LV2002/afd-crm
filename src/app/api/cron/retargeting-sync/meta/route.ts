@@ -5,12 +5,13 @@ import { requireCronSecret } from "@/lib/cron/require-secret";
 import { reportingFailures } from "@/lib/errors/capture";
 
 import { db } from "@/lib/db/client";
-import { adAudienceMembers, leads } from "@/lib/db/schema";
+import { adAudienceMembers } from "@/lib/db/schema";
 import {
   computeAudienceDiff,
   isRetargetingEligible,
   type RetargetingCandidate,
 } from "@/lib/integrations/audience-sync";
+import { loadRetargetingCandidates } from "@/lib/integrations/retargeting-candidates";
 import { retargetingWindowDays } from "@/lib/integrations/retargeting-window";
 import {
   getIntegrationCredentials,
@@ -71,19 +72,7 @@ async function run(request: Request) {
     await setIntegrationCredential("meta", "custom_audience_id", audienceId);
   }
 
-  const allLeads: RetargetingCandidate[] = await db
-    .select({
-      id: leads.id,
-      deletedAt: leads.deletedAt,
-      consentStatus: leads.consentStatus,
-      doNotContact: leads.doNotContact,
-      optedOutChannels: leads.optedOutChannels,
-      primaryPhone: leads.primaryPhone,
-      email: leads.email,
-      createdAt: leads.createdAt,
-      lastActivityAt: leads.lastActivityAt,
-    })
-    .from(leads);
+  const allLeads: RetargetingCandidate[] = await loadRetargetingCandidates();
   const leadById = new Map(allLeads.map((l) => [l.id, l]));
 
   // One `now` for the whole run, so a lead cannot fall on either side of
@@ -127,6 +116,7 @@ async function run(request: Request) {
     added: toAdd.length,
     removed: toRemove.length,
     eligible: eligibleLeadIds.length,
+    excludedAdmitted: allLeads.filter((lead) => lead.hasAdmission).length,
   });
 }
 

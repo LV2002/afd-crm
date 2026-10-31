@@ -57,7 +57,7 @@ export default async function CustomWebhooksPage() {
 
   const supabase = await createClient();
 
-  const [{ data: rows }, { data: centerRows }, { data: deliveryRows }] = await Promise.all([
+  const [{ data: rows }, { data: centerRows }, { data: deliveryRows }, { data: sourceRows }] = await Promise.all([
     supabase
       .from("custom_webhooks")
       .select(
@@ -83,7 +83,18 @@ export default async function CustomWebhooksPage() {
       .order("received_at", { ascending: false })
       .limit(500)
       .returns<DeliveryRow[]>(),
+    // The Lead source dropdown, for the picker: an endpoint is linked to
+    // one of these rather than to a name typed from memory.
+    supabase
+      .from("dropdown_options")
+      .select("value, label")
+      .eq("category", "lead_source")
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .order("sort_order")
+      .returns<Array<{ value: string; label: string }>>(),
   ]);
+  const sourceOptions = (sourceRows ?? []).map((option) => ({ value: option.value, label: option.label }));
 
   const summary = summariseDeliveries(deliveryRows ?? []);
 
@@ -93,6 +104,8 @@ export default async function CustomWebhooksPage() {
       name: row.name,
       slug: row.slug,
       source: row.source,
+      sourceLabel:
+        (sourceRows ?? []).find((option) => option.value === row.source)?.label ?? row.source,
       subSource: row.sub_source,
       centerId: row.center_id,
       signingSecret: row.signing_secret,
@@ -151,6 +164,7 @@ export default async function CustomWebhooksPage() {
               webhook={webhook}
               centers={centers}
               aliasFields={aliasFields}
+              sourceOptions={sourceOptions}
             />
           ))}
         </section>
@@ -161,7 +175,7 @@ export default async function CustomWebhooksPage() {
           <Plus className="size-4" />
           {webhooks.length === 0 ? "Add your first endpoint" : "Add another endpoint"}
         </h3>
-        <NewWebhookForm centers={centers} />
+        <NewWebhookForm centers={centers} sourceOptions={sourceOptions} />
       </section>
     </div>
   );
