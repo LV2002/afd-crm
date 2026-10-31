@@ -9,6 +9,8 @@ import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { customWebhooks, dropdownOptions, enquiries } from "@/lib/db/schema";
+import { canonicalSource } from "@/lib/identity/canonical-source";
+import { relabelEndpointLeads } from "@/lib/integrations/custom-webhook/relabel";
 import { ALIASES } from "@/lib/integrations/form-payload/map-fields";
 import { createClient } from "@/lib/supabase/server";
 
@@ -104,7 +106,26 @@ export async function saveCustomWebhook(
 
   const id = String(formData.get("id") ?? "").trim() || null;
   const name = String(formData.get("name") ?? "").trim();
-  const source = String(formData.get("source") ?? "").trim();
+  // Either an existing Lead source option, picked from the list, or a new
+  // name typed beside it. A typed name that matches an option in all but
+  // case and punctuation is that option — adding "Shiksha" next to an
+  // existing "shiksha" made a second, empty entry in the dropdown, which is
+  // why one of them showed no leads.
+  const sourceOptionRows = await db
+    .select({ value: dropdownOptions.value, label: dropdownOptions.label })
+    .from(dropdownOptions)
+    .where(and(eq(dropdownOptions.category, "lead_source"), isNull(dropdownOptions.deletedAt)));
+  const picked = String(formData.get("sourceOption") ?? "").trim();
+  const typed = String(formData.get("newSource") ?? formData.get("source") ?? "").trim();
+  let source: string;
+  if (picked && picked !== "__new__") {
+    if (!sourceOptionRows.some((option) => option.value === picked)) {
+      return { error: "That lead source no longer exists. Pick another." };
+    }
+    source = picked;
+  } else {
+    source = canonicalSource(typed, sourceOptionRows);
+  }
   const subSource = String(formData.get("subSource") ?? "").trim() || null;
   const centerId = String(formData.get("centerId") ?? "").trim() || null;
   const requireSignature = formData.get("requireSignature") === "on";
@@ -352,4 +373,59 @@ export async function deleteCustomWebhook(id: string): Promise<WebhookFormState>
   revalidatePath("/settings/integrations/webhooks");
   revalidatePath("/settings/integrations");
   return { success: `Deleted ${row.name}. Its past deliveries are still on the record.` };
+}
+
+/**
+ * Re-labels the leads an endpoint has already delivered with the source it
+ * is linked to now.
+ *
+ * An endpoint that was set up with a name that did not match a Lead source
+ * option stamped that name on everything it received, and those leads never
+ * appeared under the option the admin meant. Linking it correctly fixes
+ * every lead from now on; this fixes the ones already in.
+ *
+ * Exactly the leads that came through THIS endpoint, found by the delivery
+ * record (`webhook_events.external_id` is the enquiry's `dedupe_key`), never
+ * by guessing from a name. The enquiry always changes; the lead's first-touch
+ * and latest-touch source change only where they held the old name, so a
+ * lead that really did arrive somewhere else first keeps that. Audited.
+ */
+export async function relabelPastLeads(
+  _prev: WebhookFormState,
+  formData: FormData,
+): Promise<WebhookFormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "settings.manage")) {
+    return { error: "You don't have permission to do that." };
+  }
+
+  const id = String(formData.get("id") ?? "").trim();
+  const [webhook] = await db
+    .select({ name: customWebhooks.name, source: customWebhooks.source })
+    .from(customWebhooks)
+    .where(and(eq(customWebhooks.id, id), isNull(customWebhooks.deletedAt)));
+  if (!webhook) return { error: "That webhook no longer exists." };
+
+  const changed = await relabelEndpointLeads(id, webhook.source);
+
+  if (changed > 0) {
+    const supabase = await createClient();
+    await writeAuditLog(supabase, {
+      actorId: user.id,
+      action: "custom_webhook.relabel_past_leads",
+      entityType: "custom_webhooks",
+      entityId: id,
+      after: { source: webhook.source, enquiries: changed },
+    });
+  }
+
+  revalidatePath("/settings/integrations/webhooks");
+  revalidatePath("/leads");
+  revalidatePath("/insights");
+  return {
+    success:
+      changed === 0
+        ? "Nothing to change — every lead from this endpoint is already under that source."
+        : `Re-labelled ${changed} enquir${changed === 1 ? "y" : "ies"} from ${webhook.name}.`,
+  };
 }

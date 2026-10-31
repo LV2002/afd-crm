@@ -8843,3 +8843,9 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 
 - A lead with a confirmed admission is no longer retargeting-eligible, on both platforms (`hasAdmission` in `isRetargetingEligible`, loaded for both routes by `loadRetargetingCandidates`). The sync diffs against who was uploaded before, so existing students already in the audiences are removed on the next hourly run, not just kept out going forward. A student who later drops stays excluded (an audience is for people still to be won); that is one line in `audience-sync.ts` if it should change. The two cron responses now report `excludedAdmitted`.
 - To apply it immediately rather than at the next :25: Settings → Platform health → run the hourly tier.
+
+## Custom endpoints link to a Lead source option (the Shiksha leads showing 0)
+
+- Settings → Integrations → Custom webhooks: the **Lead source** of an endpoint is now chosen from the Lead source dropdown itself, with "A new source…" as the second step, instead of a name typed from memory. A typed name that matches an existing option (ignoring case and punctuation) now reuses that option rather than adding a second, empty "Shiksha" next to "shiksha" — the likely reason one entry counted leads and its twin showed 0.
+- **Re-label past leads** on each endpoint card moves every lead that endpoint already delivered onto its linked source: found through the delivery record (not a name guess), the enquiry always, the lead's first/latest-touch source only where it held the old name. Audited as `custom_webhook.relabel_past_leads`. Tested against Postgres.
+- Meta Lead Ads, Google lead forms and the website webhook have fixed, built-in sources; this covers custom endpoints, which is what the Shiksha mail feed uses. If a duplicate empty option remains, remove it under Settings → Dropdowns → Lead source.
