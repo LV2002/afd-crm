@@ -124,6 +124,7 @@ export const DATA_TABLES = [
   "enrolments",
   "error_events",
   "finance_transactions",
+  "bank_statement_lines",
   "google_conversion_uploads",
   // Conversations that happened, and the messages in them. Data, not
   // configuration, however much the inbox looks like a setting.

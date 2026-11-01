@@ -17,6 +17,7 @@ import {
 } from "@/lib/finance/get-finance";
 import { gstComponent } from "@/lib/finance/ledger-math";
 import { getPeriodReport } from "@/lib/finance/reports";
+import { getFinanceCenterId } from "@/lib/finance/center-filter";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -38,10 +39,11 @@ export default async function YearlyReportPage({
   const year = Number(yearParam) || new Date().getFullYear();
 
   const supabase = await createClient();
+  const centerId = await getFinanceCenterId(supabase);
   const [config, categories, accounts] = await Promise.all([
     getFinanceConfig(supabase),
     getFinanceCategories(supabase),
-    getAccountsWithBalances(supabase, { includeInactive: true }),
+    getAccountsWithBalances(supabase, { includeInactive: true, centerId }),
   ]);
 
   const accountNames = new Map(accounts.map((a) => [a.id, a.name]));
@@ -55,13 +57,14 @@ export default async function YearlyReportPage({
         getPeriodReport(supabase, {
           from: `${y}-01-01`,
           to: `${y}-12-31`,
+          centerId,
           expenseCategories,
           incomeCategories,
           accountNames,
         }),
       ),
     ),
-    getLedgerEntries(supabase, { from: `${year}-01-01`, to: `${year}-12-31`, kind: "fee" }),
+    getLedgerEntries(supabase, { from: `${year}-01-01`, to: `${year}-12-31`, kind: "fee", centerId }),
   ]);
 
   const current = reports[reports.length - 1];

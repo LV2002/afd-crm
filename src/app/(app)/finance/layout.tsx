@@ -3,6 +3,10 @@ import Link from "next/link";
 import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser } from "@/lib/auth/session";
 
+import { getFinanceCenterId, getFinanceCenters } from "@/lib/finance/center-filter";
+import { createClient } from "@/lib/supabase/server";
+
+import { CenterSwitcher } from "./center-switcher";
 import { FinanceNav } from "./finance-nav";
 
 /**
@@ -18,6 +22,12 @@ export default async function FinanceLayout({ children }: { children: React.Reac
   const user = await getCurrentUser();
   if (!user || !can(user, "finance.read")) return <AccessDenied />;
 
+  const supabase = await createClient();
+  const [centers, selectedCenter] = await Promise.all([
+    getFinanceCenters(supabase),
+    getFinanceCenterId(supabase),
+  ]);
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -28,6 +38,8 @@ export default async function FinanceLayout({ children }: { children: React.Reac
           mirror image, so the totals fix themselves and the trail stays intact.
         </p>
       </div>
+
+      {centers.length > 1 && <CenterSwitcher centers={centers} selected={selectedCenter} />}
 
       <FinanceNav
         canRecord={can(user, "finance.record")}

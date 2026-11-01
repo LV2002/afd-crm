@@ -20,6 +20,7 @@ const TABS: Tab[] = [
   { href: "/finance/reports/cash-flow", label: "Cash flow" },
   { href: "/finance/transactions", label: "Transactions" },
   { href: "/finance/ledger", label: "Account ledger" },
+  { href: "/finance/bank", label: "Bank import", needs: "record" },
   { href: "/finance/record", label: "Record entry", needs: "record" },
   { href: "/finance/accounts", label: "Bank & cash accounts", needs: "manage" },
 ];

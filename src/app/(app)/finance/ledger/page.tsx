@@ -18,6 +18,7 @@ import {
   reversedIds,
 } from "@/lib/finance/get-finance";
 import { runningBalances, signedAmount } from "@/lib/finance/ledger-math";
+import { getFinanceCenterId } from "@/lib/finance/center-filter";
 import { createClient } from "@/lib/supabase/server";
 
 import { FeeEntryActions } from "../fee-entry-actions";
@@ -39,7 +40,8 @@ export default async function AccountLedgerPage({
 }) {
   const { account: accountId, from, to } = await searchParams;
   const supabase = await createClient();
-  const accounts = await getAccountsWithBalances(supabase, { includeInactive: true });
+  const centerId = await getFinanceCenterId(supabase);
+  const accounts = await getAccountsWithBalances(supabase, { includeInactive: true, centerId });
 
   const selected = accounts.find((a) => a.id === accountId) ?? accounts[0];
 

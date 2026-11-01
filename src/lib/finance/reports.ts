@@ -377,3 +377,47 @@ export async function getCollections(
     settled: settled.slice(0, 200),
   };
 }
+
+export interface CenterComparisonRow {
+  centerId: string;
+  monthIncomePaise: number;
+  monthExpensePaise: number;
+  yearIncomePaise: number;
+  yearExpensePaise: number;
+}
+
+/**
+ * Each centre's income and expenses for a month and for the year so far,
+ * from one pass over the year's ledger. This is the company view: the same
+ * rows the per-centre pages total, split by the centre stamped on each row
+ * when it was written, so the rows here always add up to the company figure.
+ */
+export async function getCenterComparison(
+  supabase: SupabaseClient,
+  options: { yearFrom: string; yearTo: string; monthFrom: string; monthTo: string },
+): Promise<CenterComparisonRow[]> {
+  const entries = await getLedgerEntries(supabase, { from: options.yearFrom, to: options.yearTo });
+  const byCenter = new Map<string, CenterComparisonRow>();
+
+  for (const e of entries) {
+    // Transfers between our own accounts are neither income nor expense.
+    if (e.direction !== "in" && e.direction !== "out") continue;
+    const row = byCenter.get(e.center_id) ?? {
+      centerId: e.center_id,
+      monthIncomePaise: 0,
+      monthExpensePaise: 0,
+      yearIncomePaise: 0,
+      yearExpensePaise: 0,
+    };
+    const inMonth = e.occurred_on >= options.monthFrom && e.occurred_on <= options.monthTo;
+    if (e.direction === "in") {
+      row.yearIncomePaise += e.amount_paise;
+      if (inMonth) row.monthIncomePaise += e.amount_paise;
+    } else {
+      row.yearExpensePaise += e.amount_paise;
+      if (inMonth) row.monthExpensePaise += e.amount_paise;
+    }
+    byCenter.set(e.center_id, row);
+  }
+  return [...byCenter.values()];
+}

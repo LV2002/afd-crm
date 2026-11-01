@@ -12,6 +12,7 @@ import {
 import { formatDateIST } from "@/lib/format/date";
 import { formatINR } from "@/lib/format/currency";
 import { getCollections } from "@/lib/finance/reports";
+import { getFinanceCenterId } from "@/lib/finance/center-filter";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -28,8 +29,9 @@ import { createClient } from "@/lib/supabase/server";
  */
 export default async function CollectionsPage() {
   const supabase = await createClient();
+  const centerId = await getFinanceCenterId(supabase);
   const today = new Date().toISOString().slice(0, 10);
-  const report = await getCollections(supabase, { asOf: today });
+  const report = await getCollections(supabase, { asOf: today, centerId });
 
   return (
     <div className="flex flex-col gap-6">

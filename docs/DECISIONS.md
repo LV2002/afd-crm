@@ -4837,3 +4837,17 @@ Leon's rule: a student pays either a lump sum — entered as the down payment, w
 ## 2026-10-27 — No Instagram DMs; unknown numbers are held, not filed under the API number
 
 Leon does not want the CRM to see Instagram messages, so the DM inbox and everything feeding it was removed (tables kept, unused, guarded by a test). The Page subscription is now `leadgen` only. Separately, an inbound WhatsApp message whose `phone_number_id` is neither a registered number nor the API credentials' number is no longer stored: the old rule "no number = API number" was how an unregistered Coexistence number leaked onto the API tab. If the API phone number id is not set in Credentials the old behaviour is kept, since there is then nothing to tell the API number apart from.
+
+## 2026-11-01 — Bank statements are parsed and discarded; only the lines are kept
+
+Leon asked that statements not be stored (no space, and a statement is a security risk). So the upload never leaves the request: `parseBankStatement()` takes the file's text and returns lines. What is saved is `bank_statement_lines` — date, narration, direction, amount, the bank's balance, and a hash — which is the minimum needed to categorise a line and to recognise it in a later upload. No bank login or feed was used for the same reason: nothing to leak.
+
+**Why a worklist table and not the ledger directly.** `finance_transactions.category` is NOT NULL and the ledger is append-only, so an uncategorised line cannot live there and be filled in later. The worklist is mutable (pending → posted/skipped); the ledger only ever gains the finished entry.
+
+**Dedupe** is a content hash, unique per account. Two genuinely identical rows are told apart by the balance column; if a bank gives no balance, by their order within the file. Assumption: the same statement re-downloaded keeps the same order.
+
+**Student fees on the statement.** A fee already recorded through an enrolment is in the ledger and has a receipt. Posting the bank credit as well would count it twice, so the accountant sets those aside ("Student fee — already in the fee ledger"). Assumption: the fee ledger stays the source of truth for fees; matching a bank credit to a payment is a later step.
+
+**Data we found in the real sheet** (Leon's Federal Bank export): years typed as `0202` (kept, year taken from neighbouring rows, flagged "check date"); amounts like `63720 00` (read as 63,720.00); dates with a stray trailing `0`; narrations that wrap over lines and orphan continuation rows (left out, listed). Same-day rows are not always in running-balance order in the bank's own file, so the balance check is a hint ("N lines don't follow on"), never a block.
+
+**Centre choice is a cookie** (`finance_center`, path `/finance`), not a URL parameter, so every picker and link in finance honours it without carrying it. A value the person cannot see falls back to the whole company.

@@ -771,6 +771,13 @@
       "when": 1793714408000,
       "tag": "0109_down_payment_due_date",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1793800808000,
+      "tag": "0110_bank_statement_lines",
+      "breakpoints": true
     }
   ]
 }

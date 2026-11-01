@@ -191,3 +191,67 @@ export const financeTransactions = pgTable(
     check("finance_txn_amount_nonzero", sql`amount_paise <> 0`),
   ],
 );
+
+export const bankLineStatusEnum = pgEnum("bank_line_status", ["pending", "posted", "skipped"]);
+
+/**
+ * One line from a bank statement, waiting for the accountant to say what it
+ * was.
+ *
+ * This is a worklist, not the ledger and not a copy of the statement. The
+ * uploaded file is parsed in memory and thrown away (see
+ * `lib/finance/bank-statement.ts`); what is saved is each transaction's
+ * date, narration, direction and amount, which is the minimum needed to
+ * categorise it and to recognise it if the same line turns up in a later,
+ * overlapping upload. No file, no account number, no bank login.
+ *
+ * Because it is a worklist it changes: `pending` → `posted` (a ledger row
+ * was appended and is linked here) or `skipped` (money that is not income
+ * or an expense, such as a student fee already in the fee ledger). The
+ * ledger it feeds stays append-only; nothing here ever edits it.
+ */
+export const bankStatementLines = pgTable(
+  "bank_statement_lines",
+  {
+    id: idColumn(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => financeAccounts.id, { onDelete: "restrict" }),
+    /** Copied from the account when imported, as the ledger does. */
+    centerId: uuid("center_id")
+      .notNull()
+      .references(() => centers.id, { onDelete: "restrict" }),
+
+    occurredOn: date("occurred_on").notNull(),
+    particulars: text("particulars").notNull(),
+    direction: text("direction").notNull(),
+    amountPaise: bigint("amount_paise", { mode: "number" }).notNull(),
+    /** The bank's running balance after this line, kept to help spot a misread. */
+    balancePaise: bigint("balance_paise", { mode: "number" }),
+    /** What the accountant had already written beside the row, if anything. */
+    note: text("note"),
+    dateGuessed: boolean("date_guessed").notNull().default(false),
+
+    /** Hash of the line's content: re-uploading the same line adds nothing. */
+    fingerprint: text("fingerprint").notNull(),
+
+    status: bankLineStatusEnum("status").notNull().default("pending"),
+    transactionId: uuid("transaction_id").references(() => financeTransactions.id, {
+      onDelete: "restrict",
+    }),
+    skipReason: text("skip_reason"),
+
+    importedBy: uuid("imported_by").references(() => profiles.id, { onDelete: "set null" }),
+    importedAt: timestamp("imported_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedBy: uuid("resolved_by").references(() => profiles.id, { onDelete: "set null" }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("bank_lines_fingerprint_uq").on(t.accountId, t.fingerprint),
+    index("bank_lines_status_idx").on(t.accountId, t.status, t.occurredOn),
+    index("bank_lines_center_idx").on(t.centerId, t.status),
+    index("bank_lines_txn_idx").on(t.transactionId),
+    check("bank_lines_direction", sql`direction in ('in', 'out')`),
+    check("bank_lines_amount_positive", sql`amount_paise > 0`),
+  ],
+);

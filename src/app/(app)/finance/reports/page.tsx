@@ -14,6 +14,7 @@ import {
 } from "@/lib/finance/get-finance";
 import { monthBounds } from "@/lib/finance/ledger-math";
 import { getPeriodReport } from "@/lib/finance/reports";
+import { getFinanceCenterId } from "@/lib/finance/center-filter";
 import { createClient } from "@/lib/supabase/server";
 
 import { MonthPicker } from "./month-picker";
@@ -39,14 +40,16 @@ export default async function MonthlyReportPage({
   const bounds = monthBounds(monthKey);
 
   const supabase = await createClient();
+  const centerId = await getFinanceCenterId(supabase);
   const [accounts, categories] = await Promise.all([
-    getAccountsWithBalances(supabase, { includeInactive: true }),
+    getAccountsWithBalances(supabase, { includeInactive: true, centerId }),
     getFinanceCategories(supabase),
   ]);
 
   const report = await getPeriodReport(supabase, {
     from: bounds.from,
     to: bounds.to,
+    centerId,
     expenseCategories: categories.expense.map((c) => c.label),
     incomeCategories: categories.income.map((c) => c.label),
     accountNames: new Map(accounts.map((a) => [a.id, a.name])),
