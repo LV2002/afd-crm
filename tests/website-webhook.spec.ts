@@ -138,6 +138,21 @@ describe("a real submission", () => {
     expect(lead.city).toBe("Kochi");
   });
 
+  it("keeps the submission id on the lead, and only the first one", async () => {
+    // Every outcome reported back to the marketing sheet names this id.
+    const first = submission({ submission_id: "sub-first-1" });
+    await POST(request(first));
+    const { email, phone } = JSON.parse(first) as { email: string; phone: string };
+
+    await POST(request(submission({ email, phone, submission_id: "sub-second-2", form: "NIFT page" })));
+
+    const [lead] = await db
+      .select({ submissionId: leads.submissionId })
+      .from(leads)
+      .where(eq(leads.primaryPhone, `+91${phone}`));
+    expect(lead.submissionId).toBe("sub-first-1");
+  });
+
   it("does not create a second lead when the script retries", async () => {
     // Apps Script retries on a non-2xx, and UrlFetchApp can fire twice on
     // a slow response. The same submission id must stay one lead.

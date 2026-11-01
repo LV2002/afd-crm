@@ -18,6 +18,7 @@ function baseLead(overrides: Partial<Lead> = {}): Lead {
     alternatePhone: null,
     parentPhone: null,
     whatsappPhone: null,
+    submissionId: null,
     email: null,
     dob: null,
     gender: null,

@@ -40,10 +40,11 @@ const request = new Request("https://cron.local/test", {
 const keysOf = (jobs: ReturnType<typeof frequentJobs>) => jobs.map((job) => job.key);
 
 describe("what belongs on which schedule", () => {
-  it("puts the three queue-draining jobs on the frequent tier, and only those", () => {
+  it("puts the queue-draining jobs on the frequent tier, and only those", () => {
     // Anything that talks to Meta or Google landing here means 144 calls
     // a day in place of 24, for data that does not change that fast.
     expect(keysOf(frequentJobs(request)).sort()).toEqual([
+      "outcome-report",
       "sla-sweep",
       "whatsapp-broadcast-sweep",
       "whatsapp-flows",

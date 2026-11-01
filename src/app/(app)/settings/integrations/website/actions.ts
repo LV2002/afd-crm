@@ -56,3 +56,60 @@ export async function generateWebsiteSecret(): Promise<WebsiteFormState> {
     success: "Copy this now — it cannot be shown again.",
   };
 }
+
+export interface OutcomesFormState {
+  error?: string;
+  success?: string;
+}
+
+/**
+ * Saves where outcomes are reported (the Apps Script's `/exec` address) and
+ * the key they are signed with. Both go into the encrypted credential
+ * store; neither is ever read back to the browser or written to the audit
+ * log. Leaving the key blank keeps the one already saved, so the address
+ * can be corrected without retyping it.
+ */
+export async function saveOutcomesSettings(
+  _prev: OutcomesFormState,
+  formData: FormData,
+): Promise<OutcomesFormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "settings.manage")) {
+    return { error: "You don't have permission to do that." };
+  }
+
+  const execUrl = String(formData.get("execUrl") ?? "").trim();
+  const secret = String(formData.get("secret") ?? "").trim();
+
+  if (execUrl) {
+    let parsed: URL;
+    try {
+      parsed = new URL(execUrl);
+    } catch {
+      return { error: "That address isn't a web address. Paste the whole link, ending in /exec." };
+    }
+    if (parsed.protocol !== "https:" || !parsed.pathname.endsWith("/exec")) {
+      return { error: "The address must start with https:// and end in /exec." };
+    }
+    await setIntegrationCredential("website", "outcomes_exec_url", parsed.toString());
+  }
+  if (secret) {
+    if (secret.length < 12) return { error: "The key is too short — paste the whole phrase." };
+    await setIntegrationCredential("website", "outcomes_secret", secret);
+  }
+  if (!execUrl && !secret) return { error: "Paste the address, the key, or both." };
+
+  const supabase = await createClient();
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "integration.credentials_update",
+    entityType: "integration_credentials",
+    after: {
+      provider: "website",
+      keys: [execUrl && "outcomes_exec_url", secret && "outcomes_secret"].filter(Boolean),
+    },
+  });
+
+  revalidatePath("/settings/integrations/website");
+  return { success: "Saved. Status changes are reported within about ten minutes." };
+}

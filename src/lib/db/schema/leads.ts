@@ -50,6 +50,15 @@ export const leads = pgTable(
      * it in everywhere would be inventing data to avoid one `??`.
      */
     whatsappPhone: text("whatsapp_phone"),
+    /**
+     * The id the website gave the enquiry that first brought this person
+     * in through a form. Every outcome reported back to the marketing
+     * sheet names it (lib/outcomes), which is how a page or source is
+     * joined to the admission it produced. Set once, never overwritten:
+     * a later form fill by the same person is the same lead, and the
+     * first submission is the one that earned it.
+     */
+    submissionId: text("submission_id"),
     email: text("email"),
 
     dob: date("dob"),

@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db/client";
-import { webhookEvents } from "@/lib/db/schema";
+import { leads, webhookEvents } from "@/lib/db/schema";
 import { adIdentifiersFrom } from "@/lib/integrations/form-payload/ad-identifiers";
 import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await resolveOrCreateLead({
+    const resolved = await resolveOrCreateLead({
       studentName: mapped.lead.studentName,
       primaryPhone: mapped.lead.primaryPhone,
       email: mapped.lead.email,
@@ -128,6 +128,14 @@ export async function POST(request: Request) {
       raw: mapped.lead.raw,
       dedupeKey: externalId,
     });
+
+    // The id every reported outcome names. Only the first website
+    // submission is kept: a later form fill by the same person is the same
+    // lead, and the first one is the enquiry that earned it.
+    await db
+      .update(leads)
+      .set({ submissionId: externalId })
+      .where(and(eq(leads.id, resolved.leadId), isNull(leads.submissionId)));
 
     await db
       .update(webhookEvents)

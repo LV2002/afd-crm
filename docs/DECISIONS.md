@@ -4851,3 +4851,13 @@ Leon asked that statements not be stored (no space, and a statement is a securit
 **Data we found in the real sheet** (Leon's Federal Bank export): years typed as `0202` (kept, year taken from neighbouring rows, flagged "check date"); amounts like `63720 00` (read as 63,720.00); dates with a stray trailing `0`; narrations that wrap over lines and orphan continuation rows (left out, listed). Same-day rows are not always in running-balance order in the bank's own file, so the balance check is a hint ("N lines don't follow on"), never a block.
 
 **Centre choice is a cookie** (`finance_center`, path `/finance`), not a URL parameter, so every picker and link in finance honours it without carrying it. A value the person cannot see falls back to the whole company.
+
+## 2026-11-02 — Outcomes are read from status history and sent from an outbox
+
+The website's marketing sheet wants one event per status change, signed, retried safely. Rather than call it from every place a status changes (the lead page, bulk actions, confirm-admission, rules, imports), events are derived from `temperature_history`, which a trigger already fills for every write path. A scheduled job queues new history rows in `outcome_events` and sends them, so a status change never waits on Google and an outage loses nothing.
+
+**What counts as an outcome** is decided by a status's *kind* (open/parked → contacted, won → admitted, lost → lost, new → nothing), not its label, with an optional `outcome_status` in the option's metadata. Consecutive changes that map to the same outcome (Warm → Hot) are recorded but not sent: the sheet counts outcomes, not temperature. Assumption: that matches "send one event each time a status changes (contacted, demo booked, admitted, lost)".
+
+**Lookback of 14 days** when queuing, so connecting the sheet later sends recent changes but never replays months of history. **`submission_id` is the first website submission** for a lead; a repeat enquiry by the same person does not replace it, so an admission is credited to the page that first brought them in. Ids the sheet would refuse (the CRM's fallback `phone:timestamp` form has a `+` and `:`) are set aside rather than sent.
+
+**Credentials** live in the encrypted store under provider `website` (`outcomes_exec_url`, `outcomes_secret`), not environment variables, so connecting needs no deploy.

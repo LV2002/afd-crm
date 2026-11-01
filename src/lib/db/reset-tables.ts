@@ -122,6 +122,7 @@ export const DATA_TABLES = [
   "enrolment_instalments",
   "enrolment_promos",
   "enrolments",
+  "outcome_events",
   "error_events",
   "finance_transactions",
   "bank_statement_lines",
