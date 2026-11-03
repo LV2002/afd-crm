@@ -2,6 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { mediaLabel } from "./media-label";
+
 /**
  * The WhatsApp inbox: one row per lead somebody has exchanged messages
  * with, newest activity first.
@@ -56,7 +58,8 @@ interface MessageRow {
 
 function preview(row: MessageRow): string {
   if (row.message_type === "media") {
-    return `${row.media_mime_type?.split("/")[0] ?? "Media"} attachment`;
+    const caption = (row.body ?? "").replace(/\s+/g, " ").trim();
+    return caption ? `${mediaLabel(row.media_mime_type)} · ${caption}` : mediaLabel(row.media_mime_type);
   }
   if (row.message_type === "template") return `Template: ${row.template_name ?? "sent"}`;
   return (row.body ?? "").replace(/\s+/g, " ").trim() || "(empty message)";

@@ -4873,3 +4873,7 @@ The website's marketing sheet wants one event per status change, signed, retried
 **Escalation rungs are "hours late".** The sweep now subtracts the policy target before comparing. This changes when existing ladders fire (later, by the target). It matches what the editor, policy list and manual always said.
 
 **Tags: remove the use, keep the data.** Following the stages precedent (migration 0099), nothing is dropped: the tables stay, a guard test keeps code off them. Flows that started from a tag are switched off (they could never fire); old "add a tag" steps are skipped rather than failing the run, so the messages after them still send. Broadcasts resolve and save their recipients when composed, so past and scheduled ones are unaffected.
+
+## 2026-11-03 — Reactions and view-once messages are not stored
+
+Leon wants voice notes, messages, photos and videos in the inbox, and does not want disappearing messages. A disappearing / view-once message reaches a business as type `unsupported` with no content, and a reaction is an emoji on an earlier message. Storing either produced blank bubbles and made a conversation look unanswered, so neither is stored (the raw delivery still is). Assumption: reactions are noise to Leon too; if he wants to see "👍" on a broadcast reply, it is a one-line change to store them as text.

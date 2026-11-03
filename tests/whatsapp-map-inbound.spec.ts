@@ -86,3 +86,40 @@ describe("button taps", () => {
     expect(buttonText({ id: "m6", from: "x", timestamp: "1", type: "text", text: { body: "hi" } })).toBeNull();
   });
 });
+
+describe("message types that used to arrive as empty messages", () => {
+  const base = { id: "w1", from: "919847100100", timestamp: "1700000000" };
+
+  it("keeps the caption somebody typed under a photo, video or document", () => {
+    expect(
+      mapMessageContent({ ...base, type: "image", image: { id: "m1", mime_type: "image/jpeg", caption: " Marksheet " } }).body,
+    ).toBe("Marksheet");
+    expect(
+      mapMessageContent({ ...base, type: "video", video: { id: "m2", mime_type: "video/mp4", caption: "My work" } }).body,
+    ).toBe("My work");
+  });
+
+  it("treats a voice note as media", () => {
+    expect(
+      mapMessageContent({ ...base, type: "audio", audio: { id: "m3", mime_type: "audio/ogg; codecs=opus", voice: true } }),
+    ).toMatchObject({ messageType: "media", mediaId: "m3", mediaMimeType: "audio/ogg; codecs=opus" });
+  });
+
+  it("does not store reactions or view-once / disappearing messages", () => {
+    expect(mapMessageContent({ ...base, type: "reaction", reaction: { message_id: "x", emoji: "👍" } }).ignore).toBe(true);
+    expect(mapMessageContent({ ...base, type: "unsupported" }).ignore).toBe(true);
+  });
+
+  it("turns a pin and a contact card into readable text", () => {
+    expect(
+      mapMessageContent({ ...base, type: "location", location: { latitude: 9.93, longitude: 76.26, name: "AFD Kochi" } }).body,
+    ).toBe("📍 Location: AFD Kochi (9.93, 76.26)");
+    expect(
+      mapMessageContent({ ...base, type: "contacts", contacts: [{ name: { formatted_name: "Anjali" } }] }).body,
+    ).toBe("👤 Shared a contact: Anjali");
+  });
+
+  it("says plainly what an unknown type was, rather than leaving a blank", () => {
+    expect(mapMessageContent({ ...base, type: "order" }).body).toBe("[order message]");
+  });
+});
