@@ -8858,3 +8858,9 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 - What is reported: `contacted` for any open or parked status, `admitted` for Took admission (with the net fee in rupees and `Course, Centre` as the note), `lost` for the lost statuses; a status that is just a new temperature of the same outcome (Cold → Warm) is not repeated; "Not contacted" is not an outcome. No name or phone is ever sent.
 - Settings → Integrations → Website forms, section 5: paste the `/exec` address and the signing key (encrypted, never shown again; blank key keeps the old one), with counts of reported / waiting and the sheet's last error.
 - Not covered: `demo_booked` is not sent by default because the CRM has no demo status; an admin who adds one can set `outcome_status: "demo_booked"` in that option's metadata (no screen for that yet). Leads from custom endpoints (e.g. Shiksha) are not reported — only website forms.
+
+## Admission form and fee plan, simpler
+
+- **Confirm admission** (lead page): the Discount box is gone. The form is course, batch and (optional) custom fee; a discount is entered on the fee plan after the admission is confirmed.
+- **Fee plan**: course fee, offer, extra discount and its reason are on one row (four across on a wide screen, two on a phone) instead of stacked, with one small line below for the total discount and the approval note.
+- **Instalments**: the "Split into / First due / Fill the schedule / Pay in full instead" helper is removed. The lump sum goes on the lump-sum line, each instalment is entered individually with its own date and amount. (`suggestSchedule` stays in `plan-status.ts`, unused, with its tests.)
