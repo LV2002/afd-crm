@@ -115,33 +115,11 @@ export default async function LeadsPage({
 
   const search = typeof params.search === "string" ? params.search : "";
   const filterValues = readFilterValues(params, filterableFields);
-  const tagFilter = typeof params.tag === "string" ? params.tag : "";
   const requestedSize = Number(Array.isArray(params.size) ? params.size[0] : params.size);
   const PAGE_SIZE = (PAGE_SIZES as readonly number[]).includes(requestedSize) ? requestedSize : PAGE_SIZES[0];
   const page = Math.max(1, Number(params.page) || 1);
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
-
-  const { data: tagRows } = await supabase
-    .from("tags")
-    .select("id, name")
-    .eq("is_active", true)
-    .order("name")
-    .returns<Array<{ id: string; name: string }>>();
-  const tagOptions: FieldOption[] = (tagRows ?? []).map((t) => ({ value: t.id, label: t.name }));
-
-  // Tags are a many-to-many join, not a lead_tags-backed field_definitions
-  // column, so this filter doesn't fit applyLeadFilters()'s field-schema
-  // shape — resolved to a plain id list instead, same as search's ilike.
-  let taggedLeadIds: string[] | null = null;
-  if (tagFilter) {
-    const { data: matchRows } = await supabase
-      .from("lead_tags")
-      .select("lead_id")
-      .eq("tag_id", tagFilter)
-      .returns<Array<{ lead_id: string }>>();
-    taggedLeadIds = (matchRows ?? []).map((r) => r.lead_id);
-  }
 
   /*
     A bucket from the dashboard's "Your day" card (?queue=due_today).
@@ -266,9 +244,6 @@ export default async function LeadsPage({
       `student_name.ilike.%${searchFilter}%,primary_phone.ilike.%${searchFilter}%`,
     );
   }
-  if (taggedLeadIds !== null) {
-    query = query.in("id", taggedLeadIds);
-  }
   if (queueLeadIds !== null) {
     query = query.in("id", queueLeadIds);
   }
@@ -300,7 +275,6 @@ export default async function LeadsPage({
   // everything out" apart from "this CRM is new".
   const hasAnyFilter =
     Boolean(search) ||
-    Boolean(tagFilter) ||
     queueKey !== null ||
     tileKey !== null ||
     dateFilters.active ||
@@ -452,8 +426,6 @@ export default async function LeadsPage({
       <LeadFilters
         filterFields={filterFieldsWithOptions}
         searchValue={search}
-        tagOptions={tagOptions}
-        tagValue={tagFilter}
         months={recentMonths(new Date())}
       />
 

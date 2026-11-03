@@ -4861,3 +4861,15 @@ The website's marketing sheet wants one event per status change, signed, retried
 **Lookback of 14 days** when queuing, so connecting the sheet later sends recent changes but never replays months of history. **`submission_id` is the first website submission** for a lead; a repeat enquiry by the same person does not replace it, so an admission is credited to the page that first brought them in. Ids the sheet would refuse (the CRM's fallback `phone:timestamp` form has a `+` and `:`) are set aside rather than sent.
 
 **Credentials** live in the encrypted store under provider `website` (`outcomes_exec_url`, `outcomes_secret`), not environment variables, so connecting needs no deploy.
+
+## 2026-11-03 — SLA and discount authority get their own permissions; tags retired
+
+**Why separate permissions.** Leon wants centre heads and co-admins to set up SLA policies, targets and discount authority themselves and nothing else. `rules.manage` also controls who receives every lead; `settings.manage` is everything. Bundling either with these would have made the delegation a trade the owner did not want, so each is its own primitive, following the `report.ads` and `target.manage` precedent. Existing holders keep exactly what they had (migration 0112 copies the grant).
+
+**Any scope is enough** for `sla.manage` and `discount.manage`. Both are institute-wide: there is no "my centre's SLA policy" or "my centre's discount limit", so requiring `all` would only turn a mis-clicked scope into a silent refusal. Consequence, said in the guide: a centre head with SLA access can edit policies that apply to every centre.
+
+**Self-escalation guard.** A person trusted with discount authority could otherwise tick "no limit" against their own role. Unless they are already unlimited, they cannot edit their own role's row nor set another role above their own ceiling. Assumption: this is what Leon would want; the alternative (trusting them fully) makes every limit on the screen advisory.
+
+**Escalation rungs are "hours late".** The sweep now subtracts the policy target before comparing. This changes when existing ladders fire (later, by the target). It matches what the editor, policy list and manual always said.
+
+**Tags: remove the use, keep the data.** Following the stages precedent (migration 0099), nothing is dropped: the tables stay, a guard test keeps code off them. Flows that started from a tag are switched off (they could never fire); old "add a tag" steps are skipped rather than failing the run, so the messages after them still send. Broadcasts resolve and save their recipients when composed, so past and scheduled ones are unaffected.

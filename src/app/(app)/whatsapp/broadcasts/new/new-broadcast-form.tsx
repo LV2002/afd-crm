@@ -73,18 +73,15 @@ export interface TemplateChoice {
 export function NewBroadcastForm({
   leadFields,
   studentFields,
-  tags,
   templates,
 }: {
   leadFields: AudienceFieldOptions[];
   studentFields: AudienceFieldOptions[];
-  tags: Array<{ id: string; name: string }>;
   templates: TemplateChoice[];
 }) {
   const [state, formAction, pending] = useActionState(createBroadcast, initialState);
   const [entity, setEntity] = useState<AudienceEntity>("lead");
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [tagId, setTagId] = useState("");
   const [templateName, setTemplateName] = useState(templates[0]?.name ?? "");
   const [preview, setPreview] = useState<AudiencePreview | null>(null);
   const [previewing, startPreview] = useTransition();
@@ -153,7 +150,6 @@ export function NewBroadcastForm({
     // have different field definitions — so the filters reset rather than
     // silently carrying a key the new entity has never heard of.
     setFilters({});
-    setTagId("");
     setPreview(null);
     // A student has no counsellor and a lead has no batch, so a variable
     // chosen for one entity can be meaningless on the other. Rather than
@@ -184,7 +180,6 @@ export function NewBroadcastForm({
     data.set("entity", entity);
     data.set("filters", serialisedFilters);
     data.set("bodyParams", serialisedSources);
-    if (tagId) data.set("tagId", tagId);
     startPreview(async () => setPreview(await previewAudience(data)));
   }
 
@@ -196,7 +191,6 @@ export function NewBroadcastForm({
           from the same values the preview used. */}
       <input type="hidden" name="entity" value={entity} />
       <input type="hidden" name="filters" value={serialisedFilters} />
-      <input type="hidden" name="tagId" value={tagId} />
       <input type="hidden" name="bodyParams" value={serialisedSources} />
       <input type="hidden" name="sendMode" value={sendMode} />
 
@@ -218,26 +212,6 @@ export function NewBroadcastForm({
             </button>
           ))}
         </div>
-
-        {entity === "lead" && tags.length > 0 && (
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">Tag</Label>
-            <Combobox
-              className="w-56"
-              size="sm"
-              value={tagId || ANY}
-              onChange={(value) => {
-                setTagId(value === ANY ? "" : value);
-                setPreview(null);
-              }}
-              options={[
-                { value: ANY, label: "Any" },
-                ...tags.map((tag) => ({ value: tag.id, label: tag.name })),
-              ]}
-              searchPlaceholder="Type a tag…"
-            />
-          </div>
-        )}
 
         {/*
           Open by default. Every lead field was already targetable here —

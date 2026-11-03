@@ -46,11 +46,9 @@ function parseFilters(raw: FormDataEntryValue | null): Record<string, string> {
 function specFrom(formData: FormData): AudienceSpec | null {
   const entity = formData.get("entity");
   if (!isEntity(entity)) return null;
-  const tagId = formData.get("tagId");
   return {
     entity,
     filters: parseFilters(formData.get("filters")),
-    tagId: typeof tagId === "string" && tagId ? tagId : null,
   };
 }
 
@@ -322,7 +320,6 @@ export async function createBroadcast(
       name: name.trim(),
       audience_entity: spec.entity,
       audience_filters: spec.filters,
-      tag_id: spec.tagId,
       template_name: templateName.trim(),
       template_language:
         typeof templateLanguage === "string" && templateLanguage.trim()
@@ -382,7 +379,6 @@ export async function createBroadcast(
       name: name.trim(),
       entity: spec.entity,
       filters: spec.filters,
-      tagId: spec.tagId,
       templateName: templateName.trim(),
       headerMedia: headerMedia?.fileName ?? null,
       recipients: audience.members.length,

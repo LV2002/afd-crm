@@ -785,6 +785,20 @@
       "when": 1793887208000,
       "tag": "0111_outcome_events",
       "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1793973608000,
+      "tag": "0112_sla_and_discount_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1794060008000,
+      "tag": "0113_retire_tags",
+      "breakpoints": true
     }
   ]
 }

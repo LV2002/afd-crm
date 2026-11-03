@@ -29,8 +29,6 @@ note.
 
 **Task** — A small piece of work on a lead, with a due date.
 
-**Tag** — A label on a lead, for segmentation and audiences.
-
 ## Process
 
 **Stage** — Where a lead sits in the funnel.

@@ -32,7 +32,6 @@ export const FLOW_STEP_KINDS = [
   "send_template",
   "wait",
   "wait_for_reply",
-  "add_tag",
   "set_temperature",
   "notify_owner",
   "stop",
@@ -43,7 +42,6 @@ export type FlowStepKind = (typeof FLOW_STEP_KINDS)[number];
 export const FLOW_TRIGGERS = [
   "lead_created",
   "temperature_entered",
-  "tag_added",
   "inbound_keyword",
   "manual",
 ] as const;
@@ -92,7 +90,7 @@ export interface FlowStep {
  * A run cannot execute more than this many steps in one pass.
  *
  * Branches may jump backwards, so a flow CAN be written as a loop — and
- * a loop of `add_tag` steps with no wait in it would otherwise spin
+ * a loop of `set_temperature` steps with no wait in it would otherwise spin
  * forever inside one cron run. Twenty is far more than any real
  * follow-up sequence and small enough that a mistake costs nothing.
  */
@@ -247,8 +245,6 @@ export function describeStep(step: FlowStep): string {
       const answers = config.branches.map((branch) => branch.match).join(", ");
       return `Wait ${describeHours(config.hours)} for a reply${answers ? ` — ${answers}` : ""}`;
     }
-    case "add_tag":
-      return "Add a tag";
     case "set_temperature":
       return "Change their temperature";
     case "notify_owner":

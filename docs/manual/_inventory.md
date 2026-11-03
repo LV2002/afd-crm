@@ -99,7 +99,7 @@ Student Profile Forms. — Chapter 4.
 Organisation · Terminology · Centres · Users · Roles & Permissions ·
 Pipeline Stages · Temperatures · Assignment Rules · SLA Policies ·
 Batches · Fee Structures · Payment Reminders · Audit Log ·
-Platform Health · Targets · Offers · Discount Authority · Tags ·
+Platform Health · Targets · Offers · Discount Authority ·
 Dropdowns · Dashboards · Notifications · Student Profile Form ·
 Custom Fields · Config Export/Import · Integrations (Meta, Google,
 WhatsApp, Website, Custom webhooks). — Chapter 13.

@@ -22,9 +22,6 @@ import { applyPivotFilters, dimensionFields, type PivotField } from "@/lib/repor
  * what the identical filter means on the Insights page, and a custom
  * field an admin adds becomes an audience filter the moment it exists.
  *
- * A tag is still available as an extra narrowing, so every audience that
- * worked before still works.
- *
  * Everything runs through the caller's RLS-bound client, so a centre head
  * composing a broadcast reaches their centre and no further — the
  * audience is scoped by the same policies as every list they can already
@@ -37,8 +34,6 @@ export interface AudienceSpec {
   entity: AudienceEntity;
   /** `{ fieldKey: value }` — the Insights filter shape. */
   filters: Record<string, string>;
-  /** Leads only. Ignored for students, who don't carry lead tags. */
-  tagId?: string | null;
 }
 
 export interface AudienceMember {
@@ -114,17 +109,7 @@ export async function resolveAudience(
 
   const { data, error } = await query.returns<Array<Record<string, unknown>>>();
   if (error) throw new Error(`resolveAudience(${spec.entity}): ${error.message}`);
-  let rows = data ?? [];
-
-  if (spec.entity === "lead" && spec.tagId) {
-    const { data: tagged } = await supabase
-      .from("lead_tags")
-      .select("lead_id")
-      .eq("tag_id", spec.tagId)
-      .returns<Array<{ lead_id: string }>>();
-    const taggedIds = new Set((tagged ?? []).map((row) => row.lead_id));
-    rows = rows.filter((row) => taggedIds.has(String(row.id)));
-  }
+  const rows = data ?? [];
 
   const matched = applyPivotFilters(
     rows.map((row) => ({

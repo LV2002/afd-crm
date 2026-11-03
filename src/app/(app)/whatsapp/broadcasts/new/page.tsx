@@ -19,11 +19,6 @@ import { createClient } from "@/lib/supabase/server";
 import { listTemplates } from "../../templates/actions";
 import { NewBroadcastForm, type AudienceFieldOptions } from "./new-broadcast-form";
 
-interface TagRow {
-  id: string;
-  name: string;
-}
-
 /**
  * Composing a broadcast: pick who, pick what, see the count, send.
  *
@@ -59,16 +54,9 @@ export default async function NewWhatsAppBroadcastPage() {
     );
   }
 
-  const [leadFields, studentFields, { data: tags }, templateResult] = await Promise.all([
+  const [leadFields, studentFields, templateResult] = await Promise.all([
     optionsFor("lead"),
     optionsFor("student"),
-    supabase
-      .from("tags")
-      .select("id, name")
-      .eq("is_active", true)
-      .is("deleted_at", null)
-      .order("name")
-      .returns<TagRow[]>(),
     listTemplates(),
   ]);
 
@@ -115,7 +103,6 @@ export default async function NewWhatsAppBroadcastPage() {
       <NewBroadcastForm
         leadFields={leadFields}
         studentFields={studentFields}
-        tags={tags ?? []}
         templates={templates}
       />
     </div>

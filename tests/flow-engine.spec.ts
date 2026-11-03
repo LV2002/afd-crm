@@ -156,7 +156,7 @@ describe("validateFlow", () => {
   });
 
   it("notices a flow that never sends anything", () => {
-    const issues = validateFlow([step(1, "add_tag", { tagId: "t" }), step(2, "stop")]);
+    const issues = validateFlow([step(1, "wait", { hours: 1 }), step(2, "stop")]);
     expect(issues.map((issue) => issue.message)).toContain("This flow never sends anything.");
   });
 
@@ -198,7 +198,7 @@ describe("the loop guard", () => {
   it("is small enough to be harmless and larger than any real sequence", () => {
     // Branches may jump backwards, so a flow CAN be written as a loop. The
     // runner stops after this many steps in one pass; without it a loop of
-    // tag steps would spin inside a single request.
+    // wait-less steps would spin inside a single request.
     expect(MAX_STEPS_PER_ADVANCE).toBeGreaterThan(10);
     expect(MAX_STEPS_PER_ADVANCE).toBeLessThan(50);
   });

@@ -63,7 +63,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     href: "/settings/sla",
     label: "SLA Policies",
     description: "Policies, escalation ladders, business hours and holidays",
-    permissions: ["rules.manage"],
+    permissions: ["sla.manage"],
   },
   {
     // Courses and batches are one screen: a batch is a course running at a
@@ -109,13 +109,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     href: "/settings/discount-limits",
     label: "Discount Authority",
     description: "How much each role can take off a fee before it needs approval",
-    permissions: ["settings.manage"],
-  },
-  {
-    href: "/settings/tags",
-    label: "Tags",
-    description: "Labels a lead can carry, for segmentation and retargeting audiences",
-    permissions: ["settings.manage"],
+    permissions: ["discount.manage"],
   },
   {
     href: "/settings/dropdowns",

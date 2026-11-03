@@ -75,6 +75,21 @@ export function dueEscalations(
   return due.length > 0 ? [due[due.length - 1]] : [];
 }
 
+/**
+ * How late a lead is: the time on its clock beyond the policy's target.
+ *
+ * A rung's `at_hours` means "this many hours LATE" — that is what the
+ * editor labels it, what the policy list says, and how people describe it
+ * out loud ("escalate when it's a day late"). The sweep used to hand the
+ * whole elapsed time to `dueEscalations()`, so on a 4-hour target a
+ * "24 hours late" rung fired at 24 hours in, which is 20 hours late. Never
+ * negative: before the target there is no lateness, and a rung is only
+ * considered once the lead is breaching anyway.
+ */
+export function hoursLate(elapsedHours: number, targetHours: number): number {
+  return Math.max(0, elapsedHours - targetHours);
+}
+
 /** All readable rungs on a policy, ladder order. */
 export function policyEscalationSteps(raw: unknown): EscalationStep[] {
   if (!Array.isArray(raw)) return [];

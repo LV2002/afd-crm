@@ -104,7 +104,9 @@ async function makeFlow(label: string, active = true) {
       {
         flowId: flow.id,
         position: 3,
-        kind: "add_tag",
+        // A step written while tags existed. Tags are gone; the run has to
+        // step over it rather than die on it.
+        kind: "add_tag" as never,
         config: {},
       },
       { flowId: flow.id, position: 4, kind: "stop", config: {} },
@@ -234,8 +236,9 @@ describe("resolveReply", () => {
     await advanceRuns();
     expect((await runRow(runId)).status).toBe("waiting");
 
-    // "Yes, interested" jumps to step 3 (add a tag) and then falls off the
-    // end of the list, which completes the run.
+    // "Yes, interested" jumps to step 3 (a leftover "add a tag", which now
+    // does nothing) and then falls off the end of the list, which completes
+    // the run.
     await resolveReply(leadId, "Yes, interested");
 
     const row = await runRow(runId);
@@ -247,6 +250,7 @@ describe("resolveReply", () => {
       .from(whatsappFlowRunEvents)
       .where(eq(whatsappFlowRunEvents.runId, runId));
     expect(events.map((event) => event.kind)).toContain("replied");
+    expect(events.map((event) => event.kind)).toContain("skipped");
   });
 
   it("takes the other branch for a different answer", async () => {

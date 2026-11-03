@@ -1,9 +1,9 @@
-import { asc, eq, isNull } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 
 import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { centers, tags } from "@/lib/db/schema";
+import { centers } from "@/lib/db/schema";
 import { loadTemperatureOptionsDirect } from "@/lib/leads/temperature-options-direct";
 import { createClient } from "@/lib/supabase/server";
 
@@ -18,13 +18,8 @@ export default async function NewWhatsAppFlowPage() {
   if (!user || !can(user, "whatsapp.campaign")) return <AccessDenied />;
 
   const supabase = await createClient();
-  const [temperatureOptions, tagRows, centerRows, ruleOptions] = await Promise.all([
+  const [temperatureOptions, centerRows, ruleOptions] = await Promise.all([
     loadTemperatureOptionsDirect(),
-    db
-      .select({ id: tags.id, name: tags.name })
-      .from(tags)
-      .where(isNull(tags.deletedAt))
-      .orderBy(asc(tags.name)),
     db
       .select({ id: centers.id, name: centers.name })
       .from(centers)
@@ -49,7 +44,6 @@ export default async function NewWhatsAppFlowPage() {
           description: "",
           triggerType: "temperature_entered",
           temperature: "",
-          tagId: "",
           keywords: "",
           centerId: "",
           appliesTo: [],
@@ -57,7 +51,6 @@ export default async function NewWhatsAppFlowPage() {
         statuses={temperatureOptions
           .filter((option) => option.isActive)
           .map((option) => ({ value: option.value, label: option.label }))}
-        tags={tagRows}
         centers={centerRows}
         fields={ruleOptions.fields}
         optionsByField={ruleOptions.optionsByField}

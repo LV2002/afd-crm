@@ -9,7 +9,7 @@ a name anywhere in the system.
 badges for the assigned counsellor and centre.
 
 **Under that**: the **status bar** — stage on the left, temperature on the
-right — and the tag strip.
+right.
 
 ### Changing stage and temperature
 
@@ -205,18 +205,11 @@ The values update, and the change is written to the audit log.
   fills in a form with one number and does their talking on another. Leave
   it blank when they are the same.
 
-## 6.6 Tags
+## 6.6 Tags (removed)
 
-Tags are labels for segmentation — "scholarship", "parent is an alumnus",
-"wants hostel".
-
-### Procedure: add or remove a tag
-1. Open the lead.
-2. In the tag strip, open **+ Add tag** and choose one.
-3. To remove, press the small × beside the tag.
-
-Tags are filterable on the leads list and can drive retargeting
-audiences. An administrator creates them in Settings → Tags.
+Tags no longer exist in the CRM. Segment with the status, source, exam and
+custom fields instead — every one of them is a filter on the leads list and
+an audience for a broadcast.
 
 ## 6.7 Duplicates and merging
 

@@ -13,7 +13,6 @@ import {
   roles,
   rolePermissions,
   slaPolicies,
-  tags,
   temperatureRules,
   terminology,
 } from "@/lib/db/schema";
@@ -39,7 +38,6 @@ const GUARD_TABLES = [
   { name: "business_hours", table: businessHours },
   { name: "holidays", table: holidays },
   { name: "fee_structures", table: feeStructures },
-  { name: "tags", table: tags },
   { name: "dashboard_layouts", table: dashboardLayouts },
 ] as const;
 
@@ -103,7 +101,6 @@ export async function importConfig(bundle: ConfigBundle): Promise<ImportConfigRe
     if (bundle.businessHours.length > 0) await tx.insert(businessHours).values(bundle.businessHours);
     if (bundle.holidays.length > 0) await tx.insert(holidays).values(bundle.holidays);
     if (bundle.feeStructures.length > 0) await tx.insert(feeStructures).values(bundle.feeStructures);
-    if (bundle.tags.length > 0) await tx.insert(tags).values(bundle.tags);
     // After roles: every row points at one by id.
     if (bundle.dashboardLayouts.length > 0)
       await tx.insert(dashboardLayouts).values(bundle.dashboardLayouts);
@@ -123,7 +120,6 @@ export async function importConfig(bundle: ConfigBundle): Promise<ImportConfigRe
         businessHours: bundle.businessHours.length,
         holidays: bundle.holidays.length,
         feeStructures: bundle.feeStructures.length,
-        tags: bundle.tags.length,
         dashboardLayouts: bundle.dashboardLayouts.length,
       },
     };
