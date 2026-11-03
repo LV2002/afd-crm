@@ -21,8 +21,8 @@
  * fetching, this file only says what exists.
  */
 
-/** Leads and students are different tables and different people; a variable says which it can speak about. */
-export type MergeEntity = "lead" | "student";
+/** Leads, students and database contacts are different tables and different people; a variable says which it can speak about. */
+export type MergeEntity = "lead" | "student" | "contact";
 
 export interface MergeVariable {
   key: string;
@@ -43,27 +43,27 @@ export const MERGE_VARIABLES: readonly MergeVariable[] = [
   {
     key: "first_name",
     label: "First name",
-    entities: ["lead", "student"],
+    entities: ["lead", "student", "contact"],
     example: "Anjali",
     note: "The first word of the name on the record, without Mr/Ms/Dr.",
   },
   {
     key: "full_name",
     label: "Full name",
-    entities: ["lead", "student"],
+    entities: ["lead", "student", "contact"],
     example: "Anjali Menon",
   },
   {
     key: "course",
     label: "Course",
-    entities: ["lead", "student"],
+    entities: ["lead", "student", "contact"],
     example: "Foundation",
     note: "For leads this is the course they enquired about, which may be blank.",
   },
   {
     key: "center_name",
     label: "Centre",
-    entities: ["lead", "student"],
+    entities: ["lead", "student", "contact"],
     example: "Kochi",
   },
   {

@@ -36,7 +36,7 @@ export default async function NewWhatsAppBroadcastPage() {
 
   async function optionsFor(entity: AudienceEntity): Promise<AudienceFieldOptions[]> {
     const fields = await audienceFields(supabase, user!, entity);
-    const schema = await getFieldSchema(supabase, entity, user!);
+    const schema = await getFieldSchema(supabase, entity === "contact" ? "lead" : entity, user!);
     return Promise.all(
       fields.map(async (field) => {
         let options: FieldOption[] = [];
@@ -54,11 +54,20 @@ export default async function NewWhatsAppBroadcastPage() {
     );
   }
 
-  const [leadFields, studentFields, templateResult] = await Promise.all([
+  const [leadFields, studentFields, templateResult, { data: listRows }] = await Promise.all([
     optionsFor("lead"),
     optionsFor("student"),
     listTemplates(),
+    // Empty for anybody without `contact.read`, which is what hides the
+    // Database choice from them: RLS decides, not this page.
+    supabase
+      .from("contact_lists")
+      .select("id, name, use_for_whatsapp")
+      .is("archived_at", null)
+      .order("name")
+      .returns<Array<{ id: string; name: string; use_for_whatsapp: boolean }>>(),
   ]);
+  const contactLists = (listRows ?? []).map((l) => ({ id: l.id, name: l.name, agreed: l.use_for_whatsapp }));
 
   // Only approved templates can actually be sent, so only approved ones
   // are offered. Anything else in the list would be a send that fails at
@@ -103,6 +112,7 @@ export default async function NewWhatsAppBroadcastPage() {
       <NewBroadcastForm
         leadFields={leadFields}
         studentFields={studentFields}
+        contactLists={contactLists}
         templates={templates}
       />
     </div>

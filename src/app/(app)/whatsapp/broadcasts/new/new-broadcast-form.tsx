@@ -73,10 +73,13 @@ export interface TemplateChoice {
 export function NewBroadcastForm({
   leadFields,
   studentFields,
+  contactLists,
   templates,
 }: {
   leadFields: AudienceFieldOptions[];
   studentFields: AudienceFieldOptions[];
+  /** Lists in the contact database. Empty when the person cannot see the database. */
+  contactLists: Array<{ id: string; name: string; agreed: boolean }>;
   templates: TemplateChoice[];
 }) {
   const [state, formAction, pending] = useActionState(createBroadcast, initialState);
@@ -89,7 +92,9 @@ export function NewBroadcastForm({
   const [sendMode, setSendMode] = useState<"now" | "schedule">("now");
   const [scheduledAt, setScheduledAt] = useState("");
 
-  const fields = entity === "lead" ? leadFields : studentFields;
+  // A contact carries the lead fields, so the same filters apply to it.
+  const fields = entity === "student" ? studentFields : leadFields;
+  const [listIds, setListIds] = useState<string[]>([]);
   const template = templates.find((t) => t.name === templateName) ?? null;
   const serialisedFilters = JSON.stringify(filters);
   const variables = mergeVariablesFor(entity);
@@ -150,6 +155,7 @@ export function NewBroadcastForm({
     // have different field definitions — so the filters reset rather than
     // silently carrying a key the new entity has never heard of.
     setFilters({});
+    setListIds([]);
     setPreview(null);
     // A student has no counsellor and a lead has no batch, so a variable
     // chosen for one entity can be meaningless on the other. Rather than
@@ -178,6 +184,7 @@ export function NewBroadcastForm({
   function runPreview() {
     const data = new FormData();
     data.set("entity", entity);
+    for (const id of listIds) data.append("listIds", id);
     data.set("filters", serialisedFilters);
     data.set("bodyParams", serialisedSources);
     startPreview(async () => setPreview(await previewAudience(data)));
@@ -190,6 +197,7 @@ export function NewBroadcastForm({
       {/* The audience travels as hidden fields so the server resolves it
           from the same values the preview used. */}
       <input type="hidden" name="entity" value={entity} />
+      {entity === "contact" && listIds.map((id) => <input key={id} type="hidden" name="listIds" value={id} />)}
       <input type="hidden" name="filters" value={serialisedFilters} />
       <input type="hidden" name="bodyParams" value={serialisedSources} />
       <input type="hidden" name="sendMode" value={sendMode} />
@@ -198,7 +206,7 @@ export function NewBroadcastForm({
         <h3 className="text-sm font-semibold">Who it goes to</h3>
 
         <div className="flex gap-1">
-          {(["lead", "student"] as const).map((value) => (
+          {(contactLists.length > 0 ? (["lead", "student", "contact"] as const) : (["lead", "student"] as const)).map((value) => (
             <button
               key={value}
               type="button"
@@ -208,10 +216,37 @@ export function NewBroadcastForm({
                 entity === value ? "bg-accent" : "text-muted-foreground hover:bg-accent/50",
               )}
             >
-              {value === "lead" ? "Leads" : "Students"}
+              {value === "lead" ? "Leads" : value === "student" ? "Students" : "Database"}
             </button>
           ))}
         </div>
+
+        {entity === "contact" && (
+          <div className="flex flex-col gap-2 rounded-md border p-3">
+            <p className="text-sm font-medium">Which lists</p>
+            <p className="text-xs text-muted-foreground">
+              Goes only to people on these lists who are <strong>not leads</strong>. Anyone who has become a lead is left out; the
+              Leads choice reaches them. Only lists marked as having agreed to WhatsApp can be chosen.
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {contactLists.map((list) => (
+                <label key={list.id} className={cn("flex items-center gap-2 text-sm", !list.agreed && "opacity-60")}>
+                  <input
+                    type="checkbox"
+                    disabled={!list.agreed}
+                    checked={listIds.includes(list.id)}
+                    onChange={(e) => {
+                      setListIds((cur) => (e.target.checked ? [...cur, list.id] : cur.filter((id) => id !== list.id)));
+                      setPreview(null);
+                    }}
+                  />
+                  {list.name}
+                  {!list.agreed && <span className="text-xs text-muted-foreground">— not marked as agreed to WhatsApp</span>}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/*
           Open by default. Every lead field was already targetable here —
@@ -284,6 +319,8 @@ export function NewBroadcastForm({
               `${preview.duplicatePhone} share a number with somebody already on the list and get one message between them. `}
             {preview.doNotContact > 0 &&
               `${preview.doNotContact} marked do-not-contact are excluded everywhere. `}
+            {(preview.alreadyLeads ?? 0) > 0 &&
+              `${preview.alreadyLeads} are already leads and are left out — message them through Leads. `}
             {preview.noConsent > 0 &&
               `${preview.noConsent} have opted out of messaging, or joined before consent was recorded.`}
           </p>

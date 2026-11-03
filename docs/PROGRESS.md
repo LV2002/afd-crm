@@ -8893,3 +8893,11 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 - **Retargeting:** the hourly Meta and Google sync also sends eligible contacts (phone, on a list that allows ads, not a lead) and removes them when they stop being eligible. Anyone who is or becomes a lead is left to the lead rules, which exclude admitted students.
 - Migrations 0115 (tables, permissions, RLS) and 0116 (audience membership).
 - Not built: WhatsApp broadcasts to the database (the "agreed to WhatsApp" tick is recorded but not yet used); a seminar sign-up form/QR; an erase-on-request step; export (deliberately none); "conversion by list" reporting; filtering the list by "already a lead but not yet merged".
+
+## WhatsApp broadcasts to the database, and a shorter SLA/targets/discounts guide
+
+- **Broadcasts can target the contact database.** New broadcast → **Database** (beside Leads and Students) → tick one or more **lists** (they act as the tags) and optionally narrow with the usual lead-field filters. Goes only to people on those lists who are **not leads**; anyone who is or matches a lead is left out and counted ("N are already leads"). Only lists ticked "agreed to WhatsApp" can be chosen (an unticked list is refused by name). Opt-outs are skipped. The recipient is a contact, and the broadcast records which lists it went to.
+- **Checked again when each message is sent**: a contact who has become a lead, been removed, or whose list lost its tick is skipped with the reason shown.
+- Personalisation works for first name, full name, course and centre; counsellor, batch and fee variables are not offered for the database.
+- Migration 0117. Not built: multi-step automation flows for the database (they run on leads only), and recognising a database contact's reply in the inbox beyond the usual "Not in the CRM" thread.
+- `docs/SLA-TARGETS-DISCOUNTS-GUIDE.md` rewritten as a short plain-language explainer with examples.

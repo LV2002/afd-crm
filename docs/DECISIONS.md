@@ -4895,3 +4895,15 @@ Leon wants voice notes, messages, photos and videos in the inbox, and does not w
 **No export, deliberately.** Counsellors can see the whole database; a CSV download would let one take it (non-negotiable #6). Not added until somebody asks, and it would be its own permission.
 
 **Phone-or-email identity.** A contact needs a name and a phone or an email, a lead needs a phone: an email-only contact cannot be moved until a phone is added, and the screen says so.
+
+## 2026-11-03 — Broadcasts to the database: lists are the selector, consent is the list's tick
+
+Leon wants to send a WhatsApp broadcast "only to the database, not the people in my leads". The lists already group the database, so they are the selector (no separate tags), and a broadcast records the `audience_list_ids` it went to.
+
+**The audience is disjoint from the leads.** A contact who is linked to a lead, or whose phone or email belongs to one, is excluded and counted. Leads have their own audience with their own consent; mixing them would let a database send reach somebody a counsellor is working. Checked at compose time and again at send time (a broadcast can wait or take days to drain).
+
+**Consent is the list's tick,** "These people agreed to WhatsApp messages". A list without it cannot be chosen, and the refusal names it: contacts have no per-person consent field, so the list is the only record, and a number that never opted in is how a WhatsApp number is restricted.
+
+**Automation flows are not extended.** A flow run is keyed to a lead (its steps, waits and replies hang off one), so a sequence for contacts would need its own run model. A one-off bulk message was the ask that could be done safely now; sequences are a larger piece and are left for a decision.
+
+**Contact reads use the caller's RLS client,** so `contact.read` is what lets somebody compose to them; the lead-exclusion lookup is existence-only on the direct client.

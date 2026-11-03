@@ -33,7 +33,7 @@ Every contact belongs to at least one **list**: one batch with one origin, such 
 
 * **Where they came from**, which becomes the lead's source if one of them is moved into the leads.
 * **May be used for Meta and Google retargeting** (ticked by default).
-* **These people agreed to WhatsApp messages.** Recorded now; broadcasts to the database are not switched on yet.
+* **These people agreed to WhatsApp messages.** Only lists with this ticked can be chosen when you send a WhatsApp broadcast to the database.
 
 The same person can be on several lists. They are **one contact**: a student at a seminar who is also in a purchased
 exam database is one row on two lists, never retargeted twice.
@@ -81,6 +81,24 @@ Every hour, the Meta and Google audience sync also sends the database, by these 
   is archived.
 
 Because contacts and leads are kept apart in the audience, nobody is in it twice.
+
+## WhatsApp broadcasts to the database
+
+**Chats → Broadcasts → New broadcast** now has three choices at the top: **Leads**, **Students** and **Database**.
+
+* Pick **Database**, then tick the **lists** to send to (the lists act as your tags: "St Xavier's seminar", "NATA applicants").
+  The same filters as for leads (class, city, exam and so on) narrow it further.
+* The message goes **only to people on those lists who are not leads**. Anyone who has become a lead is left out and
+  counted ("12 are already leads and are left out"); the Leads choice reaches them. The reverse is also true: a
+  broadcast to Leads never reaches the database.
+* Only lists ticked **"These people agreed to WhatsApp messages"** can be chosen. Picking one that isn't is refused by name.
+* People who replied STOP are skipped, as for every broadcast.
+* It is checked again at the moment each message is sent. Someone who became a lead since you composed it, was removed,
+  or whose list lost the tick is skipped, with the reason shown.
+* Replies come into the same Chats inbox as "Not in the CRM" conversations.
+
+**Not built:** multi-step **automation flows** (a message, a wait, a follow-up depending on the reply) still run on
+leads only. A one-off bulk message to the database works; a sequence does not yet.
 
 ## Things to know
 
