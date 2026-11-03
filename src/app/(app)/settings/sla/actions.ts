@@ -58,7 +58,7 @@ export async function createSlaPolicy(
   formData: FormData,
 ): Promise<SlaFormState> {
   const user = await getCurrentUser();
-  if (!user || !can(user, "rules.manage")) {
+  if (!user || !can(user, "sla.manage")) {
     return { error: "You don't have permission to do that." };
   }
 
@@ -139,7 +139,7 @@ export async function createSlaPolicy(
 
 export async function deleteSlaPolicy(policyId: string): Promise<{ error?: string }> {
   const user = await getCurrentUser();
-  if (!user || !can(user, "rules.manage")) {
+  if (!user || !can(user, "sla.manage")) {
     return { error: "You don't have permission to do that." };
   }
 
@@ -160,7 +160,7 @@ export async function deleteSlaPolicy(policyId: string): Promise<{ error?: strin
 
 export async function setSlaPolicyActive(policyId: string, isActive: boolean): Promise<void> {
   const user = await getCurrentUser();
-  if (!user || !can(user, "rules.manage")) return;
+  if (!user || !can(user, "sla.manage")) return;
 
   const supabase = await createClient();
   const { error } = await supabase.from("sla_policies").update({ is_active: isActive }).eq("id", policyId);
@@ -184,7 +184,7 @@ export async function saveBusinessHours(
   formData: FormData,
 ): Promise<SlaFormState> {
   const user = await getCurrentUser();
-  if (!user || !can(user, "rules.manage")) {
+  if (!user || !can(user, "sla.manage")) {
     return { error: "You don't have permission to do that." };
   }
 
@@ -230,7 +230,7 @@ export async function createHoliday(
   formData: FormData,
 ): Promise<SlaFormState> {
   const user = await getCurrentUser();
-  if (!user || !can(user, "rules.manage")) {
+  if (!user || !can(user, "sla.manage")) {
     return { error: "You don't have permission to do that." };
   }
 
@@ -261,7 +261,7 @@ export async function createHoliday(
 
 export async function deleteHoliday(holidayId: string): Promise<void> {
   const user = await getCurrentUser();
-  if (!user || !can(user, "rules.manage")) return;
+  if (!user || !can(user, "sla.manage")) return;
 
   const supabase = await createClient();
   const { error } = await supabase.from("holidays").delete().eq("id", holidayId);

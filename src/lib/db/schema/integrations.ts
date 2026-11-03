@@ -1,7 +1,17 @@
 import { sql } from "drizzle-orm";
-import { pgEnum, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 import { idColumn, timestamps } from "./_helpers";
+import { leads, temperatureHistory } from "./leads";
 
 /**
  * "Plug and play" integrations (Meta, Google, WhatsApp, telephony): every
@@ -48,5 +58,50 @@ export const integrationCredentials = pgTable(
     uniqueIndex("integration_credentials_scoped_key_uq")
       .on(t.provider, t.key, t.scopeId)
       .where(sql`scope_id is not null`),
+  ],
+);
+
+/**
+ * Status changes waiting to be reported to the marketing sheet, and the
+ * record of having reported them.
+ *
+ * One row per `temperature_history` row, so "has this change been sent?" is
+ * answered by a join rather than a flag on the lead that would have to be
+ * kept in step. The receiving script stores a repeated event once, which is
+ * what makes retrying after a failure safe; the rows here exist so a
+ * failure is never silent and nothing is sent twice by this side either.
+ *
+ * Never holds a name or phone number: `note` is course and centre only.
+ */
+export const outcomeEvents = pgTable(
+  "outcome_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** The status change this reports. Unique: one event per change. */
+    historyId: uuid("history_id")
+      .notNull()
+      .references(() => temperatureHistory.id, { onDelete: "cascade" }),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => leads.id, { onDelete: "cascade" }),
+    submissionId: text("submission_id").notNull(),
+    /** contacted | demo_booked | admitted | lost — see lib/outcomes/status.ts. */
+    status: text("status").notNull(),
+    eventAt: timestamp("event_at", { withTimezone: true }).notNull(),
+    revenueInr: integer("revenue_inr"),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    /** Set when the change is deliberately not reported (same status as before, bad id, refused). */
+    skippedReason: text("skipped_reason"),
+  },
+  (t) => [
+    uniqueIndex("outcome_events_history_uq").on(t.historyId),
+    index("outcome_events_pending_idx")
+      .on(t.eventAt)
+      .where(sql`sent_at is null and skipped_reason is null`),
+    index("outcome_events_lead_idx").on(t.leadId),
   ],
 );

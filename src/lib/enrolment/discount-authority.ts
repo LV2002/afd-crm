@@ -206,3 +206,24 @@ export function describeLimit(limit: DiscountLimit): string {
   if (parts.length === 1) return `You can give up to ${parts[0]} without approval.`;
   return `You can give up to ${parts[0]} or ${parts[1]}, whichever is lower, without approval.`;
 }
+
+/**
+ * Is `candidate` no more generous than `ceiling`?
+ *
+ * Used when somebody who is not unlimited sets another role's limit: they
+ * may give a role up to what they hold themselves, never more. On each axis
+ * where the ceiling is set, the candidate has to be set too and no higher —
+ * a blank candidate on that axis means "no ceiling", which is more than any
+ * number. An axis the ceiling leaves blank constrains nothing.
+ */
+export function limitWithin(candidate: DiscountLimit, ceiling: DiscountLimit): boolean {
+  if (ceiling.isUnlimited) return true;
+  if (candidate.isUnlimited) return false;
+  if (ceiling.maxPercent !== null) {
+    if (candidate.maxPercent === null || candidate.maxPercent > ceiling.maxPercent) return false;
+  }
+  if (ceiling.maxAmountPaise !== null) {
+    if (candidate.maxAmountPaise === null || candidate.maxAmountPaise > ceiling.maxAmountPaise) return false;
+  }
+  return true;
+}

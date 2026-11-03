@@ -16,7 +16,6 @@ import {
   roles,
   rolePermissions,
   slaPolicies,
-  tags,
   temperatureRules,
   terminology,
 } from "@/lib/db/schema";
@@ -50,7 +49,6 @@ export async function exportConfig(): Promise<ConfigBundle> {
     businessHoursRows,
     holidayRows,
     feeStructureRows,
-    tagRows,
     dashboardLayoutRows,
   ] = await Promise.all([
     db.select().from(orgSettings),
@@ -66,7 +64,6 @@ export async function exportConfig(): Promise<ConfigBundle> {
     db.select().from(businessHours),
     db.select().from(holidays),
     db.select().from(feeStructures).where(isNull(feeStructures.deletedAt)),
-    db.select().from(tags).where(isNull(tags.deletedAt)),
     db.select().from(dashboardLayouts),
   ]);
 
@@ -86,7 +83,6 @@ export async function exportConfig(): Promise<ConfigBundle> {
     businessHours: businessHoursRows,
     holidays: holidayRows,
     feeStructures: feeStructureRows,
-    tags: tagRows,
     dashboardLayouts: dashboardLayoutRows,
   };
 }

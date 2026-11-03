@@ -328,8 +328,8 @@ counsellor, and somebody has to answer it.
 **Chats** → **Automations** (`whatsapp.campaign`). A sequence that runs
 by itself when something happens.
 
-**What can start one**: a lead being created, a lead entering a stage, a
-tag being added, an inbound keyword, or starting it by hand.
+**What can start one**: a lead being created, a lead entering a stage, an
+inbound keyword, or starting it by hand.
 
 **Who it then goes to** — *Only for these leads* narrows it further, with
 the same point-and-click conditions as the assignment rules: stage, lead
@@ -345,8 +345,8 @@ decides **for whom**.
 Leave it empty and the automation reaches everybody the trigger fires
 for, which is what every automation built before this did.
 
-**What a step can be**: send a template, wait, wait for a reply, add a
-tag, set a stage, notify the owner, or stop.
+**What a step can be**: send a template, wait, wait for a reply, set a
+stage, notify the owner, or stop.
 
 The editor has **The steps**, **Settings**, and **Who has been through
 it** so you can see what the automation has actually done.
@@ -354,7 +354,7 @@ it** so you can see what the automation has actually done.
 ### Procedure: build a simple follow-up automation
 1. **Chats** → **Automations** → **New automation**.
 2. Give it a name, for example *NIFT enquiry follow-up*.
-3. Choose the trigger — *Pick a stage* or *Pick a tag* as appropriate.
+3. Choose the trigger — *Pick a stage*, or another trigger as appropriate.
    Then, if this sequence is only for some of them, add conditions under
    *Only for these leads*.
 4. Add steps: a template, a wait, a wait-for-reply with answers

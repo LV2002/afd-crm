@@ -20,7 +20,7 @@ import {
 } from "../src/lib/notifications/events";
 import { renderTemplate, templateVariables, unknownVariables } from "../src/lib/notifications/render";
 import { resolveRecipients, type RecipientCandidate } from "../src/lib/notifications/recipients";
-import { dueEscalations, parseEscalationStep, policyEscalationSteps } from "../src/lib/sla/escalations";
+import { dueEscalations, hoursLate, parseEscalationStep, policyEscalationSteps } from "../src/lib/sla/escalations";
 
 const KOCHI = "center-kochi";
 const KANNUR = "center-kannur";
@@ -283,5 +283,21 @@ describe("SLA escalation ladder", () => {
     const immediate = policyEscalationSteps([{ at_hours: 0, notify_roles: ["role-a"] }]);
     expect(dueEscalations(immediate, 0.5, null).map((s) => s.atHours)).toEqual([0]);
     expect(dueEscalations(immediate, 0.5, 0)).toEqual([]);
+  });
+});
+
+describe("hoursLate — rungs are measured past the target", () => {
+  it("is the time beyond the target, never negative", () => {
+    expect(hoursLate(10, 4)).toBe(6);
+    expect(hoursLate(4, 4)).toBe(0);
+    expect(hoursLate(2, 4)).toBe(0);
+  });
+
+  it("makes a '24 hours late' rung wait for 24 hours past a 4-hour target", () => {
+    const ladder = [{ atHours: 24, notifyRoles: [], notifyOwner: true, unassign: false }];
+    // 24 hours in is only 20 late: not yet.
+    expect(dueEscalations(ladder, hoursLate(24, 4), null)).toEqual([]);
+    // 28 hours in is exactly 24 late.
+    expect(dueEscalations(ladder, hoursLate(28, 4), null)).toHaveLength(1);
   });
 });

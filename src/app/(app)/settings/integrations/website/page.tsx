@@ -5,6 +5,9 @@ import { recentWebhookDeliveries } from "@/lib/integrations/recent-deliveries";
 import { createClient } from "@/lib/supabase/server";
 
 import { getWebsiteStatus } from "./actions";
+import { getOutcomeStatus } from "@/lib/outcomes/publish";
+
+import { OutcomesPanel } from "./outcomes-panel";
 import { SecretPanel } from "./secret-panel";
 
 export const dynamic = "force-dynamic";
@@ -147,6 +150,7 @@ export default async function WebsiteIntegrationPage() {
   const deliveries = await recentWebhookDeliveries(await createClient(), "website");
 
   const { configured } = await getWebsiteStatus();
+  const outcomes = await getOutcomeStatus();
 
   return (
     <div className="flex flex-col gap-8">
@@ -246,6 +250,17 @@ export default async function WebsiteIntegrationPage() {
           deliveries={deliveries}
           emptyHint="Your website has never posted here. Check the Apps Script or form handler is posting to the webhook URL above with the signing secret."
         />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">5. Report what happens to each enquiry</h2>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Every time a website lead&rsquo;s status changes (contacted, admitted, lost), the CRM tells
+          your marketing sheet, so it can show which pages and sources bring admissions and
+          revenue. Only the enquiry&rsquo;s id, the outcome, the time, and for an admission the fee,
+          course and centre are sent &mdash; never a name or a phone number.
+        </p>
+        <OutcomesPanel status={outcomes} />
       </section>
     </div>
   );

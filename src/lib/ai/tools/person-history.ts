@@ -7,13 +7,11 @@ import {
   enquiries,
   enrolmentInstalments,
   enrolments,
-  leadTags,
   leads,
   payments,
   profiles,
   receipts,
   students,
-  tags,
 } from "@/lib/db/schema";
 import { formatINR } from "@/lib/format/currency";
 import { maskPhone } from "@/lib/leads/mask-phone";
@@ -134,7 +132,6 @@ export async function personHistory(leadId: string, canRevealPhone: boolean) {
     centreRow,
     counsellorRow,
     enquiryRows,
-    tagRows,
     enrolmentRow,
   ] = await Promise.all([
     lead.centerId
@@ -148,11 +145,6 @@ export async function personHistory(leadId: string, canRevealPhone: boolean) {
       .from(enquiries)
       .where(eq(enquiries.leadId, leadId))
       .orderBy(asc(enquiries.receivedAt)),
-    db
-      .select({ name: tags.name })
-      .from(leadTags)
-      .innerJoin(tags, eq(tags.id, leadTags.tagId))
-      .where(eq(leadTags.leadId, leadId)),
     db
       .select()
       .from(enrolments)
@@ -226,7 +218,6 @@ export async function personHistory(leadId: string, canRevealPhone: boolean) {
       centre: centreRow[0]?.name ?? null,
       counsellor: counsellorRow[0]?.name ?? null,
       temperature: temperatureLabel,
-      tags: tagRows.map((row) => row.name),
     },
     enquiry: {
       firstEnquiryAt: firstEnquiryAt?.toISOString() ?? null,

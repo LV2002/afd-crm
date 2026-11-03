@@ -28,7 +28,7 @@ function paiseToInput(paise: number | null): string {
 
 export default async function DiscountLimitsPage() {
   const user = await getCurrentUser();
-  if (!user || !can(user, "settings.manage")) return <AccessDenied />;
+  if (!user || !can(user, "discount.manage")) return <AccessDenied />;
 
   const rows = await db
     .select({

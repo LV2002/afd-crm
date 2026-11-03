@@ -26,7 +26,9 @@ export const dynamic = "force-dynamic";
 const TRIGGER_LABELS: Record<string, string> = {
   lead_created: "A new lead arrives",
   temperature_entered: "A lead's temperature changes",
-  tag_added: "A tag is put on a lead",
+  // Tags were removed. A flow that still has this trigger never starts; it is
+  // paused, and its owner is told to choose another trigger.
+  tag_added: "A tag is put on a lead (removed — pick another trigger)",
   inbound_keyword: "Somebody messages us a word",
   manual: "Started by hand",
 };

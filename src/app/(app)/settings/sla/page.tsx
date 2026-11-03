@@ -1,3 +1,5 @@
+import { AccessDenied } from "@/components/layout/access-denied";
+import { can, getCurrentUser } from "@/lib/auth/session";
 import type { RuleConditions } from "@/lib/assignment/evaluate-conditions";
 import { describeConditions } from "@/lib/rules/describe-rule";
 import { describeEscalationLadder } from "@/lib/sla/policy-copy";
@@ -10,6 +12,9 @@ import { PolicyForm } from "./policy-form";
 import { PolicyRow, type SlaPolicyData } from "./policy-row";
 
 export default async function SlaSettingsPage() {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "sla.manage")) return <AccessDenied />;
+
   const supabase = await createClient();
 
   const [{ data: policyRows }, { data: centers }, { data: hours }, { data: holidays }, ruleOptions] =

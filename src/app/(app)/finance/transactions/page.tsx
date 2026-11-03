@@ -19,6 +19,7 @@ import {
   reversedIds,
 } from "@/lib/finance/get-finance";
 import { signedAmount } from "@/lib/finance/ledger-math";
+import { getFinanceCenterId } from "@/lib/finance/center-filter";
 import { createClient } from "@/lib/supabase/server";
 
 import { EntryActions } from "./entry-actions";
@@ -41,20 +42,23 @@ export default async function FinanceTransactionsPage({
   const { from, to, kind } = await searchParams;
   const user = await getCurrentUser();
   const supabase = await createClient();
+  const centerId = await getFinanceCenterId(supabase);
 
   const [accounts, entries] = await Promise.all([
-    getAccountsWithBalances(supabase, { includeInactive: true }),
+    getAccountsWithBalances(supabase, { includeInactive: true, centerId }),
     getLedgerEntries(supabase, {
+      centerId,
       from,
       to,
       kind: isKind(kind) ? kind : undefined,
+      newest: true,
       limit: 500,
     }),
   ]);
 
   const reversed = reversedIds(entries);
   const accountNames = new Map(accounts.map((a) => [a.id, a.name]));
-  const newestFirst = entries.slice().reverse();
+  const newestFirst = entries;
   const canManage = Boolean(user && can(user, "finance.manage"));
   // A fee row is undone through its payment, which is its own permission:
   // taking money is not the same authority as giving it back.

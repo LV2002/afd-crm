@@ -8,7 +8,6 @@ import {
 } from "@/lib/assignment/evaluate-conditions";
 import { db } from "@/lib/db/client";
 import {
-  leadTags,
   leads,
   whatsappFlowRunEvents,
   whatsappFlowRuns,
@@ -111,7 +110,7 @@ async function endRun(runId: string, status: string, reason: string): Promise<vo
  */
 export async function startFlows(
   trigger: FlowTrigger,
-  input: { leadId: string; temperature?: string | null; tagId?: string | null; text?: string | null },
+  input: { leadId: string; temperature?: string | null; text?: string | null },
 ): Promise<number> {
   try {
     // The whole row, not three columns: a flow's `applies_to` conditions
@@ -177,12 +176,11 @@ export async function startFlows(
 function triggerMatches(
   trigger: string,
   config: Record<string, unknown> | null,
-  input: { temperature?: string | null; tagId?: string | null; text?: string | null },
+  input: { temperature?: string | null; text?: string | null },
 ): boolean {
   if (trigger === "lead_created" || trigger === "manual") return true;
   if (trigger === "temperature_entered")
     return Boolean(config?.temperature) && config?.temperature === input.temperature;
-  if (trigger === "tag_added") return Boolean(config?.tagId) && config?.tagId === input.tagId;
   if (trigger === "inbound_keyword") {
     const keywords = Array.isArray(config?.keywords) ? config.keywords : [];
     const text = (input.text ?? "").trim().toLowerCase();
@@ -343,6 +341,17 @@ async function runOne(run: RunRow, steps: FlowStep[]): Promise<void> {
       return;
     }
 
+    /*
+      Tags were removed from the CRM. A flow written while they existed may
+      still have a "put a tag on them" step; it is skipped rather than
+      stopping the run, so the messages after it still go out.
+    */
+    if ((current.kind as string) === "add_tag") {
+      await logEvent(run.id, current.id, "skipped", "Tags no longer exist, so this step did nothing.");
+      current = nextStep(steps, current.position);
+      continue;
+    }
+
     switch (current.kind) {
       case "send_template": {
         let outcome;
@@ -415,16 +424,6 @@ async function runOne(run: RunRow, steps: FlowStep[]): Promise<void> {
           .where(eq(whatsappFlowRuns.id, run.id));
         await logEvent(run.id, current.id, "waited", describeStep(current));
         return;
-      }
-
-      case "add_tag": {
-        const tagId = (current.config as { tagId?: unknown }).tagId;
-        if (typeof tagId === "string" && tagId) {
-          await db.insert(leadTags).values({ leadId: run.leadId, tagId }).onConflictDoNothing();
-          await logEvent(run.id, current.id, "tagged", null);
-        }
-        current = nextStep(steps, current.position);
-        break;
       }
 
       case "set_temperature": {

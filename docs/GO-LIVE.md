@@ -150,7 +150,7 @@ Clears every record of something that happened. Keeps everything you set up.
 | Uploaded files | Fee structures, offers, discount limits |
 | WhatsApp messages and broadcasts sent | WhatsApp templates and automations |
 | Notifications, audit log, error log | Notification rules, dashboards, terminology |
-| Merge queue, webhook log, ad spend | Assignment rules, tags, targets, logo and branding |
+| Merge queue, webhook log, ad spend | Assignment rules, targets, logo and branding |
 | | **People who replied STOP** — see below |
 
 Lead numbers, receipt numbers and student codes all start again at 1.

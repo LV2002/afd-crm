@@ -16,7 +16,6 @@ import { db } from "@/lib/db/client";
 import {
   centers,
   leads,
-  tags,
   whatsappFlowRuns,
   whatsappFlowSteps,
   whatsappFlows,
@@ -63,7 +62,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
   if (!flow) notFound();
 
   const supabase = await createClient();
-  const [stepRows, temperatureOptions, tagRows, centerRows, templateResult, runRows, ruleOptions] =
+  const [stepRows, temperatureOptions, centerRows, templateResult, runRows, ruleOptions] =
     await Promise.all([
       db
         .select()
@@ -71,11 +70,6 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
         .where(eq(whatsappFlowSteps.flowId, id))
         .orderBy(asc(whatsappFlowSteps.position)),
       loadTemperatureOptionsDirect(),
-      db
-        .select({ id: tags.id, name: tags.name })
-        .from(tags)
-        .where(isNull(tags.deletedAt))
-        .orderBy(asc(tags.name)),
       db
         .select({ id: centers.id, name: centers.name })
         .from(centers)
@@ -125,7 +119,6 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
 
   const lists: StepEditorLists = {
     templates,
-    tags: tagRows,
     // What an automation may SET. Took admission needs a confirmed
     // admission and a closing outcome that asks why needs a reason, and a
     // step can supply neither — so they are not offered, rather than
@@ -205,7 +198,6 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
             description: flow.description ?? "",
             triggerType: flow.triggerType as FlowTrigger,
             temperature: String(triggerConfig.temperature ?? ""),
-            tagId: String(triggerConfig.tagId ?? ""),
             keywords: Array.isArray(triggerConfig.keywords)
               ? (triggerConfig.keywords as string[]).join(", ")
               : "",
@@ -215,8 +207,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
           statuses={temperatureOptions
             .filter((option) => option.isActive)
             .map((option) => ({ value: option.value, label: option.label }))}
-          tags={tagRows}
-          centers={centerRows}
+            centers={centerRows}
           fields={ruleOptions.fields}
           optionsByField={ruleOptions.optionsByField}
         />

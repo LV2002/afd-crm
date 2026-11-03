@@ -43,7 +43,6 @@ import { getRawFieldValue } from "@/lib/fields/field-column";
 import { describeLead } from "@/lib/leads/search-leads";
 
 import { LeadEditForm } from "./lead-edit-form";
-import { LeadTagsPanel, type TagOption } from "./lead-tags-panel";
 import { TasksPanel, type TaskRow } from "./tasks-panel";
 
 interface EnrolmentRow {
@@ -158,25 +157,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         .is("deleted_at", null)
         .maybeSingle<EnrolmentRow>(),
     ]);
-
-  const [{ data: leadTagRows }, { data: allTagRows }] = await Promise.all([
-    supabase
-      .from("lead_tags")
-      .select("tag_id, tags(id, name, color)")
-      .eq("lead_id", id)
-      .returns<Array<{ tag_id: string; tags: TagOption | null }>>(),
-    supabase
-      .from("tags")
-      .select("id, name, color")
-      .eq("is_active", true)
-      .order("name")
-      .returns<TagOption[]>(),
-  ]);
-  const currentTags = (leadTagRows ?? [])
-    .map((r) => r.tags)
-    .filter((t): t is TagOption => t !== null);
-  const currentTagIds = new Set(currentTags.map((t) => t.id));
-  const availableTags = (allTagRows ?? []).filter((t) => !currentTagIds.has(t.id));
 
   // No `canReadWhatsApp` here any more. The WhatsApp panel was removed from
   // this page in September 2026 at Leon's request — messaging belongs in the
@@ -326,13 +306,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         currentTemperature={row.temperature ? String(row.temperature) : null}
         admissionStands={enrolment !== null && enrolment.dropped_at === null}
         lostReasonOptions={lostReasonOptions}
-        canEdit={can(user, "lead.update")}
-      />
-
-      <LeadTagsPanel
-        leadId={id}
-        currentTags={currentTags}
-        availableTags={availableTags}
         canEdit={can(user, "lead.update")}
       />
 

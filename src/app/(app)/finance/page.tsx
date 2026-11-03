@@ -18,7 +18,13 @@ import {
   getFinanceConfig,
 } from "@/lib/finance/get-finance";
 import { monthBounds } from "@/lib/finance/ledger-math";
-import { getCollections, getMonthlySeries, getPeriodReport } from "@/lib/finance/reports";
+import {
+  getCenterComparison,
+  getCollections,
+  getMonthlySeries,
+  getPeriodReport,
+} from "@/lib/finance/reports";
+import { getFinanceCenterId, getFinanceCenters } from "@/lib/finance/center-filter";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -31,12 +37,13 @@ import { createClient } from "@/lib/supabase/server";
  */
 export default async function FinanceDashboardPage() {
   const supabase = await createClient();
+  const centerId = await getFinanceCenterId(supabase);
   const today = new Date().toISOString().slice(0, 10);
   const thisMonth = today.slice(0, 7);
   const thisYear = today.slice(0, 4);
 
   const [accounts, categories, config] = await Promise.all([
-    getAccountsWithBalances(supabase),
+    getAccountsWithBalances(supabase, { centerId }),
     getFinanceCategories(supabase),
     getFinanceConfig(supabase),
   ]);
@@ -44,10 +51,12 @@ export default async function FinanceDashboardPage() {
   const accountNames = new Map(accounts.map((a) => [a.id, a.name]));
   const bounds = monthBounds(thisMonth);
 
-  const [month, year, collections, trend] = await Promise.all([
+  const centers = centerId ? [] : await getFinanceCenters(supabase);
+  const [month, year, collections, trend, comparison] = await Promise.all([
     getPeriodReport(supabase, {
       from: bounds.from,
       to: bounds.to,
+      centerId,
       expenseCategories: categories.expense.map((c) => c.label),
       incomeCategories: categories.income.map((c) => c.label),
       accountNames,
@@ -55,13 +64,24 @@ export default async function FinanceDashboardPage() {
     getPeriodReport(supabase, {
       from: `${thisYear}-01-01`,
       to: `${thisYear}-12-31`,
+      centerId,
       expenseCategories: categories.expense.map((c) => c.label),
       incomeCategories: categories.income.map((c) => c.label),
       accountNames,
     }),
-    getCollections(supabase, { asOf: today }),
-    getMonthlySeries(supabase, { monthKeys: lastSixMonths(today) }),
+    getCollections(supabase, { asOf: today, centerId }),
+    getMonthlySeries(supabase, { monthKeys: lastSixMonths(today), centerId }),
+    // Only the whole-company view compares centres; one centre has nothing to compare to.
+    centers.length > 1
+      ? getCenterComparison(supabase, {
+          yearFrom: `${thisYear}-01-01`,
+          yearTo: `${thisYear}-12-31`,
+          monthFrom: bounds.from,
+          monthTo: bounds.to,
+        })
+      : Promise.resolve([]),
   ]);
+  const centerNames = new Map(centers.map((c) => [c.id, c.name]));
 
   const totalCashPaise = accounts.reduce((sum, a) => sum + a.balancePaise, 0);
   const topExpenses = [...year.expenses.rows]
@@ -154,6 +174,58 @@ export default async function FinanceDashboardPage() {
           tone={year.netPaise >= 0 ? "good" : "bad"}
         />
       </section>
+
+      {comparison.length > 1 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            By centre
+          </h2>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Centre</TableHead>
+                <TableHead className="text-right">Income (month)</TableHead>
+                <TableHead className="text-right">Expenses (month)</TableHead>
+                <TableHead className="text-right">Net (month)</TableHead>
+                <TableHead className="text-right">Income (year)</TableHead>
+                <TableHead className="text-right">Expenses (year)</TableHead>
+                <TableHead className="text-right">Net (year)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {comparison
+                .slice()
+                .sort((a, b) => (centerNames.get(a.centerId) ?? "").localeCompare(centerNames.get(b.centerId) ?? ""))
+                .map((row) => (
+                  <TableRow key={row.centerId}>
+                    <TableCell className="font-medium">
+                      {centerNames.get(row.centerId) ?? "Unknown centre"}
+                    </TableCell>
+                    <TableCell className="text-right">{formatINR(row.monthIncomePaise)}</TableCell>
+                    <TableCell className="text-right">{formatINR(row.monthExpensePaise)}</TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {formatINR(row.monthIncomePaise - row.monthExpensePaise)}
+                    </TableCell>
+                    <TableCell className="text-right">{formatINR(row.yearIncomePaise)}</TableCell>
+                    <TableCell className="text-right">{formatINR(row.yearExpensePaise)}</TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {formatINR(row.yearIncomePaise - row.yearExpensePaise)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              <TableRow className="border-t-2 font-semibold">
+                <TableCell>Company</TableCell>
+                <TableCell className="text-right">{formatINR(month.incomePaise)}</TableCell>
+                <TableCell className="text-right">{formatINR(month.expensePaise)}</TableCell>
+                <TableCell className="text-right">{formatINR(month.netPaise)}</TableCell>
+                <TableCell className="text-right">{formatINR(year.incomePaise)}</TableCell>
+                <TableCell className="text-right">{formatINR(year.expensePaise)}</TableCell>
+                <TableCell className="text-right">{formatINR(year.netPaise)}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </section>
+      )}
 
       <section className="grid gap-4 lg:grid-cols-2">
         <Card>

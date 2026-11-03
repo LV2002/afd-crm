@@ -16,7 +16,7 @@ import {
 import { isNoLongerWorked, terminalValuesOf } from "@/lib/leads/temperature-kinds";
 import { loadTemperatureOptionsDirect } from "@/lib/leads/temperature-options-direct";
 import type { DayHours } from "@/lib/sla/business-hours";
-import { dueEscalations, policyEscalationSteps } from "@/lib/sla/escalations";
+import { dueEscalations, hoursLate, policyEscalationSteps } from "@/lib/sla/escalations";
 import { evaluateLeadSla } from "@/lib/sla/evaluate-sla";
 import { notify } from "@/lib/notifications/notify";
 
@@ -173,7 +173,12 @@ async function run(request: Request) {
     if (result.breached && result.policyId) {
       const policy = policyById.get(result.policyId);
       const steps = policyEscalationSteps(policy?.escalations);
-      const due = dueEscalations(steps, result.elapsedHours, lead.slaEscalatedAtHours);
+      // Rungs are "hours late", so measure past the target, not from the start.
+      const due = dueEscalations(
+        steps,
+        hoursLate(result.elapsedHours, policy?.targetHours ?? 0),
+        lead.slaEscalatedAtHours,
+      );
       for (const step of due) {
         pendingEscalations.push({
           lead,

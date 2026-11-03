@@ -636,6 +636,87 @@ describe("a runtime-created role gets exactly the RLS boundary it was granted", 
   });
 });
 
+describe("SLA policies and discount authority can be delegated on their own", () => {
+  let slaRoleId: string;
+  let discountRoleId: string;
+  let slaUserId: string;
+  let discountUserId: string;
+  let policyId: string | undefined;
+
+  async function makeUser(roleId: string, tag: string): Promise<string> {
+    const id = randomUUID();
+    const email = fixtureEmail(tag);
+    await owner`insert into auth.users (id, email) values (${id}, ${email})`;
+    await owner`insert into profiles (id, full_name, email, role_id, is_active) values (${id}, ${`RLS Test ${tag}`}, ${email}, ${roleId}, true)`;
+    return id;
+  }
+
+  beforeAll(async () => {
+    const [sla] = await owner<Array<{ id: string }>>`
+      insert into roles (code, name, description) values ('rls_test_sla', 'RLS Test SLA', 'tests/rls.spec.ts') returning id`;
+    const [disc] = await owner<Array<{ id: string }>>`
+      insert into roles (code, name, description) values ('rls_test_discount', 'RLS Test Discount', 'tests/rls.spec.ts') returning id`;
+    slaRoleId = sla.id;
+    discountRoleId = disc.id;
+    // Granted at "center" on purpose: for these two, any scope is enough.
+    await owner`insert into role_permissions (role_id, permission_code, scope) values (${slaRoleId}, 'sla.manage', 'center')`;
+    await owner`insert into role_permissions (role_id, permission_code, scope) values (${discountRoleId}, 'discount.manage', 'center')`;
+    slaUserId = await makeUser(slaRoleId, "slaonly");
+    discountUserId = await makeUser(discountRoleId, "discountonly");
+  });
+
+  afterAll(async () => {
+    if (policyId) await owner`delete from sla_policies where id = ${policyId}`;
+    await owner`delete from discount_limits where role_id = ${slaRoleId}`;
+    await owner`delete from auth.users where id in (${slaUserId}, ${discountUserId})`;
+    await owner`delete from roles where id in (${slaRoleId}, ${discountRoleId})`;
+  });
+
+  it("a role with only sla.manage can create an SLA policy, and holds nothing else", async () => {
+    const [held] = await asUser(slaUserId, (tx) =>
+      tx<Array<{ rules: string | null; settings: string | null; discount: string | null }>>`
+        select private.auth_scope('rules.manage') as rules,
+               private.auth_scope('settings.manage') as settings,
+               private.auth_scope('discount.manage') as discount`,
+    );
+    expect(held).toEqual({ rules: null, settings: null, discount: null });
+
+    const [row] = await asUser(slaUserId, (tx) =>
+      tx<Array<{ id: string }>>`
+        insert into sla_policies (name, measure, target_hours) values ('RLS Test policy', 'first_response', 4) returning id`,
+    );
+    policyId = row.id;
+    expect(policyId).toBeTruthy();
+  });
+
+  it("a role with only sla.manage cannot touch discount limits or other settings", async () => {
+    await expect(
+      asUser(slaUserId, (tx) => tx`insert into discount_limits (role_id, max_percent) values (${slaRoleId}, 50)`),
+    ).rejects.toThrow(/row-level security/);
+    await expect(
+      asUser(slaUserId, (tx) => tx`insert into centers (name, city) values ('Should fail', 'Nowhere')`),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("a role with only discount.manage can set a discount limit but not an SLA policy", async () => {
+    await asUser(discountUserId, (tx) =>
+      tx`insert into discount_limits (role_id, max_percent) values (${slaRoleId}, 5)`,
+    );
+    await expect(
+      asUser(discountUserId, (tx) =>
+        tx`insert into sla_policies (name, measure, target_hours) values ('Should fail', 'first_response', 4)`,
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("the admin role holds both, so it cannot be locked out of them", async () => {
+    const rows = await owner<Array<{ permission_code: string }>>`
+      select permission_code from role_permissions
+      where role_id = ${roleIds.admin} and permission_code in ('sla.manage', 'discount.manage')`;
+    expect(rows.map((r) => r.permission_code).sort()).toEqual(["discount.manage", "sla.manage"]);
+  });
+});
+
 describe("lockout protection triggers", () => {
   it("the protected admin role cannot be deleted", async () => {
     await expect(ownerTx((tx) => tx`delete from roles where code = 'admin'`)).rejects.toThrow(

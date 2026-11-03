@@ -21,7 +21,6 @@ function emptyBundle() {
     businessHours: [],
     holidays: [],
     feeStructures: [],
-    tags: [],
     dashboardLayouts: [],
   };
 }
@@ -66,19 +65,16 @@ describe("configBundleSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("accepts a bundle with a real-shaped tag row", () => {
-    const bundle = emptyBundle();
-    bundle.tags = [
-      {
-        id: randomUUID(),
-        name: "High intent",
-        color: "#22c55e",
-        isActive: true,
-        createdAt: new Date().toISOString(),
-      },
-    ] as unknown as (typeof bundle)["tags"];
+  it("still accepts an older export that carries tags, and drops them", () => {
+    // Tags were removed from the CRM. A bundle exported before that has a
+    // `tags` list; importing it must not fail, and must not bring them back.
+    const bundle = {
+      ...emptyBundle(),
+      tags: [{ id: randomUUID(), name: "High intent", color: "#22c55e", isActive: true, createdAt: new Date().toISOString() }],
+    };
     const result = configBundleSchema.safeParse(bundle);
     expect(result.success).toBe(true);
+    expect(result.success && "tags" in result.data).toBe(false);
   });
 
   it("rejects a bundle with the wrong version", () => {

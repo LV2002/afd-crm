@@ -28,7 +28,6 @@ export const STEP_LABELS: Record<FlowStepKind, string> = {
   send_template: "Send a WhatsApp message",
   wait: "Wait",
   wait_for_reply: "Wait for their reply",
-  add_tag: "Put a tag on them",
   set_temperature: "Change their temperature",
   notify_owner: "Tell their counsellor",
   stop: "Stop here",
@@ -43,7 +42,6 @@ export interface StepTemplate {
 
 export interface StepEditorLists {
   templates: StepTemplate[];
-  tags: Array<{ id: string; name: string }>;
   /** Only temperatures an automation may safely set — see the page that builds this. */
   statuses: Array<{ value: string; label: string }>;
   /** Every step number in this flow, so a branch can only point somewhere real. */
@@ -134,26 +132,28 @@ function StepConfig({
     );
   }
 
-  if (kind === "add_tag" || kind === "set_temperature") {
-    const options =
-      kind === "add_tag"
-        ? lists.tags.map((tag) => ({ value: tag.id, label: tag.name }))
-        : lists.statuses;
-    const key = kind === "add_tag" ? "tagId" : "temperature";
+  if (kind === "set_temperature") {
     return (
       <div className="flex flex-col gap-1">
-        <Label className="text-xs text-muted-foreground">
-          {kind === "add_tag" ? "Tag" : "Temperature"}
-        </Label>
+        <Label className="text-xs text-muted-foreground">Temperature</Label>
         <Combobox
           className="w-64"
-          value={String(config[key] ?? "")}
-          onChange={(value) => setConfig({ ...config, [key]: value })}
-          options={options}
+          value={String(config.temperature ?? "")}
+          onChange={(value) => setConfig({ ...config, temperature: value })}
+          options={lists.statuses}
           placeholder="Pick one"
           searchPlaceholder="Type to search…"
         />
       </div>
+    );
+  }
+
+  if ((kind as string) === "add_tag") {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Tags have been removed, so this step does nothing and the automation carries on past it.
+        Delete it.
+      </p>
     );
   }
 
@@ -385,7 +385,7 @@ export function ExistingStep({
       <div className="flex items-center justify-between gap-3">
         <h4 className="text-sm font-semibold">
           <span className="mr-2 rounded bg-muted px-2 py-0.5 font-mono text-xs">{position}</span>
-          {STEP_LABELS[kind]}
+          {STEP_LABELS[kind] ?? "Removed step (tags no longer exist)"}
         </h4>
         <form action={removeAction}>
           <input type="hidden" name="flowId" value={flowId} />

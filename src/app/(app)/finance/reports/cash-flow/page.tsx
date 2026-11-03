@@ -12,6 +12,7 @@ import { formatINR } from "@/lib/format/currency";
 import { getFinanceCategories, getFinanceConfig } from "@/lib/finance/get-finance";
 import { fiscalMonths } from "@/lib/finance/ledger-math";
 import { getMonthlySeries } from "@/lib/finance/reports";
+import { getFinanceCenterId } from "@/lib/finance/center-filter";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -32,6 +33,7 @@ export default async function CashFlowPage({
   searchParams: Promise<{ year?: string }>;
 }) {
   const supabase = await createClient();
+  const centerId = await getFinanceCenterId(supabase);
   const [config, categories] = await Promise.all([
     getFinanceConfig(supabase),
     getFinanceCategories(supabase),
@@ -48,7 +50,7 @@ export default async function CashFlowPage({
   const year = Number(yearParam) || defaultYear;
 
   const monthKeys = fiscalMonths(year, config.fiscalYearStartMonth);
-  const series = await getMonthlySeries(supabase, { monthKeys });
+  const series = await getMonthlySeries(supabase, { monthKeys, centerId });
 
   const incomeCategories = ["Course Fees", ...categories.income.map((c) => c.label)];
   const expenseCategories = categories.expense.map((c) => c.label);

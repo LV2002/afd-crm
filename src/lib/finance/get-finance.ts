@@ -91,9 +91,9 @@ export interface AccountWithBalance extends AccountRow {
  */
 export async function getAccountsWithBalances(
   supabase: SupabaseClient,
-  options: { includeInactive?: boolean } = {},
+  options: { includeInactive?: boolean; centerId?: string } = {},
 ): Promise<AccountWithBalance[]> {
-  const [accounts, { data: entries }, { data: centers }] = await Promise.all([
+  const [allAccounts, { data: entries }, { data: centers }] = await Promise.all([
     getAccounts(supabase, options),
     supabase
       .from("finance_transactions")
@@ -101,6 +101,10 @@ export async function getAccountsWithBalances(
       .returns<Array<{ account_id: string; direction: FinanceDirection; amount_paise: number }>>(),
     supabase.from("centers").select("id, name").returns<Array<{ id: string; name: string }>>(),
   ]);
+
+  const accounts = options.centerId
+    ? allAccounts.filter((a) => a.center_id === options.centerId)
+    : allAccounts;
 
   const byAccount = new Map<string, Array<{ direction: FinanceDirection; amountPaise: number }>>();
   for (const entry of entries ?? []) {
@@ -130,33 +134,58 @@ export interface LedgerFilter {
   /** Inclusive `YYYY-MM-DD`. */
   from?: string;
   to?: string;
+  /** Newest first, so `limit` keeps the latest rows rather than the oldest. */
+  newest?: boolean;
   limit?: number;
 }
 
-/** Ledger rows, oldest first — the order a running balance needs. */
+/**
+ * Ledger rows, oldest first — the order a running balance needs.
+ *
+ * Fetched a page at a time. PostgREST answers at most `max_rows` (1,000 on a
+ * default Supabase project) however large a `.limit()` is asked for, and a
+ * silent cut-off is the worst failure a report can have: the totals still
+ * add up, to the wrong number. A year of imported bank lines passes 1,000
+ * well inside the year, so every report that sums a period depends on this
+ * walking the whole set. `limit` is a ceiling on rows returned, for screens
+ * that only show the latest few hundred.
+ */
 export async function getLedgerEntries(
   supabase: SupabaseClient,
   filter: LedgerFilter = {},
 ): Promise<LedgerRow[]> {
-  let query = supabase.from("finance_transactions").select(LEDGER_COLUMNS);
+  const ceiling = filter.limit ?? 100_000;
+  const rows: LedgerRow[] = [];
 
-  if (filter.accountId) query = query.eq("account_id", filter.accountId);
-  if (filter.centerId) query = query.eq("center_id", filter.centerId);
-  if (filter.kind) query = query.eq("kind", filter.kind);
-  if (filter.from) query = query.gte("occurred_on", filter.from);
-  if (filter.to) query = query.lte("occurred_on", filter.to);
+  while (rows.length < ceiling) {
+    let query = supabase.from("finance_transactions").select(LEDGER_COLUMNS);
 
-  const { data } = await query
-    // `created_at` breaks the tie so two entries on the same day keep the
-    // order they were recorded in — otherwise a running balance shuffles
-    // between page loads.
-    .order("occurred_on", { ascending: true })
-    .order("created_at", { ascending: true })
-    .limit(filter.limit ?? 2000)
-    .returns<LedgerRow[]>();
+    if (filter.accountId) query = query.eq("account_id", filter.accountId);
+    if (filter.centerId) query = query.eq("center_id", filter.centerId);
+    if (filter.kind) query = query.eq("kind", filter.kind);
+    if (filter.from) query = query.gte("occurred_on", filter.from);
+    if (filter.to) query = query.lte("occurred_on", filter.to);
 
-  return data ?? [];
+    const { data } = await query
+      // `created_at` breaks the tie so two entries on the same day keep the
+      // order they were recorded in — otherwise a running balance shuffles
+      // between page loads. `txn_no` makes the order total, which paging
+      // needs: with ties, a row could be skipped or repeated at a page edge.
+      .order("occurred_on", { ascending: !filter.newest })
+      .order("created_at", { ascending: !filter.newest })
+      .order("txn_no", { ascending: !filter.newest })
+      .range(rows.length, rows.length + PAGE_ROWS - 1)
+      .returns<LedgerRow[]>();
+
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < PAGE_ROWS) break;
+  }
+
+  return rows.slice(0, ceiling);
 }
+
+const PAGE_ROWS = 1000;
 
 /** Newest first, for the "what happened lately" list. */
 export async function getRecentEntries(

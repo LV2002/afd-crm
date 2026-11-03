@@ -385,7 +385,36 @@ export const PERMISSIONS = [
     code: "rules.manage",
     label: "Manage rules",
     category: "Administration",
-    description: "Edit assignment rules, SLA policies, temperature rules, scoring.",
+    description: "Edit assignment rules, temperature rules and scoring.",
+  },
+  /*
+    SLA policies and discount authority have permissions of their own.
+
+    Both were bundled with something much bigger: SLA policies with
+    `rules.manage` (so handing a centre head the response-time targets also
+    handed them the assignment rules that decide who receives every lead),
+    and discount authority with `settings.manage` (the key to everything
+    else on the settings menu). Leon wants his centre heads and co-admins to
+    set these two up themselves and nothing else, so each is its own switch.
+
+    Scope does not narrow either one: a policy or a role's discount limit is
+    institute-wide, there is no "my centre's" version of it. Holding the
+    permission at any scope is enough; the role editor's scope choice is
+    ignored for these two.
+  */
+  {
+    code: "sla.manage",
+    label: "Manage SLA policies",
+    category: "Administration",
+    description:
+      "Set the response-time targets, escalation ladders, business hours and holidays that decide when a lead counts as overdue.",
+  },
+  {
+    code: "discount.manage",
+    label: "Set discount authority",
+    category: "Administration",
+    description:
+      "Set how much each role can take off a fee before it needs approval. Cannot raise your own role's limit.",
   },
   {
     code: "config.export",

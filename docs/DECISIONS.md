@@ -4837,3 +4837,39 @@ Leon's rule: a student pays either a lump sum — entered as the down payment, w
 ## 2026-10-27 — No Instagram DMs; unknown numbers are held, not filed under the API number
 
 Leon does not want the CRM to see Instagram messages, so the DM inbox and everything feeding it was removed (tables kept, unused, guarded by a test). The Page subscription is now `leadgen` only. Separately, an inbound WhatsApp message whose `phone_number_id` is neither a registered number nor the API credentials' number is no longer stored: the old rule "no number = API number" was how an unregistered Coexistence number leaked onto the API tab. If the API phone number id is not set in Credentials the old behaviour is kept, since there is then nothing to tell the API number apart from.
+
+## 2026-11-01 — Bank statements are parsed and discarded; only the lines are kept
+
+Leon asked that statements not be stored (no space, and a statement is a security risk). So the upload never leaves the request: `parseBankStatement()` takes the file's text and returns lines. What is saved is `bank_statement_lines` — date, narration, direction, amount, the bank's balance, and a hash — which is the minimum needed to categorise a line and to recognise it in a later upload. No bank login or feed was used for the same reason: nothing to leak.
+
+**Why a worklist table and not the ledger directly.** `finance_transactions.category` is NOT NULL and the ledger is append-only, so an uncategorised line cannot live there and be filled in later. The worklist is mutable (pending → posted/skipped); the ledger only ever gains the finished entry.
+
+**Dedupe** is a content hash, unique per account. Two genuinely identical rows are told apart by the balance column; if a bank gives no balance, by their order within the file. Assumption: the same statement re-downloaded keeps the same order.
+
+**Student fees on the statement.** A fee already recorded through an enrolment is in the ledger and has a receipt. Posting the bank credit as well would count it twice, so the accountant sets those aside ("Student fee — already in the fee ledger"). Assumption: the fee ledger stays the source of truth for fees; matching a bank credit to a payment is a later step.
+
+**Data we found in the real sheet** (Leon's Federal Bank export): years typed as `0202` (kept, year taken from neighbouring rows, flagged "check date"); amounts like `63720 00` (read as 63,720.00); dates with a stray trailing `0`; narrations that wrap over lines and orphan continuation rows (left out, listed). Same-day rows are not always in running-balance order in the bank's own file, so the balance check is a hint ("N lines don't follow on"), never a block.
+
+**Centre choice is a cookie** (`finance_center`, path `/finance`), not a URL parameter, so every picker and link in finance honours it without carrying it. A value the person cannot see falls back to the whole company.
+
+## 2026-11-02 — Outcomes are read from status history and sent from an outbox
+
+The website's marketing sheet wants one event per status change, signed, retried safely. Rather than call it from every place a status changes (the lead page, bulk actions, confirm-admission, rules, imports), events are derived from `temperature_history`, which a trigger already fills for every write path. A scheduled job queues new history rows in `outcome_events` and sends them, so a status change never waits on Google and an outage loses nothing.
+
+**What counts as an outcome** is decided by a status's *kind* (open/parked → contacted, won → admitted, lost → lost, new → nothing), not its label, with an optional `outcome_status` in the option's metadata. Consecutive changes that map to the same outcome (Warm → Hot) are recorded but not sent: the sheet counts outcomes, not temperature. Assumption: that matches "send one event each time a status changes (contacted, demo booked, admitted, lost)".
+
+**Lookback of 14 days** when queuing, so connecting the sheet later sends recent changes but never replays months of history. **`submission_id` is the first website submission** for a lead; a repeat enquiry by the same person does not replace it, so an admission is credited to the page that first brought them in. Ids the sheet would refuse (the CRM's fallback `phone:timestamp` form has a `+` and `:`) are set aside rather than sent.
+
+**Credentials** live in the encrypted store under provider `website` (`outcomes_exec_url`, `outcomes_secret`), not environment variables, so connecting needs no deploy.
+
+## 2026-11-03 — SLA and discount authority get their own permissions; tags retired
+
+**Why separate permissions.** Leon wants centre heads and co-admins to set up SLA policies, targets and discount authority themselves and nothing else. `rules.manage` also controls who receives every lead; `settings.manage` is everything. Bundling either with these would have made the delegation a trade the owner did not want, so each is its own primitive, following the `report.ads` and `target.manage` precedent. Existing holders keep exactly what they had (migration 0112 copies the grant).
+
+**Any scope is enough** for `sla.manage` and `discount.manage`. Both are institute-wide: there is no "my centre's SLA policy" or "my centre's discount limit", so requiring `all` would only turn a mis-clicked scope into a silent refusal. Consequence, said in the guide: a centre head with SLA access can edit policies that apply to every centre.
+
+**Self-escalation guard.** A person trusted with discount authority could otherwise tick "no limit" against their own role. Unless they are already unlimited, they cannot edit their own role's row nor set another role above their own ceiling. Assumption: this is what Leon would want; the alternative (trusting them fully) makes every limit on the screen advisory.
+
+**Escalation rungs are "hours late".** The sweep now subtracts the policy target before comparing. This changes when existing ladders fire (later, by the target). It matches what the editor, policy list and manual always said.
+
+**Tags: remove the use, keep the data.** Following the stages precedent (migration 0099), nothing is dropped: the tables stay, a guard test keeps code off them. Flows that started from a tag are switched off (they could never fire); old "add a tag" steps are skipped rather than failing the run, so the messages after them still send. Broadcasts resolve and save their recipients when composed, so past and scheduled ones are unaffected.

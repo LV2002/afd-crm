@@ -66,8 +66,9 @@ once.
 ### Settings → Discount Authority
 
 How much each role can take off a fee before approval is needed:
-a percent, an amount, or unlimited. See Chapter 3.3 for the shipped
-figures. A request above the ceiling is recorded as pending, never
+a percent, an amount, or unlimited. Needs `discount.manage`, which can be
+given to a centre head or co-admin on its own. See Chapter 3.3 for the
+shipped figures, and `docs/SLA-TARGETS-DISCOUNTS-GUIDE.md` for how it works. A request above the ceiling is recorded as pending, never
 refused.
 
 ## 13.2 The institute
@@ -172,6 +173,8 @@ the lowest priority.
 
 ### Settings → SLA Policies
 How quickly a lead has to be answered, and what happens when it is not.
+Needs `sla.manage` (separate from `rules.manage`, so it can be given on its
+own). Full explanation: `docs/SLA-TARGETS-DISCOUNTS-GUIDE.md`.
 
 There are **no ready-made policies**, on purpose: what an institute
 measures itself on is its own decision. Six fields, and only the first
@@ -204,9 +207,6 @@ set on the same screen, so a target does not expire overnight on a day
 the office is shut.
 
 No JSON anywhere on this screen any more.
-
-### Settings → Tags
-Labels a lead can carry: **Name** and **Colour**.
 
 ### Settings → Dropdowns
 Every enumerated list: the fourteen categories in the Appendix, each

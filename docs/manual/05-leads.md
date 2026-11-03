@@ -114,8 +114,7 @@ title updates.
    list below.
 3. Pick values. Dropdown filters apply immediately; text filters need
    **Enter**.
-4. Use the **Tag** box to filter by tag.
-5. To clear a filter, set it back to blank.
+4. To clear a filter, set it back to blank.
 
 **What you should see** — the list and its count change. The address in
 your browser changes too, so you can bookmark this view or send it to a

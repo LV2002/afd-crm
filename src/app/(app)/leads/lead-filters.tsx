@@ -23,14 +23,10 @@ export interface FilterFieldWithOptions {
 export function LeadFilters({
   filterFields,
   searchValue,
-  tagOptions,
-  tagValue,
   months,
 }: {
   filterFields: FilterFieldWithOptions[];
   searchValue: string;
-  tagOptions?: FieldOption[];
-  tagValue?: string;
   /** The last twelve months, newest first, computed on the server so the list is IST. */
   months: FieldOption[];
 }) {
@@ -101,19 +97,6 @@ export function LeadFilters({
           />
         );
       })}
-      {tagOptions && tagOptions.length > 0 && (
-        <Combobox
-          className="w-40"
-          size="sm"
-          value={tagValue ?? ""}
-          onChange={(value) => updateParam("tag", value)}
-          options={tagOptions}
-          placeholder="Tag"
-          searchPlaceholder="Type a tag…"
-          clearable
-        />
-      )}
-
       {/*
         The date filters, on their own line with labels, because a bare
         date box beside nine dropdowns says nothing about which date it

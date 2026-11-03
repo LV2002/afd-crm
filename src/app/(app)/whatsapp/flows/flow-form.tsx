@@ -29,7 +29,6 @@ const ANY = "__any__";
 const TRIGGER_LABELS: Record<FlowTrigger, string> = {
   lead_created: "A new lead arrives",
   temperature_entered: "A lead's temperature changes to…",
-  tag_added: "A tag is put on a lead",
   inbound_keyword: "Somebody messages us a word",
   manual: "Only when somebody starts it by hand",
 };
@@ -40,7 +39,6 @@ export interface FlowValues {
   description: string;
   triggerType: FlowTrigger;
   temperature: string;
-  tagId: string;
   keywords: string;
   centerId: string;
   /** Extra narrowing beyond the trigger. Empty means every lead it fires for. */
@@ -50,14 +48,12 @@ export interface FlowValues {
 export function FlowForm({
   values,
   statuses,
-  tags,
   centers,
   fields,
   optionsByField,
 }: {
   values: FlowValues;
   statuses: Array<{ value: string; label: string }>;
-  tags: Array<{ id: string; name: string }>;
   centers: Array<{ id: string; name: string }>;
   fields: ConditionField[];
   optionsByField: ConditionFieldOptions;
@@ -65,7 +61,6 @@ export function FlowForm({
   const [state, action, pending] = useActionState(saveFlow, initialState);
   const [trigger, setTrigger] = useState<FlowTrigger>(values.triggerType);
   const [temperature, setTemperature] = useState(values.temperature);
-  const [tagId, setTagId] = useState(values.tagId);
   const [keywords, setKeywords] = useState(values.keywords);
   const [centerId, setCenterId] = useState(values.centerId);
 
@@ -74,16 +69,14 @@ export function FlowForm({
   const triggerConfig = JSON.stringify(
     trigger === "temperature_entered"
       ? { temperature }
-      : trigger === "tag_added"
-        ? { tagId }
-        : trigger === "inbound_keyword"
-          ? {
-              keywords: keywords
-                .split(",")
-                .map((word) => word.trim())
-                .filter(Boolean),
-            }
-          : {},
+      : trigger === "inbound_keyword"
+        ? {
+            keywords: keywords
+              .split(",")
+              .map((word) => word.trim())
+              .filter(Boolean),
+          }
+        : {},
   );
 
   return (
@@ -133,6 +126,13 @@ export function FlowForm({
         </Select>
       </div>
 
+      {!(FLOW_TRIGGERS as readonly string[]).includes(trigger) && (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+          This automation was started by a tag, and tags no longer exist, so it can&apos;t start
+          any more. Pick a different trigger above and save.
+        </p>
+      )}
+
       {trigger === "temperature_entered" && (
         <div className="flex flex-col gap-2">
           <Label>Which temperature</Label>
@@ -142,19 +142,6 @@ export function FlowForm({
             options={statuses}
             placeholder="Pick a temperature"
             searchPlaceholder="Type a temperature…"
-          />
-        </div>
-      )}
-
-      {trigger === "tag_added" && (
-        <div className="flex flex-col gap-2">
-          <Label>Which tag</Label>
-          <Combobox
-            value={tagId || ANY}
-            onChange={(v) => setTagId(v === ANY ? "" : v)}
-            options={tags.map((tag) => ({ value: tag.id, label: tag.name }))}
-            placeholder="Pick a tag"
-            searchPlaceholder="Type a tag…"
           />
         </div>
       )}

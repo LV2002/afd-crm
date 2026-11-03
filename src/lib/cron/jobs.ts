@@ -5,6 +5,7 @@ import { expectOk, type NightlyJob } from "@/lib/cron/nightly-runner";
 import { GET as adSpendGoogle } from "@/app/api/cron/ad-spend-sync/google/route";
 import { GET as adSpendMeta } from "@/app/api/cron/ad-spend-sync/meta/route";
 import { GET as googleConversions } from "@/app/api/cron/google-conversions/route";
+import { GET as outcomeReport } from "@/app/api/cron/outcome-report/route";
 import { GET as paymentReminders } from "@/app/api/cron/payment-reminders/route";
 import { GET as recomputeTemperature } from "@/app/api/cron/recompute-temperature/route";
 import { GET as retargetingGoogle } from "@/app/api/cron/retargeting-sync/google/route";
@@ -86,6 +87,9 @@ export function frequentJobs(request: Request): NightlyJob[] {
     // rung firing twice, so running it every ten minutes notifies nobody
     // twice. A breach found tomorrow is a lead already lost.
     job("sla-sweep", "Response-time sweep", slaSweep, 4000, request),
+    // A queue being drained: a status change is waiting to be told to the
+    // marketing sheet. Retried every run until the sheet accepts it.
+    job("outcome-report", "Report outcomes to the website sheet", outcomeReport, 5000, request),
   ];
 }
 

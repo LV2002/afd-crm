@@ -226,21 +226,6 @@ export const feeStructureSchema = z.object({
 });
 
 /**
- * Tag definitions are configuration (an admin-editable label list), same
- * reasoning as fee_structures above — `lead_tags` (which leads carry which
- * tag) is data, not configuration, and is never exported, same bucket as
- * leads/students/payments themselves.
- */
-export const tagSchema = z.object({
-  id: uuid,
-  name: z.string(),
-  color: z.string().nullable().optional(),
-  isActive: z.boolean(),
-  createdAt: timestamp,
-  updatedAt: nullableTimestamp,
-});
-
-/**
  * Which dashboard widgets a role sees. Keyed by `role_id`, and roles keep
  * their ids across an import, so this travels correctly — unlike
  * `assignment_rules`, whose action names a specific person (see the note
@@ -287,7 +272,6 @@ export const configBundleSchema = z.object({
   businessHours: z.array(businessHoursSchema),
   holidays: z.array(holidaySchema),
   feeStructures: z.array(feeStructureSchema),
-  tags: z.array(tagSchema),
   dashboardLayouts: z.array(dashboardLayoutSchema),
 });
 

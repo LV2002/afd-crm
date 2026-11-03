@@ -18,6 +18,7 @@ import {
   checkAuthority,
   describeLimit,
   discountPercent,
+  limitWithin,
   resolveDiscount,
   type DiscountLimit,
 } from "../src/lib/enrolment/discount-authority";
@@ -212,5 +213,32 @@ describe("describeLimit", () => {
 
   it("says so when there is no ceiling", () => {
     expect(describeLimit(limit({ isUnlimited: true }))).toMatch(/any discount/i);
+  });
+});
+
+describe("limitWithin — nobody gives a role more than they hold", () => {
+  const mine = { maxPercent: 10, maxAmountPaise: 500000, isUnlimited: false };
+
+  it("allows the same or less", () => {
+    expect(limitWithin(mine, mine)).toBe(true);
+    expect(limitWithin({ maxPercent: 5, maxAmountPaise: 100000, isUnlimited: false }, mine)).toBe(true);
+  });
+  it("refuses more on either ceiling", () => {
+    expect(limitWithin({ ...mine, maxPercent: 11 }, mine)).toBe(false);
+    expect(limitWithin({ ...mine, maxAmountPaise: 500001 }, mine)).toBe(false);
+  });
+  it("treats a blank ceiling as more than any number", () => {
+    expect(limitWithin({ maxPercent: 5, maxAmountPaise: null, isUnlimited: false }, mine)).toBe(false);
+    expect(limitWithin({ maxPercent: null, maxAmountPaise: 100000, isUnlimited: false }, mine)).toBe(false);
+  });
+  it("never allows unlimited unless the caller is", () => {
+    expect(limitWithin({ maxPercent: null, maxAmountPaise: null, isUnlimited: true }, mine)).toBe(false);
+    expect(
+      limitWithin({ maxPercent: null, maxAmountPaise: null, isUnlimited: true }, { maxPercent: null, maxAmountPaise: null, isUnlimited: true }),
+    ).toBe(true);
+  });
+  it("an axis the caller leaves blank constrains nothing", () => {
+    const amountOnly = { maxPercent: null, maxAmountPaise: 500000, isUnlimited: false };
+    expect(limitWithin({ maxPercent: 50, maxAmountPaise: 400000, isUnlimited: false }, amountOnly)).toBe(true);
   });
 });

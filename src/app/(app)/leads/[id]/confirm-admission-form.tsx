@@ -116,19 +116,16 @@ export function ConfirmAdmissionForm({
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="admission-discount">Discount</Label>
-          <MoneyInput id="admission-discount" name="discount" placeholder="0" />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="admission-fee-override">Custom fee (optional)</Label>
-          <MoneyInput
-            id="admission-fee-override"
-            name="totalFeeOverride"
-            placeholder="Blank uses the batch fee"
-          />
-        </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="admission-fee-override">Custom fee (optional)</Label>
+        <MoneyInput
+          id="admission-fee-override"
+          name="totalFeeOverride"
+          placeholder="Blank uses the batch fee"
+        />
+        <p className="text-xs text-muted-foreground">
+          Discounts are entered on the fee plan once the admission is confirmed.
+        </p>
       </div>
 
       <FormMessage error={state.error} success={state.success} />

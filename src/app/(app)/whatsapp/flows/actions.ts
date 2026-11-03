@@ -74,9 +74,6 @@ export async function saveFlow(_prev: FlowFormState, formData: FormData): Promis
   if (triggerType === "temperature_entered" && !triggerConfig.temperature) {
     return { error: "Pick the temperature that starts it." };
   }
-  if (triggerType === "tag_added" && !triggerConfig.tagId) {
-    return { error: "Pick the tag that starts it." };
-  }
   if (
     triggerType === "inbound_keyword" &&
     (!Array.isArray(triggerConfig.keywords) || triggerConfig.keywords.length === 0)

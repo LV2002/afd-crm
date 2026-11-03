@@ -7,6 +7,8 @@ import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { discountLimits, roles } from "@/lib/db/schema";
+import { limitWithin } from "@/lib/enrolment/discount-authority";
+import { getDiscountLimit } from "@/lib/enrolment/get-discount-limit";
 import { parseRupeesToPaise } from "@/lib/format/currency";
 import { createClient } from "@/lib/supabase/server";
 
@@ -28,7 +30,7 @@ export async function saveDiscountLimit(
   formData: FormData,
 ): Promise<DiscountLimitState> {
   const user = await getCurrentUser();
-  if (!user || !can(user, "settings.manage")) {
+  if (!user || !can(user, "discount.manage")) {
     return { error: "You don't have permission to change discount limits." };
   }
 
@@ -69,6 +71,32 @@ export async function saveDiscountLimit(
       error:
         "Set a percentage, a cash limit, or tick 'no limit'. Leaving both blank without ticking it would give this role unlimited authority by accident.",
     };
+  }
+
+  /*
+    Nobody can lift their own ceiling, or set one above it.
+
+    Handing discount authority to a centre head is the point of this
+    permission; letting that centre head type "no limit" against their own
+    role would make every limit on the screen a suggestion. So unless the
+    caller already has unlimited authority themselves (an admin, a co-admin):
+    their own role's row is read-only to them, and no role can be given more
+    than they hold. Reducing a limit is always allowed.
+  */
+  const callerUnlimited = user.roleCode === "admin" || (await getDiscountLimit(user)).isUnlimited;
+  if (!callerUnlimited) {
+    if (roleId === user.roleId) {
+      return {
+        error:
+          "You can't change your own role's discount authority. Ask an admin, or a role with more authority than yours.",
+      };
+    }
+    if (!limitWithin({ maxPercent, maxAmountPaise, isUnlimited }, await getDiscountLimit(user))) {
+      return {
+        error:
+          "That is more than you can give yourself, so you can't give it to another role either. Set a lower limit, or ask an admin.",
+      };
+    }
   }
 
   const [before] = await db

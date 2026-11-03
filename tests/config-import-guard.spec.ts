@@ -44,7 +44,6 @@ function emptyBundle() {
     businessHours: [],
     holidays: [],
     feeStructures: [],
-    tags: [],
     dashboardLayouts: [],
   };
 }
