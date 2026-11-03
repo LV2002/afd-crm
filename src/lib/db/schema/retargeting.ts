@@ -2,6 +2,7 @@ import { pgTable, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { idColumn } from "./_helpers";
 import { adPlatformEnum } from "./ad-spend";
+import { contacts } from "./contacts";
 import { leads } from "./leads";
 
 /**
@@ -32,4 +33,27 @@ export const adAudienceMembers = pgTable(
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("ad_audience_members_platform_lead_id_uq").on(t.platform, t.leadId)],
+);
+
+/**
+ * Who from the contact database is in each ad platform's audience.
+ *
+ * The same idea as `ad_audience_members`, kept apart because that table is
+ * keyed by lead and a contact is not one. Recording what was sent is what
+ * makes removal possible: somebody who is deleted, moved into the leads (and
+ * so governed by the lead rules), or whose list stops allowing ads has to
+ * come back OUT of the audience, and the platform cannot be asked who is in
+ * it.
+ */
+export const adAudienceContactMembers = pgTable(
+  "ad_audience_contact_members",
+  {
+    id: idColumn(),
+    platform: adPlatformEnum("platform").notNull(),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("ad_audience_contact_members_platform_contact_uq").on(t.platform, t.contactId)],
 );

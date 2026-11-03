@@ -11,6 +11,7 @@ import {
   isRetargetingEligible,
   type RetargetingCandidate,
 } from "@/lib/integrations/audience-sync";
+import { syncContactAudience } from "@/lib/integrations/contact-audience";
 import { loadRetargetingCandidates } from "@/lib/integrations/retargeting-candidates";
 import { retargetingWindowDays } from "@/lib/integrations/retargeting-window";
 import {
@@ -111,12 +112,21 @@ async function run(request: Request) {
       );
   }
 
+  // The contact database (seminars, purchased lists) goes into the same
+  // audience, by its own rules — see lib/integrations/contact-audience.ts.
+  const contactsSync = await syncContactAudience({
+    platform: "meta",
+    add: (phones) => addUsersToAudience(audienceId, accessToken, phones.map(hashPhone)),
+    remove: (phones) => removeUsersFromAudience(audienceId, accessToken, phones.map(hashPhone)),
+  });
+
   return NextResponse.json({
     audienceId,
     added: toAdd.length,
     removed: toRemove.length,
     eligible: eligibleLeadIds.length,
     excludedAdmitted: allLeads.filter((lead) => lead.hasAdmission).length,
+    contacts: contactsSync,
   });
 }
 

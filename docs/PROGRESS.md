@@ -8882,3 +8882,14 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 - **Existing rows repaired** by migration 0114 from the raw deliveries: reactions and unreadable messages are hidden (soft delete), pins/contacts/other types get a readable line, and captions are restored.
 - Videos and large files are fetched by the 10-minute sweep, so a video can take a few minutes to become playable; a photo or voice note is usually there at once.
 - Not covered: Safari cannot play WhatsApp's `.ogg` voice notes (Chrome, Edge and Firefox can); a "Download" fallback is not built.
+
+## The contact database (seminars and purchased lists)
+
+- **New section: Database** (sidebar, for anyone with *View the contact database*). People we hold details for who are not leads; nobody here is assigned, timed or counted in any lead report. Full guide: `docs/DATABASE-GUIDE.md`.
+- **Lists** (one batch, one origin; the list supplies the lead source and says whether it may be used for ads / WhatsApp). **Contacts** are one row per person across any number of lists, matched by phone then email, never duplicated. Every lead field (including custom ones) is available on a contact because the form and import are drawn from the lead field definitions.
+- **Add a contact**, **Import a CSV** (mapping, preview, chunks of 1,000, file read in the browser and not stored), edit, soft-remove. Phones masked, audited reveal.
+- **Move to leads / Merge.** Both go through `resolveOrCreateLead()`, so assignment, first-touch source and duplicate handling are the same as every other lead. A contact that is already a lead (by any phone or email the lead has had, including one that arrived later) shows *Already a lead* and the button says **Merge**: it adds an enquiry, fills the lead's blank details, never overwrites. The contact **stays** in the database marked *Moved/Merged · Lead #N*; the lead page shows *In the database*.
+- **Permissions** `contact.read`, `contact.manage`, `contact.promote` (Contacts category in Roles). Admin and Co-Admin: all; Counsellor: view; Centre Head: view and move. Institute-wide, any scope. RLS: read with `contact.read`, write with `contact.manage`, no delete policy.
+- **Retargeting:** the hourly Meta and Google sync also sends eligible contacts (phone, on a list that allows ads, not a lead) and removes them when they stop being eligible. Anyone who is or becomes a lead is left to the lead rules, which exclude admitted students.
+- Migrations 0115 (tables, permissions, RLS) and 0116 (audience membership).
+- Not built: WhatsApp broadcasts to the database (the "agreed to WhatsApp" tick is recorded but not yet used); a seminar sign-up form/QR; an erase-on-request step; export (deliberately none); "conversion by list" reporting; filtering the list by "already a lead but not yet merged".

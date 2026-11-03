@@ -717,6 +717,65 @@ describe("SLA policies and discount authority can be delegated on their own", ()
   });
 });
 
+describe("the contact database", () => {
+  let listId: string;
+  let contactId: string;
+
+  beforeAll(async () => {
+    const [list] = await owner<Array<{ id: string }>>`
+      insert into contact_lists (name) values ('RLS Test list') returning id`;
+    listId = list.id;
+    const [contact] = await owner<Array<{ id: string }>>`
+      insert into contacts (name, phone) values ('RLS Test contact', '+919847699999') returning id`;
+    contactId = contact.id;
+    await owner`insert into contact_list_members (contact_id, list_id) values (${contactId}, ${listId})`;
+  });
+
+  afterAll(async () => {
+    await owner`delete from contact_list_members where list_id = ${listId}`;
+    await owner`delete from contacts where id = ${contactId}`;
+    await owner`delete from contact_lists where id = ${listId}`;
+  });
+
+  it("is readable by a counsellor and a co-admin", async () => {
+    for (const who of [fx.counsellor_kochi, fx.coadmin_a, fx.admin_a]) {
+      const rows = await asUser(who, (tx) => tx<Array<{ id: string }>>`select id from contacts where id = ${contactId}`);
+      expect(rows).toHaveLength(1);
+    }
+  });
+
+  it("is invisible to a role that was not given it", async () => {
+    const rows = await asUser(fx.accounts_a, (tx) => tx<Array<{ id: string }>>`select id from contacts where id = ${contactId}`);
+    expect(rows).toHaveLength(0);
+    const lists = await asUser(fx.accounts_a, (tx) => tx<Array<{ id: string }>>`select id from contact_lists where id = ${listId}`);
+    expect(lists).toHaveLength(0);
+  });
+
+  it("cannot be changed by a counsellor, who can only look", async () => {
+    await expect(
+      asUser(fx.counsellor_kochi, (tx) => tx`insert into contacts (name, phone) values ('Should fail', '+919847699998')`),
+    ).rejects.toThrow(/row-level security/);
+    const updated = await asUser(fx.counsellor_kochi, (tx) =>
+      tx<Array<{ id: string }>>`update contacts set name = 'hijacked' where id = ${contactId} returning id`,
+    );
+    expect(updated).toHaveLength(0);
+    await expect(
+      asUser(fx.counsellor_kochi, (tx) => tx`insert into contact_lists (name) values ('Should fail')`),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("can be changed by an admin, and no role can erase a contact", async () => {
+    const updated = await asUser(fx.admin_a, (tx) =>
+      tx<Array<{ id: string }>>`update contacts set updated_at = now() where id = ${contactId} returning id`,
+    );
+    expect(updated).toHaveLength(1);
+    const deleted = await asUser(fx.admin_a, (tx) =>
+      tx<Array<{ id: string }>>`delete from contacts where id = ${contactId} returning id`,
+    );
+    expect(deleted).toHaveLength(0);
+  });
+});
+
 describe("lockout protection triggers", () => {
   it("the protected admin role cannot be deleted", async () => {
     await expect(ownerTx((tx) => tx`delete from roles where code = 'admin'`)).rejects.toThrow(

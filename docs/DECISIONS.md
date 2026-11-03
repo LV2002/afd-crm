@@ -4877,3 +4877,21 @@ The website's marketing sheet wants one event per status change, signed, retried
 ## 2026-11-03 — Reactions and view-once messages are not stored
 
 Leon wants voice notes, messages, photos and videos in the inbox, and does not want disappearing messages. A disappearing / view-once message reaches a business as type `unsupported` with no content, and a reaction is an emoji on an earlier message. Storing either produced blank bubbles and made a conversation look unanswered, so neither is stored (the raw delivery still is). Assumption: reactions are noise to Leon too; if he wants to see "👍" on a broadcast reply, it is a one-line change to store them as text.
+
+## 2026-11-03 — The contact database is its own table; move and merge are one operation
+
+**Separate from leads, not a flag on them.** A `database only` flag on `leads` would put every lead query (lists, follow-ups, SLA sweep, assignment, dashboards, retargeting) one missed exclusion away from putting thousands of people who never enquired in front of counsellors. A separate `contacts` table cannot leak into any of them.
+
+**One person, many lists.** `contacts` is unique by phone and by email (like lead identifiers); `contact_list_members` links to lists. A person at a seminar who is also in a purchased database is one contact on two lists. Second appearances fill blanks and never overwrite.
+
+**Fields come from the lead field definitions** (`contacts.fields` jsonb by key), so a custom field added to leads is on contacts with no migration, and moves across on promotion. Name, phone and email are columns.
+
+**Move and merge are the same call.** `promoteContact()` calls `resolveOrCreateLead()`: a new phone/email creates a lead (assigned by the rules); an existing one attaches an enquiry (first touch untouched, nobody reassigned). The button says Move or Merge from a match computed when the list is drawn, through `lead_identifiers`, so a lead that arrived by another route after the import is recognised. Merging fills a lead's blank details only; the lead's own are what somebody actually said to a counsellor.
+
+**The contact stays after promotion** (`lead_id`, `linked_how`), per Leon: the list keeps saying who responded, and the lead page says they were in the database.
+
+**Audiences are kept disjoint.** Anyone who is or matches a lead is governed by the lead rules (consent, recency, and no admitted students), not the list's ad flag. Otherwise a person in both would be removed from Meta when either side dropped them. Cost: once somebody is a lead, the list's "ads are fine" no longer applies to them; the lead's own consent does.
+
+**No export, deliberately.** Counsellors can see the whole database; a CSV download would let one take it (non-negotiable #6). Not added until somebody asks, and it would be its own permission.
+
+**Phone-or-email identity.** A contact needs a name and a phone or an email, a lead needs a phone: an email-only contact cannot be moved until a phone is added, and the screen says so.

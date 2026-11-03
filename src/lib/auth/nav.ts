@@ -11,6 +11,7 @@ export type NavIconKey =
   | "leads"
   | "follow-ups"
   | "orphans"
+  | "database"
   | "accounts"
   | "finance"
   | "students"
@@ -94,6 +95,14 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     badgeKey: "unassigned",
     badgeWhat: "leads waiting to be assigned",
     label: "Unassigned",
+  },
+  {
+    // People we hold details for who are not leads: seminar attendees,
+    // purchased lists. Visible to anyone who can read the database.
+    href: "/database",
+    iconKey: "database",
+    permission: "contact.read",
+    label: "Database",
   },
   {
     // "Admissions", not "Accounts": this is the per-student fee-collection
