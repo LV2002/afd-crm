@@ -16,6 +16,7 @@ import type { ParamSource } from "@/lib/whatsapp/personalise";
 import { idColumn, timestamps } from "./_helpers";
 import { profiles } from "./auth";
 import { students } from "./academics";
+import { contacts } from "./contacts";
 import { leads } from "./leads";
 import { tags } from "./tags";
 
@@ -36,7 +37,7 @@ export const whatsappBroadcastRecipientStatusEnum = pgEnum("whatsapp_broadcast_r
   "failed",
 ]);
 
-export const whatsappAudienceEntityEnum = pgEnum("whatsapp_audience_entity", ["lead", "student"]);
+export const whatsappAudienceEntityEnum = pgEnum("whatsapp_audience_entity", ["lead", "student", "contact"]);
 
 /**
  * A template-based bulk send — template-based by definition, since a
@@ -63,6 +64,11 @@ export const whatsappBroadcasts = pgTable("whatsapp_broadcasts", {
   audienceEntity: whatsappAudienceEntityEnum("audience_entity").notNull().default("lead"),
   /** `{ fieldKey: value }`, exactly the shape the Insights filter bar produces. Null means "everybody in the entity". */
   audienceFilters: jsonb("audience_filters").$type<Record<string, string>>(),
+  /**
+   * For a broadcast to the contact database: which lists it went to. Recorded
+   * so "who did we send the seminar reminder to" can be answered later.
+   */
+  audienceListIds: uuid("audience_list_ids").array(),
   /** Optional extra narrowing by tag. Nullable since the audience no longer has to be a tag at all. */
   tagId: uuid("tag_id").references(() => tags.id, { onDelete: "restrict" }),
   templateName: text("template_name").notNull(),
@@ -137,6 +143,8 @@ export const whatsappBroadcastRecipients = pgTable(
     studentId: uuid("student_id").references(() => students.id, {
       onDelete: "cascade",
     }),
+    /** A person from the contact database: not a lead and not a student. */
+    contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "cascade" }),
     phone: text("phone").notNull(),
     /**
      * The strings that go into this person's `{{n}}` placeholders, in
@@ -160,6 +168,12 @@ export const whatsappBroadcastRecipients = pgTable(
     uniqueIndex("whatsapp_broadcast_recipients_broadcast_id_student_id_uq")
       .on(t.broadcastId, t.studentId)
       .where(sql`student_id is not null`),
-    check("whatsapp_broadcast_recipients_one_subject", sql`num_nonnulls(lead_id, student_id) = 1`),
+    uniqueIndex("whatsapp_broadcast_recipients_broadcast_id_contact_id_uq")
+      .on(t.broadcastId, t.contactId)
+      .where(sql`contact_id is not null`),
+    check(
+      "whatsapp_broadcast_recipients_one_subject",
+      sql`num_nonnulls(lead_id, student_id, contact_id) = 1`,
+    ),
   ],
 );

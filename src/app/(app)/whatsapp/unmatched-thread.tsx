@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { WhatsAppThreadMessage } from "@/lib/whatsapp/get-thread";
 import { MediaPicker } from "@/components/whatsapp/media-picker";
+import { MessageContent } from "@/components/whatsapp/message-content";
 import {
   sendWhatsAppMedia,
   sendWhatsAppMessage,
@@ -140,7 +141,7 @@ export function UnmatchedThread({
                   : "bg-muted",
               )}
             >
-              {message.body ?? <span className="italic opacity-80">(no text)</span>}
+              <MessageContent message={message} />
             </div>
             <p className="text-xs text-muted-foreground">
               {new Date(message.occurredAt).toLocaleString("en-IN", {

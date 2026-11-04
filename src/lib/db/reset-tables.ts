@@ -95,6 +95,7 @@ export const CONFIG_TABLES = [
 export const DATA_TABLES = [
   // Who is in which retargeting audience. Rebuilt from the leads by the
   // nightly sync, so there is nothing here to preserve.
+  "ad_audience_contact_members",
   "ad_audience_members",
   /**
    * Real money spent on real ads, pulled from Meta and Google.
@@ -126,6 +127,9 @@ export const DATA_TABLES = [
   "error_events",
   "finance_transactions",
   "bank_statement_lines",
+  "contact_list_members",
+  "contact_lists",
+  "contacts",
   "google_conversion_uploads",
   // Conversations that happened, and the messages in them. Data, not
   // configuration, however much the inbox looks like a setting.

@@ -103,6 +103,10 @@ export const ROLE_SEEDS: RoleSeed[] = [
           // splits them between their counsellors. Scoped to "center", so
           // the institute-wide target stays out of reach.
           "target.manage",
+          // The contact database: they see it and can move a contact into
+          // their leads. Adding and importing stays with admins.
+          "contact.read",
+          "contact.promote",
           "users.manage",
           // No `audit.read`. It cannot be scoped to a centre — audit_log
           // has no center_id and a row about a role change belongs to no
@@ -140,6 +144,9 @@ export const ROLE_SEEDS: RoleSeed[] = [
           "enrolment.change_plan",
           "payment.read",
           "report.read",
+          // They can see the contact database; moving someone into the
+          // leads is a decision Leon has kept with others for now.
+          "contact.read",
         ],
         "own",
       ),

@@ -6,6 +6,7 @@ import {
   GraduationCap,
   Inbox,
   CalendarClock,
+  Database,
   MessageCircle,
   Landmark,
   LayoutDashboard,
@@ -27,6 +28,7 @@ import type { NavIconKey } from "@/lib/auth/nav";
 export const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   dashboard: LayoutDashboard,
   orphans: Inbox,
+  database: Database,
   leads: Users,
   "follow-ups": CalendarClock,
   accounts: Wallet,

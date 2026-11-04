@@ -207,9 +207,9 @@ export async function resolveMergeValues(
     if (wanted.has("first_name")) row.first_name = firstName(subject.name);
     if (wanted.has("course")) {
       row.course =
-        entity === "lead"
-          ? firstCourse(subject.record)
-          : readString(subject.record, "current_course");
+        entity === "student"
+          ? readString(subject.record, "current_course")
+          : firstCourse(subject.record);
     }
   }
 

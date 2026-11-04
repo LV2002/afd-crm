@@ -35,6 +35,8 @@ import { getStudentFieldLabels } from "@/lib/profile-form/field-labels";
 
 import { ChangePlanPanel } from "@/components/enrolment/change-plan-panel";
 import { LeadStatusBar } from "@/components/leads/lead-status-bar";
+
+import { LeadDatabasePanel } from "./lead-database-panel";
 import { loadTemperatureOptions } from "@/lib/leads/temperature-options";
 
 import { ConfirmAdmissionForm } from "./confirm-admission-form";
@@ -299,6 +301,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           inputValue={toISTInputValue(String(row.created_at))}
         />
       ) : null}
+
+      {can(user, "contact.read") && <LeadDatabasePanel leadId={id} />}
 
       <LeadStatusBar
         leadId={id}

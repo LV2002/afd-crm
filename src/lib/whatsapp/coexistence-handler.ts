@@ -160,6 +160,10 @@ export async function recordKnownMessages(
     // different ways depending on which webhook carried it is worse than
     // one that is merely incomplete.
     const content = mapMessageContent(raw as unknown as WhatsAppInboundMessage);
+    if (content.ignore) {
+      skipped += 1;
+      continue;
+    }
     const businessPhone = normalizePhone(message.businessPhone) ?? message.businessPhone;
 
     await db.insert(whatsappMessages).values({

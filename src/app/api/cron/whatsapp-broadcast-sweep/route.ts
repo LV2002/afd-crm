@@ -6,6 +6,7 @@ import { reportingFailures } from "@/lib/errors/capture";
 
 import { db } from "@/lib/db/client";
 import { whatsappBroadcastRecipients, whatsappBroadcasts } from "@/lib/db/schema";
+import { messageableContactIds } from "@/lib/contacts/whatsapp-eligibility";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 import { advanceRuns } from "@/lib/whatsapp/flow-runner";
@@ -100,6 +101,7 @@ async function run(request: Request) {
       recipientId: whatsappBroadcastRecipients.id,
       broadcastId: whatsappBroadcastRecipients.broadcastId,
       phone: whatsappBroadcastRecipients.phone,
+      contactId: whatsappBroadcastRecipients.contactId,
       templateName: whatsappBroadcasts.templateName,
       templateLanguage: whatsappBroadcasts.templateLanguage,
       bodyParam: whatsappBroadcasts.bodyParam,
@@ -138,9 +140,32 @@ async function run(request: Request) {
     rows.map((row) => row.phone),
   );
 
+  // Database contacts are re-checked too: one who has become a lead since
+  // the broadcast was composed belongs to the leads audience, and one whose
+  // list no longer carries consent must not be sent to at all.
+  const stillMessageable = await messageableContactIds(
+    rows.map((row) => row.contactId).filter((id): id is string => Boolean(id)),
+  );
+
   for (const row of rows) {
     touchedBroadcastIds.add(row.broadcastId);
     try {
+      if (row.contactId && !stillMessageable.has(row.contactId)) {
+        await db
+          .update(whatsappBroadcastRecipients)
+          .set({
+            status: "failed",
+            errorMessage: "No longer on a list that may be messaged, or has since become a lead.",
+          })
+          .where(eq(whatsappBroadcastRecipients.id, row.recipientId));
+        await db
+          .update(whatsappBroadcasts)
+          .set({ failedCount: sql`${whatsappBroadcasts.failedCount} + 1` })
+          .where(eq(whatsappBroadcasts.id, row.broadcastId));
+        suppressedCount += 1;
+        continue;
+      }
+
       if (suppressed.has(normalizePhone(row.phone) ?? row.phone)) {
         // Not a failure — nothing went wrong, we simply must not send.
         // Marked failed with a plain reason so the broadcast can finish

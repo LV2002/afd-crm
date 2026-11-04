@@ -216,6 +216,18 @@ export async function POST(request: Request) {
           .returning({ id: webhookEvents.id });
         if (!inserted) continue; // already processed on a previous delivery of this same message id
 
+        const content = mapMessageContent(message);
+        if (content.ignore) {
+          // A reaction, or a view-once / disappearing message that WhatsApp
+          // does not let a business read. Nothing to show or answer; the
+          // delivery stays recorded, marked handled.
+          await db
+            .update(webhookEvents)
+            .set({ status: "done", processedAt: new Date() })
+            .where(eq(webhookEvents.id, inserted.id));
+          continue;
+        }
+
         try {
           // Whether an inbound message may create a lead is a property of
           // the NUMBER, not of this handler.
@@ -283,8 +295,6 @@ export async function POST(request: Request) {
             });
             matched = await findLeadByPhone(message.from);
           }
-
-          const content = mapMessageContent(message);
 
           // Before anything else. WhatsApp expects a business to honour
           // an opt-out, and a number that ignores one loses its quality

@@ -14,6 +14,7 @@ export type PermissionScope = (typeof PERMISSION_SCOPES)[number];
 
 export const PERMISSION_CATEGORIES = [
   "Leads",
+  "Contacts",
   "Interactions",
   "WhatsApp",
   "Enrolment",
@@ -347,6 +348,36 @@ export const PERMISSIONS = [
     category: "Reports",
     description:
       "Ask the /ask AI analyst questions, including the full history of one named lead or student.",
+  },
+
+  /*
+    The contact database: people we hold details for who are not leads.
+
+    School-seminar attendees, purchased lists, exam-application data. Kept
+    apart from leads on purpose, so nobody is followed up, assigned, timed or
+    counted until somebody decides they are an enquiry and moves them across.
+    These are institute-wide, with no "my centre's contacts": holding any of
+    them at any scope is enough.
+  */
+  {
+    code: "contact.read",
+    label: "View the contact database",
+    category: "Contacts",
+    description:
+      "See the contact database and its lists. Phone numbers are masked until revealed, and revealing one is audited.",
+  },
+  {
+    code: "contact.manage",
+    label: "Manage contacts",
+    category: "Contacts",
+    description: "Add, edit, import and remove contacts, and create or archive lists.",
+  },
+  {
+    code: "contact.promote",
+    label: "Move contacts into leads",
+    category: "Contacts",
+    description:
+      "Turn a contact into a lead, or merge it with the lead it already is. The lead then goes through the normal assignment rules.",
   },
 
   // Administration

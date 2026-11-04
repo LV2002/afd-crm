@@ -32,6 +32,8 @@ export function InboundMedia({
   const [url, setUrl] = React.useState<string | null>(null);
   const [state, setState] = React.useState<"idle" | "loading" | "failed">("idle");
   const isImage = (mimeType ?? "").startsWith("image/");
+  const isAudio = (mimeType ?? "").startsWith("audio/");
+  const isVideo = (mimeType ?? "").startsWith("video/");
 
   const load = React.useCallback(async () => {
     setState("loading");
@@ -44,9 +46,32 @@ export function InboundMedia({
     }
   }, [messageId]);
 
+  // A voice note is small and is the message, so it is ready to play like a
+  // photo is ready to see. A video waits for a click, as before.
   React.useEffect(() => {
-    if (isImage) void load();
-  }, [isImage, load]);
+    if (isImage || isAudio) void load();
+  }, [isImage, isAudio, load]);
+
+  if (isAudio) {
+    return url ? (
+      <audio controls preload="metadata" src={url} className="h-10 w-64 max-w-full" />
+    ) : (
+      <span className="text-sm opacity-80">
+        {state === "failed" ? "Could not load the voice note." : "Loading the voice note…"}
+      </span>
+    );
+  }
+
+  if (isVideo) {
+    return url ? (
+      <video controls preload="metadata" src={url} className="max-h-72 w-auto max-w-full rounded-md border" />
+    ) : (
+      <Button size="sm" variant="secondary" onClick={load} disabled={state === "loading"}>
+        <Download className="size-4" />
+        {state === "loading" ? "Getting the video…" : state === "failed" ? "Try again" : "Play video"}
+      </Button>
+    );
+  }
 
   if (isImage) {
     if (url) {

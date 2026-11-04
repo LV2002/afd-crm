@@ -24,7 +24,7 @@ export interface BroadcastFormState {
 }
 
 function isEntity(value: unknown): value is AudienceEntity {
-  return value === "lead" || value === "student";
+  return value === "lead" || value === "student" || value === "contact";
 }
 
 /** Parses the filter map the form carries as JSON, tolerating a blank or malformed value rather than failing the send. */
@@ -49,6 +49,11 @@ function specFrom(formData: FormData): AudienceSpec | null {
   return {
     entity,
     filters: parseFilters(formData.get("filters")),
+    // Only meaningful for the contact database; ignored for leads and students.
+    listIds:
+      entity === "contact"
+        ? formData.getAll("listIds").map(String).filter((id) => /^[0-9a-f-]{36}$/i.test(id))
+        : undefined,
   };
 }
 
@@ -59,6 +64,8 @@ export interface AudiencePreview {
   duplicatePhone: number;
   /** Withdrew consent, or predates consent being captured at all. */
   noConsent: number;
+  /** Database only: already a lead, so left to the leads audience. */
+  alreadyLeads?: number;
   /** A few names, so somebody can sanity-check that the filters mean what they think. */
   sample: string[];
   /**
@@ -163,6 +170,7 @@ export async function previewAudience(formData: FormData): Promise<AudiencePrevi
       doNotContact: skipped.doNotContact,
       duplicatePhone: skipped.duplicatePhone,
       noConsent: skipped.noConsent,
+      alreadyLeads: skipped.alreadyLeads,
       sample: members.slice(0, 5).map((member) => member.name),
       sampleValues,
     };
@@ -320,6 +328,7 @@ export async function createBroadcast(
       name: name.trim(),
       audience_entity: spec.entity,
       audience_filters: spec.filters,
+      audience_list_ids: spec.entity === "contact" ? (spec.listIds ?? []) : null,
       template_name: templateName.trim(),
       template_language:
         typeof templateLanguage === "string" && templateLanguage.trim()
@@ -355,6 +364,7 @@ export async function createBroadcast(
       broadcast_id: broadcast.id,
       lead_id: member.entity === "lead" ? member.id : null,
       student_id: member.entity === "student" ? member.id : null,
+      contact_id: member.entity === "contact" ? member.id : null,
       phone: member.phone,
       params,
       status: missing.length > 0 ? "failed" : "queued",
@@ -379,6 +389,7 @@ export async function createBroadcast(
       name: name.trim(),
       entity: spec.entity,
       filters: spec.filters,
+      lists: spec.listIds ?? null,
       templateName: templateName.trim(),
       headerMedia: headerMedia?.fileName ?? null,
       recipients: audience.members.length,

@@ -24,7 +24,7 @@ interface BroadcastRow {
   name: string;
   template_name: string;
   status: "draft" | "scheduled" | "sending" | "completed" | "failed" | "cancelled";
-  audience_entity: "lead" | "student";
+  audience_entity: "lead" | "student" | "contact";
   total_recipients: number;
   sent_count: number;
   failed_count: number;
@@ -70,7 +70,7 @@ export default async function WhatsAppBroadcastsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
         <p className="max-w-2xl text-sm text-muted-foreground">
-          An approved template sent to a slice of your leads or students, picked with the same
+          An approved template sent to a slice of your leads, students or database, picked with the same
           filters as Insights. Each message can carry that person&rsquo;s own name and details. Send
           it now or set a time; a background job sends a few at a time, so refresh to see progress.
         </p>

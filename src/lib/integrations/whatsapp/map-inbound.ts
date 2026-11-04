@@ -4,11 +4,18 @@ export interface WhatsAppInboundMessage {
   timestamp: string;
   type: string;
   text?: { body: string };
-  image?: { id: string; mime_type: string };
-  document?: { id: string; mime_type: string; filename?: string };
-  audio?: { id: string; mime_type: string };
-  video?: { id: string; mime_type: string };
+  image?: { id: string; mime_type: string; caption?: string };
+  document?: { id: string; mime_type: string; filename?: string; caption?: string };
+  /** `voice` is true for a recorded voice note, false for an audio file somebody forwarded. */
+  audio?: { id: string; mime_type: string; voice?: boolean };
+  video?: { id: string; mime_type: string; caption?: string };
   sticker?: { id: string; mime_type: string };
+  /** A pin dropped on a map. */
+  location?: { latitude?: number; longitude?: number; name?: string; address?: string };
+  /** One or more contact cards. */
+  contacts?: Array<{ name?: { formatted_name?: string } }>;
+  /** An emoji reaction to an earlier message. An empty `emoji` is the reaction being taken back. */
+  reaction?: { message_id?: string; emoji?: string };
   /**
    * A tap on a template's quick-reply button. Meta sends the button's own
    * text, which is exactly what an automation branch matches on.
@@ -82,13 +89,29 @@ export interface MappedMessageContent {
   body: string | null;
   mediaId: string | null;
   mediaMimeType: string | null;
+  /**
+   * Set when the message is not something to show. A reaction is an emoji on
+   * an earlier message, not a message to answer; a disappearing or
+   * view-once message arrives as `unsupported` with nothing in it. Neither
+   * is stored, so neither shows as an empty bubble, makes a conversation look
+   * as though it is waiting for a reply, or counts as a message. The raw
+   * delivery is still in `webhook_events`.
+   */
+  ignore?: boolean;
 }
 
 /**
- * Media (image/document/audio/video/sticker) is recorded by its Meta media
- * id and mime type only — not downloaded into Supabase Storage in this
- * pass, a deliberate, documented gap (see docs/DECISIONS.md), not a
- * dropped message: the raw webhook delivery is still in `webhook_events`.
+ * What an inbound message becomes.
+ *
+ * Media (image, document, voice note, audio, video, sticker) is recorded by
+ * its Meta media id and mime type, with the sender's caption as the body;
+ * the file itself is fetched into private storage by
+ * `lib/whatsapp/inbound-media.ts`.
+ *
+ * Everything else that carries something a person wants to read is turned
+ * into a line of text: a pin becomes its name or address, a contact card
+ * its name. Before this, any type the mapper did not know became a message
+ * with no body, which the inbox showed as "(empty message)".
  */
 export function mapMessageContent(message: WhatsAppInboundMessage): MappedMessageContent {
   if (message.type === "text") {
@@ -112,9 +135,50 @@ export function mapMessageContent(message: WhatsAppInboundMessage): MappedMessag
   const media =
     message.image ?? message.document ?? message.audio ?? message.video ?? message.sticker;
   if (media) {
-    return { messageType: "media", body: null, mediaId: media.id, mediaMimeType: media.mime_type };
+    const caption = (media as { caption?: string }).caption?.trim() ?? "";
+    return {
+      messageType: "media",
+      body: caption || null,
+      mediaId: media.id,
+      mediaMimeType: media.mime_type,
+    };
   }
-  return { messageType: "text", body: null, mediaId: null, mediaMimeType: null };
+
+  if (message.type === "reaction" || message.type === "unsupported") {
+    return { messageType: "text", body: null, mediaId: null, mediaMimeType: null, ignore: true };
+  }
+
+  if (message.type === "location" && message.location) {
+    const { name, address, latitude, longitude } = message.location;
+    const where = [name, address].filter(Boolean).join(", ");
+    const coords =
+      latitude !== undefined && longitude !== undefined ? `${latitude}, ${longitude}` : "";
+    return {
+      messageType: "text",
+      body: `📍 Location${where ? `: ${where}` : ""}${coords ? ` (${coords})` : ""}`,
+      mediaId: null,
+      mediaMimeType: null,
+    };
+  }
+
+  if (message.type === "contacts" && message.contacts?.length) {
+    const names = message.contacts.map((c) => c.name?.formatted_name).filter(Boolean);
+    return {
+      messageType: "text",
+      body: `👤 Shared ${names.length > 1 ? "contacts" : "a contact"}${names.length ? `: ${names.join(", ")}` : ""}`,
+      mediaId: null,
+      mediaMimeType: null,
+    };
+  }
+
+  // A type this code has never heard of. Said plainly, so it is visible and
+  // somebody can tell what it was, rather than an unexplained blank.
+  return {
+    messageType: "text",
+    body: message.type && message.type !== "text" ? `[${message.type} message]` : null,
+    mediaId: null,
+    mediaMimeType: null,
+  };
 }
 
 /**

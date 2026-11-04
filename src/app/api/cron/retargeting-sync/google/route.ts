@@ -26,6 +26,7 @@ import {
   getIntegrationCredentials,
   setIntegrationCredential,
 } from "@/lib/integrations/credentials";
+import { syncContactAudience } from "@/lib/integrations/contact-audience";
 import { hashPhoneE164 } from "@/lib/integrations/hash-pii";
 
 export const dynamic = "force-dynamic";
@@ -120,12 +121,23 @@ async function run(request: Request) {
       );
   }
 
+  // The contact database goes into the same list, by its own rules — see
+  // lib/integrations/contact-audience.ts.
+  const contactsSync = await syncContactAudience({
+    platform: "google",
+    add: (phones) =>
+      addUsersToList(customerId, credentials, userListResourceName, phones.map(hashPhoneE164)),
+    remove: (phones) =>
+      removeUsersFromList(customerId, credentials, userListResourceName, phones.map(hashPhoneE164)),
+  });
+
   return NextResponse.json({
     userListResourceName,
     added: toAdd.length,
     removed: toRemove.length,
     eligible: eligibleLeadIds.length,
     excludedAdmitted: allLeads.filter((lead) => lead.hasAdmission).length,
+    contacts: contactsSync,
   });
 }
 

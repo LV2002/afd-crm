@@ -8873,3 +8873,31 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 - **Escalation rungs measured correctly.** The editor and policy list say a rung is "hours late" but the sweep compared it with the total time since the clock started, so on a 4-hour target a "24 hours late" rung fired at 24 hours (20 late). It now measures past the target (`hoursLate()`).
 - **Tags removed.** Settings → Tags, the tag strip on the lead page, the Tag filter on the leads list, the tag trigger and tag step in automations, the tag audience on broadcasts, tags in the AI analyst's lead history and in config export are gone. The tables (`tags`, `lead_tags`, `whatsapp_broadcasts.tag_id`) stay in the database, unused; `tests/no-tags.spec.ts` fails the build if code touches them. Migration 0113 switches off automations that started from a tag. A leftover "put a tag on them" step is skipped (the run carries on). An older config export that includes tags still imports; the tags are ignored.
 - Team guide: `docs/SLA-TARGETS-DISCOUNTS-GUIDE.md`.
+
+## WhatsApp inbox: voice notes, photos, videos and the "(empty message)" rows
+
+- **Why they were empty.** The mapper knew text, buttons and files; any other inbound type was stored with no body, which the inbox showed as "(empty message)". Separately, the inbox for people who are not leads yet only drew `body`, so even files that were stored and downloaded showed blank there (the lead page already handled them).
+- **Now shown:** photos (inline), voice notes (an audio player, ready to play), videos (a Play button), documents (Open), with the sender's caption. A shared pin shows its name/address, a contact card its name, and an unknown type says what it was (`[order message]`) instead of a blank. The conversation list says "🎤 Voice note", "📷 Photo", "🎥 Video", "📄 Document" instead of "audio attachment".
+- **Not shown, on purpose:** reactions (an emoji on an earlier message) and view-once / disappearing messages, which WhatsApp delivers to a business as `unsupported` with nothing in them. They are not stored, so they don't appear as blank bubbles or make a conversation look as though it is awaiting a reply. The raw delivery stays in `webhook_events`.
+- **Existing rows repaired** by migration 0114 from the raw deliveries: reactions and unreadable messages are hidden (soft delete), pins/contacts/other types get a readable line, and captions are restored.
+- Videos and large files are fetched by the 10-minute sweep, so a video can take a few minutes to become playable; a photo or voice note is usually there at once.
+- Not covered: Safari cannot play WhatsApp's `.ogg` voice notes (Chrome, Edge and Firefox can); a "Download" fallback is not built.
+
+## The contact database (seminars and purchased lists)
+
+- **New section: Database** (sidebar, for anyone with *View the contact database*). People we hold details for who are not leads; nobody here is assigned, timed or counted in any lead report. Full guide: `docs/DATABASE-GUIDE.md`.
+- **Lists** (one batch, one origin; the list supplies the lead source and says whether it may be used for ads / WhatsApp). **Contacts** are one row per person across any number of lists, matched by phone then email, never duplicated. Every lead field (including custom ones) is available on a contact because the form and import are drawn from the lead field definitions.
+- **Add a contact**, **Import a CSV** (mapping, preview, chunks of 1,000, file read in the browser and not stored), edit, soft-remove. Phones masked, audited reveal.
+- **Move to leads / Merge.** Both go through `resolveOrCreateLead()`, so assignment, first-touch source and duplicate handling are the same as every other lead. A contact that is already a lead (by any phone or email the lead has had, including one that arrived later) shows *Already a lead* and the button says **Merge**: it adds an enquiry, fills the lead's blank details, never overwrites. The contact **stays** in the database marked *Moved/Merged · Lead #N*; the lead page shows *In the database*.
+- **Permissions** `contact.read`, `contact.manage`, `contact.promote` (Contacts category in Roles). Admin and Co-Admin: all; Counsellor: view; Centre Head: view and move. Institute-wide, any scope. RLS: read with `contact.read`, write with `contact.manage`, no delete policy.
+- **Retargeting:** the hourly Meta and Google sync also sends eligible contacts (phone, on a list that allows ads, not a lead) and removes them when they stop being eligible. Anyone who is or becomes a lead is left to the lead rules, which exclude admitted students.
+- Migrations 0115 (tables, permissions, RLS) and 0116 (audience membership).
+- Not built: WhatsApp broadcasts to the database (the "agreed to WhatsApp" tick is recorded but not yet used); a seminar sign-up form/QR; an erase-on-request step; export (deliberately none); "conversion by list" reporting; filtering the list by "already a lead but not yet merged".
+
+## WhatsApp broadcasts to the database, and a shorter SLA/targets/discounts guide
+
+- **Broadcasts can target the contact database.** New broadcast → **Database** (beside Leads and Students) → tick one or more **lists** (they act as the tags) and optionally narrow with the usual lead-field filters. Goes only to people on those lists who are **not leads**; anyone who is or matches a lead is left out and counted ("N are already leads"). Only lists ticked "agreed to WhatsApp" can be chosen (an unticked list is refused by name). Opt-outs are skipped. The recipient is a contact, and the broadcast records which lists it went to.
+- **Checked again when each message is sent**: a contact who has become a lead, been removed, or whose list lost its tick is skipped with the reason shown.
+- Personalisation works for first name, full name, course and centre; counsellor, batch and fee variables are not offered for the database.
+- Migration 0117. Not built: multi-step automation flows for the database (they run on leads only), and recognising a database contact's reply in the inbox beyond the usual "Not in the CRM" thread.
+- `docs/SLA-TARGETS-DISCOUNTS-GUIDE.md` rewritten as a short plain-language explainer with examples.

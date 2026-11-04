@@ -50,7 +50,9 @@ function sign(body: string, secret: string): string {
   return `sha256=${createHmac("sha256", secret).update(body, "utf8").digest("hex")}`;
 }
 
-function messagePayload(overrides: { messageId?: string; from?: string; name?: string; body?: string } = {}) {
+function messagePayload(
+  overrides: { messageId?: string; from?: string; name?: string; body?: string; message?: Record<string, unknown> } = {},
+) {
   const messageId = overrides.messageId ?? `wamid.${randomUUID()}`;
   return JSON.stringify({
     object: "whatsapp_business_account",
@@ -65,13 +67,15 @@ function messagePayload(overrides: { messageId?: string; from?: string; name?: s
               metadata: { phone_number_id: PHONE_NUMBER_ID, display_phone_number: "911234567890" },
               contacts: [{ profile: { name: overrides.name ?? `${MARKER} Contact` }, wa_id: overrides.from ?? "919847500301" }],
               messages: [
-                {
-                  id: messageId,
-                  from: overrides.from ?? "919847500301",
-                  timestamp: "1700000000",
-                  type: "text",
-                  text: { body: overrides.body ?? "Hi, interested in NID coaching" },
-                },
+                overrides.message
+                  ? { id: messageId, from: overrides.from ?? "919847500301", timestamp: "1700000000", ...overrides.message }
+                  : {
+                      id: messageId,
+                      from: overrides.from ?? "919847500301",
+                      timestamp: "1700000000",
+                      type: "text",
+                      text: { body: overrides.body ?? "Hi, interested in NID coaching" },
+                    },
               ],
             },
           },
@@ -210,6 +214,31 @@ describe("POST /api/webhooks/whatsapp (inbound messages)", () => {
     expect(message.leadId).toBeNull();
     expect(message.counsellorId).toBeNull();
     expect(message.body).toBe("Hi, interested in NID coaching");
+  });
+
+  it("shows a voice note with its caption-less media, and ignores a reaction and a view-once message", async () => {
+    const send = async (from: string, message: Record<string, unknown>) => {
+      const body = messagePayload({ from, name: `${MARKER} Types`, message });
+      const res = await POST(
+        new Request("https://example.com/api/webhooks/whatsapp", {
+          method: "POST",
+          headers: { "x-hub-signature-256": sign(body, APP_SECRET) },
+          body,
+        }),
+      );
+      expect(res.status).toBe(200);
+    };
+
+    await send("919847500390", { type: "audio", audio: { id: "media-voice-1", mime_type: "audio/ogg; codecs=opus", voice: true } });
+    await send("919847500391", { type: "reaction", reaction: { message_id: "x", emoji: "👍" } });
+    await send("919847500392", { type: "unsupported" });
+
+    const voice = await db.select().from(whatsappMessages).where(eq(whatsappMessages.fromPhone, "+919847500390"));
+    expect(voice).toHaveLength(1);
+    expect(voice[0]).toMatchObject({ messageType: "media", mediaId: "media-voice-1" });
+
+    expect(await db.select().from(whatsappMessages).where(eq(whatsappMessages.fromPhone, "+919847500391"))).toHaveLength(0);
+    expect(await db.select().from(whatsappMessages).where(eq(whatsappMessages.fromPhone, "+919847500392"))).toHaveLength(0);
   });
 
   it("files a reply from a number the CRM already has onto that lead, and onto its counsellor", async () => {
