@@ -38,6 +38,7 @@ export async function saveStatementLines(
         balancePaise: l.balancePaise,
         note: l.note,
         dateGuessed: l.dateGuessed,
+        seq: l.seq ?? null,
         fingerprint: l.fingerprint,
         importedBy: input.importedBy,
       })),

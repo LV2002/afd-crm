@@ -76,7 +76,42 @@ export interface WaivedLine {
   at: string;
 }
 
+export interface CashBox {
+  accountId: string;
+  name: string;
+  centerName: string;
+  bookPaise: number;
+  lastCountedOn: string | null;
+  lastVariancePaise: number | null;
+  lastCountedByName: string | null;
+  daysSince: number | null;
+}
+
+export interface CashReversal {
+  txnNo: number;
+  occurredOn: string;
+  accountName: string;
+  amountPaise: number;
+  reason: string | null;
+  byName: string | null;
+}
+
+export interface BankCheck {
+  accountId: string;
+  accountName: string;
+  asOf: string;
+  bankPaise: number;
+  statementPaise: number | null;
+  checkedByName: string | null;
+}
+
+/** A cash count older than this is flagged: an uncounted box is an unchecked one. */
+export const STALE_COUNT_DAYS = 8;
+
 export interface Reconciliation {
+  cash: CashBox[];
+  cashReversals: CashReversal[];
+  bankChecks: BankCheck[];
   coverage: Coverage[];
   lines: ExceptionLine[];
   entries: ExceptionEntry[];
@@ -274,7 +309,80 @@ export async function getReconciliation(centerIds: string[] | null, centerId?: s
     `)),
   ][0];
 
+  const cashRows = [
+    ...(await db.execute<Row>(sql`
+      select a.id, a.name, c.name as center_name,
+             a.opening_balance_paise + coalesce((
+               select sum(case when t.direction in ('in','transfer_in') then t.amount_paise else -t.amount_paise end)
+               from finance_transactions t where t.account_id = a.id), 0) as book,
+             k.counted_on::text as counted_on, (k.counted_paise - k.expected_paise) as variance, kp.full_name as counted_by
+      from finance_accounts a
+      join centers c on c.id = a.center_id
+      left join lateral (
+        select * from cash_counts k where k.account_id = a.id order by k.counted_on desc, k.created_at desc limit 1
+      ) k on true
+      left join profiles kp on kp.id = k.counted_by
+      where a.type in ('cash','petty_cash') and a.deleted_at is null and a.is_active ${centerFilter}
+      order by c.name, a.name
+    `)),
+  ];
+  const cash: CashBox[] = cashRows.map((r) => ({
+    accountId: String(r.id),
+    name: String(r.name),
+    centerName: String(r.center_name),
+    bookPaise: Number(r.book),
+    lastCountedOn: (r.counted_on as string | null) ?? null,
+    lastVariancePaise: r.variance === null || r.variance === undefined ? null : Number(r.variance),
+    lastCountedByName: (r.counted_by as string | null) ?? null,
+    daysSince: r.counted_on ? Math.floor(daysBetween(today, String(r.counted_on))) : null,
+  }));
+
+  // Reversals in cash are how a missing receipt is quietly made to disappear,
+  // so they are listed on their own, with who and why.
+  const cashReversals: CashReversal[] = [
+    ...(await db.execute<Row>(sql`
+      select t.txn_no, t.occurred_on::text as occurred_on, a.name as account_name, t.amount_paise,
+             t.reversal_reason, p.full_name as by_name
+      from finance_transactions t
+      join finance_accounts a on a.id = t.account_id and a.type in ('cash','petty_cash')
+      left join profiles p on p.id = t.recorded_by
+      where t.reverses_transaction_id is not null and t.created_at > now() - interval '60 days' ${centerFilter}
+      order by t.created_at desc
+      limit 100
+    `)),
+  ].map((r) => ({
+    txnNo: Number(r.txn_no),
+    occurredOn: String(r.occurred_on),
+    accountName: String(r.account_name),
+    amountPaise: Math.abs(Number(r.amount_paise)),
+    reason: (r.reversal_reason as string | null) ?? null,
+    byName: (r.by_name as string | null) ?? null,
+  }));
+
+  const checkRows = [
+    ...(await db.execute<Row>(sql`
+      select distinct on (b.account_id) b.account_id, a.name, b.as_of::text as as_of, b.bank_balance_paise,
+             b.statement_balance_paise, p.full_name as by_name
+      from bank_balance_checks b
+      join finance_accounts a on a.id = b.account_id
+      left join profiles p on p.id = b.checked_by
+      where true ${centerFilter}
+      order by b.account_id, b.as_of desc, b.created_at desc
+    `)),
+  ];
+  const bankChecks: BankCheck[] = checkRows.map((r) => ({
+    accountId: String(r.account_id),
+    accountName: String(r.name),
+    asOf: String(r.as_of),
+    bankPaise: Number(r.bank_balance_paise),
+    statementPaise: r.statement_balance_paise === null ? null : Number(r.statement_balance_paise),
+    checkedByName: (r.by_name as string | null) ?? null,
+  }));
+
   return {
+    cash,
+    cashReversals,
+    bankChecks,
     coverage,
     lines,
     entries,
@@ -297,5 +405,9 @@ export async function getReconciliation(centerIds: string[] | null, centerId?: s
 /** The number on the tab: everything that needs a person to look. */
 export async function countExceptions(centerIds: string[] | null): Promise<number> {
   const r = await getReconciliation(centerIds);
-  return r.lines.length + r.entries.length + r.payments.length;
+  // A bank balance that disagrees with the statement, or a count that came
+  // up short or over, is open until the next check says otherwise.
+  const badChecks = r.bankChecks.filter((c) => c.statementPaise === null || c.statementPaise !== c.bankPaise).length;
+  const badCounts = r.cash.filter((c) => c.lastVariancePaise !== null && c.lastVariancePaise !== 0).length;
+  return r.lines.length + r.entries.length + r.payments.length + badChecks + badCounts;
 }

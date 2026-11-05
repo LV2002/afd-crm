@@ -4919,3 +4919,9 @@ Leon wants to send a WhatsApp broadcast "only to the database, not the people in
 **Checking starts at an account's first statement line,** and entries within 3 days of its last line are "waiting", not missing. Otherwise the first import would flag the whole history and every fresh entry.
 
 **PDF reading refuses on any balance break.** The CSV reader only warns, because the file comes straight from the bank's export. A PDF's columns are inferred from word positions, so a misread would put money in the wrong direction; the running balance is the check that can tell.
+
+## 2026-11-05: accountant uploads statements; cash counted, not deposited
+
+**Decision reversed:** the earlier choice not to give accounts `bank.import` is reversed at Leon's request. The control moves from "she cannot supply the bank's side" to "what she supplies is checked": balance continuity with the previous statement, no new lines on dates already imported, no direct inserts, and a balance Leon confirms himself against the bank's own app. The last of these is the real defence against a doctored PDF, and only works if he does it, not the accountant.
+
+**Cash is counted, not reconciled.** Leon keeps cash and will not deposit it, so there is nothing external to pair cash entries with. A physical count is the only check. It is stored with the book balance at the time, so a later correction can't make an old count look better. Unrecorded cash cannot be detected by any of this; the mitigation is receipts that families can verify.

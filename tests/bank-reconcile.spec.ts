@@ -19,6 +19,7 @@ const { postEntry, reverseTransaction } = await import("../src/lib/finance/post"
 const { saveStatementLines, resolveBankLines } = await import("../src/lib/finance/bank-ledger");
 const { autoMatchAccount, matchManually, unmatch, waiveLine } = await import("../src/lib/finance/reconcile");
 const { getReconciliation } = await import("../src/lib/finance/reconcile-queries");
+const { checkContinuity } = await import("../src/lib/finance/bank-continuity");
 
 const line = (id: string, on: string, direction: "in" | "out", amountPaise: number, particulars = "x") => ({
   id, occurredOn: on, direction, amountPaise, particulars,
@@ -85,6 +86,8 @@ async function sweep() {
     await db.delete(bankStatementLines).where(eq(bankStatementLines.accountId, a.id));
     await db.delete(financeTransactions).where(eq(financeTransactions.accountId, a.id));
   }
+  await db.execute(sql`delete from cash_counts where account_id in (select id from finance_accounts where name like ${MARK + "%"})`);
+  await db.execute(sql`delete from bank_balance_checks where account_id in (select id from finance_accounts where name like ${MARK + "%"})`);
   await db.delete(financeAccounts).where(like(financeAccounts.name, `${MARK}%`));
   await db.delete(centers).where(like(centers.name, `${MARK}%`));
 }
@@ -96,7 +99,7 @@ async function fresh() {
 }
 
 const stmt = (on: string, direction: "in" | "out", amountPaise: number, particulars: string, n: number) => ({
-  occurredOn: on, particulars, direction, amountPaise, balancePaise: null, note: null, dateGuessed: false,
+  occurredOn: on, particulars, direction, amountPaise, balancePaise: null as number | null, note: null, dateGuessed: false, seq: undefined as number | undefined,
   fingerprint: `${MARK}-${n}-${on}-${amountPaise}`.padEnd(64, "0"),
 });
 const post = (on: string, direction: "in" | "out", amountPaise: number, description: string, extra: { reference?: string; accountId?: string } = {}) =>
@@ -237,5 +240,55 @@ describe("reconciliation against the ledger", () => {
     await expect(
       db.insert(bankMatches).values({ bankLineId: l.id, transactionId: null, centerId, method: "manual" }),
     ).rejects.toThrow();
+  });
+});
+
+const withBal = (on: string, direction: "in" | "out", amountPaise: number, balancePaise: number, n: number, seq: number) => ({
+  ...stmt(on, direction, amountPaise, `L${n}`, n),
+  balancePaise,
+  seq,
+});
+
+describe("checking an upload against what is already stored", () => {
+  it("accepts a statement that opens where the last one closed", async () => {
+    await fresh();
+    await lines(withBal("2026-04-01", "in", 1000, 11000, 1, 0), withBal("2026-04-02", "out", 500, 10500, 2, 1));
+    const next = [withBal("2026-04-03", "in", 200, 10700, 3, 0)];
+    expect(await checkContinuity(db, accountId, next)).toBeNull();
+  });
+
+  it("refuses one whose opening balance does not join: lines or a month are missing", async () => {
+    await fresh();
+    await lines(withBal("2026-04-01", "in", 1000, 11000, 1, 0), withBal("2026-04-02", "out", 500, 10500, 2, 1));
+    const gap = [withBal("2026-05-03", "in", 200, 99200, 3, 0)];
+    expect(await checkContinuity(db, accountId, gap)).toMatch(/opens with a balance/);
+  });
+
+  it("refuses new lines on dates that were already imported", async () => {
+    await fresh();
+    await lines(withBal("2026-04-01", "in", 1000, 11000, 1, 0), withBal("2026-04-10", "out", 500, 10500, 2, 1));
+    const rewrite = [withBal("2026-04-01", "in", 1000, 11000, 1, 0), withBal("2026-04-05", "out", 9000, 2000, 4, 1), withBal("2026-04-10", "out", 500, 1500, 5, 2)];
+    expect(await checkContinuity(db, accountId, rewrite)).toMatch(/already imported/);
+  });
+
+  it("allows an overlapping statement that only adds later lines, and the first ever upload", async () => {
+    await fresh();
+    expect(await checkContinuity(db, accountId, [withBal("2026-04-01", "in", 1000, 11000, 1, 0)])).toBeNull();
+    await lines(withBal("2026-04-01", "in", 1000, 11000, 1, 0));
+    const overlap = [withBal("2026-04-01", "in", 1000, 11000, 1, 0), withBal("2026-04-02", "out", 500, 10500, 2, 1)];
+    expect(await checkContinuity(db, accountId, overlap)).toBeNull();
+  });
+});
+
+describe("cash on the reconciliation page", () => {
+  it("shows a cash box's book balance from its opening balance and every entry", async () => {
+    await db.update(financeAccounts).set({ openingBalancePaise: 100000 }).where(eq(financeAccounts.id, cashId));
+    await post("2026-04-10", "in", 250000, "Cash fee", { accountId: cashId });
+    await post("2026-04-11", "out", 40000, "Tea", { accountId: cashId });
+    const r = await open();
+    const box = r.cash.find((c) => c.accountId === cashId);
+    expect(box?.bookPaise).toBe(100000 + 250000 - 40000);
+    expect(box?.lastCountedOn).toBeNull();
+    await db.delete(financeTransactions).where(eq(financeTransactions.accountId, cashId));
   });
 });

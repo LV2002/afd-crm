@@ -8918,3 +8918,10 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 - **Segregation of duties.** New permissions `bank.import` and `bank.reconcile`, granted to admin and co-admin only. Statement lines can no longer be inserted through the API by anyone who merely records entries (RLS tightened). Setting a line aside now needs `bank.reconcile` and is recorded as a visible waiver. Recording a student payment now requires choosing an account once accounts exist.
 - Badges: the transactions list and a student's payment ledger show whether each payment is on the bank statement.
 - Not built: splitting one bank line across several entries (a lump deposit of several cash fees), a notification when items stay open, and a review queue for categories on real bank lines.
+
+### Follow-up: accountant uploads statements; cash ledger checks (migration 0121)
+
+- **Accounts now holds `bank.import`**, as Leon asked. Because the person who keeps the books now also uploads the statement, the upload is checked: it must open with the balance the last statement closed on (`lib/finance/bank-continuity.ts`), it may not add lines on dates already imported, and statement lines are inserted only by the server (the direct-insert policy is dropped). Only an admin (`bank.reconcile`) can import past a refusal, and that is recorded.
+- **Bank balance check**: an admin enters the balance read off the bank's own app; it is compared with the statement for that date (`bank_balance_checks`, append-only). A disagreement, or a date the statement doesn't reach, counts as open.
+- **Cash**: Leon will not deposit cash, so cash is kept in its own ledger and checked by counting. `cash_counts` (append-only) stores the count and what the books expected at the time; a difference needs an explanation; a box not counted for 8 days is flagged; cash reversals in the last 60 days are listed with who and why. `bank.reconcile` is relabelled "Match and review bank and cash".
+- Not built: cash receipts being sent to the family automatically (the strongest check on unrecorded cash), and an approval step for large cash payouts.

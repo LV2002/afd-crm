@@ -250,14 +250,14 @@ export const PERMISSIONS = [
     label: "Upload bank statements",
     category: "Finance",
     description:
-      "Upload a bank statement. Kept apart from recording entries on purpose: whoever keeps the books should not also supply the bank's side.",
+      "Upload a bank statement. What is uploaded is checked: it must continue from the last statement and cannot change dates already imported.",
   },
   {
     code: "bank.reconcile",
-    label: "Match and review bank transactions",
+    label: "Match and review bank and cash",
     category: "Finance",
     description:
-      "Pair statement lines with ledger entries by hand, undo a pair, and accept a line as having no entry. Run the automatic matching.",
+      "Pair statement lines with entries by hand, undo a pair, accept a line as having no entry, confirm the bank balance and count the cash.",
   },
 
   // Academics

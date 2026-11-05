@@ -99,6 +99,11 @@ export function ImportPanel({ accounts }: { accounts: Array<{ id: string; name: 
             <Stat label="Money out (new)" value={formatINR(preview.outPaise)} />
           </dl>
 
+          {preview.continuityError && (
+            <p className="rounded-md border border-red-300 bg-red-50 p-2 text-sm text-red-900">
+              {preview.continuityError}
+            </p>
+          )}
           {preview.gapWarning && (
             <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-900">{preview.gapWarning}</p>
           )}
@@ -135,8 +140,13 @@ export function ImportPanel({ accounts }: { accounts: Array<{ id: string; name: 
             </details>
           )}
 
-          {preview.fresh.length > 0 ? (
+          {preview.fresh.length > 0 && preview.continuityError && !preview.canOverride ? (
+            <p className="text-sm text-muted-foreground">
+              Nothing was imported. Upload the right statement, or ask an admin to look at it.
+            </p>
+          ) : preview.fresh.length > 0 ? (
             <form action={importAction} className="flex items-center gap-3">
+              {preview.continuityError && <input type="hidden" name="override" value="1" />}
               <input
                 type="hidden"
                 name="payload"
@@ -145,7 +155,7 @@ export function ImportPanel({ accounts }: { accounts: Array<{ id: string; name: 
               <Button type="submit" disabled={importing}>
                 {importing
                   ? "Importing…"
-                  : `Import ${preview.fresh.length} new transaction${preview.fresh.length === 1 ? "" : "s"}`}
+                  : `${preview.continuityError ? "Import anyway — " : "Import "}${preview.fresh.length} new transaction${preview.fresh.length === 1 ? "" : "s"}`}
               </Button>
               <FormMessage error={importState.error} />
             </form>

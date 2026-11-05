@@ -14,6 +14,7 @@ import { assertAccountInScope } from "./account-scope";
 import { parseBankStatement, type ParsedStatement, type StatementLine } from "./bank-statement";
 import { parseBankPdf } from "./bank-statement-pdf";
 import { autoMatchAccount } from "./reconcile";
+import { checkContinuity, chronological } from "./bank-continuity";
 import { SKIP_REASONS } from "./bank-constants";
 import { getFinanceCategories } from "./get-finance";
 import { resolveBankLines, saveStatementLines } from "./bank-ledger";
@@ -47,6 +48,10 @@ export interface ImportPreview {
   outPaise: number;
   /** Set when there is a stretch with no statement between the last import and this file. */
   gapWarning: string | null;
+  /** Set when the file does not fit the statements already imported. Blocks the import. */
+  continuityError: string | null;
+  /** Whether this person may import despite that (admins reviewing a bank correction). */
+  canOverride: boolean;
 }
 
 export interface PreviewState {
@@ -107,7 +112,9 @@ export async function previewStatement(
   }
 
   const known = new Set(await existingFingerprints(accountId, parsed.lines.map((l) => l.fingerprint)));
-  const fresh = parsed.lines.filter((l) => !known.has(l.fingerprint));
+  const ordered = chronological(parsed.lines).map((l, i) => ({ ...l, seq: i }));
+  const fresh = ordered.filter((l) => !known.has(l.fingerprint));
+  const continuityError = await checkContinuity(db, accountId, ordered);
   const dates = parsed.lines.map((l) => l.occurredOn).sort();
 
   // A month with no statement is a month nobody checked. Say so rather than
@@ -135,6 +142,8 @@ export async function previewStatement(
       inPaise: fresh.filter((l) => l.direction === "in").reduce((s, l) => s + l.amountPaise, 0),
       outPaise: fresh.filter((l) => l.direction === "out").reduce((s, l) => s + l.amountPaise, 0),
       gapWarning,
+      continuityError,
+      canOverride: can(importer, "bank.reconcile"),
     },
   };
 }
@@ -165,6 +174,7 @@ const lineSchema = z.object({
   balancePaise: z.number().int().nullable(),
   note: z.string().max(2000).nullable(),
   dateGuessed: z.boolean(),
+  seq: z.number().int().nonnegative().optional(),
   fingerprint: z.string().regex(/^[0-9a-f]{64}$/),
 });
 
@@ -193,6 +203,13 @@ export async function importLines(
     return { error: "Uploading bank statements is limited to people with that permission." };
   }
 
+  // Checked again here: the lines arrive from the browser, so nothing the
+  // preview said can be taken on trust. Only a reviewer may import past it.
+  const continuityError = await checkContinuity(db, parsed.data.accountId, parsed.data.lines);
+  if (continuityError && !(formData.get("override") === "1" && can(user, "bank.reconcile"))) {
+    return { error: continuityError };
+  }
+
   const inserted = await saveStatementLines(db, {
     accountId: parsed.data.accountId,
     centerId: scope.centerId,
@@ -209,7 +226,12 @@ export async function importLines(
     action: "finance.bank_import",
     entityType: "bank_statement_lines",
     entityId: parsed.data.accountId,
-    after: { offered: parsed.data.lines.length, saved: inserted, autoMatched: paired },
+    after: {
+      offered: parsed.data.lines.length,
+      saved: inserted,
+      autoMatched: paired,
+      overridden: Boolean(continuityError),
+    },
   });
 
   revalidateBank();

@@ -126,6 +126,8 @@ export const DATA_TABLES = [
   "outcome_events",
   "error_events",
   "bank_matches",
+  "bank_balance_checks",
+  "cash_counts",
   "finance_transactions",
   "bank_statement_lines",
   "contact_list_members",

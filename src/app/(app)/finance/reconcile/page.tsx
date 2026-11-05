@@ -4,12 +4,12 @@ import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { getFinanceCenterId } from "@/lib/finance/center-filter";
-import { STALE_STATEMENT_DAYS, getReconciliation } from "@/lib/finance/reconcile-queries";
+import { STALE_COUNT_DAYS, STALE_STATEMENT_DAYS, getReconciliation } from "@/lib/finance/reconcile-queries";
 import { formatINR } from "@/lib/format/currency";
 import { formatDateIST } from "@/lib/format/date";
 import { createClient } from "@/lib/supabase/server";
 
-import { PairButton, ReasonForm, RunMatchingButton } from "./reconcile-forms";
+import { BankBalanceForm, CashCountForm, PairButton, ReasonForm, RunMatchingButton } from "./reconcile-forms";
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +112,103 @@ export default async function ReconcilePage() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold">Bank balance check</h3>
+        <p className="text-xs text-muted-foreground">
+          The check that doesn&apos;t depend on the statement file: read the balance off the bank&apos;s own app or
+          passbook and enter it here. It is compared with what the imported statement says for that day.
+        </p>
+        {data.coverage.map((c) => {
+          const check = data.bankChecks.find((b) => b.accountId === c.accountId);
+          const ok = check && check.statementPaise !== null && check.statementPaise === check.bankPaise;
+          return (
+            <div key={c.accountId} className="flex flex-col gap-1.5 rounded-lg border p-3">
+              <p className="text-sm font-medium">
+                {c.name}{" "}
+                {check ? (
+                  ok ? (
+                    <Badge variant="secondary">Agreed on {day(check.asOf)}</Badge>
+                  ) : (
+                    <Badge variant="destructive">
+                      {check.statementPaise === null
+                        ? `Not covered by a statement (${day(check.asOf)})`
+                        : `Differs on ${day(check.asOf)}: bank ${formatINR(check.bankPaise)}, statement ${formatINR(check.statementPaise)}`}
+                    </Badge>
+                  )
+                ) : (
+                  <Badge variant="outline">Never checked</Badge>
+                )}
+              </p>
+              {check && <p className="text-xs text-muted-foreground">Last checked by {check.checkedByName ?? "unknown"}.</p>}
+              {canReconcile && <BankBalanceForm accountId={c.accountId} />}
+            </div>
+          );
+        })}
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold">Cash</h3>
+        <p className="text-xs text-muted-foreground">
+          Cash has no bank statement, so it is checked by counting it. Count the box, enter the amount, and it is set against
+          what the books say it should hold. A box not counted for {STALE_COUNT_DAYS} days is flagged.
+        </p>
+        {data.cash.length === 0 ? (
+          <Empty />
+        ) : (
+          data.cash.map((b) => {
+            const stale = b.daysSince === null || b.daysSince > STALE_COUNT_DAYS;
+            return (
+              <div key={b.accountId} className="flex flex-col gap-1.5 rounded-lg border p-3">
+                <p className="text-sm font-medium">
+                  {b.name} <span className="font-normal text-muted-foreground">({b.centerName})</span> — books say{" "}
+                  {formatINR(b.bookPaise)}
+                </p>
+                <p className="text-xs">
+                  {b.lastCountedOn ? (
+                    <>
+                      Last counted {day(b.lastCountedOn)}
+                      {b.lastCountedByName ? ` by ${b.lastCountedByName}` : ""}:{" "}
+                      {b.lastVariancePaise === 0 ? (
+                        <span className="text-green-700">agreed</span>
+                      ) : (
+                        <span className="font-medium text-red-700">
+                          {(b.lastVariancePaise ?? 0) > 0 ? "over" : "short"} by {formatINR(Math.abs(b.lastVariancePaise ?? 0))}
+                        </span>
+                      )}{" "}
+                      {stale && <Badge variant="destructive">{b.daysSince} days ago</Badge>}
+                    </>
+                  ) : (
+                    <Badge variant="destructive">Never counted</Badge>
+                  )}
+                </p>
+                {canReconcile && <CashCountForm accountId={b.accountId} />}
+              </div>
+            );
+          })
+        )}
+        {data.cashReversals.length > 0 && (
+          <details className="text-sm">
+            <summary className="cursor-pointer text-xs font-medium">
+              {data.cashReversals.length} reversal{data.cashReversals.length === 1 ? "" : "s"} in cash in the last 60 days
+            </summary>
+            <table className="mt-2 w-full text-xs">
+              <tbody>
+                {data.cashReversals.map((r) => (
+                  <tr key={r.txnNo} className="border-t">
+                    <td className="p-1.5">#{r.txnNo}</td>
+                    <td className="p-1.5">{day(r.occurredOn)}</td>
+                    <td className="p-1.5">{r.accountName}</td>
+                    <td className="p-1.5">{formatINR(r.amountPaise)}</td>
+                    <td className="p-1.5">{r.reason ?? "—"}</td>
+                    <td className="p-1.5">{r.byName ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        )}
       </section>
 
       <section className="flex flex-col gap-2">
