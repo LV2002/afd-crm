@@ -4904,6 +4904,6 @@ Leon wants to send a WhatsApp broadcast "only to the database, not the people in
 
 **Consent is the list's tick,** "These people agreed to WhatsApp messages". A list without it cannot be chosen, and the refusal names it: contacts have no per-person consent field, so the list is the only record, and a number that never opted in is how a WhatsApp number is restricted.
 
-**Automation flows are not extended.** A flow run is keyed to a lead (its steps, waits and replies hang off one), so a sequence for contacts would need its own run model. A one-off bulk message was the ask that could be done safely now; sequences are a larger piece and are left for a decision.
+**Automation flows for the database (superseding the earlier "not extended").** A run now has exactly one subject, a lead or a contact (check constraint), and a flow's audience is fixed at creation so existing runs can't be orphaned. Contact flows are manual-start per list: there is no lead event to trigger them, and automatic enrolment on joining a list would message people the moment an import finished. Consent and lead-exclusion reuse the broadcast rules (`messageableContactIds`) and are re-checked at each step.
 
 **Contact reads use the caller's RLS client,** so `contact.read` is what lets somebody compose to them; the lead-exclusion lookup is existence-only on the direct client.

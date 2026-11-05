@@ -74,12 +74,14 @@ export function NewBroadcastForm({
   leadFields,
   studentFields,
   contactLists,
+  canUseDatabase,
   templates,
 }: {
   leadFields: AudienceFieldOptions[];
   studentFields: AudienceFieldOptions[];
   /** Lists in the contact database. Empty when the person cannot see the database. */
   contactLists: Array<{ id: string; name: string; agreed: boolean }>;
+  canUseDatabase: boolean;
   templates: TemplateChoice[];
 }) {
   const [state, formAction, pending] = useActionState(createBroadcast, initialState);
@@ -206,7 +208,7 @@ export function NewBroadcastForm({
         <h3 className="text-sm font-semibold">Who it goes to</h3>
 
         <div className="flex gap-1">
-          {(contactLists.length > 0 ? (["lead", "student", "contact"] as const) : (["lead", "student"] as const)).map((value) => (
+          {(canUseDatabase ? (["lead", "student", "contact"] as const) : (["lead", "student"] as const)).map((value) => (
             <button
               key={value}
               type="button"
@@ -228,6 +230,11 @@ export function NewBroadcastForm({
               Goes only to people on these lists who are <strong>not leads</strong>. Anyone who has become a lead is left out; the
               Leads choice reaches them. Only lists marked as having agreed to WhatsApp can be chosen.
             </p>
+            {!contactLists.some((l) => l.agreed) && (
+              <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-900">
+                Nothing to send to yet. Go to Database → Lists, make a list, and tick &ldquo;agreed to WhatsApp&rdquo; on it.
+              </p>
+            )}
             <div className="flex flex-col gap-1.5">
               {contactLists.map((list) => (
                 <label key={list.id} className={cn("flex items-center gap-2 text-sm", !list.agreed && "opacity-60")}>

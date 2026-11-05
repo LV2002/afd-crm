@@ -108,3 +108,9 @@ leads only. A one-off bulk message to the database works; a sequence does not ye
 * **Removing someone** removes them from the database and the ad audiences. It is a soft removal (the record is kept, hidden).
 * **A person asking for their data to be erased** isn't built as a separate step yet: removal hides them and takes them
   out of audiences, but the record remains in the database.
+
+## Automations for the database
+
+Chats → Automations → New → *Who it's for* → **People in the database**. Build the steps as usual, switch it on, then on
+its page tick the lists and press **Start**. It goes only to people on lists marked "agreed to WhatsApp" who are not
+leads and have not opted out. If someone becomes a lead part-way through, they drop out of it.

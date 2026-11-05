@@ -46,6 +46,7 @@ export default async function NewWhatsAppFlowPage() {
           temperature: "",
           keywords: "",
           centerId: "",
+          audience: "lead",
           appliesTo: [],
         }}
         statuses={temperatureOptions

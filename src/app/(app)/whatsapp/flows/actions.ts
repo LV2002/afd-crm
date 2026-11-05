@@ -17,7 +17,7 @@ import {
   type FlowStepKind,
   type FlowTrigger,
 } from "@/lib/whatsapp/flow-engine";
-import { startFlows } from "@/lib/whatsapp/flow-runner";
+import { startFlowForContacts, startFlows } from "@/lib/whatsapp/flow-runner";
 
 export interface FlowFormState {
   error?: string;
@@ -64,7 +64,10 @@ export async function saveFlow(_prev: FlowFormState, formData: FormData): Promis
   const flowId = String(formData.get("flowId") ?? "").trim() || null;
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim() || null;
-  const triggerType = formData.get("triggerType");
+  const audience = formData.get("audience") === "contact" ? ("contact" as const) : ("lead" as const);
+  // A flow for the database has no lead events to react to: it is started by
+  // hand for chosen lists.
+  const triggerType = audience === "contact" ? "manual" : formData.get("triggerType");
   const centerId = String(formData.get("centerId") ?? "").trim() || null;
 
   if (!name) return { error: "Give the automation a name." };
@@ -86,7 +89,7 @@ export async function saveFlow(_prev: FlowFormState, formData: FormData): Promis
   // called from the middle of ordinary work and swallows its own errors.
   // An unknown field name stored here would make the automation silently
   // reach nobody, with nothing anywhere saying why.
-  const appliesToParsed = parseConditions(formData.get("appliesTo"));
+  const appliesToParsed = parseConditions(audience === "contact" ? null : formData.get("appliesTo"));
   if (!appliesToParsed.ok) return { error: appliesToParsed.error };
   const conditions = appliesToParsed.value.all ?? [];
   // Stored as a fresh object rather than the parser's `RuleConditions`,
@@ -99,6 +102,8 @@ export async function saveFlow(_prev: FlowFormState, formData: FormData): Promis
 
   let savedId: string;
   if (flowId) {
+    // The audience is fixed when the flow is created: switching a flow
+    // that has runs from leads to contacts would orphan every one of them.
     await db
       .update(whatsappFlows)
       .set({ ...values, updatedAt: new Date() })
@@ -107,7 +112,7 @@ export async function saveFlow(_prev: FlowFormState, formData: FormData): Promis
   } else {
     const [created] = await db
       .insert(whatsappFlows)
-      .values({ ...values, createdBy: user.id })
+      .values({ ...values, audience, createdBy: user.id })
       .returning({ id: whatsappFlows.id });
     savedId = created.id;
   }
@@ -356,4 +361,60 @@ export async function triggerManualFlows(leadId: string): Promise<number> {
   const user = await requireCampaigner();
   if (!user) return 0;
   return startFlows("manual", { leadId });
+}
+
+/**
+ * Starts a database flow for everyone on the chosen lists.
+ *
+ * Only lists marked as having agreed to WhatsApp are accepted, and the people
+ * on them who are leads or have opted out are left out here and again before
+ * each message. Needs `contact.read` as well as `whatsapp.campaign`: sending
+ * to the database is reaching into it.
+ */
+export async function startFlowForLists(
+  _prev: FlowFormState,
+  formData: FormData,
+): Promise<FlowFormState> {
+  const user = await requireCampaigner();
+  if (!user) return { error: "You don't have permission to do that." };
+  if (!can(user, "contact.read")) return { error: "You don't have access to the database." };
+
+  const flowId = String(formData.get("flowId") ?? "").trim();
+  const listIds = formData.getAll("listIds").map(String).filter(Boolean);
+  if (!flowId) return { error: "Which automation?" };
+  if (listIds.length === 0) return { error: "Tick at least one list." };
+
+  const [flow] = await db
+    .select({ id: whatsappFlows.id, isActive: whatsappFlows.isActive, audience: whatsappFlows.audience })
+    .from(whatsappFlows)
+    .where(and(eq(whatsappFlows.id, flowId), isNull(whatsappFlows.deletedAt)));
+  if (!flow) return { error: "That automation no longer exists." };
+  if (flow.audience !== "contact") return { error: "This automation is for leads." };
+  if (!flow.isActive) return { error: "Switch it on first." };
+
+  const agreed = await db.execute<{ id: string }>(sql`
+    select id from contact_lists
+    where archived_at is null and use_for_whatsapp
+      and id in (${sql.join(listIds.map((id) => sql`${id}::uuid`), sql`, `)})
+  `);
+  const allowed = [...agreed].map((r) => r.id);
+  if (allowed.length === 0) return { error: "None of those lists is marked as agreed to WhatsApp." };
+
+  const { started, skipped } = await startFlowForContacts(flowId, allowed);
+
+  const supabase = await createClient();
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "whatsapp.flow_start_lists",
+    entityType: "whatsapp_flows",
+    entityId: flowId,
+    after: { listIds: allowed, started, skipped },
+  });
+
+  revalidatePath(`/whatsapp/flows/${flowId}`);
+  return {
+    success: `Started for ${started} ${started === 1 ? "person" : "people"}${
+      skipped > 0 ? `; ${skipped} left out (leads, opted out, already in it, or no number)` : ""
+    }. The first message goes on the next sweep, within about ten minutes.`,
+  };
 }

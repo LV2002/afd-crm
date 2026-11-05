@@ -14,7 +14,7 @@ import {
   releasePhone,
   suppressPhone,
 } from "@/lib/whatsapp/opt-out";
-import { resolveReply, startFlows } from "@/lib/whatsapp/flow-runner";
+import { resolveContactReply, resolveReply, startFlows } from "@/lib/whatsapp/flow-runner";
 import { downloadMessageMedia, worthFetchingInline } from "@/lib/whatsapp/inbound-media";
 import { activeDropdownValues } from "@/lib/config/dropdown-values";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
@@ -387,6 +387,10 @@ export async function POST(request: Request) {
           if (matched && !optOut) {
             await resolveReply(matched.id, content.body);
             await startFlows("inbound_keyword", { leadId: matched.id, text: content.body });
+          } else if (!matched && !optOut) {
+            // Not a lead: may be somebody on the contact database answering
+            // an automation that was started for their list.
+            await resolveContactReply(message.from, content.body);
           }
 
           if (matched) {

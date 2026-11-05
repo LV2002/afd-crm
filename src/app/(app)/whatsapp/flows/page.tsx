@@ -47,6 +47,7 @@ export default async function WhatsAppFlowsPage() {
       name: whatsappFlows.name,
       description: whatsappFlows.description,
       triggerType: whatsappFlows.triggerType,
+      audience: whatsappFlows.audience,
       appliesTo: whatsappFlows.appliesTo,
       isActive: whatsappFlows.isActive,
       steps: sql<number>`(select count(*) from ${whatsappFlowSteps} where ${whatsappFlowSteps.flowId} = ${whatsappFlows.id})`,
@@ -95,7 +96,9 @@ export default async function WhatsAppFlowsPage() {
                   )}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                  {TRIGGER_LABELS[flow.triggerType] ?? flow.triggerType}
+                  {flow.audience === "contact"
+                    ? "Started by hand for database lists"
+                    : (TRIGGER_LABELS[flow.triggerType] ?? flow.triggerType)}
                   {/* An automation narrowed to a slice of leads looked
                       identical here to one that reaches everybody, which
                       is the difference between 200 messages and 12. */}

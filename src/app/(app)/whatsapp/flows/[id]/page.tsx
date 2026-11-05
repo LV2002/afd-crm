@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
 import { AccessDenied } from "@/components/layout/access-denied";
@@ -15,6 +15,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import {
   centers,
+  contacts,
   leads,
   whatsappFlowRuns,
   whatsappFlowSteps,
@@ -37,6 +38,7 @@ import { loadRuleOptions } from "@/app/(app)/settings/rules/load-options";
 import { listTemplates } from "../../templates/actions";
 import { FlowForm } from "../flow-form";
 import { FlowControls } from "./flow-controls";
+import { StartForLists } from "./start-for-lists";
 import { AddStep, ExistingStep, type StepEditorLists } from "./step-editor";
 
 export const dynamic = "force-dynamic";
@@ -83,16 +85,24 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
           stopReason: whatsappFlowRuns.stopReason,
           startedAt: whatsappFlowRuns.startedAt,
           wakeAt: whatsappFlowRuns.wakeAt,
-          studentName: leads.studentName,
+          studentName: sql<string>`coalesce(${leads.studentName}, ${contacts.name})`,
           leadId: leads.id,
         })
         .from(whatsappFlowRuns)
-        .innerJoin(leads, eq(leads.id, whatsappFlowRuns.leadId))
+        .leftJoin(leads, eq(leads.id, whatsappFlowRuns.leadId))
+        .leftJoin(contacts, eq(contacts.id, whatsappFlowRuns.contactId))
         .where(eq(whatsappFlowRuns.flowId, id))
         .orderBy(desc(whatsappFlowRuns.startedAt))
         .limit(25),
       loadRuleOptions(supabase),
     ]);
+
+  const forDatabase = flow.audience === "contact";
+  const listRows = forDatabase
+    ? await db.execute<{ id: string; name: string; agreed: boolean }>(sql`
+        select id, name, use_for_whatsapp as agreed from contact_lists where archived_at is null order by name
+      `)
+    : [];
 
   const steps: FlowStep[] = stepRows.map((row) => ({
     id: row.id,
@@ -132,6 +142,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
       )
       .map((option) => ({ value: option.value, label: option.label })),
     positions: steps.map((step) => step.position),
+    audience: flow.audience,
   };
 
   const liveRuns = runRows.filter((run) => run.status === "running" || run.status === "waiting");
@@ -153,6 +164,14 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
       </div>
 
       <FlowControls flowId={flow.id} isActive={flow.isActive} liveRuns={liveRuns.length} />
+
+      {forDatabase && (
+        <StartForLists
+          flowId={flow.id}
+          isActive={flow.isActive}
+          lists={[...listRows].map((l) => ({ id: l.id, name: l.name, agreed: Boolean(l.agreed) }))}
+        />
+      )}
 
       {issues.length > 0 && (
         <div className="rounded-lg border border-dashed p-4 text-sm">
@@ -202,6 +221,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
               ? (triggerConfig.keywords as string[]).join(", ")
               : "",
             centerId: flow.centerId ?? "",
+            audience: flow.audience,
             appliesTo: (flow.appliesTo as RuleConditions | null)?.all ?? [],
           }}
           statuses={temperatureOptions
@@ -221,7 +241,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Lead</TableHead>
+                <TableHead>{forDatabase ? "Contact" : "Lead"}</TableHead>
                 <TableHead>Where they are</TableHead>
                 <TableHead>Started</TableHead>
                 <TableHead>Next move</TableHead>

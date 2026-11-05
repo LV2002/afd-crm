@@ -202,7 +202,16 @@ export function describeWhatsAppDelivery(
     const text = (raw.text as { body?: unknown } | undefined)?.body;
     const what = typeof text === "string" && text.trim() ? `“${text.trim().slice(0, 60)}”` : String(raw.type ?? "message");
     const state = id === null || !stored.has(id) ? "not saved to Chats" : stored.get(id) ? "saved, but hidden" : "saved in Chats";
-    return `Message from ${maskPhone(`+${raw.from}`)}: ${what} — ${state}`;
+    // WhatsApp withholds some messages (view-once, disappearing, some
+    // newer types) and says why in `errors`; surfacing it answers "why did
+    // this person's message arrive empty?" without opening the raw payload.
+    const err = Array.isArray(raw.errors) ? (raw.errors[0] as Record<string, unknown> | undefined) : undefined;
+    const why = err
+      ? ` — WhatsApp said: ${[err.code, err.title ?? err.message, (err.error_data as { details?: unknown } | undefined)?.details]
+          .filter((part) => typeof part === "string" || typeof part === "number")
+          .join(" ")}`
+      : "";
+    return `Message from ${maskPhone(`+${raw.from}`)}: ${what} — ${state}${why}`;
   }
 
   return null;
