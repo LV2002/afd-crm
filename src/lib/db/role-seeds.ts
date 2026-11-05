@@ -172,6 +172,9 @@ export const ROLE_SEEDS: RoleSeed[] = [
           "finance.read",
           "finance.record",
           "finance.manage",
+          // Accounts uploads the bank statements; what is uploaded is checked
+          // (see lib/finance/bank-continuity.ts), and pairing stays with the admins.
+          "bank.import",
           "enrolment.read",
           // Correcting a fee that was agreed wrongly is accounts' work,
           // and before this it had to go through a centre head.

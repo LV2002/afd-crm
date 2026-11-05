@@ -1,9 +1,10 @@
 import Link from "next/link";
 
 import { AccessDenied } from "@/components/layout/access-denied";
-import { can, getCurrentUser } from "@/lib/auth/session";
+import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 
 import { getFinanceCenterId, getFinanceCenters } from "@/lib/finance/center-filter";
+import { countExceptions } from "@/lib/finance/reconcile-queries";
 import { createClient } from "@/lib/supabase/server";
 
 import { CenterSwitcher } from "./center-switcher";
@@ -28,6 +29,10 @@ export default async function FinanceLayout({ children }: { children: React.Reac
     getFinanceCenterId(supabase),
   ]);
 
+  const openItems = await countExceptions(
+    scopeFor(user, "finance.read") === "all" ? null : user.centerIds,
+  ).catch(() => 0);
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -44,6 +49,7 @@ export default async function FinanceLayout({ children }: { children: React.Reac
       <FinanceNav
         canRecord={can(user, "finance.record")}
         canManage={can(user, "finance.manage")}
+        openItems={openItems}
       />
 
       {children}

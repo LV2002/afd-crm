@@ -36,6 +36,8 @@ export interface StatementLine {
   note: string | null;
   /** True when the file's year was unusable and was taken from the neighbouring rows. */
   dateGuessed: boolean;
+  /** Position in the statement, oldest first. Set when the preview is built. */
+  seq?: number;
   /** Stable identity of the line, so re-uploading an overlapping statement adds nothing twice. */
   fingerprint: string;
 }
@@ -137,7 +139,7 @@ export function parseStatementAmount(raw: string): number | null {
   return negative ? -paise : paise;
 }
 
-function normalise(text: string): string {
+export function normalise(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
@@ -192,7 +194,7 @@ function findColumns(header: string[]): Columns | null {
   };
 }
 
-function fingerprintOf(parts: {
+export function fingerprintOf(parts: {
   occurredOn: string;
   direction: string;
   amountPaise: number;

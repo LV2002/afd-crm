@@ -245,6 +245,20 @@ export const PERMISSIONS = [
     description:
       "Add and edit accounts and opening balances, and reverse or correct a posted entry.",
   },
+  {
+    code: "bank.import",
+    label: "Upload bank statements",
+    category: "Finance",
+    description:
+      "Upload a bank statement. What is uploaded is checked: it must continue from the last statement and cannot change dates already imported.",
+  },
+  {
+    code: "bank.reconcile",
+    label: "Match and review bank and cash",
+    category: "Finance",
+    description:
+      "Pair statement lines with entries by hand, undo a pair, accept a line as having no entry, confirm the bank balance and count the cash.",
+  },
 
   // Academics
   {

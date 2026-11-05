@@ -10,7 +10,7 @@ import { CounsellorLinks, type CounsellorLink } from "@/components/layout/counse
 import { NavBadge } from "@/components/layout/nav-badge";
 import { NAV_ICONS } from "@/components/layout/nav-icons";
 import { Button } from "@/components/ui/button";
-import type { NavItem } from "@/lib/auth/nav";
+import { NAV_GROUP_LABELS, type NavItem } from "@/lib/auth/nav";
 import type { NavBadgeCounts } from "@/lib/nav/badge-permissions";
 import { cn } from "@/lib/utils";
 
@@ -142,7 +142,9 @@ export function MobileNav({
               </div>
 
               <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
-                {items.map((item) => {
+                {items.map((item, index) => {
+                  const heading =
+                    item.group && item.group !== items[index - 1]?.group ? NAV_GROUP_LABELS[item.group] : null;
                   const hasChildren = item.href === "/dashboard" && counsellors.length > 0;
                   const isOpen =
                     hasChildren && (pathname === item.href || pathname.startsWith(`${item.href}/`));
@@ -152,6 +154,12 @@ export function MobileNav({
                   const Icon = NAV_ICONS[item.iconKey];
                   return (
                     <div key={item.href} className="flex flex-col gap-1">
+                    {!item.group && items[index - 1]?.group && <div className="mx-3 my-2 border-t" />}
+                    {heading && (
+                      <p className="mt-3 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {heading}
+                      </p>
+                    )}
                     <Link
                       href={item.href}
                       className={cn(

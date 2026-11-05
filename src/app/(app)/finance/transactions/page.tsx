@@ -21,6 +21,7 @@ import {
 import { signedAmount } from "@/lib/finance/ledger-math";
 import { getFinanceCenterId } from "@/lib/finance/center-filter";
 import { createClient } from "@/lib/supabase/server";
+import { BANK_STATUS_LABEL, bankStatusForTransactions } from "@/lib/finance/bank-status";
 
 import { EntryActions } from "./entry-actions";
 import { FeeEntryActions } from "../fee-entry-actions";
@@ -57,6 +58,10 @@ export default async function FinanceTransactionsPage({
   ]);
 
   const reversed = reversedIds(entries);
+  const bankStatus = await bankStatusForTransactions(
+    supabase,
+    entries.map((e) => ({ id: e.id, accountId: e.account_id })),
+  );
   const accountNames = new Map(accounts.map((a) => [a.id, a.name]));
   const newestFirst = entries;
   const canManage = Boolean(user && can(user, "finance.manage"));
@@ -88,6 +93,7 @@ export default async function FinanceTransactionsPage({
                 <TableHead>Description</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Account</TableHead>
+                <TableHead>Bank</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 {(canManage || canRefund) && <TableHead />}
               </TableRow>
@@ -150,6 +156,23 @@ export default async function FinanceTransactionsPage({
                     <TableCell className="text-muted-foreground">{entry.category}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {accountNames.get(entry.account_id) ?? "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs">
+                      {(() => {
+                        const status = bankStatus.get(entry.id);
+                        if (!status || status === "cash") return <span className="text-muted-foreground">—</span>;
+                        // A mistake and its correction cancel out and never touched the bank.
+                        if (status === "unmatched" && (isReversed || isReversal)) {
+                          return <span className="text-muted-foreground">—</span>;
+                        }
+                        return status === "matched" ? (
+                          <span className="text-green-700">✓ {BANK_STATUS_LABEL.matched}</span>
+                        ) : (
+                          <Link href="/finance/reconcile" className="font-medium text-red-700 underline">
+                            {BANK_STATUS_LABEL.unmatched}
+                          </Link>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell
                       className={

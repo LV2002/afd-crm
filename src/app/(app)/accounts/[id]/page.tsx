@@ -5,6 +5,7 @@ import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { BANK_STATUS_LABEL, bankStatusForPayments, type BankStatus } from "@/lib/finance/bank-status";
 import { formatDateIST } from "@/lib/format/date";
 import { formatINR } from "@/lib/format/currency";
 import { maskPhone } from "@/lib/leads/mask-phone";
@@ -117,6 +118,13 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
       .returns<Array<{ payment_id: string; receipt_no: number }>>(),
   ]);
 
+  const canSeeBank = can(user, "finance.read");
+  const bankStatus = canSeeBank
+    ? await bankStatusForPayments(
+        supabase,
+        (paymentRows ?? []).map((p) => p.id),
+      )
+    : new Map<string, BankStatus>();
   const receiptNoByPaymentId = new Map((receiptRows ?? []).map((r) => [r.payment_id, r.receipt_no]));
   const payments = paymentRows ?? [];
 
@@ -305,6 +313,7 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
                   <TableHead>Amount</TableHead>
                   <TableHead>Method</TableHead>
                   <TableHead>Reference</TableHead>
+                  {canSeeBank && <TableHead>Bank</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -332,11 +341,21 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
                     </TableCell>
                     <TableCell>{p.method}</TableCell>
                     <TableCell>{p.reference ?? "—"}</TableCell>
+                    {canSeeBank && (
+                      <TableCell className="whitespace-nowrap text-xs">
+                        {(() => {
+                          const status = bankStatus.get(p.id) ?? "none";
+                          if (status === "matched") return <span className="text-green-700">✓ {BANK_STATUS_LABEL.matched}</span>;
+                          if (status === "cash") return <span className="text-muted-foreground">Cash</span>;
+                          return <span className="font-medium text-red-700">{BANK_STATUS_LABEL[status]}</span>;
+                        })()}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
                 {payments.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    <TableCell colSpan={canSeeBank ? 6 : 5} className="text-center text-muted-foreground">
                       No payments recorded yet.
                     </TableCell>
                   </TableRow>

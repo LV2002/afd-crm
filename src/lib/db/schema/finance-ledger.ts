@@ -6,6 +6,7 @@ import {
   check,
   date,
   index,
+  integer,
   pgEnum,
   pgTable,
   text,
@@ -232,6 +233,9 @@ export const bankStatementLines = pgTable(
     note: text("note"),
     dateGuessed: boolean("date_guessed").notNull().default(false),
 
+    /** Position in the statement, oldest first, so lines on the same day keep their order. */
+    seq: integer("seq"),
+
     /** Hash of the line's content: re-uploading the same line adds nothing. */
     fingerprint: text("fingerprint").notNull(),
 
@@ -254,4 +258,101 @@ export const bankStatementLines = pgTable(
     check("bank_lines_direction", sql`direction in ('in', 'out')`),
     check("bank_lines_amount_positive", sql`amount_paise > 0`),
   ],
+);
+
+/**
+ * One pairing of a bank statement line with the ledger entry it belongs to.
+ *
+ * The point of the whole table: every rupee the bank shows is accounted for
+ * by an entry in the books, and every entry in a bank account is proved by a
+ * line on the statement. A line or entry with no active pair is an exception
+ * and is listed until somebody deals with it.
+ *
+ * Pairs are never deleted. Undoing one sets `active = false` and records who
+ * and why, so a pair that was made and later undone is still visible. A
+ * `waived` row (no ledger entry) is a line somebody with authority accepted
+ * as having none, and is reviewable the same way.
+ */
+export const bankMatches = pgTable(
+  "bank_matches",
+  {
+    id: idColumn(),
+    bankLineId: uuid("bank_line_id")
+      .notNull()
+      .references(() => bankStatementLines.id, { onDelete: "restrict" }),
+    transactionId: uuid("transaction_id").references(() => financeTransactions.id, {
+      onDelete: "restrict",
+    }),
+    centerId: uuid("center_id")
+      .notNull()
+      .references(() => centers.id, { onDelete: "restrict" }),
+    /** auto | categorised | manual | waived */
+    method: text("method").$type<"auto" | "categorised" | "manual" | "waived">().notNull(),
+    matchedBy: uuid("matched_by").references(() => profiles.id, { onDelete: "set null" }),
+    note: text("note"),
+    matchedAt: timestamp("matched_at", { withTimezone: true }).notNull().defaultNow(),
+    active: boolean("active").notNull().default(true),
+    unmatchedBy: uuid("unmatched_by").references(() => profiles.id, { onDelete: "set null" }),
+    unmatchedAt: timestamp("unmatched_at", { withTimezone: true }),
+    unmatchReason: text("unmatch_reason"),
+  },
+  (t) => [
+    uniqueIndex("bank_matches_line_active_uq").on(t.bankLineId).where(sql`active`),
+    uniqueIndex("bank_matches_txn_active_uq")
+      .on(t.transactionId)
+      .where(sql`active and transaction_id is not null`),
+    index("bank_matches_center_idx").on(t.centerId, t.active),
+    check("bank_matches_waiver_check", sql`(method = 'waived') = (transaction_id is null)`),
+  ],
+);
+
+/**
+ * A physical count of a cash box, set against what the books said it should
+ * hold. Cash has no statement to be checked against, so the count is the
+ * check. The expected figure is stored with the count, so it stays true
+ * after later entries move the balance. Never edited.
+ */
+export const cashCounts = pgTable(
+  "cash_counts",
+  {
+    id: idColumn(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => financeAccounts.id, { onDelete: "restrict" }),
+    centerId: uuid("center_id")
+      .notNull()
+      .references(() => centers.id, { onDelete: "restrict" }),
+    countedOn: date("counted_on").notNull(),
+    countedPaise: bigint("counted_paise", { mode: "number" }).notNull(),
+    expectedPaise: bigint("expected_paise", { mode: "number" }).notNull(),
+    note: text("note"),
+    countedBy: uuid("counted_by").references(() => profiles.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("cash_counts_account_idx").on(t.accountId, t.countedOn)],
+);
+
+/**
+ * The balance somebody read off the bank's own app, set against what the
+ * imported statement says it was that day. The one check that does not
+ * depend on the statement file being honest.
+ */
+export const bankBalanceChecks = pgTable(
+  "bank_balance_checks",
+  {
+    id: idColumn(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => financeAccounts.id, { onDelete: "restrict" }),
+    centerId: uuid("center_id")
+      .notNull()
+      .references(() => centers.id, { onDelete: "restrict" }),
+    asOf: date("as_of").notNull(),
+    bankBalancePaise: bigint("bank_balance_paise", { mode: "number" }).notNull(),
+    statementBalancePaise: bigint("statement_balance_paise", { mode: "number" }),
+    note: text("note"),
+    checkedBy: uuid("checked_by").references(() => profiles.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("bank_balance_checks_account_idx").on(t.accountId, t.asOf)],
 );

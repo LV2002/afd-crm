@@ -24,9 +24,25 @@ export type NavIconKey =
   | "ask"
   | "settings";
 
+/**
+ * The department a screen belongs to. The sidebar shows a heading above the
+ * first item of each, so a person finds "fees" under Accounts and "leads"
+ * under Sales instead of in one long list. Items with no group (Dashboard,
+ * Insights, Ask AI, Settings) sit outside any department.
+ */
+export type NavGroup = "sales" | "accounts" | "marketing" | "academics";
+
+export const NAV_GROUP_LABELS: Record<NavGroup, string> = {
+  sales: "Sales",
+  accounts: "Accounts",
+  marketing: "Marketing",
+  academics: "Academics",
+};
+
 export interface NavItem {
   href: string;
   label: string;
+  group?: NavGroup;
   iconKey: NavIconKey;
   /** Omit for items every signed-in user should see (e.g. Dashboard). */
   permission?: PermissionCode;
@@ -42,6 +58,7 @@ export interface NavItem {
 
 interface NavItemDef {
   href: string;
+  group?: NavGroup;
   iconKey: NavIconKey;
   permission?: PermissionCode;
   badgeKey?: NavBadgeKey;
@@ -65,6 +82,7 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
   { href: "/dashboard", iconKey: "dashboard", label: "Dashboard" },
   {
     href: "/leads",
+    group: "sales",
     iconKey: "leads",
     permission: "lead.read",
     label: { term: "lead", form: "plural" },
@@ -80,6 +98,7 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
   */
   {
     href: "/follow-ups",
+    group: "sales",
     iconKey: "follow-ups",
     permission: "lead.read",
     badgeKey: "followUps",
@@ -92,6 +111,7 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
   // so only the people who can actually claim one see it.
   {
     href: "/leads/orphans",
+    group: "sales",
     iconKey: "orphans",
     permission: "lead.assign",
     badgeKey: "unassigned",
@@ -102,15 +122,31 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     // People we hold details for who are not leads: seminar attendees,
     // purchased lists. Visible to anyone who can read the database.
     href: "/database",
+    group: "sales",
     iconKey: "database",
     permission: "contact.read",
     label: "Database",
+  },
+  {
+    // "Chats", not "WhatsApp", because the section now holds more than
+    // one channel — the Business API inbox, and the places the other
+    // conversations will live. The route stays /whatsapp: renaming it
+    // would break every bookmark and every link already sent round, and
+    // buys nothing a label does not.
+    href: "/whatsapp",
+    group: "sales",
+    iconKey: "whatsapp",
+    permission: "whatsapp.read",
+    badgeKey: "whatsapp",
+    badgeWhat: "conversations waiting for a reply",
+    label: "Chats",
   },
   {
     // "Admissions", not "Accounts": this is the per-student fee-collection
     // queue, and the moment a Finance section existed the old name read as
     // "the accounting area" — which is the other one.
     href: "/accounts",
+    group: "accounts",
     iconKey: "accounts",
     permission: "payment.read",
     // Confirmed by a counsellor, not yet paid. This is the signal accounts
@@ -121,34 +157,39 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     label: "Admissions",
   },
   {
-    href: "/students",
-    iconKey: "students",
-    permission: "student.read",
-    badgeKey: "onboarding",
-    badgeWhat: "students waiting to be onboarded",
-    label: "Students",
-  },
-  {
     // The institute's own money. Gated on finance.read, which a counsellor
     // does not hold — so the whole section is invisible to them, not just
     // disabled.
     href: "/finance",
+    group: "accounts",
     iconKey: "finance",
     permission: "finance.read",
     label: "Finance",
   },
   {
-    // "Chats", not "WhatsApp", because the section now holds more than
-    // one channel — the Business API inbox, and the places the other
-    // conversations will live. The route stays /whatsapp: renaming it
-    // would break every bookmark and every link already sent round, and
-    // buys nothing a label does not.
-    href: "/whatsapp",
-    iconKey: "whatsapp",
-    permission: "whatsapp.read",
-    badgeKey: "whatsapp",
-    badgeWhat: "conversations waiting for a reply",
-    label: "Chats",
+    /*
+      Gated on the permission the screen actually needs.
+
+      It used to be `report.read`, which every counsellor holds, so the
+      entry appeared for everybody and the page then turned most of them
+      away — a tab whose only function, for four of the six seeded roles,
+      was to refuse them. Now the link and the screen agree, and an admin
+      who unticks "View ad performance" for a role removes both.
+    */
+    href: "/marketing",
+    group: "marketing",
+    iconKey: "marketing",
+    permission: "report.ads",
+    label: "Ad Performance",
+  },
+  {
+    href: "/students",
+    group: "academics",
+    iconKey: "students",
+    permission: "student.read",
+    badgeKey: "onboarding",
+    badgeWhat: "students waiting to be onboarded",
+    label: "Students",
   },
   {
     href: "/profile-forms",
@@ -162,21 +203,6 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     label: "Student Profile Forms",
   },
   { href: "/insights", iconKey: "insights", permission: "report.read", label: "Insights" },
-  {
-    /*
-      Gated on the permission the screen actually needs.
-
-      It used to be `report.read`, which every counsellor holds, so the
-      entry appeared for everybody and the page then turned most of them
-      away — a tab whose only function, for four of the six seeded roles,
-      was to refuse them. Now the link and the screen agree, and an admin
-      who unticks "View ad performance" for a role removes both.
-    */
-    href: "/marketing",
-    iconKey: "marketing",
-    permission: "report.ads",
-    label: "Ad Performance",
-  },
   { href: "/ask", iconKey: "ask", permission: "ai.query", label: "Ask AI" },
   { href: "/settings", iconKey: "settings", permission: "settings.manage", label: "Settings" },
 ];
@@ -191,6 +217,7 @@ export function navItemsFor(user: SessionUser, terms: TerminologyMap): NavItem[]
   }).map(
     (item) => ({
       href: item.href,
+      group: item.group,
       iconKey: item.iconKey,
       permission: item.permission,
       badgeKey: item.badgeKey,

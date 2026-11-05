@@ -27,10 +27,11 @@ export function ImportPanel({ accounts }: { accounts: Array<{ id: string; name: 
       <div>
         <h2 className="text-lg font-semibold">Import a bank statement</h2>
         <p className="text-sm text-muted-foreground">
-          Upload the CSV your bank gives you. Only transactions the CRM hasn&apos;t seen are added,
-          so overlapping statements are fine.{" "}
-          <strong className="font-medium text-foreground">The file itself is never saved</strong> —
-          it is read, and discarded when this page finishes.
+          Upload the statement your bank gives you, as a PDF (password-protected is fine) or a CSV.
+          Only transactions the CRM hasn&apos;t seen are added, so overlapping statements are fine.
+          Every line is then checked against the entries in the books.{" "}
+          <strong className="font-medium text-foreground">Neither the file nor its password is ever saved</strong>{" "}
+          — they are used to read it, and discarded when this page finishes.
         </p>
       </div>
 
@@ -53,14 +54,24 @@ export function ImportPanel({ accounts }: { accounts: Array<{ id: string; name: 
           </select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="bank-file">Statement (CSV)</Label>
+          <Label htmlFor="bank-file">Statement (PDF or CSV)</Label>
           <input
             id="bank-file"
             name="file"
             type="file"
-            accept=".csv,text/csv"
+            accept=".pdf,.csv,application/pdf,text/csv"
             required
             className="text-sm file:mr-3 file:rounded-md file:border file:bg-secondary file:px-3 file:py-1.5 file:text-sm"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="bank-password">PDF password (if it has one)</Label>
+          <input
+            id="bank-password"
+            name="password"
+            type="password"
+            autoComplete="off"
+            className="h-9 w-48 rounded-md border bg-background px-3 text-sm"
           />
         </div>
         <Button type="submit" disabled={previewing}>
@@ -88,6 +99,14 @@ export function ImportPanel({ accounts }: { accounts: Array<{ id: string; name: 
             <Stat label="Money out (new)" value={formatINR(preview.outPaise)} />
           </dl>
 
+          {preview.continuityError && (
+            <p className="rounded-md border border-red-300 bg-red-50 p-2 text-sm text-red-900">
+              {preview.continuityError}
+            </p>
+          )}
+          {preview.gapWarning && (
+            <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-900">{preview.gapWarning}</p>
+          )}
           {preview.guessedDates > 0 && (
             <p className="text-sm text-amber-700 dark:text-amber-400">
               {preview.guessedDates} line{preview.guessedDates === 1 ? "" : "s"} had an impossible
@@ -121,8 +140,13 @@ export function ImportPanel({ accounts }: { accounts: Array<{ id: string; name: 
             </details>
           )}
 
-          {preview.fresh.length > 0 ? (
+          {preview.fresh.length > 0 && preview.continuityError && !preview.canOverride ? (
+            <p className="text-sm text-muted-foreground">
+              Nothing was imported. Upload the right statement, or ask an admin to look at it.
+            </p>
+          ) : preview.fresh.length > 0 ? (
             <form action={importAction} className="flex items-center gap-3">
+              {preview.continuityError && <input type="hidden" name="override" value="1" />}
               <input
                 type="hidden"
                 name="payload"
@@ -131,7 +155,7 @@ export function ImportPanel({ accounts }: { accounts: Array<{ id: string; name: 
               <Button type="submit" disabled={importing}>
                 {importing
                   ? "Importing…"
-                  : `Import ${preview.fresh.length} new transaction${preview.fresh.length === 1 ? "" : "s"}`}
+                  : `${preview.continuityError ? "Import anyway — " : "Import "}${preview.fresh.length} new transaction${preview.fresh.length === 1 ? "" : "s"}`}
               </Button>
               <FormMessage error={importState.error} />
             </form>

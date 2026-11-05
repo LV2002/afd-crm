@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Reads bank statement PDFs on the server; loads its own worker file at
+  // runtime, which bundling would break.
+  serverExternalPackages: ["pdfjs-dist"],
+
   /**
    * Server Actions refuse a body over 1 MB by default, which is smaller than
    * one phone photo — every file upload in the CRM (attachments, WhatsApp

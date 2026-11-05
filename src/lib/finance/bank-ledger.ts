@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 
 import type { DbExecutor } from "@/lib/db/client";
-import { bankStatementLines } from "@/lib/db/schema";
+import { bankMatches, bankStatementLines } from "@/lib/db/schema";
 
 import type { StatementLine } from "./bank-statement";
 import { postEntry } from "./post";
@@ -38,6 +38,7 @@ export async function saveStatementLines(
         balancePaise: l.balancePaise,
         note: l.note,
         dateGuessed: l.dateGuessed,
+        seq: l.seq ?? null,
         fingerprint: l.fingerprint,
         importedBy: input.importedBy,
       })),
@@ -80,7 +81,18 @@ export async function resolveBankLines(
       .returning({ id: bankStatementLines.id });
     if (!claimed) continue;
 
-    if (!input.skipReason) {
+    if (input.skipReason) {
+      // Setting a line aside is accepting that it has no ledger entry, so it
+      // is recorded as a waiver: visible, attributed, and reviewable.
+      await tx.insert(bankMatches).values({
+        bankLineId: line.id,
+        transactionId: null,
+        centerId: line.centerId,
+        method: "waived",
+        matchedBy: input.userId,
+        note: input.skipReason,
+      });
+    } else {
       const posted = await postEntry(tx, {
         occurredOn: line.occurredOn,
         direction: input.direction,
@@ -96,6 +108,14 @@ export async function resolveBankLines(
         .update(bankStatementLines)
         .set({ transactionId: posted.id })
         .where(eq(bankStatementLines.id, line.id));
+      // The entry was made from this very line, so the pair is certain.
+      await tx.insert(bankMatches).values({
+        bankLineId: line.id,
+        transactionId: posted.id,
+        centerId: line.centerId,
+        method: "categorised",
+        matchedBy: input.userId,
+      });
     }
     done++;
   }
