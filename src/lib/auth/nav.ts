@@ -22,22 +22,13 @@ export type NavIconKey =
   | "insights"
   | "marketing"
   | "ask"
+  | "hr-me"
+  | "hr-people"
   | "settings";
 
-/**
- * The department a screen belongs to. The sidebar shows a heading above the
- * first item of each, so a person finds "fees" under Accounts and "leads"
- * under Sales instead of in one long list. Items with no group (Dashboard,
- * Insights, Ask AI, Settings) sit outside any department.
- */
-export type NavGroup = "sales" | "accounts" | "marketing" | "academics";
+import type { NavGroup } from "./nav-groups";
 
-export const NAV_GROUP_LABELS: Record<NavGroup, string> = {
-  sales: "Sales",
-  accounts: "Accounts",
-  marketing: "Marketing",
-  academics: "Academics",
-};
+export type { NavGroup };
 
 export interface NavItem {
   href: string;
@@ -190,6 +181,35 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     badgeKey: "onboarding",
     badgeWhat: "students waiting to be onboarded",
     label: "Students",
+  },
+  {
+    // Everybody with a login: their own leave, holidays and payslips.
+    href: "/hr/me",
+    group: "hr",
+    iconKey: "hr-me",
+    permission: "hr.self",
+    label: "My HR",
+  },
+  {
+    href: "/hr/employees",
+    group: "hr",
+    iconKey: "hr-people",
+    permission: "hr.read",
+    label: "Employees",
+  },
+  {
+    href: "/hr/leave",
+    group: "hr",
+    iconKey: "hr-people",
+    permission: "hr.read",
+    label: "Leave",
+  },
+  {
+    href: "/hr/payroll",
+    group: "hr",
+    iconKey: "hr-people",
+    permission: "payroll.read",
+    label: "Payroll",
   },
   {
     href: "/profile-forms",

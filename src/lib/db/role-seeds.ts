@@ -43,7 +43,7 @@ function grant(codes: PermissionCode[], scope: PermissionScope) {
   return codes.map((code) => ({ code, scope }));
 }
 
-export const ROLE_SEEDS: RoleSeed[] = [
+const BASE_ROLE_SEEDS: RoleSeed[] = [
   {
     code: "admin",
     name: "Admin",
@@ -175,6 +175,9 @@ export const ROLE_SEEDS: RoleSeed[] = [
           // Accounts uploads the bank statements; what is uploaded is checked
           // (see lib/finance/bank-continuity.ts), and pairing stays with the admins.
           "bank.import",
+          // Accounts prepares payroll and pays it; pay rates and approval stay with the owner.
+          "payroll.read",
+          "payroll.generate",
           "enrolment.read",
           // Correcting a fee that was agreed wrongly is accounts' work,
           // and before this it had to go through a centre head.
@@ -216,5 +219,32 @@ export const ROLE_SEEDS: RoleSeed[] = [
         "center",
       ),
     ],
+  },
+];
+
+/**
+ * Every role can see its own HR page (their leave, holidays and payslips),
+ * and two roles exist for the HR work itself. HR sees every employee and
+ * every leave request; an employee sees only themselves.
+ */
+export const ROLE_SEEDS: RoleSeed[] = [
+  ...BASE_ROLE_SEEDS.map((role) =>
+    role.grants.some((g) => g.code === "hr.self")
+      ? role
+      : { ...role, grants: [...role.grants, { code: "hr.self" as const, scope: "own" as const }] },
+  ),
+  {
+    code: "hr",
+    name: "HR",
+    description: "Employees, leave and payroll. Sees every employee and every leave request.",
+    isProtected: false,
+    grants: grant(["hr.self", "hr.read", "hr.manage", "payroll.read", "payroll.generate"], "all"),
+  },
+  {
+    code: "employee",
+    name: "Employee",
+    description: "Sees their own leave, holidays and payslips, and can apply for leave.",
+    isProtected: false,
+    grants: grant(["hr.self"], "own"),
   },
 ];

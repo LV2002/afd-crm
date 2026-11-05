@@ -27,4 +27,5 @@ export * from "./dashboards";
 export * from "./error-events";
 export * from "./notifications";
 export * from "./finance-ledger";
+export * from "./hr";
 export * from "./contacts";

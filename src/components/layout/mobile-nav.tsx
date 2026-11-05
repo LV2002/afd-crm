@@ -10,7 +10,8 @@ import { CounsellorLinks, type CounsellorLink } from "@/components/layout/counse
 import { NavBadge } from "@/components/layout/nav-badge";
 import { NAV_ICONS } from "@/components/layout/nav-icons";
 import { Button } from "@/components/ui/button";
-import { NAV_GROUP_LABELS, type NavItem } from "@/lib/auth/nav";
+import type { NavItem } from "@/lib/auth/nav";
+import { NAV_GROUP_LABELS } from "@/lib/auth/nav-groups";
 import type { NavBadgeCounts } from "@/lib/nav/badge-permissions";
 import { cn } from "@/lib/utils";
 

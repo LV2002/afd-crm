@@ -23,6 +23,7 @@ export const PERMISSION_CATEGORIES = [
   "Academics",
   "Files",
   "Reports",
+  "HR",
   "Administration",
 ] as const;
 export type PermissionCategory = (typeof PERMISSION_CATEGORIES)[number];
@@ -244,6 +245,42 @@ export const PERMISSIONS = [
     category: "Finance",
     description:
       "Add and edit accounts and opening balances, and reverse or correct a posted entry.",
+  },
+  {
+    code: "hr.self",
+    label: "See my own HR page",
+    category: "HR",
+    description: "See your own leave balances, company holidays and payslips, and apply for leave.",
+  },
+  {
+    code: "hr.read",
+    label: "View all employees and leave",
+    category: "HR",
+    description: "See every employee, their leave balances, every leave request and the leave slips. Does not include pay.",
+  },
+  {
+    code: "hr.manage",
+    label: "Manage employees and leave policy",
+    category: "HR",
+    description: "Add and edit employees, set the leave policy and company holidays, and approve or reject any leave request.",
+  },
+  {
+    code: "payroll.read",
+    label: "View payroll and pay",
+    category: "HR",
+    description: "See every employee's pay rates, payslips and whether each was paid.",
+  },
+  {
+    code: "payroll.generate",
+    label: "Generate payslips and record salary payments",
+    category: "HR",
+    description: "Enter the month's inputs, generate payslips, and record the salary payment against the bank account.",
+  },
+  {
+    code: "payroll.manage",
+    label: "Set pay rates and approve payslips",
+    category: "HR",
+    description: "Set and change salary components and bank details, revise pay, change payroll rules, approve payslips and regenerate one.",
   },
   {
     code: "bank.import",

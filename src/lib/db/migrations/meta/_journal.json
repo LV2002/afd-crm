@@ -855,6 +855,27 @@
       "when": 1794751208000,
       "tag": "0121_cash_counts_and_balance_checks",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1794837608000,
+      "tag": "0122_hr_employees_and_leave",
+      "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1794924008000,
+      "tag": "0123_payroll",
+      "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1795010408000,
+      "tag": "0124_attendance",
+      "breakpoints": true
     }
   ]
 }
