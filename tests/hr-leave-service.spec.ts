@@ -13,7 +13,10 @@ const { db } = await import("../src/lib/db/client");
 const { companyHolidays, employees, leaveRequests } = await import("../src/lib/db/schema");
 const { applyForLeave, cancelLeave, canDecide, decideLeave, wouldCreateCycle } = await import("../src/lib/hr/service");
 
+import { createTestUsers } from "./helpers/fixture-users";
+
 const MARK = "HrLeaveTest";
+let cleanupUsers: () => Promise<void>;
 let staff: string; // an employee
 let boss: string; // their manager
 let hr: string; // some other person
@@ -29,9 +32,9 @@ async function sweep() {
 
 beforeAll(async () => {
   await sweep();
-  const profs = [...(await db.execute<{ id: string }>(sql`select id from profiles order by created_at limit 3`))].map((p) => p.id);
-  if (profs.length < 3) throw new Error("Needs three profiles in the test database.");
-  [staffUser, bossUser, hrUser] = profs;
+  const users = await createTestUsers(["counsellor", "counsellor", "hr"]);
+  cleanupUsers = users.cleanup;
+  [staffUser, bossUser, hrUser] = users.ids;
   const [b] = await db.insert(employees).values({ empNo: `${MARK}-1`, name: `${MARK} boss`, userId: bossUser, dateOfJoining: "2020-01-01" }).returning({ id: employees.id });
   const [s] = await db
     .insert(employees)
@@ -42,7 +45,10 @@ beforeAll(async () => {
   staff = s.id;
   hr = h.id;
 });
-afterAll(sweep);
+afterAll(async () => {
+  await sweep();
+  await cleanupUsers();
+});
 
 // Mon 2 Nov 2026 is a working day; Sunday 8 Nov is the weekly off.
 const apply = (over: Partial<Parameters<typeof applyForLeave>[1]> = {}) =>

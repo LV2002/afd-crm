@@ -265,6 +265,24 @@ export const PERMISSIONS = [
     description: "Add and edit employees, set the leave policy and company holidays, and approve or reject any leave request.",
   },
   {
+    code: "payroll.read",
+    label: "View payroll and pay",
+    category: "HR",
+    description: "See every employee's pay rates, payslips and whether each was paid.",
+  },
+  {
+    code: "payroll.generate",
+    label: "Generate payslips and record salary payments",
+    category: "HR",
+    description: "Enter the month's inputs, generate payslips, and record the salary payment against the bank account.",
+  },
+  {
+    code: "payroll.manage",
+    label: "Set pay rates and approve payslips",
+    category: "HR",
+    description: "Set and change salary components and bank details, revise pay, change payroll rules, approve payslips and regenerate one.",
+  },
+  {
     code: "bank.import",
     label: "Upload bank statements",
     category: "Finance",

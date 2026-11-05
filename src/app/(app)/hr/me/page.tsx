@@ -5,6 +5,10 @@ import { db } from "@/lib/db/client";
 import { AccessDenied } from "@/components/layout/access-denied";
 import { getDirectReports, getRequests, balanceFor } from "@/lib/hr/queries";
 import { employeeForUser, loadHolidays } from "@/lib/hr/service";
+import { payslips } from "@/lib/db/schema";
+import { loadPayrollSettings } from "@/lib/payroll/service";
+import { formatINR } from "@/lib/format/currency";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 
 import { ApplyLeaveForm, CancelButton, DecideButtons } from "../hr-forms";
 import { BalanceCards, StatusBadge, dayText, kindText, rangeText } from "../leave-ui";
@@ -42,6 +46,19 @@ export default async function MyHrPage() {
     getRequests({ employeeId: employee.id, limit: 50 }),
     loadHolidays(db, employee.centerId),
   ]);
+  const payroll = await loadPayrollSettings(db);
+  const mySlips = await db
+    .select()
+    .from(payslips)
+    .where(
+      and(
+        eq(payslips.employeeId, employee.id),
+        eq(payslips.status, "current"),
+        payroll.requireApproval ? isNotNull(payslips.approvedAt) : undefined,
+      ),
+    )
+    .orderBy(desc(payslips.month))
+    .limit(36);
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = holidays.filter((h) => h.onDate >= today).slice(0, 12);
 
@@ -114,7 +131,20 @@ export default async function MyHrPage() {
 
       <section className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold">Payslips</h3>
-        <p className="text-sm text-muted-foreground">Your salary slips will appear here once payroll is set up.</p>
+        {mySlips.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Your salary slips appear here once they have been approved.</p>
+        ) : (
+          <ul className="text-sm">
+            {mySlips.map((s) => (
+              <li key={s.id}>
+                <Link href={`/hr/payroll/${s.id}`} className="underline">
+                  {new Date(`${s.month}-01T12:00:00Z`).toLocaleString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" })}
+                </Link>{" "}
+                · net {formatINR(s.netPaise)}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );

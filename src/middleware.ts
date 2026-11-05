@@ -66,6 +66,6 @@ export const config = {
   // inside this matcher would redirect it to /login before the route
   // handler's own auth ever runs, silently breaking every cron/webhook.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/|iclock/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

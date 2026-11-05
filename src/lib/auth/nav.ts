@@ -205,6 +205,13 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     label: "Leave",
   },
   {
+    href: "/hr/payroll",
+    group: "hr",
+    iconKey: "hr-people",
+    permission: "payroll.read",
+    label: "Payroll",
+  },
+  {
     href: "/profile-forms",
     iconKey: "profile-forms",
     permission: "lead.read",

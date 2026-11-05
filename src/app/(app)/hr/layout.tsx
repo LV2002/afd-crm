@@ -11,7 +11,9 @@ export default async function HrLayout({ children }: { children: React.ReactNode
   const tabs = [
     ...(can(user, "hr.self") ? [{ href: "/hr/me", label: "My HR" }] : []),
     ...(can(user, "hr.read") ? [{ href: "/hr/employees", label: "Employees" }, { href: "/hr/leave", label: "Leave" }] : []),
-    ...(can(user, "hr.manage") ? [{ href: "/hr/policy", label: "Leave policy & holidays" }] : []),
+    ...(can(user, "hr.read") ? [{ href: "/hr/attendance", label: "Attendance" }] : []),
+    ...(can(user, "payroll.read") ? [{ href: "/hr/payroll", label: "Payroll" }] : []),
+    ...(can(user, "hr.manage") || can(user, "payroll.manage") ? [{ href: "/hr/policy", label: "Policy & holidays" }] : []),
   ];
 
   return (

@@ -11,8 +11,14 @@ loadEnv({ path: ".env" });
 loadEnv({ path: ".env.local", override: true });
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set.");
 
+import { createTestUsers } from "./helpers/fixture-users";
+
 const owner = postgres(process.env.DATABASE_URL, { max: 2 });
-afterAll(() => owner.end());
+let cleanupUsers: (() => Promise<void>) | undefined;
+afterAll(async () => {
+  await cleanupUsers?.();
+  await owner.end();
+});
 
 type Reserved = Awaited<ReturnType<typeof owner.reserve>>;
 
@@ -35,14 +41,13 @@ async function readAs<T>(
   }
 }
 
+let cached: { staff: string; boss: string; stranger: string; hr: string } | undefined;
 async function users() {
-  const rows = await owner<Array<{ id: string; code: string }>>`
-    select p.id, r.code from profiles p join roles r on r.id = p.role_id where p.is_active order by p.created_at
-  `;
-  const plain = rows.filter((r) => r.code === "counsellor");
-  const hr = rows.find((r) => r.code === "co_admin");
-  if (plain.length < 3 || !hr) throw new Error("Needs three counsellors and a co-admin in the test database.");
-  return { staff: plain[0].id, boss: plain[1].id, stranger: plain[2].id, hr: hr.id };
+  if (cached) return cached;
+  const made = await createTestUsers(["counsellor", "counsellor", "counsellor", "hr"]);
+  cleanupUsers = made.cleanup;
+  cached = { staff: made.ids[0], boss: made.ids[1], stranger: made.ids[2], hr: made.ids[3] };
+  return cached;
 }
 
 async function fixtures(tx: Reserved, u: Awaited<ReturnType<typeof users>>) {

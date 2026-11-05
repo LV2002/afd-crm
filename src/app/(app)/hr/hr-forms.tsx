@@ -99,6 +99,7 @@ export interface EmployeeFormValues {
   address: string;
   dateOfJoining: string;
   reportsToId: string;
+  biometricCode: string;
   openingSl: string;
   openingCl: string;
   openingAsOf: string;
@@ -128,6 +129,7 @@ export function EmployeeForm({
         <Pick name="centerId" label="Location" defaultValue={values.centerId} options={centers} blank="—" />
         <Text name="dateOfJoining" label="Date of joining" type="date" defaultValue={values.dateOfJoining} hint="Blank means long-standing" />
         <Pick name="reportsToId" label="Reports to (approves their leave)" defaultValue={values.reportsToId} options={managers} blank="Nobody: HR approves" />
+        <Text name="biometricCode" label="Biometric code" defaultValue={values.biometricCode} hint="The code this person has on the attendance device" />
         <Pick name="userId" label="CRM login" defaultValue={values.userId} options={logins} blank="None yet" hint="Needed for them to see their page and apply for leave" />
       </div>
       <Text name="address" label="Address" defaultValue={values.address} />

@@ -175,6 +175,9 @@ const BASE_ROLE_SEEDS: RoleSeed[] = [
           // Accounts uploads the bank statements; what is uploaded is checked
           // (see lib/finance/bank-continuity.ts), and pairing stays with the admins.
           "bank.import",
+          // Accounts prepares payroll and pays it; pay rates and approval stay with the owner.
+          "payroll.read",
+          "payroll.generate",
           "enrolment.read",
           // Correcting a fee that was agreed wrongly is accounts' work,
           // and before this it had to go through a centre head.
@@ -235,7 +238,7 @@ export const ROLE_SEEDS: RoleSeed[] = [
     name: "HR",
     description: "Employees, leave and payroll. Sees every employee and every leave request.",
     isProtected: false,
-    grants: grant(["hr.self", "hr.read", "hr.manage"], "all"),
+    grants: grant(["hr.self", "hr.read", "hr.manage", "payroll.read", "payroll.generate"], "all"),
   },
   {
     code: "employee",

@@ -20,7 +20,7 @@ export function kindText(kind: RequestRow["kind"]) {
 }
 
 /** Sick and casual: what is left, what is waiting on approval. */
-export function BalanceCards({ balance }: { balance: LeaveBalance }) {
+export function BalanceCards({ balance }: { balance: LeaveBalance & { probationLop?: number } }) {
   const cards = [
     { label: "Sick leave", pool: balance.sick },
     { label: "Casual leave", pool: balance.casual },
@@ -42,6 +42,12 @@ export function BalanceCards({ balance }: { balance: LeaveBalance }) {
           )}
         </div>
       ))}
+      {(balance.probationLop ?? 0) > 0 && (
+        <p className="text-xs text-amber-800 sm:col-span-2">
+          In probation, only some leave a month is paid. {balance.probationLop} approved day{balance.probationLop === 1 ? "" : "s"} this
+          year will be paid as loss of pay.
+        </p>
+      )}
     </div>
   );
 }

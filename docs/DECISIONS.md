@@ -4925,3 +4925,17 @@ Leon wants to send a WhatsApp broadcast "only to the database, not the people in
 **Decision reversed:** the earlier choice not to give accounts `bank.import` is reversed at Leon's request. The control moves from "she cannot supply the bank's side" to "what she supplies is checked": balance continuity with the previous statement, no new lines on dates already imported, no direct inserts, and a balance Leon confirms himself against the bank's own app. The last of these is the real defence against a doctored PDF, and only works if he does it, not the accountant.
 
 **Cash is counted, not reconciled.** Leon keeps cash and will not deposit it, so there is nothing external to pair cash entries with. A physical count is the only check. It is stored with the book balance at the time, so a later correction can't make an old count look better. Unrecorded cash cannot be detected by any of this; the mitigation is receipts that families can verify.
+
+## 2026-11-05: payroll
+
+**Owner approval before a payslip can be paid** (`payroll_settings.require_approval`, default on). Not in the brief. The person who generates a slip also records the payment, and the extras on a slip (bonus, incentives, arrears) are free-typed; approval puts a second person between them and the money. Switchable if it proves too slow.
+
+**Pay rates are the owner's alone.** The brief lets editors change salaries; with the owner's concern about the accountant this is restricted to `payroll.manage`. Accounts and HR generate and pay but cannot change a rate, regenerate, or revise pay.
+
+**Approved leave is authoritative in payroll.** Otherwise the person generating could drop a loss-of-pay day. Manual entries are for what leave slips don't cover (late, early, one punch, and unapplied leave).
+
+**A manager sees leave, not pay.** `private.payroll_can_see_employee` is payroll or the employee, deliberately not the reporting line.
+
+**Biometrics suggest; they never decide.** A missing punch is as likely a flat battery as an absence. The suggestions pre-fill a form a person confirms, and the slip page flags no-punch days the slip leaves untreated, so the check is by someone other than the person who made it.
+
+**Salary payment = an expense entry plus a link.** It reuses the ledger and the bank reconciliation instead of a second record of money, so "paid" means the same thing everywhere and a payslip's payment is proved by the same statement line as every other entry.

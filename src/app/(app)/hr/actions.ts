@@ -75,6 +75,7 @@ async function readEmployee(formData: FormData) {
       address: blank(formData.get("address")),
       dateOfJoining: day(formData.get("dateOfJoining")),
       reportsToId: blank(formData.get("reportsToId")),
+      biometricCode: blank(formData.get("biometricCode")),
       openingSl,
       openingCl,
       openingAsOf,
@@ -84,7 +85,15 @@ async function readEmployee(formData: FormData) {
 }
 
 /** Errors a unique index would raise, said in words. */
-async function clashes(values: { empNo: string; userId: string | null }, exceptId: string | null): Promise<string | null> {
+async function clashes(values: { empNo: string; userId: string | null; biometricCode: string | null }, exceptId: string | null): Promise<string | null> {
+  if (values.biometricCode) {
+    const sameCode = await db
+      .select({ id: employees.id, name: employees.name })
+      .from(employees)
+      .where(and(eq(employees.biometricCode, values.biometricCode), isNull(employees.deletedAt)));
+    const other = sameCode.find((e) => e.id !== exceptId);
+    if (other) return `Biometric code ${values.biometricCode} already belongs to ${other.name}.`;
+  }
   const sameNo = await db
     .select({ id: employees.id })
     .from(employees)

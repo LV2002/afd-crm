@@ -5,7 +5,8 @@ import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { centers, employees, leaveRequests, profiles } from "@/lib/db/schema";
 
-import { leaveBalance, type LeaveBalance, type LeavePolicy } from "./leave";
+import { leaveBalance, workingDates, type LeaveBalance, type LeavePolicy } from "./leave";
+import { probationLopDays } from "@/lib/payroll/calc";
 import { loadHolidays, loadPolicy } from "./service";
 
 /**
@@ -39,6 +40,7 @@ export async function getEmployees(): Promise<Array<EmployeeRow & { managerName:
     openingSl: r.opening_sl === null ? null : Number(r.opening_sl),
     openingCl: r.opening_cl === null ? null : Number(r.opening_cl),
     openingAsOf: (r.opening_as_of as string | null) ?? null,
+    biometricCode: (r.biometric_code as string | null) ?? null,
     status: r.status as "active" | "inactive",
     createdBy: (r.created_by as string | null) ?? null,
     createdAt: new Date(String(r.created_at)),
@@ -163,14 +165,21 @@ export async function getDirectReports(userId: string): Promise<Array<{ id: stri
   return [...rows];
 }
 
-export async function balanceFor(employee: EmployeeRow, year: number, policy?: LeavePolicy): Promise<LeaveBalance> {
+export async function balanceFor(employee: EmployeeRow, year: number, policy?: LeavePolicy): Promise<LeaveBalance & { probationLop: number }> {
   const p = policy ?? (await loadPolicy(db));
   const holidays = new Set((await loadHolidays(db, employee.centerId)).map((h) => h.onDate));
   const requests = await db
     .select({ kind: leaveRequests.kind, fromDate: leaveRequests.fromDate, toDate: leaveRequests.toDate, status: leaveRequests.status })
     .from(leaveRequests)
     .where(eq(leaveRequests.employeeId, employee.id));
-  return leaveBalance({ employee, year, policy: p, requests, holidays });
+  const balance = leaveBalance({ employee, year, policy: p, requests, holidays });
+
+  // Approved sick/casual days that probation will turn into loss of pay.
+  const days = requests
+    .filter((r) => r.status === "approved" && (r.kind === "sick" || r.kind === "casual"))
+    .flatMap((r) => workingDates(r.fromDate, r.toDate, holidays, p.weeklyOff).map((date) => ({ date, type: r.kind as "sick" | "casual" })));
+  const probationLop = probationLopDays({ days, year, dateOfJoining: employee.dateOfJoining, leave: p });
+  return { ...balance, probationLop };
 }
 
 /** Everyone's balances for the year, in one pass. */

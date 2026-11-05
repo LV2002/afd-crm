@@ -74,7 +74,7 @@ export default async function EmployeesPage() {
         <section className="flex flex-col gap-2">
           <h2 className="text-lg font-semibold">Add an employee</h2>
           <EmployeeForm
-            values={{ empNo: "", name: "", userId: "", designation: "", department: "", centerId: "", address: "", dateOfJoining: "", reportsToId: "", openingSl: "", openingCl: "", openingAsOf: "", status: "active" }}
+            values={{ empNo: "", name: "", userId: "", designation: "", department: "", centerId: "", address: "", dateOfJoining: "", reportsToId: "", biometricCode: "", openingSl: "", openingCl: "", openingAsOf: "", status: "active" }}
             logins={logins}
             centers={centers}
             managers={employees.filter((e) => e.status === "active").map((e) => ({ id: e.id, name: e.name }))}

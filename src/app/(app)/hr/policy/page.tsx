@@ -7,21 +7,33 @@ import { loadPolicy } from "@/lib/hr/service";
 import { and, asc, isNull } from "drizzle-orm";
 
 import { HolidayForm, PolicyForm, RemoveHolidayButton } from "../hr-forms";
+import { PayrollSettingsForm } from "../payroll/payroll-forms";
+import { loadPayrollSettings } from "@/lib/payroll/service";
 import { dayText } from "../leave-ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function PolicyPage() {
   const user = await getCurrentUser();
-  if (!user || !can(user, "hr.manage")) return <AccessDenied />;
-  const [policy, centers, holidays] = await Promise.all([
+  if (!user || !(can(user, "hr.manage") || can(user, "payroll.manage"))) return <AccessDenied />;
+  const canHr = can(user, "hr.manage");
+  const canPayroll = can(user, "payroll.manage");
+  const [policy, centers, holidays, payroll] = await Promise.all([
     loadPolicy(db),
     getCenterOptions(),
     db.select().from(companyHolidays).where(and(isNull(companyHolidays.deletedAt))).orderBy(asc(companyHolidays.onDate)),
+    loadPayrollSettings(db),
   ]);
 
   return (
     <div className="flex flex-col gap-8">
+      {canPayroll && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-semibold">Payroll rules</h2>
+          <PayrollSettingsForm s={payroll} />
+        </section>
+      )}
+      {canHr && (<>
       <section className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold">Leave policy</h2>
         <p className="max-w-2xl text-sm text-muted-foreground">
@@ -48,6 +60,7 @@ export default async function PolicyPage() {
           {holidays.length === 0 && <li className="text-muted-foreground">None yet.</li>}
         </ul>
       </section>
+      </>)}
     </div>
   );
 }
