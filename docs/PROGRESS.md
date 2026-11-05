@@ -8908,3 +8908,5 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 - Broadcasts: the **Database** choice is always shown to anyone with `contact.read`; with no list marked "agreed to WhatsApp" it says what to do instead of disappearing.
 - Migration 0118 repeats the 0114 repair for empty WhatsApp messages stored after it first ran. Platform health → deliveries now shows WhatsApp's own reason on messages it withheld ("unsupported").
 - Not built: starting a database flow automatically (new contact joins a list), and a message log for database conversations (their sends are not stored in Chats).
+
+- **Settings tab now shows for any role that can open a settings screen.** It was tied to `settings.manage`, so a role given only SLA, targets or discount authority had the permission but no Settings tab. The tab appears when at least one settings screen is available to the role, and the Settings page lists only those.
