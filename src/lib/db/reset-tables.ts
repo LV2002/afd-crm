@@ -37,6 +37,8 @@ export const CONFIG_TABLES = [
   // in. The transactions against them are data and go.
   "finance_accounts",
   "holidays",
+  "hr_settings",
+  "company_holidays",
   "integration_credentials",
   "notification_settings",
   "org_settings",
@@ -126,6 +128,8 @@ export const DATA_TABLES = [
   "outcome_events",
   "error_events",
   "bank_matches",
+  "leave_requests",
+  "employees",
   "bank_balance_checks",
   "cash_counts",
   "finance_transactions",

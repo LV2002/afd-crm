@@ -8929,3 +8929,10 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 ## Sidebar grouped by department
 
 The sidebar now has department headings: **Sales** (Leads, Follow-ups, Unassigned, Database, Chats), **Accounts** (Admissions, Finance), **Marketing** (Ad Performance) and **Academics** (Students). Dashboard, Student Profile Forms, Insights, Ask AI and Settings stay outside any department. A heading appears only when the person can see at least one screen in it. Routes and permissions are unchanged.
+
+## HR: employees and leave (migration 0122)
+
+New **HR** department in the sidebar: **My HR** (everyone), **Employees** and **Leave** (HR). Employees (`employees`: number, name, designation, reports-to, joining date, optional login, opening leave balances), the leave policy (`hr_settings`: 6 sick and 6 casual a year, joining-month rule, probation, weekly off), company holidays, and leave requests with a numbered leave slip. Employees apply from My HR; their manager (or HR if none) is notified (`leave.requested`) and approves or turns down with a reason (`leave.decided` goes back to the employee). Nobody decides their own request. Slips are visible to the employee, their manager and HR only, enforced by RLS (`private.hr_can_see_employee`); all writes go through the server.
+- Balances follow the brief: the joining-year entitlement table, 1 January reset, opening balances from an old payslip with only later leave counted against them. Probation capping and loss-of-pay treatment belong to payroll and are not applied here: leave beyond the balance just shows as taken beyond it.
+- Permissions: `hr.self` (every role), `hr.read`, `hr.manage` (admin, co-admin, and new **HR** role). New **Employee** role sees only My HR.
+- Not built: salary, payslips and PDF, the history import, bank mapping of salary payments. Next PRs.

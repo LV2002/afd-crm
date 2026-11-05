@@ -20,7 +20,7 @@ export interface NotificationEventDefinition {
   /** What actually happened, in the admin's language. */
   description: string;
   /** Where the notification points. Grouped in the settings UI. */
-  category: "Leads" | "SLA" | "Admissions" | "Money" | "Academics";
+  category: "Leads" | "SLA" | "Admissions" | "Money" | "Academics" | "HR";
   /**
    * Template variables this event supplies. The settings screen lists
    * them, so an admin writing copy can see what they may use rather than
@@ -363,6 +363,30 @@ export const NOTIFICATION_EVENTS = [
     // event is how people learn to ignore the bell.
     defaultNotifyOwner: false,
     defaultNotifyRoleCodes: ["academics"],
+  },
+  {
+    // Goes to the employee's manager, who is the person who approves it,
+    // and to HR, who see every request.
+    key: "leave.requested",
+    label: "Leave requested",
+    description: "An employee applied for leave. Tells their manager, who approves it, and HR.",
+    category: "HR",
+    variables: ["employee_name", "leave_type", "from_date", "to_date", "days", "reason"],
+    defaultTitle: "Leave request: {{employee_name}}",
+    defaultBody: "{{leave_type}}, {{from_date}} to {{to_date}} ({{days}} days). {{reason}}",
+    defaultNotifyOwner: true,
+    defaultNotifyRoleCodes: ["hr"],
+  },
+  {
+    key: "leave.decided",
+    label: "Leave approved or turned down",
+    description: "A manager or HR decided on a leave request. Tells the employee.",
+    category: "HR",
+    variables: ["leave_type", "from_date", "to_date", "decision", "decided_by", "note"],
+    defaultTitle: "Your leave was {{decision}}",
+    defaultBody: "{{leave_type}}, {{from_date}} to {{to_date}} — {{decided_by}}. {{note}}",
+    defaultNotifyOwner: true,
+    defaultNotifyRoleCodes: [],
   },
 ] as const satisfies readonly NotificationEventDefinition[];
 

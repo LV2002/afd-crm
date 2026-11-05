@@ -855,6 +855,13 @@
       "when": 1794751208000,
       "tag": "0121_cash_counts_and_balance_checks",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1794837608000,
+      "tag": "0122_hr_employees_and_leave",
+      "breakpoints": true
     }
   ]
 }

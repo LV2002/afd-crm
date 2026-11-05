@@ -23,6 +23,7 @@ export const PERMISSION_CATEGORIES = [
   "Academics",
   "Files",
   "Reports",
+  "HR",
   "Administration",
 ] as const;
 export type PermissionCategory = (typeof PERMISSION_CATEGORIES)[number];
@@ -244,6 +245,24 @@ export const PERMISSIONS = [
     category: "Finance",
     description:
       "Add and edit accounts and opening balances, and reverse or correct a posted entry.",
+  },
+  {
+    code: "hr.self",
+    label: "See my own HR page",
+    category: "HR",
+    description: "See your own leave balances, company holidays and payslips, and apply for leave.",
+  },
+  {
+    code: "hr.read",
+    label: "View all employees and leave",
+    category: "HR",
+    description: "See every employee, their leave balances, every leave request and the leave slips. Does not include pay.",
+  },
+  {
+    code: "hr.manage",
+    label: "Manage employees and leave policy",
+    category: "HR",
+    description: "Add and edit employees, set the leave policy and company holidays, and approve or reject any leave request.",
   },
   {
     code: "bank.import",

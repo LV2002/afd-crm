@@ -11,6 +11,8 @@ import {
   Landmark,
   LayoutDashboard,
   Settings,
+  UserRound,
+  Users2,
   Sparkles,
   Users,
   TrendingUp,
@@ -27,6 +29,8 @@ import type { NavIconKey } from "@/lib/auth/nav";
  */
 export const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   dashboard: LayoutDashboard,
+  "hr-me": UserRound,
+  "hr-people": Users2,
   orphans: Inbox,
   database: Database,
   leads: Users,
