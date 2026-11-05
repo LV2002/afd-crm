@@ -166,14 +166,14 @@ export function MobileNav({
                       className={cn(
                         // 48px rows: this is a list operated with a thumb
                         // while standing up, not a mouse at a desk.
-                        "flex min-h-12 items-center gap-3 rounded-md px-3 text-[0.9375rem] font-medium transition-colors",
+                        "flex min-h-12 items-center gap-3 rounded-lg px-3 text-[0.9375rem] font-medium transition-colors",
                         // Same filled chip as the sidebar, so "where am I"
                         // looks identical on a phone and on a laptop.
                         isActive
-                          ? "bg-primary text-primary-foreground shadow-sm"
+                          ? "bg-primary-subtle font-semibold text-primary-ink"
                           : isOpen
-                            ? "bg-primary-subtle text-primary-ink"
-                            : "text-foreground hover:bg-primary-subtle hover:text-primary-ink",
+                            ? "bg-primary-subtle/60 text-primary-ink"
+                            : "text-foreground hover:bg-accent",
                       )}
                     >
                       <Icon className="size-5 shrink-0" />
@@ -182,7 +182,7 @@ export function MobileNav({
                         <NavBadge
                           count={badges[item.badgeKey]}
                           what={item.badgeWhat ?? "waiting"}
-                          className={isActive ? "bg-card text-destructive-ink" : undefined}
+                          className={undefined}
                         />
                       )}
                     </Link>

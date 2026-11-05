@@ -8,6 +8,7 @@ import { centers, employees, leaveRequests, profiles } from "@/lib/db/schema";
 import { leaveBalance, workingDates, type LeaveBalance, type LeavePolicy } from "./leave";
 import { probationLopDays } from "@/lib/payroll/calc";
 import { loadHolidays, loadPolicy } from "./service";
+import { loadWeek, weeklyOffOf } from "./schedule";
 
 /**
  * Reads for the HR pages, on the direct connection. Each page checks who is
@@ -166,7 +167,9 @@ export async function getDirectReports(userId: string): Promise<Array<{ id: stri
 }
 
 export async function balanceFor(employee: EmployeeRow, year: number, policy?: LeavePolicy): Promise<LeaveBalance & { probationLop: number }> {
-  const p = policy ?? (await loadPolicy(db));
+  const base = policy ?? (await loadPolicy(db));
+  // Their own days off, not the company's.
+  const p = { ...base, weeklyOff: weeklyOffOf((await loadWeek(db, employee.id)).week) };
   const holidays = new Set((await loadHolidays(db, employee.centerId)).map((h) => h.onDate));
   const requests = await db
     .select({ kind: leaveRequests.kind, fromDate: leaveRequests.fromDate, toDate: leaveRequests.toDate, status: leaveRequests.status })
@@ -200,7 +203,8 @@ export async function balancesForAll(list: EmployeeRow[], year: number): Promise
       holidays = new Set((await loadHolidays(db, e.centerId)).map((h) => h.onDate));
       holidayCache.set(key, holidays);
     }
-    out.set(e.id, leaveBalance({ employee: e, year, policy, requests: byEmployee.get(e.id) ?? [], holidays }));
+    const own = { ...policy, weeklyOff: weeklyOffOf((await loadWeek(db, e.id)).week) };
+    out.set(e.id, leaveBalance({ employee: e, year, policy: own, requests: byEmployee.get(e.id) ?? [], holidays }));
   }
   return out;
 }

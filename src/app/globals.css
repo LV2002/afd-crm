@@ -22,7 +22,7 @@
      Semantic colours are separate from the accent on purpose: green
      and red have to mean paid and overdue, not decoration.
      ───────────────────────────────────────────────────────────── */
-  --radius: 0.625rem;
+  --radius: 0.75rem;
 
   /* Native scrollbars, date pickers and <select> popups follow this, and
      nothing else makes them match the theme. The inline script in the root
@@ -41,7 +41,7 @@
      tinted; any lighter and the cards stop separating, which is the
      whole point. Dark mode does the same thing the other way — the page
      steps DOWN away from the cards, to the same 1.14:1. */
-  --background: oklch(0.955 0.012 258);
+  --background: oklch(0.984 0.003 255);
   --foreground: oklch(0.215 0.021 258);
 
   --card: oklch(1 0 0);
@@ -49,13 +49,13 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.215 0.021 258);
 
-  --primary: oklch(0.505 0.163 262);
+  --primary: oklch(0.54 0.215 264);
   --primary-foreground: oklch(0.99 0.002 250);
 
-  --secondary: oklch(0.925 0.016 256);
+  --secondary: oklch(0.955 0.008 256);
   --secondary-foreground: oklch(0.27 0.023 258);
 
-  --muted: oklch(0.966 0.005 253);
+  --muted: oklch(0.968 0.004 255);
   /* Was oklch(0.556 0 0) — about 4.2:1 on white, and used at 12px in
      dozens of places, which is genuinely hard to read at 55. This is
      roughly 7:1 and comfortable at every size the app uses. */
@@ -65,7 +65,7 @@
      card and the tinted page — at its old 0.955 it was identical to the
      new page lightness, so hovering anything that sits directly on the
      page did nothing visible at all. */
-  --accent: oklch(0.928 0.017 255);
+  --accent: oklch(0.955 0.012 258);
   --accent-foreground: oklch(0.27 0.023 258);
 
   --destructive: oklch(0.532 0.196 27);
@@ -112,12 +112,12 @@
   --info-subtle: oklch(0.942 0.037 221);
   --info-ink: oklch(0.424 0.094 221);
 
-  --primary-subtle: oklch(0.941 0.039 262);
-  --primary-ink: oklch(0.424 0.148 262);
+  --primary-subtle: oklch(0.953 0.035 264);
+  --primary-ink: oklch(0.43 0.19 264);
 
-  --border: oklch(0.898 0.008 253);
-  --input: oklch(0.878 0.009 253);
-  --ring: oklch(0.505 0.163 262);
+  --border: oklch(0.925 0.006 255);
+  --input: oklch(0.895 0.008 255);
+  --ring: oklch(0.54 0.215 264);
 
   /* ─────────────────────────────────────────────────────────────
      Chart series — identity, not decoration
@@ -147,24 +147,24 @@
 .dark {
   color-scheme: dark;
 
-  --background: oklch(0.172 0.016 259);
+  --background: oklch(0.145 0.012 262);
   --foreground: oklch(0.955 0.005 250);
 
-  --card: oklch(0.234 0.018 259);
+  --card: oklch(0.195 0.014 262);
   --card-foreground: oklch(0.955 0.005 250);
-  --popover: oklch(0.245 0.018 259);
+  --popover: oklch(0.21 0.015 262);
   --popover-foreground: oklch(0.955 0.005 250);
 
-  --primary: oklch(0.655 0.148 262);
-  --primary-foreground: oklch(0.17 0.022 260);
+  --primary: oklch(0.68 0.17 264);
+  --primary-foreground: oklch(0.15 0.02 262);
 
-  --secondary: oklch(0.286 0.018 259);
+  --secondary: oklch(0.26 0.015 262);
   --secondary-foreground: oklch(0.955 0.005 250);
 
-  --muted: oklch(0.281 0.018 259);
+  --muted: oklch(0.245 0.014 262);
   --muted-foreground: oklch(0.735 0.019 255);
 
-  --accent: oklch(0.315 0.022 259);
+  --accent: oklch(0.285 0.02 262);
   --accent-foreground: oklch(0.965 0.005 250);
 
   --destructive: oklch(0.665 0.176 26);
@@ -190,12 +190,12 @@
   --info-subtle: oklch(0.302 0.05 221);
   --info-ink: oklch(0.812 0.086 221);
 
-  --primary-subtle: oklch(0.308 0.058 262);
-  --primary-ink: oklch(0.788 0.112 262);
+  --primary-subtle: oklch(0.29 0.07 264);
+  --primary-ink: oklch(0.8 0.12 264);
 
-  --border: oklch(1 0 0 / 13%);
-  --input: oklch(1 0 0 / 18%);
-  --ring: oklch(0.655 0.148 262);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.68 0.17 264);
 
   /* The same six hues, stepped for the dark surface rather than
      flipped — a palette that is merely inverted lands outside the
@@ -289,6 +289,64 @@
   /* Figures line up in columns without being asked to. */
   table, .tabular {
     font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * The look of the application: surfaces, tables, headings.
+   *
+   * Done once here, as base styles, so that the two hundred screens that
+   * draw a panel as `rounded-lg border` or a table as a bare <table> all
+   * move together. Anything that sets its own background or colour with a
+   * utility class still wins over these.
+   */
+  h1, h2, h3 {
+    letter-spacing: -0.015em;
+  }
+  h1 {
+    font-weight: 650;
+  }
+
+  /* A bordered panel is a card: white on the page, with a hair of lift. */
+  .rounded-lg.border,
+  .rounded-xl.border {
+    background-color: var(--card);
+    box-shadow: 0 1px 2px 0 oklch(0.25 0.03 262 / 0.04);
+  }
+  .dark .rounded-lg.border,
+  .dark .rounded-xl.border {
+    box-shadow: none;
+  }
+
+  /* Tables: quiet headings, room in the rows, a row you can find under the cursor. */
+  table thead th {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  table thead tr {
+    background-color: color-mix(in oklab, var(--muted) 70%, transparent);
+  }
+  table tbody tr {
+    transition: background-color 120ms ease;
+  }
+  table tbody tr:hover {
+    background-color: color-mix(in oklab, var(--accent) 45%, transparent);
+  }
+  table th,
+  table td {
+    padding-block: 0.625rem;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--primary) 22%, transparent);
+  }
+
+  /* Scrollbars that belong to the theme rather than the OS. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
   }
 
   @media (prefers-reduced-motion: reduce) {

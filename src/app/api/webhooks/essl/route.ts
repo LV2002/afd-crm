@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 
 import { ingestPunches, MAX_PUNCHES_PER_REQUEST } from "@/lib/attendance/ingest";
-import { parsePunchTime, type Punch } from "@/lib/attendance/parse";
+import { parsePunchCsv, parsePunchTime, type Punch } from "@/lib/attendance/parse";
 import { db } from "@/lib/db/client";
 import { payrollSettings } from "@/lib/db/schema";
 
@@ -33,27 +33,35 @@ export async function POST(request: Request) {
   const ok = expected.length === 64 && presented.length > 0 && timingSafeEqual(Buffer.from(given), Buffer.from(expected));
   if (!ok) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Body was not valid JSON" }, { status: 400 });
-  }
-  const list = (body as { punches?: unknown })?.punches;
-  if (!Array.isArray(list)) return NextResponse.json({ error: "Expected { punches: [...] }" }, { status: 400 });
-  if (list.length > MAX_PUNCHES_PER_REQUEST) return NextResponse.json({ error: "Too many punches in one request" }, { status: 413 });
-
   const punches: Punch[] = [];
   let skipped = 0;
-  for (const p of list as Array<{ code?: unknown; time?: unknown }>) {
-    const at = typeof p?.time === "string" ? parsePunchTime(p.time) : null;
-    const code = typeof p?.code === "string" || typeof p?.code === "number" ? String(p.code).trim() : "";
-    if (!code || !at) {
-      skipped += 1;
-      continue;
+
+  if ((request.headers.get("content-type") ?? "").includes("csv")) {
+    // The same export the software produces, posted as it is.
+    const parsed = parsePunchCsv(await request.text());
+    if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    punches.push(...parsed.punches);
+    skipped = parsed.skipped;
+  } else {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Body was not valid JSON" }, { status: 400 });
     }
-    punches.push({ code, at });
+    const list = (body as { punches?: unknown })?.punches;
+    if (!Array.isArray(list)) return NextResponse.json({ error: "Expected { punches: [...] }" }, { status: 400 });
+    for (const p of list as Array<{ code?: unknown; time?: unknown }>) {
+      const at = typeof p?.time === "string" ? parsePunchTime(p.time) : null;
+      const code = typeof p?.code === "string" || typeof p?.code === "number" ? String(p.code).trim() : "";
+      if (!code || !at) {
+        skipped += 1;
+        continue;
+      }
+      punches.push({ code, at });
+    }
   }
+  if (punches.length > MAX_PUNCHES_PER_REQUEST) return NextResponse.json({ error: "Too many punches in one request" }, { status: 413 });
 
   try {
     const result = await ingestPunches(db, punches, { source: "relay" });

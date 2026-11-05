@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Reads bank statement PDFs on the server; loads its own worker file at
   // runtime, which bundling would break.
-  serverExternalPackages: ["pdfjs-dist"],
+  serverExternalPackages: ["pdfjs-dist", "pdfkit"],
 
   /**
    * Server Actions refuse a body over 1 MB by default, which is smaller than

@@ -10,6 +10,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  primaryKey,
   text,
   time,
   timestamp,
@@ -224,6 +225,10 @@ export const payslipPayments = pgTable(
     transactionId: uuid("transaction_id")
       .notNull()
       .references(() => financeTransactions.id, { onDelete: "restrict" }),
+    /** The part of this payment that was more than the payslip owed. It is an advance. */
+    advancePaise: bigint("advance_paise", { mode: "number" }).notNull().default(0),
+    /** The payslip whose "advance given" figure it was added to; null until the next payslip. */
+    advanceAbsorbedBy: uuid("advance_absorbed_by").references((): AnyPgColumn => payslips.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -231,6 +236,40 @@ export const payslipPayments = pgTable(
     uniqueIndex("payslip_payments_txn_uq").on(t.transactionId),
     index("payslip_payments_slip_idx").on(t.payslipId),
   ],
+);
+
+export const employeeSchedules = pgTable(
+  "employee_schedules",
+  {
+    employeeId: uuid("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "cascade" }),
+    weekday: integer("weekday").notNull(),
+    isWorking: boolean("is_working").notNull().default(true),
+    startTime: time("start_time"),
+    endTime: time("end_time"),
+  },
+  (t) => [primaryKey({ columns: [t.employeeId, t.weekday] })],
+);
+
+export type AdjustmentKind = "present" | "comp_off" | "excused" | "worked_off_day";
+
+export const attendanceAdjustments = pgTable(
+  "attendance_adjustments",
+  {
+    id: idColumn(),
+    employeeId: uuid("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "restrict" }),
+    onDate: date("on_date").notNull(),
+    kind: text("kind").$type<AdjustmentKind>().notNull(),
+    note: text("note"),
+    createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    removedBy: uuid("removed_by").references(() => profiles.id, { onDelete: "set null" }),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("attendance_adjustments_live_uq").on(t.employeeId, t.onDate).where(sql`removed_at is null`)],
 );
 
 export const biometricDevices = pgTable(

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { parseDeviceAttLog, parsePunchCsv, parsePunchTime } from "../src/lib/attendance/parse";
 import { buildAttendance } from "../src/lib/attendance/report";
+import { defaultWeek } from "../src/lib/hr/schedule";
 
 describe("punch times", () => {
   it("reads device times as India time", () => {
@@ -49,9 +50,7 @@ describe("the preliminary report", () => {
   const at = (date: string, time: string) => parsePunchTime(`${date} ${time}`) as Date;
   const base = {
     month: "2026-11",
-    shiftStart: "09:30",
-    shiftEnd: "17:30",
-    weeklyOff: [0],
+    week: defaultWeek([0], "09:30", "17:30"),
     holidays: new Set(["2026-11-12"]),
     dateOfJoining: "2020-01-01",
     leave: new Map<string, string>(),
@@ -92,5 +91,55 @@ describe("the preliminary report", () => {
   it("uses India time for the day, so a late-evening punch stays on its day", () => {
     const r = buildAttendance({ ...base, punches: [at("2026-11-02", "09:30"), at("2026-11-02", "23:50")] });
     expect(r.days.find((d) => d.date === "2026-11-02")).toMatchObject({ status: "present", last: "23:50", earlyMinutes: 0 });
+  });
+});
+
+describe("each person's own week, and what HR marks", () => {
+  const at = (date: string, time: string) => parsePunchTime(`${date} ${time}`) as Date;
+  const holidays = new Set<string>();
+  const common = { month: "2026-11", holidays, dateOfJoining: "2020-01-01", today: "2026-11-30" };
+  // Mon 2 Nov 2026.
+
+  it("measures lateness against that person's own times, per day", () => {
+    const week = defaultWeek([0], "09:30", "17:30");
+    week[1] = { working: true, start: "10:30", end: "18:30" }; // Mondays start later
+    const r = buildAttendance({ ...common, week, leave: new Map(), punches: [at("2026-11-02", "10:40"), at("2026-11-02", "18:30"), at("2026-11-03", "10:40"), at("2026-11-03", "17:30")] });
+    expect(r.days.find((d) => d.date === "2026-11-02")).toMatchObject({ lateMinutes: 10 });
+    expect(r.days.find((d) => d.date === "2026-11-03")).toMatchObject({ lateMinutes: 70 }); // Tuesday starts 9:30
+  });
+
+  it("treats their own day off as a day off, not an absence", () => {
+    const week = defaultWeek([6], "09:30", "17:30"); // Saturday off, Sunday working
+    const r = buildAttendance({ ...common, week, leave: new Map(), punches: [] });
+    expect(r.days.find((d) => d.date === "2026-11-07")!.status).toBe("off");
+    expect(r.days.find((d) => d.date === "2026-11-08")!.status).toBe("absent");
+  });
+
+  it("a comp-off day is not an absence and costs nothing; it is counted", () => {
+    const r = buildAttendance({ ...common, week: defaultWeek([0], "09:30", "17:30"), leave: new Map(), adjustments: new Map([["2026-11-04", "comp_off"]]), punches: [] });
+    expect(r.days.find((d) => d.date === "2026-11-04")!.status).toBe("comp_off");
+    expect(r.suggestions.find((s) => s.date === "2026-11-04")).toBeUndefined();
+    expect(r.compOffTaken).toBe(1);
+  });
+
+  it("an excused day carries no late or early minutes", () => {
+    const r = buildAttendance({
+      ...common, week: defaultWeek([0], "09:30", "17:30"), leave: new Map(),
+      adjustments: new Map([["2026-11-02", "excused"]]),
+      punches: [at("2026-11-02", "10:30"), at("2026-11-02", "16:30")],
+    });
+    expect(r.days.find((d) => d.date === "2026-11-02")).toMatchObject({ status: "present", lateMinutes: 0, earlyMinutes: 0 });
+    expect(r.suggestions.filter((x) => x.date === "2026-11-02")).toHaveLength(0);
+  });
+
+  it("marking a day present covers a device that missed them, with no minutes to deduct", () => {
+    const r = buildAttendance({ ...common, week: defaultWeek([0], "09:30", "17:30"), leave: new Map(), adjustments: new Map([["2026-11-05", "present"]]), punches: [at("2026-11-05", "09:50")] });
+    expect(r.days.find((d) => d.date === "2026-11-05")).toMatchObject({ status: "present", lateMinutes: 0 });
+  });
+
+  it("working on a day off is recorded, to earn a comp-off", () => {
+    const r = buildAttendance({ ...common, week: defaultWeek([0], "09:30", "17:30"), leave: new Map(), adjustments: new Map([["2026-11-08", "worked_off_day"]]), punches: [at("2026-11-08", "10:00"), at("2026-11-08", "16:00")] });
+    expect(r.days.find((d) => d.date === "2026-11-08")).toMatchObject({ status: "off", workedOffDay: true });
+    expect(r.workedOffDays).toBe(1);
   });
 });

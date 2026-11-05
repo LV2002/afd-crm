@@ -36,7 +36,7 @@ export function Sidebar({
   const pathname = usePathname();
 
   return (
-    <nav className="flex flex-col gap-1 p-3">
+    <nav className="flex flex-col gap-0.5 px-3 py-3">
       {items.map((item, index) => {
         // A heading wherever the department changes, including back to "none".
         const heading =
@@ -55,7 +55,7 @@ export function Sidebar({
           <div key={item.href} className="flex flex-col gap-0.5">
           {!item.group && items[index - 1]?.group && <div className="mx-3 my-2 border-t" />}
           {heading && (
-            <p className="mt-3 px-3 pb-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="mb-1 mt-5 px-3 text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80">
               {heading}
             </p>
           )}
@@ -64,20 +64,21 @@ export function Sidebar({
             className={cn(
               // 44px rows and 15px text: this is the control everybody uses
               // dozens of times a day, on every screen size.
-              "flex min-h-11 items-center gap-2.5 rounded-md px-3 py-2 text-[0.9375rem] font-medium transition-colors",
+              "group relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
               // Filled, not washed. The active item was a 10% tint of the
               // accent, which on a white sidebar is a difference you have
               // to look for — and "where am I" should never be a question
               // you have to look for the answer to. A solid chip is
               // unmistakable at a glance and from across a desk.
               isActive
-                ? "bg-primary text-primary-foreground shadow-sm"
+                ? "bg-primary-subtle font-semibold text-primary-ink"
                 : isOpen
-                  ? "bg-primary-subtle text-primary-ink"
-                  : "text-foreground/80 hover:bg-primary-subtle hover:text-primary-ink",
+                  ? "bg-primary-subtle/60 text-primary-ink"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
-            <Icon className="size-4 shrink-0" />
+            {isActive && <span className="absolute inset-y-2 left-0 w-[3px] rounded-full bg-primary" />}
+            <Icon className="size-[1.125rem] shrink-0" />
             <span className="min-w-0 truncate">{item.label}</span>
             {item.badgeKey && (
               <NavBadge
@@ -87,7 +88,7 @@ export function Sidebar({
                 // blue, which is the one pairing that fights. Inverted —
                 // white pill, red figure — it is still unmistakably the
                 // red count and it is far easier to read.
-                className={isActive ? "bg-card text-destructive-ink" : undefined}
+                className={undefined}
               />
             )}
           </Link>

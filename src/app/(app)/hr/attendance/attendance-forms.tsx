@@ -6,7 +6,7 @@ import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
-import { addDevice, generateKey, importPunchFile, mapPunchCode, saveShift, type AttendanceFormState } from "./actions";
+import { addDevice, clearAdjustment, generateKey, importPunchFile, mapPunchCode, saveShift, setAdjustment, type AttendanceFormState } from "./actions";
 
 const initial: AttendanceFormState = {};
 const field = "h-9 rounded-md border bg-background px-3 text-sm";
@@ -101,5 +101,48 @@ export function DeviceForm() {
       </Button>
       <FormMessage error={state.error} success={state.success} />
     </form>
+  );
+}
+
+const ADJUST_LABEL: Record<string, string> = {
+  present: "Count as present",
+  comp_off: "Comp-off (day off in lieu)",
+  excused: "Excuse late / early",
+  worked_off_day: "Worked on a day off",
+};
+
+/** Mark a day. The reason is required and is kept with who gave it. */
+export function AdjustForm({ employeeId, date, current }: { employeeId: string; date: string; current?: string }) {
+  const [state, action, pending] = useActionState(setAdjustment, initial);
+  const [clearState, clearAction, clearing] = useActionState(clearAdjustment, initial);
+  return (
+    <div className="flex flex-col gap-1">
+      <form action={action} className="flex flex-wrap items-center gap-1.5">
+        <input type="hidden" name="employeeId" value={employeeId} />
+        <input type="hidden" name="onDate" value={date} />
+        <select name="kind" defaultValue={current ?? "present"} className="h-8 rounded-md border bg-background px-2 text-xs">
+          {Object.entries(ADJUST_LABEL).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
+        </select>
+        <input name="note" required placeholder="Why" className="h-8 w-40 rounded-md border bg-background px-2 text-xs" />
+        <Button type="submit" size="sm" variant="outline" disabled={pending}>
+          {current ? "Change" : "Mark"}
+        </Button>
+      </form>
+      {current && (
+        <form action={clearAction} className="flex items-center gap-2">
+          <input type="hidden" name="employeeId" value={employeeId} />
+          <input type="hidden" name="onDate" value={date} />
+          <Button type="submit" size="sm" variant="ghost" disabled={clearing} className="h-6 px-1 text-xs">
+            Clear the mark
+          </Button>
+          <FormMessage error={clearState.error} />
+        </form>
+      )}
+      <FormMessage error={state.error} />
+    </div>
   );
 }

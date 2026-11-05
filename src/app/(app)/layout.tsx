@@ -49,9 +49,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         Only from `md` up. Below that the sidebar is hidden and the
         header's mobile menu is the way around.
       */}
-      <aside className="hidden w-56 shrink-0 border-r bg-card md:sticky md:top-0 md:flex md:h-screen md:flex-col print:hidden">
-        <div className="shrink-0 border-b px-4 py-4">
-          <span className="text-sm font-semibold">{brand.name}</span>
+      <aside className="hidden w-64 shrink-0 border-r bg-card md:sticky md:top-0 md:flex md:h-screen md:flex-col print:hidden">
+        <div className="flex h-14 shrink-0 items-center gap-3 border-b px-5">
+          {/* A mark for the organisation: its initial on the accent, until a logo is set. */}
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground shadow-sm shadow-primary/30">
+            {brand.name.trim().charAt(0).toUpperCase() || "A"}
+          </span>
+          <span className="truncate text-[0.9375rem] font-semibold tracking-tight">{brand.name}</span>
         </div>
         {/*
           The nav renders at once; its red queue counts arrive a moment
@@ -82,7 +86,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           which is what makes a card look like a card without every card
           needing a heavier border. See globals.css.
         */}
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b bg-card/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-card/80 sm:px-4 print:hidden">
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b bg-background/80 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/70 sm:px-6 print:hidden">
           {/* Below `md` the sidebar is hidden and this is the only way to
               reach another screen. It was missing entirely. */}
           <Suspense fallback={<MobileNav items={navItems} userName={user.fullName} />}>
@@ -105,7 +109,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <UserMenu user={user} />
           </div>
         </header>
-        <main className="flex-1 p-4 sm:p-6 print:p-0">
+        <main className="mx-auto w-full max-w-[90rem] flex-1 p-4 sm:p-6 lg:p-8 print:p-0">
           {/*
             Any screen in the app prints as the institute's stationery,
             not as a bare web page — which is what "make the reports look

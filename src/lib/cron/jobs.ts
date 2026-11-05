@@ -6,6 +6,7 @@ import { GET as adSpendGoogle } from "@/app/api/cron/ad-spend-sync/google/route"
 import { GET as adSpendMeta } from "@/app/api/cron/ad-spend-sync/meta/route";
 import { GET as bankMatch } from "@/app/api/cron/bank-match/route";
 import { GET as googleConversions } from "@/app/api/cron/google-conversions/route";
+import { GET as payrollReady } from "@/app/api/cron/payroll-ready/route";
 import { GET as outcomeReport } from "@/app/api/cron/outcome-report/route";
 import { GET as paymentReminders } from "@/app/api/cron/payment-reminders/route";
 import { GET as recomputeTemperature } from "@/app/api/cron/recompute-temperature/route";
@@ -132,6 +133,8 @@ export function dailyJobs(request: Request): NightlyJob[] {
       request,
     ),
     job("google-conversions", "Google offline conversions", googleConversions, 6000, request),
+    // Runs only on the first of the month, and only tells people.
+    job("payroll-ready", "Payroll ready to review", payrollReady, 2000, request),
     // Then the safety net: everything the other two tiers do, in case
     // neither of them is running.
     ...frequentJobs(request),

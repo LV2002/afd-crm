@@ -58,3 +58,10 @@ editable), skips days off, holidays, leave and days before joining, and **only s
 - Importing the old payslips (needs your data file) and PDF generation: slips print from the browser (Print → Save as PDF).
 - One bank transfer covering several people's salaries: each salary pairs with its own statement line.
 - Late/early exemptions per employee or per shift, and half-day detection from punches.
+
+## Added later
+- **Working weeks.** Each employee can have their own days and times (HR → Employees → their page). Late/early and leave follow it. No schedule means the company default.
+- **Marking a day.** Attendance → a person → mark a day: count as present, comp-off, excuse late/early, or worked on a day off (earns a comp-off). A reason is required. Comp-offs earned and taken are counted.
+- **Review the month first.** HR → Payroll → *Review and generate the month* previews every payslip and flags what to look at, before anything is generated. On the 1st HR and accounts are told it is ready.
+- **Paying more than the slip.** Record or pick a payment larger than what the slip owes and the extra is an advance: it is added to the next payslip as "advance given", and is recovered by entering "advance repaid" in later months. The payroll page lists advances given with the month's salary.
+- **PDF and print.** Every payslip page has *Download PDF* and *Print*; the payroll page downloads all of a month's slips as one PDF. Admin, co-admin, HR and accounts can; an employee can download their own approved slips.

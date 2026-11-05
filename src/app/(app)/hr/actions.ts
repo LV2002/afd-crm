@@ -10,6 +10,7 @@ import { db } from "@/lib/db/client";
 import { companyHolidays, employees, hrSettings, leaveRequests, profiles } from "@/lib/db/schema";
 import { LEAVE_KIND_LABELS } from "@/lib/hr/leave";
 import { applyForLeave, cancelLeave, decideLeave, employeeForUser, wouldCreateCycle } from "@/lib/hr/service";
+import { saveWeek, validateWeek, type WeekSchedule } from "@/lib/hr/schedule";
 import { notify } from "@/lib/notifications/notify";
 import { createClient } from "@/lib/supabase/server";
 
@@ -302,3 +303,31 @@ export async function cancelLeaveRequest(_prev: HrFormState, formData: FormData)
   return { success: "Withdrawn." };
 }
 
+
+/** Sets one person's working week: which days they work, and from when to when. */
+export async function saveWorkingWeek(_prev: HrFormState, formData: FormData): Promise<HrFormState> {
+  const user = await hrManager();
+  if (!user) return { error: "You don't have permission to do that." };
+  const employeeId = String(formData.get("employeeId") ?? "");
+  const [emp] = await db.select({ id: employees.id }).from(employees).where(eq(employees.id, employeeId));
+  if (!emp) return { error: "That employee doesn't exist." };
+
+  if (formData.get("useDefault") === "on") {
+    await saveWeek(db, employeeId, null);
+    await audit(user, "hr.schedule_default", "employees", employeeId, {});
+    revalidate();
+    return { success: "This person now follows the company default." };
+  }
+
+  const week: WeekSchedule = Array.from({ length: 7 }, (_, d) => ({
+    working: formData.get(`work${d}`) === "on",
+    start: String(formData.get(`start${d}`) ?? ""),
+    end: String(formData.get(`end${d}`) ?? ""),
+  }));
+  const problem = validateWeek(week);
+  if (problem) return { error: problem };
+  await saveWeek(db, employeeId, week);
+  await audit(user, "hr.schedule_update", "employees", employeeId, { week });
+  revalidate();
+  return { success: "Saved. Leave, late coming and early exit now follow this week." };
+}

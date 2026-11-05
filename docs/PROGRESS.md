@@ -8945,3 +8945,13 @@ New **HR** department in the sidebar: **My HR** (everyone), **Employees** and **
 - **Biometrics**: punches stored from three routes (device push at `/iclock/cdata`, a keyed relay at `/api/webhooks/essl`, CSV import), never twice. The Attendance page is the preliminary report; its suggestions pre-fill the payslip form and the slip page warns about no-punch days it doesn't account for.
 - Permissions `payroll.read`, `payroll.generate` (accounts and HR), `payroll.manage` (admin, co-admin). Tests use throwaway users, so they pass on a fresh database.
 - Not built: import of the old payslips (needs the data file), PDF files (browser print), one transfer covering several salaries, per-employee shifts. The device push is untested on a real eSSL device.
+
+## Schedules, comp-off, advances with salary, month review, PDF payslips, redesign (migration 0125)
+
+- **Working weeks per employee** (`employee_schedules`): late/early and leave charging follow the person's own days and times; the company shift/off days are only the default.
+- **Attendance marks** (`attendance_adjustments`): present, comp-off, excused, worked on a day off; reason required, soft-removed, never deleted; comp-off balance counted.
+- **Salary paid over the slip is an advance** (`payslip_payments.advance_paise`): the slip is settled by the salary part only; the excess is picked up as "advance given" by the next payslip (re-pointed on regeneration, ignored if the payment is reversed) and carries forward. Listed on the payroll page.
+- **Month review** (`lib/payroll/review.ts`, dry-run generation): per-person preview and flags, generate all as shown with a "reviewed" confirmation and per-person opt-out. `payroll-ready` cron notifies HR and accounts on the 1st; it generates nothing.
+- **PDF payslips** (`lib/payroll/pdf.ts`, pdfkit): per slip and whole month; "Rs." because the standard PDF fonts have no rupee glyph.
+- **Biometric:** the relay endpoint also takes a CSV body; `scripts/essl-relay/relay.py` is a template (not run against a real eSSL database); setup guide in `docs/ESSL-SETUP.md`.
+- **Visual refresh:** new surface, border, shadow and accent tokens in light and dark, panels and tables styled once in the base layer, a redesigned sidebar (pill items, left accent, department headings) and header, rounder buttons, pill badges.

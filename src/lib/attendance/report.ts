@@ -1,3 +1,5 @@
+import type { AdjustmentKind } from "@/lib/db/schema";
+import type { WeekSchedule } from "@/lib/hr/schedule";
 import type { PayrollEntry } from "@/lib/payroll/calc";
 
 /**
@@ -8,7 +10,7 @@ import type { PayrollEntry } from "@/lib/payroll/calc";
  * an absence, so a person reads this and confirms it before it touches pay.
  */
 
-export type DayStatus = "off" | "holiday" | "leave" | "present" | "single" | "absent" | "before_joining" | "upcoming";
+export type DayStatus = "off" | "holiday" | "leave" | "comp_off" | "present" | "single" | "absent" | "before_joining" | "upcoming";
 
 export interface DayRow {
   date: string;
@@ -19,6 +21,10 @@ export interface DayRow {
   earlyMinutes: number;
   punches: number;
   leaveKind?: string;
+  /** What HR marked this day as, if anything. */
+  adjustment?: AdjustmentKind;
+  /** Worked on a day off or a holiday: earns a comp-off. */
+  workedOffDay?: boolean;
 }
 
 export interface AttendanceReport {
@@ -26,6 +32,8 @@ export interface AttendanceReport {
   presentDays: number;
   absentDays: number;
   singlePunchDays: number;
+  compOffTaken: number;
+  workedOffDays: number;
   lateMinutes: number;
   earlyMinutes: number;
   suggestions: PayrollEntry[];
@@ -44,20 +52,20 @@ const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2
 
 export function buildAttendance(input: {
   month: string;
-  shiftStart: string;
-  shiftEnd: string;
-  weeklyOff: readonly number[];
+  /** This person's own working week: which days, and from when to when. */
+  week: WeekSchedule;
   holidays: ReadonlySet<string>;
   dateOfJoining: string | null;
   punches: Date[];
   /** Approved leave, by date. */
   leave: ReadonlyMap<string, string>;
+  /** What HR marked, by date. */
+  adjustments?: ReadonlyMap<string, AdjustmentKind>;
   /** Days after this are not judged yet. */
   today: string;
 }): AttendanceReport {
   const dim = new Date(Date.UTC(Number(input.month.slice(0, 4)), Number(input.month.slice(5, 7)), 0)).getUTCDate();
-  const start = toMinutes(input.shiftStart);
-  const end = toMinutes(input.shiftEnd);
+  const adjustments = input.adjustments ?? new Map<string, AdjustmentKind>();
 
   const byDay = new Map<string, number[]>();
   for (const p of input.punches) {
@@ -70,26 +78,34 @@ export function buildAttendance(input: {
   for (let d = 1; d <= dim; d++) {
     const date = `${input.month}-${String(d).padStart(2, "0")}`;
     const mins = (byDay.get(date) ?? []).sort((a, b) => a - b);
-    const base: DayRow = { date, status: "present", first: null, last: null, lateMinutes: 0, earlyMinutes: 0, punches: mins.length };
+    const adj = adjustments.get(date);
+    const base: DayRow = { date, status: "present", first: null, last: null, lateMinutes: 0, earlyMinutes: 0, punches: mins.length, adjustment: adj };
     const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
+    const sched = input.week[dow];
+    const start = toMinutes(sched.start);
+    const end = toMinutes(sched.end);
+    const worked = adj === "worked_off_day" && mins.length > 0;
 
     if (input.dateOfJoining && date < input.dateOfJoining) days.push({ ...base, status: "before_joining" });
     else if (date > input.today) days.push({ ...base, status: "upcoming" });
-    else if (input.weeklyOff.includes(dow)) days.push({ ...base, status: "off", first: mins.length ? hhmm(mins[0]) : null });
-    else if (input.holidays.has(date)) days.push({ ...base, status: "holiday" });
+    else if (!sched.working) days.push({ ...base, status: "off", first: mins.length ? hhmm(mins[0]) : null, workedOffDay: worked });
+    else if (input.holidays.has(date)) days.push({ ...base, status: "holiday", first: mins.length ? hhmm(mins[0]) : null, workedOffDay: worked });
     else if (input.leave.has(date)) days.push({ ...base, status: "leave", leaveKind: input.leave.get(date), first: mins.length ? hhmm(mins[0]) : null });
+    else if (adj === "comp_off") days.push({ ...base, status: "comp_off" });
+    else if (mins.length < 2 && adj === "present") days.push({ ...base, status: "present", first: mins.length ? hhmm(mins[0]) : null });
     else if (mins.length === 0) days.push({ ...base, status: "absent" });
     else if (mins.length === 1) days.push({ ...base, status: "single", first: hhmm(mins[0]) });
     else {
       const first = mins[0];
       const last = mins[mins.length - 1];
+      const excused = adj === "excused";
       days.push({
         ...base,
         status: "present",
         first: hhmm(first),
         last: hhmm(last),
-        lateMinutes: Math.max(0, first - start),
-        earlyMinutes: Math.max(0, end - last),
+        lateMinutes: excused ? 0 : Math.max(0, first - start),
+        earlyMinutes: excused ? 0 : Math.max(0, end - last),
       });
     }
   }
@@ -107,6 +123,8 @@ export function buildAttendance(input: {
     presentDays: days.filter((d) => d.status === "present" || d.status === "single").length,
     absentDays: days.filter((d) => d.status === "absent").length,
     singlePunchDays: days.filter((d) => d.status === "single").length,
+    compOffTaken: days.filter((d) => d.status === "comp_off").length,
+    workedOffDays: days.filter((d) => d.workedOffDay).length,
     lateMinutes: days.reduce((t, d) => t + d.lateMinutes, 0),
     earlyMinutes: days.reduce((t, d) => t + d.earlyMinutes, 0),
     suggestions,
