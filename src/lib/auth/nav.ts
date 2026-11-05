@@ -26,21 +26,9 @@ export type NavIconKey =
   | "hr-people"
   | "settings";
 
-/**
- * The department a screen belongs to. The sidebar shows a heading above the
- * first item of each, so a person finds "fees" under Accounts and "leads"
- * under Sales instead of in one long list. Items with no group (Dashboard,
- * Insights, Ask AI, Settings) sit outside any department.
- */
-export type NavGroup = "sales" | "accounts" | "marketing" | "academics" | "hr";
+import type { NavGroup } from "./nav-groups";
 
-export const NAV_GROUP_LABELS: Record<NavGroup, string> = {
-  sales: "Sales",
-  accounts: "Accounts",
-  marketing: "Marketing",
-  academics: "Academics",
-  hr: "HR",
-};
+export type { NavGroup };
 
 export interface NavItem {
   href: string;
