@@ -9,12 +9,13 @@ import { db } from "@/lib/db/client";
 import { biometricDevices, employees, payrollSettings } from "@/lib/db/schema";
 import { formatDateIST } from "@/lib/format/date";
 
-import { DeviceForm, ImportForm, KeyForm, MapCodeForm, ShiftForm } from "./attendance-forms";
+import { AdjustForm, DeviceForm, ImportForm, KeyForm, MapCodeForm, ShiftForm } from "./attendance-forms";
+import { compOffBalance } from "@/lib/attendance/load";
 
 export const dynamic = "force-dynamic";
 
 const STATUS_LABEL: Record<string, string> = {
-  present: "Present", single: "One punch", absent: "No punch", leave: "On leave", off: "Day off", holiday: "Holiday", before_joining: "—", upcoming: "",
+  present: "Present", single: "One punch", absent: "No punch", leave: "On leave", comp_off: "Comp-off", off: "Day off", holiday: "Holiday", before_joining: "—", upcoming: "",
 };
 
 /** The preliminary report: what the biometric punches say, for the payslip to be checked against. Suggestions only. */
@@ -39,6 +40,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
   for (const p of people) reports.set(p.id, await loadAttendanceReport(db, p.id, month));
   const detail = sp.employee ? people.find((p) => p.id === sp.employee) : undefined;
   const detailReport = detail ? reports.get(detail.id) : null;
+  const comp = detail ? await compOffBalance(db, detail.id) : null;
 
   return (
     <div className="flex flex-col gap-8">
@@ -99,6 +101,11 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
       {detail && detailReport && (
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold">{detail.name}: day by day</h3>
+          {comp && (
+            <p className="text-xs text-muted-foreground">
+              Comp-offs: {comp.earned} earned by working on a day off, {comp.taken} taken, {comp.earned - comp.taken} left.
+            </p>
+          )}
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">
               <tbody>
@@ -113,7 +120,13 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
                     <td className="p-1.5 text-xs text-muted-foreground">
                       {d.lateMinutes > 0 ? `${d.lateMinutes} min late ` : ""}
                       {d.earlyMinutes > 0 ? `${d.earlyMinutes} min early` : ""}
+                      {d.adjustment ? ` · marked: ${d.adjustment.replace("_", " ")}` : ""}
                     </td>
+                    {canManage && d.status !== "upcoming" && d.status !== "before_joining" && (
+                      <td className="p-1.5">
+                        <AdjustForm employeeId={detail.id} date={d.date} current={d.adjustment} />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

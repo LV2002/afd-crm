@@ -2,7 +2,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { writeAuditLog } from "@/lib/audit/log";
@@ -10,7 +10,7 @@ import { can, getCurrentUser, type SessionUser } from "@/lib/auth/session";
 import { ingestPunches, mapCode } from "@/lib/attendance/ingest";
 import { parsePunchCsv } from "@/lib/attendance/parse";
 import { db } from "@/lib/db/client";
-import { biometricDevices, payrollSettings } from "@/lib/db/schema";
+import { attendanceAdjustments, biometricDevices, employees, payrollSettings } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 
 export interface AttendanceFormState {
@@ -96,4 +96,45 @@ export async function addDevice(_prev: AttendanceFormState, formData: FormData):
   await audit(user, "attendance.device_add", inserted[0].id, { serial });
   revalidatePath("/hr/attendance");
   return { success: "Registered. It will be accepted the next time it connects." };
+}
+
+const KINDS = ["present", "comp_off", "excused", "worked_off_day"] as const;
+
+/** HR marks a day: present, a comp-off, excused lateness, or worked on a day off. One mark per person per day. */
+export async function setAdjustment(_prev: AttendanceFormState, formData: FormData): Promise<AttendanceFormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "hr.manage")) return { error: "You don't have permission to do that." };
+  const employeeId = String(formData.get("employeeId") ?? "");
+  const onDate = String(formData.get("onDate") ?? "");
+  const kind = String(formData.get("kind") ?? "") as (typeof KINDS)[number];
+  const note = String(formData.get("note") ?? "").trim();
+  if (!KINDS.includes(kind) || !/^\d{4}-\d{2}-\d{2}$/.test(onDate)) return { error: "Pick what to mark the day as." };
+  if (note.length < 3) return { error: "Say why, in a few words. It is kept with who marked it." };
+  const [emp] = await db.select({ id: employees.id }).from(employees).where(eq(employees.id, employeeId));
+  if (!emp) return { error: "That employee doesn't exist." };
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(attendanceAdjustments)
+      .set({ removedAt: new Date(), removedBy: user.id })
+      .where(and(eq(attendanceAdjustments.employeeId, employeeId), eq(attendanceAdjustments.onDate, onDate), isNull(attendanceAdjustments.removedAt)));
+    await tx.insert(attendanceAdjustments).values({ employeeId, onDate, kind, note, createdBy: user.id });
+  });
+  await audit(user, "attendance.adjust", employeeId, { onDate, kind, note });
+  revalidatePath("/hr", "layout");
+  return { success: "Marked." };
+}
+
+export async function clearAdjustment(_prev: AttendanceFormState, formData: FormData): Promise<AttendanceFormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "hr.manage")) return { error: "You don't have permission to do that." };
+  const employeeId = String(formData.get("employeeId") ?? "");
+  const onDate = String(formData.get("onDate") ?? "");
+  await db
+    .update(attendanceAdjustments)
+    .set({ removedAt: new Date(), removedBy: user.id })
+    .where(and(eq(attendanceAdjustments.employeeId, employeeId), eq(attendanceAdjustments.onDate, onDate), isNull(attendanceAdjustments.removedAt)));
+  await audit(user, "attendance.adjust_clear", employeeId, { onDate });
+  revalidatePath("/hr", "layout");
+  return { success: "Cleared." };
 }

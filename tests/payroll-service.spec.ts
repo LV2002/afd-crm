@@ -119,6 +119,51 @@ describe("generating", () => {
   });
 });
 
+describe("paying more than the slip shows", () => {
+  it("records the extra as an advance, adds it to the next payslip, and carries it forward", async () => {
+    // Fresh employee so earlier tests' slips don't interfere.
+    const [e2] = await db.insert(employees).values({ empNo: `${MARK}-2`, name: `${MARK} Bina`, dateOfJoining: "2020-01-01" }).returning({ id: employees.id });
+    await db.insert(employeePay).values({ employeeId: e2.id, basicPaise: 2_000_000 });
+    const g = (month: string, over: Partial<Parameters<typeof generatePayslip>[1]> = {}) =>
+      generatePayslip(db, { employeeId: e2.id, month, money: ZERO, entries: [], regenerate: false, userId, ...over });
+
+    const oct = await g("2026-10");
+    expect(oct).toMatchObject({ ok: true, net: 2_000_000 });
+    const [slip] = await db.select().from(payslips).where(and(eq(payslips.employeeId, e2.id), eq(payslips.month, "2026-10")));
+    await approvePayslip(db, { payslipId: slip.id, userId });
+
+    // Pays ₹25,000 against a ₹20,000 salary.
+    const paid = await recordSalaryPayment(db, { payslipId: slip.id, accountId: bankId, amountPaise: 2_500_000, occurredOn: "2026-11-02", reference: null, userId });
+    expect(paid).toMatchObject({ ok: true, advancePaise: 500_000 });
+    const status = (await paymentStatuses(db, [{ id: slip.id, netPaise: slip.netPaise }])).get(slip.id)!;
+    expect(status).toMatchObject({ recordedPaise: 2_000_000, advancePaise: 500_000, remainingPaise: 0, state: "recorded" });
+
+    // November's payslip picks the advance up, and a part-repayment leaves the balance.
+    const nov = await g("2026-11", { money: { ...ZERO, advanceRepaid: 100_000 } });
+    expect(nov.ok && nov.result.advance).toMatchObject({ given: 500_000, repaid: 100_000, closing: 400_000 });
+    expect(nov.ok && nov.net).toBe(2_000_000 - 100_000);
+    // Regenerating November finds the same advance again and does not double it.
+    const again = await g("2026-11", { regenerate: true, money: { ...ZERO, advanceRepaid: 100_000 } });
+    expect(again.ok && again.result.advance.closing).toBe(400_000);
+    // And December carries the balance.
+    const dec = await g("2026-12");
+    expect(dec.ok && dec.result.advance).toMatchObject({ broughtForward: 400_000, given: 0, closing: 400_000 });
+  });
+
+  it("an advance whose payment was reversed is not added to any payslip", async () => {
+    const [e3] = await db.insert(employees).values({ empNo: `${MARK}-3`, name: `${MARK} Chitra`, dateOfJoining: "2020-01-01" }).returning({ id: employees.id });
+    await db.insert(employeePay).values({ employeeId: e3.id, basicPaise: 1_000_000 });
+    await generatePayslip(db, { employeeId: e3.id, month: "2026-10", money: ZERO, entries: [], regenerate: false, userId });
+    const [slip] = await db.select().from(payslips).where(eq(payslips.employeeId, e3.id));
+    await approvePayslip(db, { payslipId: slip.id, userId });
+    const paid = await recordSalaryPayment(db, { payslipId: slip.id, accountId: bankId, amountPaise: 1_300_000, occurredOn: "2026-11-02", reference: null, userId });
+    if (!paid.ok) throw new Error(paid.error);
+    await db.transaction((tx) => reverseTransaction(tx, { transactionId: paid.transactionId, reason: "wrong", recordedBy: userId }));
+    const nov = await generatePayslip(db, { employeeId: e3.id, month: "2026-11", money: ZERO, entries: [], regenerate: false, userId });
+    expect(nov.ok && nov.result.advance.given).toBe(0);
+  });
+});
+
 describe("paying", () => {
   async function slipFor(month: string) {
     const [s] = await db.select().from(payslips).where(and(eq(payslips.employeeId, empId), eq(payslips.month, month), eq(payslips.status, "current")));
@@ -137,7 +182,6 @@ describe("paying", () => {
     const slip = await slipFor("2026-10");
     const part = await recordSalaryPayment(db, { payslipId: slip.id, accountId: bankId, amountPaise: 2_000_000, occurredOn: "2026-11-01", reference: null, userId });
     expect(part.ok).toBe(true);
-    expect(await recordSalaryPayment(db, { payslipId: slip.id, accountId: bankId, amountPaise: 9_999_999, occurredOn: "2026-11-01", reference: null, userId })).toMatchObject({ ok: false });
 
     let status = (await paymentStatuses(db, [{ id: slip.id, netPaise: slip.netPaise }])).get(slip.id)!;
     expect(status).toMatchObject({ state: "partial", recordedPaise: 2_000_000, verifiedPaise: 0, remainingPaise: 4_500_000 });

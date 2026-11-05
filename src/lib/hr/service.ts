@@ -4,6 +4,7 @@ import type { DbExecutor } from "@/lib/db/client";
 import { companyHolidays, employees, hrSettings, leaveRequests, type LeaveKind } from "@/lib/db/schema";
 
 import { countLeaveDays, rangesOverlap, type LeavePolicy } from "./leave";
+import { loadWeek, weeklyOffOf } from "./schedule";
 
 /**
  * The writes behind leave: applying, deciding, cancelling. Kept apart from
@@ -69,7 +70,9 @@ export async function applyForLeave(
 
   const policy = await loadPolicy(tx);
   const holidays = new Set((await loadHolidays(tx, employee.centerId)).map((h) => h.onDate));
-  const days = countLeaveDays(kind, input.fromDate, toDate, holidays, policy.weeklyOff);
+  // Their own working week: somebody whose day off is a Saturday is not charged leave for it.
+  const weeklyOff = weeklyOffOf((await loadWeek(tx, employeeId)).week);
+  const days = countLeaveDays(kind, input.fromDate, toDate, holidays, weeklyOff);
   if (days <= 0) return { ok: false, error: "Those dates are all days off or company holidays, so there is nothing to apply for." };
 
   // One person can't be on two leaves at once, and a cancelled or rejected

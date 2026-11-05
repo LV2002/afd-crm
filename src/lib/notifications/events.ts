@@ -378,6 +378,17 @@ export const NOTIFICATION_EVENTS = [
     defaultNotifyRoleCodes: ["hr"],
   },
   {
+    key: "payroll.ready",
+    label: "Payroll ready to review",
+    description: "It is the first of the month: last month's attendance and leave are in, and payroll can be reviewed and generated.",
+    category: "HR",
+    variables: ["month"],
+    defaultTitle: "Payroll for {{month}} is ready to review",
+    defaultBody: "Check attendance, leave and anything that needs a correction, then generate the payslips.",
+    defaultNotifyOwner: false,
+    defaultNotifyRoleCodes: ["hr", "accounts"],
+  },
+  {
     key: "leave.decided",
     label: "Leave approved or turned down",
     description: "A manager or HR decided on a leave request. Tells the employee.",

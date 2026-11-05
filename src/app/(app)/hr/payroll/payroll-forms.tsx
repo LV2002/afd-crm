@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import {
   approve,
   generate,
+  generateReviewed,
   linkEntry,
   payFromLine,
   payOut,
@@ -365,5 +366,41 @@ export function PayrollSettingsForm({
         Save
       </Button>
     </form>
+  );
+}
+
+export function GenerateReviewedForm({ month, ready, skippable }: { month: string; ready: number; skippable: Array<{ id: string; name: string }> }) {
+  const [state, action, pending] = useActionState(generateReviewed, initial);
+  return (
+    <form action={action} className="flex max-w-2xl flex-col gap-3 rounded-lg border p-4">
+      <input type="hidden" name="month" value={month} />
+      <p className="text-sm">
+        Generate the {ready} ready payslip{ready === 1 ? "" : "s"} as shown. Anyone who needs overtime, an advance or a correction: tick them to
+        leave them out, and generate them one at a time.
+      </p>
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {skippable.map((p) => (
+          <label key={p.id} className="flex items-center gap-1.5 text-sm">
+            <input type="checkbox" name="skip" value={p.id} />
+            Leave out {p.name}
+          </label>
+        ))}
+      </div>
+      <label className="flex items-center gap-2 text-sm font-medium">
+        <input type="checkbox" name="reviewed" />I have reviewed the list above
+      </label>
+      <FormMessage error={state.error} success={state.success} />
+      <Button type="submit" disabled={pending || ready === 0} className="w-fit">
+        {pending ? "Generating…" : `Generate ${ready}`}
+      </Button>
+    </form>
+  );
+}
+
+export function PrintButton() {
+  return (
+    <Button type="button" variant="outline" size="sm" onClick={() => window.print()}>
+      Print
+    </Button>
   );
 }

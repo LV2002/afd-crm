@@ -12,6 +12,7 @@ import {
   decideLeaveRequest,
   removeHoliday,
   saveEmployee,
+  saveWorkingWeek,
   savePolicy,
   type HrFormState,
 } from "./actions";
@@ -292,6 +293,53 @@ export function RemoveHolidayButton({ holidayId }: { holidayId: string }) {
         Remove
       </Button>
       <FormMessage error={state.error} />
+    </form>
+  );
+}
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** A person's working week. Late coming and early exit are measured against these times; leave skips the days off. */
+export function WorkingWeekForm({
+  employeeId,
+  week,
+  custom,
+}: {
+  employeeId: string;
+  week: Array<{ working: boolean; start: string; end: string }>;
+  custom: boolean;
+}) {
+  const [state, action, pending] = useActionState(saveWorkingWeek, initial);
+  return (
+    <form action={action} className="flex max-w-xl flex-col gap-3 rounded-lg border p-4">
+      <input type="hidden" name="employeeId" value={employeeId} />
+      <p className="text-xs text-muted-foreground">
+        {custom ? "This person has their own week." : "Following the company default. Save to give them their own."} Late coming and early exit
+        are measured against these times, and leave isn&apos;t charged on their days off.
+      </p>
+      <div className="grid grid-cols-[7rem_auto_1fr] items-center gap-x-3 gap-y-2 text-sm">
+        {week.map((d, i) => (
+          <div key={i} className="contents">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" name={`work${i}`} defaultChecked={d.working} />
+              {DAY_NAMES[i]}
+            </label>
+            <input type="time" name={`start${i}`} defaultValue={d.start} className={field} aria-label={`${DAY_NAMES[i]} starts`} />
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">to</span>
+              <input type="time" name={`end${i}`} defaultValue={d.end} className={field} aria-label={`${DAY_NAMES[i]} ends`} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="useDefault" />
+        Go back to the company default instead
+      </label>
+      <FormMessage error={state.error} success={state.success} />
+      <Button type="submit" disabled={pending} className="w-fit">
+        Save working week
+      </Button>
     </form>
   );
 }

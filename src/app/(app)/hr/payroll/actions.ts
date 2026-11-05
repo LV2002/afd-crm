@@ -10,6 +10,7 @@ import { bankStatementLines, employeePay, employees, payrollSettings } from "@/l
 import { assertAccountInScope } from "@/lib/finance/account-scope";
 import { parseRupeesToPaise } from "@/lib/format/currency";
 import type { PayrollEntry } from "@/lib/payroll/calc";
+import { reviewMonth } from "@/lib/payroll/review";
 import {
   approvePayslip,
   generatePayslip,
@@ -211,10 +212,19 @@ export async function payOut(_prev: PayrollFormState, formData: FormData): Promi
     userId: user.id,
   });
   if (!result.ok) return { error: result.error };
-  await audit(user, "payroll.pay", "finance_transactions", result.transactionId, { payslipId: String(formData.get("payslipId")), amount });
+  await audit(user, "payroll.pay", "finance_transactions", result.transactionId, {
+    payslipId: String(formData.get("payslipId")),
+    amount,
+    advance: result.advancePaise,
+  });
   revalidate();
   revalidatePath("/finance", "layout");
-  return { success: "Recorded. It shows as paid once a bank statement line proves it." };
+  return {
+    success:
+      result.advancePaise > 0
+        ? `Recorded. ₹${(result.advancePaise / 100).toLocaleString("en-IN")} of it was more than the salary owed, so it is an advance: it is added to the next payslip and recovered through "advance repaid".`
+        : "Recorded. It shows as paid once a bank statement line proves it.",
+  };
 }
 
 export async function linkEntry(_prev: PayrollFormState, formData: FormData): Promise<PayrollFormState> {
@@ -248,3 +258,41 @@ export async function payFromLine(_prev: PayrollFormState, formData: FormData): 
   return { success: "That bank line is now this salary, and it is verified." };
 }
 
+
+/**
+ * Generates every payslip in the review list that is ready, exactly as
+ * previewed: approved leave and the biometric suggestions, no extras. Anyone
+ * who needs overtime, an advance or a correction is generated one at a time
+ * instead. Everything still waits for the owner's approval.
+ */
+export async function generateReviewed(_prev: PayrollFormState, formData: FormData): Promise<PayrollFormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "payroll.generate")) return { error: "You don't have permission to do that." };
+  if (formData.get("reviewed") !== "on") return { error: "Tick the box to say you have reviewed the list." };
+  const month = String(formData.get("month") ?? "");
+  if (!/^\d{4}-\d{2}$/.test(month)) return { error: "Pick the month." };
+  const skip = new Set(formData.getAll("skip").map(String));
+
+  const rows = (await reviewMonth(db, month)).filter((r) => r.state === "ready" && !skip.has(r.employeeId));
+  let made = 0;
+  const failed: string[] = [];
+  for (const r of rows) {
+    const result = await generatePayslip(db, {
+      employeeId: r.employeeId,
+      month,
+      money: { overtime: 0, arrears: 0, incentives: 0, insurance: 0, bonus: 0, advanceGiven: 0, advanceRepaid: 0 },
+      entries: r.entries,
+      regenerate: false,
+      userId: user.id,
+    });
+    if (result.ok) {
+      made += 1;
+      await audit(user, "payroll.generate", "payslips", result.id, { month, net: result.net, bulk: true });
+    } else failed.push(`${r.name}: ${result.error}`);
+  }
+  revalidate();
+  return {
+    success: `Generated ${made} payslip${made === 1 ? "" : "s"}. They wait for the owner's approval.`,
+    error: failed.length ? failed.join(" ") : undefined,
+  };
+}

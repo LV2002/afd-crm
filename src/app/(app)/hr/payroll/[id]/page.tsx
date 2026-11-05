@@ -14,7 +14,7 @@ import type { PayrollResult } from "@/lib/payroll/calc";
 import { SALARY_CATEGORY, loadPayrollSettings, paymentStatuses } from "@/lib/payroll/service";
 import { loadAttendanceReport } from "@/lib/attendance/load";
 
-import { ApproveButton, LinkEntryButton, PayForm, PayFromLineButton } from "../payroll-forms";
+import { ApproveButton, LinkEntryButton, PayForm, PayFromLineButton, PrintButton } from "../payroll-forms";
 import { SlipView } from "../slip-view";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +46,7 @@ export default async function PayslipPage({ params }: { params: Promise<{ id: st
   let accounts: Array<{ id: string; name: string; type: string }> = [];
   let entries: Array<{ id: string; label: string }> = [];
   let lines: Array<{ id: string; label: string }> = [];
-  const canPay = can(user, "payroll.generate") && slip.status === "current" && (!settings.requireApproval || Boolean(slip.approvedAt)) && status.remainingPaise > 0;
+  const canPay = can(user, "payroll.generate") && slip.status === "current" && (!settings.requireApproval || Boolean(slip.approvedAt));
   if (isPayroll && canPay) {
     const scope = scopeFor(user, "finance.record");
     const centreClause = scope === "all" ? sql`` : user.centerIds.length ? sql`and a.center_id in (${sql.join(user.centerIds.map((c) => sql`${c}::uuid`), sql`, `)})` : sql`and false`;
@@ -59,20 +59,19 @@ export default async function PayslipPage({ params }: { params: Promise<{ id: st
         select t.id, t.occurred_on::text as occurred_on, t.amount_paise, t.description
         from finance_transactions t join finance_accounts a on a.id = t.account_id
         where t.category = ${SALARY_CATEGORY} and t.direction = 'out' and t.amount_paise > 0
-          and t.amount_paise <= ${status.remainingPaise}
           and not exists (select 1 from payslip_payments sp where sp.transaction_id = t.id)
           and not exists (select 1 from finance_transactions r where r.reverses_transaction_id = t.id)
           ${centreClause}
-        order by t.occurred_on desc limit 8`)),
+        order by abs(t.amount_paise - ${status.remainingPaise}), t.occurred_on desc limit 8`)),
     ].map((r) => ({ id: r.id, label: `Link entry · ${day(r.occurred_on)} · ${formatINR(Number(r.amount_paise))} · ${r.description}` }));
     lines = [
       ...(await db.execute<{ id: string; occurred_on: string; amount_paise: string; particulars: string }>(sql`
         select l.id, l.occurred_on::text as occurred_on, l.amount_paise, l.particulars
         from bank_statement_lines l join finance_accounts a on a.id = l.account_id
-        where l.direction = 'out' and l.amount_paise <= ${status.remainingPaise}
+        where l.direction = 'out'
           and not exists (select 1 from bank_matches m where m.bank_line_id = l.id and m.active)
           ${centreClause}
-        order by (l.amount_paise = ${status.remainingPaise}) desc, l.occurred_on desc limit 8`)),
+        order by abs(l.amount_paise - ${status.remainingPaise}), l.occurred_on desc limit 8`)),
     ].map((r) => ({ id: r.id, label: `${day(r.occurred_on)} · ${formatINR(Number(r.amount_paise))} · ${r.particulars.slice(0, 70)}` }));
   }
 
@@ -94,7 +93,12 @@ export default async function PayslipPage({ params }: { params: Promise<{ id: st
         <Link href={isPayroll ? `/hr/payroll?month=${slip.month}` : "/hr/me"} className="text-sm text-muted-foreground underline">
           Back
         </Link>
-        <p className="text-xs text-muted-foreground">Use your browser&apos;s Print and choose &ldquo;Save as PDF&rdquo; for a copy.</p>
+        <div className="flex items-center gap-2">
+          <a href={`/hr/payroll/${slip.id}/pdf`} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground">
+            Download PDF
+          </a>
+          <PrintButton />
+        </div>
       </div>
 
       {slip.status === "superseded" && (
@@ -136,12 +140,19 @@ export default async function PayslipPage({ params }: { params: Promise<{ id: st
             <p className="text-xs text-muted-foreground">Approved {formatDateIST(slip.approvedAt, "d MMM yyyy, h:mm a")}.</p>
           )}
 
-          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <Fig label="Net pay" value={formatINR(slip.netPaise)} />
-            <Fig label="Recorded as paid" value={formatINR(status.recordedPaise)} />
+            <Fig label="Salary recorded as paid" value={formatINR(status.recordedPaise)} />
             <Fig label="Proved by the bank statement" value={formatINR(status.verifiedPaise)} />
             <Fig label="Still owed" value={formatINR(status.remainingPaise)} bad={status.remainingPaise > 0} />
+            <Fig label="Paid as an advance" value={formatINR(status.advancePaise)} />
           </dl>
+          {status.advancePaise > 0 && (
+            <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900">
+              {formatINR(status.advancePaise)} was paid over the salary. It is an advance to {emp.name}: it is added to the next payslip, and is
+              recovered by entering an amount under &ldquo;Advance repaid&rdquo; in the months that follow.
+            </p>
+          )}
 
           {status.payments.length > 0 && (
             <table className="w-full text-sm">
@@ -150,7 +161,10 @@ export default async function PayslipPage({ params }: { params: Promise<{ id: st
                   <tr key={p.transactionId} className="border-t">
                     <td className="p-1.5">{day(p.occurredOn)}</td>
                     <td className="p-1.5">{p.accountName}</td>
-                    <td className="p-1.5">{formatINR(p.amountPaise)}</td>
+                    <td className="p-1.5">
+                      {formatINR(p.amountPaise)}
+                      {p.advancePaise > 0 && <span className="ml-1 text-xs text-muted-foreground">(incl. {formatINR(p.advancePaise)} advance)</span>}
+                    </td>
                     <td className="p-1.5">
                       {p.accountType !== "bank" ? (
                         <span className="text-muted-foreground">Cash: no statement to check</span>
@@ -185,6 +199,9 @@ export default async function PayslipPage({ params }: { params: Promise<{ id: st
                 </div>
               )}
               <p className="text-xs font-medium">Or record a payment</p>
+              <p className="text-xs text-muted-foreground">
+                Pay more than the slip shows and the extra is recorded as an advance to this person.
+              </p>
               <PayForm payslipId={slip.id} remaining={String(status.remainingPaise / 100)} accounts={accounts} />
             </>
           )}

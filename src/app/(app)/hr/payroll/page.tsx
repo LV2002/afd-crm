@@ -26,6 +26,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
   const verified = rows.reduce((t, r) => t + r.status.verifiedPaise + r.status.cashPaise, 0);
   const recorded = rows.reduce((t, r) => t + r.status.recordedPaise, 0);
   const canGenerate = can(user, "payroll.generate");
+  const advances = rows.reduce((t, r) => t + r.status.advancePaise, 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -38,12 +39,22 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
           <button type="submit" className="h-9 rounded-md border px-3 text-sm">Show</button>
         </form>
         {canGenerate && (
-          <Link href={`/hr/payroll/generate?month=${month}`} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
-            Generate a payslip
-          </Link>
+          <div className="flex gap-2">
+            <Link href={`/hr/payroll/review?month=${month}`} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
+              Review and generate the month
+            </Link>
+            <Link href={`/hr/payroll/generate?month=${month}`} className="rounded-md border px-4 py-2 text-sm font-medium">
+              Generate one payslip
+            </Link>
+          </div>
         )}
       </div>
 
+      {advances > 0 && (
+        <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900">
+          {formatINR(advances)} was paid over the salary this month, as advances: {rows.filter((r) => r.status.advancePaise > 0).map((r) => `${r.name} ${formatINR(r.status.advancePaise)}`).join(", ")}.
+        </p>
+      )}
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Payslips" value={String(rows.length)} />
         <Stat label="Net pay owed" value={formatINR(totalNet)} />
@@ -51,6 +62,11 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
         <Stat label="Still to pay" value={formatINR(Math.max(0, totalNet - recorded))} bad={totalNet - recorded > 0} />
       </dl>
 
+      {rows.length > 0 && (
+        <a href={`/hr/payroll/pdf?month=${month}`} className="w-fit text-sm font-medium underline">
+          Download all {rows.length} payslips for {month} as one PDF (for printing)
+        </a>
+      )}
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left text-xs text-muted-foreground">

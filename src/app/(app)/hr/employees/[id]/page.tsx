@@ -5,7 +5,8 @@ import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { balanceFor, getCenterOptions, getEmployee, getEmployees, getLoginOptions, getRequests } from "@/lib/hr/queries";
 
-import { EmployeeForm } from "../../hr-forms";
+import { EmployeeForm, WorkingWeekForm } from "../../hr-forms";
+import { loadWeek } from "@/lib/hr/schedule";
 import { PayRatesForm } from "../../payroll/payroll-forms";
 import { db } from "@/lib/db/client";
 import { employeePay, payslips } from "@/lib/db/schema";
@@ -28,6 +29,7 @@ export default async function EmployeePage({ params }: { params: Promise<{ id: s
   const slips = canPayroll
     ? await db.select().from(payslips).where(and(eq(payslips.employeeId, id), eq(payslips.status, "current"))).orderBy(desc(payslips.month)).limit(24)
     : [];
+  const { week, custom } = await loadWeek(db, id);
   const rupees = (p: number | undefined) => (p ? String(p / 100) : "");
 
   const [balance, requests, all, logins, centers] = await Promise.all([
@@ -80,6 +82,17 @@ export default async function EmployeePage({ params }: { params: Promise<{ id: s
           {[employee.designation, employee.department, employee.empNo].filter(Boolean).join(" · ")}
         </p>
       )}
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold">Working week</h3>
+        {canManage ? (
+          <WorkingWeekForm employeeId={employee.id} week={week} custom={custom} />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {week.map((d, i) => (d.working ? `${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][i]} ${d.start}–${d.end}` : null)).filter(Boolean).join(" · ")}
+          </p>
+        )}
+      </section>
 
       {canPayroll && (
         <section className="flex flex-col gap-2">

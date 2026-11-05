@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import type { DbExecutor } from "@/lib/db/client";
 import {
@@ -17,6 +17,7 @@ import { resolveBankLines } from "@/lib/finance/bank-ledger";
 import { matchSoon } from "@/lib/finance/reconcile";
 import { postEntry } from "@/lib/finance/post";
 import { workingDates } from "@/lib/hr/leave";
+import { loadWeek, weeklyOffOf } from "@/lib/hr/schedule";
 import { loadHolidays, loadPolicy, type Result } from "@/lib/hr/service";
 
 import {
@@ -43,6 +44,37 @@ export interface RevisionInput {
   effectiveDate: string;
   newDesignation?: string | null;
   newComponents: Partial<Components>;
+}
+
+/** How much of a payment is more than what the slip still owes. */
+export function splitAdvance(amountPaise: number, remainingPaise: number): number {
+  return Math.max(0, amountPaise - Math.max(0, remainingPaise));
+}
+
+/**
+ * Advances paid along with salary that no payslip has picked up yet (or that
+ * the payslip being regenerated had picked up). They become that month's
+ * "advance given", so the balance carries forward like any other advance.
+ */
+async function pendingAdvances(
+  tx: DbExecutor,
+  employeeId: string,
+  month: string,
+  ownSlipId: string | null,
+): Promise<{ total: number; ids: string[] }> {
+  const monthEnd = `${month}-${String(new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate()).padStart(2, "0")}`;
+  const rows = await tx.execute<{ id: string; advance_paise: string | number }>(sql`
+    select sp.id, sp.advance_paise
+    from payslip_payments sp
+    join payslips p on p.id = sp.payslip_id
+    join finance_transactions t on t.id = sp.transaction_id
+    where p.employee_id = ${employeeId}::uuid and sp.advance_paise > 0
+      and (sp.advance_absorbed_by is null ${ownSlipId ? sql`or sp.advance_absorbed_by = ${ownSlipId}::uuid` : sql``})
+      and t.occurred_on <= ${monthEnd}::date
+      and not exists (select 1 from finance_transactions r where r.reverses_transaction_id = t.id)
+  `);
+  const list = [...rows];
+  return { total: list.reduce((t, r) => t + Number(r.advance_paise), 0), ids: list.map((r) => r.id) };
 }
 
 export async function loadPayrollSettings(tx: DbExecutor) {
@@ -102,7 +134,7 @@ async function laterExists(tx: DbExecutor, employeeId: string, month: string): P
  */
 export async function approvedLeaveEntries(tx: DbExecutor, employeeId: string, month: string): Promise<PayrollEntry[]> {
   const [emp] = await tx.select({ centerId: employees.centerId }).from(employees).where(eq(employees.id, employeeId));
-  const policy = await loadPolicy(tx);
+  const weeklyOff = weeklyOffOf((await loadWeek(tx, employeeId)).week);
   const holidays = new Set((await loadHolidays(tx, emp?.centerId ?? null)).map((h) => h.onDate));
   const monthStart = `${month}-01`;
   const monthEnd = `${month}-${String(new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate()).padStart(2, "0")}`;
@@ -114,7 +146,7 @@ export async function approvedLeaveEntries(tx: DbExecutor, employeeId: string, m
   const out: PayrollEntry[] = [];
   for (const r of rows) {
     if (r.toDate < monthStart || r.fromDate > monthEnd) continue;
-    for (const date of workingDates(r.fromDate, r.toDate, holidays, policy.weeklyOff)) {
+    for (const date of workingDates(r.fromDate, r.toDate, holidays, weeklyOff)) {
       if (date < monthStart || date > monthEnd) continue;
       out.push({ date, type: r.kind, notes: `Leave slip #${r.leaveNo}` });
     }
@@ -131,6 +163,8 @@ export interface GenerateInput {
   revision?: RevisionInput | null;
   regenerate: boolean;
   userId: string;
+  /** Work it all out and return the slip without saving anything. */
+  dryRun?: boolean;
 }
 
 export async function generatePayslip(
@@ -194,6 +228,10 @@ export async function generatePayslip(
   );
   const entries = [...approved, ...manual];
 
+  // Salary paid over what an earlier slip owed is an advance, and lands here.
+  const pending = await pendingAdvances(tx, employee.id, input.month, existing?.id ?? null);
+  const autoAdvance = pending.total;
+
   const outcome = calculatePayslip({
     month: input.month,
     settings: toCalcSettings(settings),
@@ -202,11 +240,13 @@ export async function generatePayslip(
     base,
     revision: revision ?? undefined,
     opening,
-    money: input.money,
+    money: { ...input.money, advanceGiven: input.money.advanceGiven + autoAdvance },
     entries,
   });
   if (!outcome.ok) return { ok: false, error: outcome.errors.join(" ") };
   const result = outcome.result;
+
+  if (input.dryRun) return { ok: true, id: "", slipNo: 0, net: result.net, result };
 
   if (existing) {
     await tx
@@ -220,7 +260,7 @@ export async function generatePayslip(
       employeeId: employee.id,
       month: input.month,
       version: (existing?.version ?? 0) + 1,
-      inputs: { money: input.money, entries, revision, baseDesignation, manualEntries: manual } as unknown as Record<string, unknown>,
+      inputs: { money: input.money, autoAdvance, entries, revision, baseDesignation, manualEntries: manual } as unknown as Record<string, unknown>,
       result: result as unknown as Record<string, unknown>,
       baseComponents: base as unknown as Record<string, number>,
       netPaise: result.net,
@@ -231,6 +271,14 @@ export async function generatePayslip(
       generatedBy: input.userId,
     })
     .returning({ id: payslips.id, slipNo: payslips.slipNo });
+
+  if (pending.ids.length > 0) {
+    // Point the advances at this version, so a later regeneration finds them again.
+    await tx
+      .update(payslipPayments)
+      .set({ advanceAbsorbedBy: row.id })
+      .where(inArray(payslipPayments.id, pending.ids));
+  }
 
   // A promotion updates the master to the new values; the ledger of
   // revisions keeps the old ones and the date.
@@ -283,6 +331,8 @@ export interface SlipPayment {
   reference: string | null;
   /** A statement line proves it. Cash can't be, and shows as such. */
   onStatement: boolean;
+  /** The part of this payment that was more than the payslip owed: an advance. */
+  advancePaise: number;
 }
 
 export type PaidState = "paid" | "recorded" | "partial" | "unpaid";
@@ -290,8 +340,10 @@ export type PaidState = "paid" | "recorded" | "partial" | "unpaid";
 export interface SlipPaymentStatus {
   payslipId: string;
   netPaise: number;
-  /** Everything recorded against the slip (reversed payments excluded). */
+  /** Salary recorded against the slip (reversed payments excluded; anything over the net is an advance, below). */
   recordedPaise: number;
+  /** Paid over the net: recorded as an advance, and added to the next payslip. */
+  advancePaise: number;
   /** The part of it that a bank statement line proves. */
   verifiedPaise: number;
   /** The part paid in cash, which has no statement. */
@@ -316,8 +368,9 @@ export async function paymentStatuses(
     account_type: string;
     reference: string | null;
     on_statement: boolean;
+    advance_paise: string | number;
   }>(sql`
-    select sp.payslip_id, t.id as transaction_id, t.amount_paise, t.occurred_on::text as occurred_on,
+    select sp.payslip_id, sp.advance_paise, t.id as transaction_id, t.amount_paise, t.occurred_on::text as occurred_on,
            a.name as account_name, a.type as account_type, t.reference,
            exists (select 1 from bank_matches m where m.transaction_id = t.id and m.active) as on_statement
     from payslip_payments sp
@@ -339,20 +392,25 @@ export async function paymentStatuses(
       accountType: r.account_type,
       reference: r.reference,
       onStatement: r.on_statement,
+      advancePaise: Number(r.advance_paise),
     });
     bySlip.set(r.payslip_id, list);
   }
   for (const s of slips) {
     const payments = bySlip.get(s.id) ?? [];
-    const recorded = payments.reduce((t, p) => t + p.amountPaise, 0);
-    const verified = payments.filter((p) => p.onStatement).reduce((t, p) => t + p.amountPaise, 0);
-    const cash = payments.filter((p) => p.accountType !== "bank").reduce((t, p) => t + p.amountPaise, 0);
+    // Salary and advance are told apart: only the salary portion settles the slip.
+    const salary = (p: SlipPayment) => p.amountPaise - p.advancePaise;
+    const recorded = payments.reduce((t, p) => t + salary(p), 0);
+    const advance = payments.reduce((t, p) => t + p.advancePaise, 0);
+    const verified = payments.filter((p) => p.onStatement).reduce((t, p) => t + salary(p), 0);
+    const cash = payments.filter((p) => p.accountType !== "bank").reduce((t, p) => t + salary(p), 0);
     const state: PaidState =
       recorded === 0 ? "unpaid" : recorded < s.netPaise ? "partial" : verified + cash >= s.netPaise ? "paid" : "recorded";
     out.set(s.id, {
       payslipId: s.id,
       netPaise: s.netPaise,
       recordedPaise: recorded,
+      advancePaise: advance,
       verifiedPaise: verified,
       cashPaise: cash,
       remainingPaise: Math.max(0, s.netPaise - recorded),
@@ -375,14 +433,15 @@ async function slipForPayment(tx: DbExecutor, payslipId: string, requireApproval
 export async function recordSalaryPayment(
   tx: DbExecutor,
   input: { payslipId: string; accountId: string; amountPaise: number; occurredOn: string; reference: string | null; userId: string },
-): Promise<Result<{ transactionId: string }>> {
+): Promise<Result<{ transactionId: string; advancePaise: number }>> {
   const settings = await loadPayrollSettings(tx);
   const found = await slipForPayment(tx, input.payslipId, settings.requireApproval);
   if (!found.ok) return { ok: false, error: found.error };
   const { slip, status } = found;
   if (!Number.isInteger(input.amountPaise) || input.amountPaise <= 0) return { ok: false, error: "Enter the amount paid." };
-  if (input.amountPaise > status.remainingPaise) return { ok: false, error: "That is more than what is still owed on this payslip." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.occurredOn)) return { ok: false, error: "Pick the date it was paid." };
+  // Whatever is paid over what the slip still owes is an advance.
+  const advance = splitAdvance(input.amountPaise, status.remainingPaise);
 
   const [employee] = await tx.select({ name: employees.name }).from(employees).where(eq(employees.id, slip.employeeId));
   const posted = await postEntry(tx, {
@@ -397,9 +456,9 @@ export async function recordSalaryPayment(
     recordedBy: input.userId,
     source: "payroll",
   });
-  await tx.insert(payslipPayments).values({ payslipId: slip.id, transactionId: posted.id, createdBy: input.userId });
+  await tx.insert(payslipPayments).values({ payslipId: slip.id, transactionId: posted.id, advancePaise: advance, createdBy: input.userId });
   await matchSoon(tx, [input.accountId]);
-  return { ok: true, transactionId: posted.id };
+  return { ok: true, transactionId: posted.id, advancePaise: advance };
 }
 
 /** Links a ledger entry that already exists (a Salaries expense nobody tied to a slip) to a payslip. */
@@ -415,10 +474,9 @@ export async function linkSalaryEntry(
   if (txn.category !== SALARY_CATEGORY || txn.direction !== "out" || txn.amountPaise <= 0) {
     return { ok: false, error: "Only an expense entry under Salaries can be linked to a payslip." };
   }
-  if (txn.amountPaise > found.status.remainingPaise) return { ok: false, error: "That is more than what is still owed on this payslip." };
   const inserted = await tx
     .insert(payslipPayments)
-    .values({ payslipId: input.payslipId, transactionId: txn.id, createdBy: input.userId })
+    .values({ payslipId: input.payslipId, transactionId: txn.id, advancePaise: splitAdvance(txn.amountPaise, found.status.remainingPaise), createdBy: input.userId })
     .onConflictDoNothing()
     .returning({ id: payslipPayments.id });
   return inserted.length ? { ok: true } : { ok: false, error: "That entry already pays a payslip." };
@@ -439,7 +497,6 @@ export async function payFromBankLine(
   const [line] = await tx.select().from(bankStatementLines).where(eq(bankStatementLines.id, input.bankLineId));
   if (!line) return { ok: false, error: "That statement line no longer exists." };
   if (line.direction !== "out") return { ok: false, error: "That line is money coming in." };
-  if (line.amountPaise > found.status.remainingPaise) return { ok: false, error: "That is more than what is still owed on this payslip." };
   const taken = await tx
     .select({ id: bankMatches.id })
     .from(bankMatches)
@@ -456,7 +513,12 @@ export async function payFromBankLine(
   if (done === 0) return { ok: false, error: "That line was just dealt with by somebody else." };
   const [after] = await tx.select({ transactionId: bankStatementLines.transactionId }).from(bankStatementLines).where(eq(bankStatementLines.id, line.id));
   if (!after?.transactionId) return { ok: false, error: "The entry could not be created." };
-  await tx.insert(payslipPayments).values({ payslipId: input.payslipId, transactionId: after.transactionId, createdBy: input.userId });
+  await tx.insert(payslipPayments).values({
+    payslipId: input.payslipId,
+    transactionId: after.transactionId,
+    advancePaise: splitAdvance(line.amountPaise, found.status.remainingPaise),
+    createdBy: input.userId,
+  });
   return { ok: true };
 }
 
