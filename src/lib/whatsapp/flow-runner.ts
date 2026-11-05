@@ -7,7 +7,10 @@ import {
   type RuleConditions,
 } from "@/lib/assignment/evaluate-conditions";
 import { db } from "@/lib/db/client";
+import { messageableContactIds } from "@/lib/contacts/whatsapp-eligibility";
 import {
+  contactListMembers,
+  contacts,
   leads,
   whatsappFlowRunEvents,
   whatsappFlowRuns,
@@ -69,7 +72,9 @@ const RUNS_PER_SWEEP = 100;
 interface RunRow {
   id: string;
   flowId: string;
-  leadId: string;
+  /** Exactly one of leadId / contactId is set: a flow is for leads or for the database. */
+  leadId: string | null;
+  contactId: string | null;
   currentStepId: string | null;
 }
 
@@ -132,6 +137,8 @@ export async function startFlows(
         and(
           eq(whatsappFlows.triggerType, trigger),
           eq(whatsappFlows.isActive, true),
+          // Contact flows are started by hand for chosen lists, never by a lead event.
+          eq(whatsappFlows.audience, "lead"),
           isNull(whatsappFlows.deletedAt),
           // A flow may be pinned to one centre. Null reaches everybody.
           or(
@@ -217,10 +224,14 @@ async function stepsFor(flowId: string): Promise<FlowStep[]> {
  */
 async function sendStep(
   step: FlowStep,
-  leadId: string,
+  subject: { leadId: string | null; contactId: string | null },
 ): Promise<{ ok: true; waMessageId: string } | { ok: false; reason: string; fatal: boolean }> {
   const config = step.config as Partial<SendTemplateConfig>;
   if (!config.templateName) return { ok: false, reason: "No template on this step.", fatal: true };
+
+  if (subject.contactId) return sendStepToContact(step, subject.contactId);
+  if (!subject.leadId) return { ok: false, reason: "This run has nobody to send to.", fatal: true };
+  const leadId = subject.leadId;
 
   const [lead] = await db
     .select({
@@ -313,6 +324,106 @@ async function sendStep(
 }
 
 /**
+ * The same send, for a person in the contact database.
+ *
+ * Eligibility is asked again here, on every step, exactly as the broadcast
+ * sweep does: a contact can become a lead, be taken off the list, or have
+ * the list's "agreed to WhatsApp" tick removed between two steps a fortnight
+ * apart. Becoming a lead ends the run: the leads side owns that person now.
+ * Nothing is logged to a lead's chat (there is no lead).
+ */
+async function sendStepToContact(
+  step: FlowStep,
+  contactId: string,
+): Promise<{ ok: true; waMessageId: string } | { ok: false; reason: string; fatal: boolean }> {
+  const config = step.config as Partial<SendTemplateConfig>;
+
+  const [contact] = await db
+    .select({ id: contacts.id, name: contacts.name, phone: contacts.phone })
+    .from(contacts)
+    .where(and(eq(contacts.id, contactId), isNull(contacts.deletedAt)));
+  if (!contact) return { ok: false, reason: "The contact no longer exists.", fatal: true };
+
+  const phone = contact.phone ? normalizePhone(contact.phone) : null;
+  if (!phone) return { ok: false, reason: "No phone number on the record.", fatal: true };
+
+  const eligible = await messageableContactIds([contact.id]);
+  if (!eligible.has(contact.id)) {
+    return {
+      ok: false,
+      reason: "No longer on a list that may be messaged, or has since become a lead.",
+      fatal: true,
+    };
+  }
+
+  const suppressed = await suppressedAmong(db, [phone]);
+  if (suppressed.has(phone)) return { ok: false, reason: "Opted out of WhatsApp messages.", fatal: true };
+
+  const { access_token: accessToken, phone_number_id: phoneNumberId } =
+    await getIntegrationCredentials("whatsapp", ["access_token", "phone_number_id"]);
+  if (!accessToken || !phoneNumberId) return { ok: false, reason: "WhatsApp isn't connected.", fatal: false };
+
+  const sources = parseParamSources(config.params);
+  let params: string[] = [];
+  if (sources.length > 0) {
+    const [row] = await db.select().from(contacts).where(eq(contacts.id, contact.id));
+    const record: Record<string, unknown> = { ...(row?.fields ?? {}), student_name: contact.name, primary_phone: phone };
+    const values = await resolveMergeValues(
+      "contact",
+      [{ id: contact.id, name: contact.name, record }],
+      sources.flatMap((source) => (source.kind === "variable" ? [source.key] : [])),
+    );
+    const resolved = resolveParams(sources, values.get(contact.id) ?? {});
+    if (resolved.missing.length > 0) {
+      return {
+        ok: false,
+        reason: `Nothing to put in ${resolved.missing.map((n) => `{{${n}}}`).join(", ")}.`,
+        fatal: true,
+      };
+    }
+    params = resolved.params;
+  }
+
+  const waMessageId = await sendTemplateMessage(
+    phoneNumberId,
+    accessToken,
+    phone,
+    config.templateName ?? "",
+    config.templateLanguage ?? "en_US",
+    params.length > 0 ? params : undefined,
+  );
+  return { ok: true, waMessageId };
+}
+
+async function runNotifyOwner(run: RunRow, leadId: string, current: FlowStep): Promise<void> {
+  const [lead] = await db
+    .select({
+      studentName: leads.studentName,
+      leadNumber: leads.leadNumber,
+      assignedTo: leads.assignedTo,
+      centerId: leads.centerId,
+    })
+    .from(leads)
+    .where(eq(leads.id, leadId));
+  const message = String((current.config as { message?: unknown }).message ?? "").trim();
+  if (!lead) return;
+  await notify({
+    eventKey: "flow.step_reached",
+    context: {
+      lead_name: lead.studentName,
+      lead_number: lead.leadNumber ?? "",
+      message: message || describeStep(current),
+    },
+    href: `/leads/${leadId}`,
+    entityType: "leads",
+    entityId: leadId,
+    centerId: lead.centerId,
+    ownerId: lead.assignedTo,
+  });
+  await logEvent(run.id, current.id, "notified", message || null);
+}
+
+/**
  * Walks one run forward until it has to stop and wait.
  *
  * Capped at MAX_STEPS_PER_ADVANCE: branches may jump backwards, so a
@@ -356,7 +467,7 @@ async function runOne(run: RunRow, steps: FlowStep[]): Promise<void> {
       case "send_template": {
         let outcome;
         try {
-          outcome = await sendStep(current, run.leadId);
+          outcome = await sendStep(current, { leadId: run.leadId, contactId: run.contactId });
         } catch (error) {
           // Meta refused it. Recorded, not retried — the same template
           // will be refused identically tomorrow and every attempt costs
@@ -426,7 +537,20 @@ async function runOne(run: RunRow, steps: FlowStep[]): Promise<void> {
         return;
       }
 
-      case "set_temperature": {
+      case "set_temperature":
+      case "notify_owner": {
+        // Both act on a lead. A contact has no temperature and no owner, so
+        // the step is skipped and the messages after it still go out.
+        if (!run.leadId) {
+          await logEvent(run.id, current.id, "skipped", "Only applies to leads, so it did nothing here.");
+          current = nextStep(steps, current.position);
+          break;
+        }
+        if (current.kind === "notify_owner") {
+          await runNotifyOwner(run, run.leadId, current);
+          current = nextStep(steps, current.position);
+          break;
+        }
         const temperature = (current.config as { temperature?: unknown }).temperature;
         if (typeof temperature === "string" && temperature) {
           /*
@@ -452,37 +576,6 @@ async function runOne(run: RunRow, steps: FlowStep[]): Promise<void> {
               error instanceof Error ? error.message : "Could not change the temperature",
             );
           }
-        }
-        current = nextStep(steps, current.position);
-        break;
-      }
-
-      case "notify_owner": {
-        const [lead] = await db
-          .select({
-            studentName: leads.studentName,
-            leadNumber: leads.leadNumber,
-            assignedTo: leads.assignedTo,
-            centerId: leads.centerId,
-          })
-          .from(leads)
-          .where(eq(leads.id, run.leadId));
-        const message = String((current.config as { message?: unknown }).message ?? "").trim();
-        if (lead) {
-          await notify({
-            eventKey: "flow.step_reached",
-            context: {
-              lead_name: lead.studentName,
-              lead_number: lead.leadNumber ?? "",
-              message: message || describeStep(current),
-            },
-            href: `/leads/${run.leadId}`,
-            entityType: "leads",
-            entityId: run.leadId,
-            centerId: lead.centerId,
-            ownerId: lead.assignedTo,
-          });
-          await logEvent(run.id, current.id, "notified", message || null);
         }
         current = nextStep(steps, current.position);
         break;
@@ -516,6 +609,7 @@ export async function advanceRuns(): Promise<{ advanced: number }> {
       id: whatsappFlowRuns.id,
       flowId: whatsappFlowRuns.flowId,
       leadId: whatsappFlowRuns.leadId,
+      contactId: whatsappFlowRuns.contactId,
       currentStepId: whatsappFlowRuns.currentStepId,
       awaitingStepId: whatsappFlowRuns.awaitingStepId,
     })
@@ -588,18 +682,87 @@ export async function advanceRuns(): Promise<{ advanced: number }> {
  * being recorded.
  */
 export async function resolveReply(leadId: string, text: string | null): Promise<number> {
+  return resolveWaiting(eq(whatsappFlowRuns.leadId, leadId), text);
+}
+
+/**
+ * A database contact replied (the number matched no lead). Same branching as
+ * for a lead; the contact is found by phone, since the reply carries nothing else.
+ */
+export async function resolveContactReply(phone: string, text: string | null): Promise<number> {
+  try {
+    const normalised = normalizePhone(phone) ?? phone;
+    const [contact] = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(and(eq(contacts.phone, normalised), isNull(contacts.deletedAt)));
+    if (!contact) return 0;
+    return resolveWaiting(eq(whatsappFlowRuns.contactId, contact.id), text);
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Enrols the people on these lists into a contact flow.
+ *
+ * Only lists marked as having agreed to WhatsApp, only people who are not
+ * leads and not opted out: the same rules a broadcast to the database applies,
+ * and checked again before every send. Anyone already partway through is left
+ * alone (the unique live-run index). Returns how many started and how many
+ * were left out.
+ */
+export async function startFlowForContacts(
+  flowId: string,
+  listIds: string[],
+): Promise<{ started: number; skipped: number }> {
+  if (listIds.length === 0) return { started: 0, skipped: 0 };
+  const members = await db
+    .selectDistinct({ contactId: contactListMembers.contactId })
+    .from(contactListMembers)
+    .where(inArray(contactListMembers.listId, listIds));
+  const ids = members.map((m) => m.contactId);
+
+  let started = 0;
+  for (let i = 0; i < ids.length; i += 500) {
+    const chunk = ids.slice(i, i + 500);
+    const eligible = [...(await messageableContactIds(chunk))];
+    if (eligible.length === 0) continue;
+    const phones = await db
+      .select({ id: contacts.id, phone: contacts.phone })
+      .from(contacts)
+      .where(inArray(contacts.id, eligible));
+    const suppressed = await suppressedAmong(
+      db,
+      phones.flatMap((p) => (p.phone ? [p.phone] : [])),
+    );
+    const go = phones.filter((p) => p.phone && !suppressed.has(p.phone)).map((p) => p.id);
+    if (go.length === 0) continue;
+    const created = await db
+      .insert(whatsappFlowRuns)
+      .values(go.map((contactId) => ({ flowId, contactId, status: "running", wakeAt: new Date() })))
+      .onConflictDoNothing()
+      .returning({ id: whatsappFlowRuns.id });
+    for (const run of created) await logEvent(run.id, null, "started", "Started for a database list");
+    started += created.length;
+  }
+  return { started, skipped: ids.length - started };
+}
+
+async function resolveWaiting(subject: ReturnType<typeof eq>, text: string | null): Promise<number> {
   try {
     const waiting = await db
       .select({
         id: whatsappFlowRuns.id,
         flowId: whatsappFlowRuns.flowId,
         leadId: whatsappFlowRuns.leadId,
+        contactId: whatsappFlowRuns.contactId,
         awaitingStepId: whatsappFlowRuns.awaitingStepId,
       })
       .from(whatsappFlowRuns)
       .where(
         and(
-          eq(whatsappFlowRuns.leadId, leadId),
+          subject,
           inArray(whatsappFlowRuns.status, ["running", "waiting"]),
           sql`${whatsappFlowRuns.awaitingStepId} is not null`,
         ),
@@ -646,7 +809,7 @@ export async function resolveReply(leadId: string, text: string | null): Promise
         })
         .where(eq(whatsappFlowRuns.id, run.id));
       await runOne(
-        { id: run.id, flowId: run.flowId, leadId: run.leadId, currentStepId: target.id },
+        { id: run.id, flowId: run.flowId, leadId: run.leadId, contactId: run.contactId, currentStepId: target.id },
         steps,
       );
       moved += 1;

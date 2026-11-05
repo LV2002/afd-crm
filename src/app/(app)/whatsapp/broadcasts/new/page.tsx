@@ -67,6 +67,7 @@ export default async function NewWhatsAppBroadcastPage() {
       .order("name")
       .returns<Array<{ id: string; name: string; use_for_whatsapp: boolean }>>(),
   ]);
+  const canUseDatabase = can(user, "contact.read");
   const contactLists = (listRows ?? []).map((l) => ({ id: l.id, name: l.name, agreed: l.use_for_whatsapp }));
 
   // Only approved templates can actually be sent, so only approved ones
@@ -113,6 +114,7 @@ export default async function NewWhatsAppBroadcastPage() {
         leadFields={leadFields}
         studentFields={studentFields}
         contactLists={contactLists}
+        canUseDatabase={canUseDatabase}
         templates={templates}
       />
     </div>

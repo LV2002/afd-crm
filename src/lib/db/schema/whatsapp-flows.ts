@@ -16,6 +16,7 @@ import type { FlowStepKind, FlowTrigger } from "@/lib/whatsapp/flow-engine";
 
 import { idColumn, softDelete, timestamps } from "./_helpers";
 import { profiles } from "./auth";
+import { contacts } from "./contacts";
 import { leads } from "./leads";
 import { centers } from "./org";
 
@@ -45,6 +46,8 @@ export const whatsappFlows = pgTable(
     id: idColumn(),
     name: text("name").notNull(),
     description: text("description"),
+    /** `lead` (the default) or `contact` — a flow for the contact database, started by hand for chosen lists. */
+    audience: text("audience").$type<"lead" | "contact">().notNull().default("lead"),
     triggerType: text("trigger_type").$type<FlowTrigger>().notNull(),
     /** `{ stageId }`, `{ tagId }`, `{ keywords: [...] }` — shape depends on the trigger. */
     triggerConfig: jsonb("trigger_config").$type<Record<string, unknown>>(),
@@ -123,9 +126,9 @@ export const whatsappFlowRuns = pgTable(
     flowId: uuid("flow_id")
       .notNull()
       .references(() => whatsappFlows.id, { onDelete: "cascade" }),
-    leadId: uuid("lead_id")
-      .notNull()
-      .references(() => leads.id, { onDelete: "cascade" }),
+    leadId: uuid("lead_id").references(() => leads.id, { onDelete: "cascade" }),
+    /** Set instead of `lead_id` for a run in a contact flow; exactly one of the two is set. */
+    contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "cascade" }),
     /** running | waiting | completed | stopped | failed */
     status: text("status").notNull().default("running"),
     currentStepId: uuid("current_step_id").references(() => whatsappFlowSteps.id, {
@@ -145,6 +148,10 @@ export const whatsappFlowRuns = pgTable(
     uniqueIndex("whatsapp_flow_runs_live_uq")
       .on(t.flowId, t.leadId)
       .where(sql`status in ('running','waiting')`),
+    uniqueIndex("whatsapp_flow_runs_live_contact_uq")
+      .on(t.flowId, t.contactId)
+      .where(sql`status in ('running','waiting') and contact_id is not null`),
+    check("whatsapp_flow_runs_one_subject", sql`num_nonnulls(lead_id, contact_id) = 1`),
     index("whatsapp_flow_runs_wake_idx").on(t.wakeAt).where(sql`status in ('running','waiting')`),
     index("whatsapp_flow_runs_awaiting_idx").on(t.leadId).where(sql`awaiting_step_id is not null`),
   ],

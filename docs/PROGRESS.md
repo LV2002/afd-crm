@@ -8901,3 +8901,12 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 - Personalisation works for first name, full name, course and centre; counsellor, batch and fee variables are not offered for the database.
 - Migration 0117. Not built: multi-step automation flows for the database (they run on leads only), and recognising a database contact's reply in the inbox beyond the usual "Not in the CRM" thread.
 - `docs/SLA-TARGETS-DISCOUNTS-GUIDE.md` rewritten as a short plain-language explainer with examples.
+
+## Automation flows for the database, and empty-message clean-up
+
+- **Flows can be for the database.** New automation → *Who it's for* → **People in the database** (fixed at creation). It is started by hand from its own page by ticking lists ("agreed to WhatsApp" lists only). Goes only to people who are not leads and have not opted out; eligibility is re-checked before **every** step, and becoming a lead ends the run. Replies (matched by phone when the number is not a lead) branch the flow exactly as for leads. Steps that act on a lead (change temperature, tell counsellor) are not offered, and are skipped if present. Migration 0119 (`audience` on flows; runs have `contact_id`, exactly one of lead/contact).
+- Broadcasts: the **Database** choice is always shown to anyone with `contact.read`; with no list marked "agreed to WhatsApp" it says what to do instead of disappearing.
+- Migration 0118 repeats the 0114 repair for empty WhatsApp messages stored after it first ran. Platform health → deliveries now shows WhatsApp's own reason on messages it withheld ("unsupported").
+- Not built: starting a database flow automatically (new contact joins a list), and a message log for database conversations (their sends are not stored in Chats).
+
+- **Settings tab now shows for any role that can open a settings screen.** It was tied to `settings.manage`, so a role given only SLA, targets or discount authority had the permission but no Settings tab. The tab appears when at least one settings screen is available to the role, and the Settings page lists only those.

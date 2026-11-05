@@ -46,6 +46,8 @@ export interface StepEditorLists {
   statuses: Array<{ value: string; label: string }>;
   /** Every step number in this flow, so a branch can only point somewhere real. */
   positions: number[];
+  /** A flow for the database has no temperature or counsellor, so those steps aren't offered. */
+  audience: "lead" | "contact";
 }
 
 interface Branch {
@@ -110,7 +112,7 @@ function StepConfig({
   setConfig: (next: Record<string, unknown>) => void;
   lists: StepEditorLists;
 }) {
-  const variables = mergeVariablesFor("lead");
+  const variables = mergeVariablesFor(lists.audience);
 
   if (kind === "stop") {
     return <p className="text-xs text-muted-foreground">Nothing to set — the run ends here.</p>;
@@ -441,7 +443,9 @@ export function AddStep({ flowId, lists }: { flowId: string; lists: StepEditorLi
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {FLOW_STEP_KINDS.map((value) => (
+            {FLOW_STEP_KINDS.filter(
+              (value) => lists.audience === "lead" || (value !== "set_temperature" && value !== "notify_owner"),
+            ).map((value) => (
               <SelectItem key={value} value={value}>
                 {STEP_LABELS[value]}
               </SelectItem>

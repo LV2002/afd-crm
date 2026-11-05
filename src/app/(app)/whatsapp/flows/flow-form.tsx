@@ -41,6 +41,7 @@ export interface FlowValues {
   temperature: string;
   keywords: string;
   centerId: string;
+  audience: "lead" | "contact";
   /** Extra narrowing beyond the trigger. Empty means every lead it fires for. */
   appliesTo: Condition[];
 }
@@ -63,6 +64,8 @@ export function FlowForm({
   const [temperature, setTemperature] = useState(values.temperature);
   const [keywords, setKeywords] = useState(values.keywords);
   const [centerId, setCenterId] = useState(values.centerId);
+  const [audience, setAudience] = useState(values.audience);
+  const forDatabase = audience === "contact";
 
   // The trigger's own settings travel as one JSON field, because their
   // shape depends entirely on which trigger it is.
@@ -84,6 +87,7 @@ export function FlowForm({
       {values.id && <input type="hidden" name="flowId" value={values.id} />}
       <input type="hidden" name="triggerConfig" value={triggerConfig} />
       <input type="hidden" name="centerId" value={centerId} />
+      <input type="hidden" name="audience" value={audience} />
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="flow-name">Name</Label>
@@ -106,7 +110,36 @@ export function FlowForm({
         />
       </div>
 
-      <div className="flex flex-col gap-2">
+      {!values.id ? (
+        <div className="flex flex-col gap-2">
+          <Label>Who it&rsquo;s for</Label>
+          <Select value={audience} onValueChange={(v) => setAudience(v as "lead" | "contact")}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lead">Leads</SelectItem>
+              <SelectItem value="contact">People in the database</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            A database automation goes only to people on the lists you choose, never to your leads. It can&rsquo;t be
+            changed later.
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          For: <strong>{forDatabase ? "people in the database" : "leads"}</strong>
+        </p>
+      )}
+
+      {forDatabase && (
+        <p className="rounded-md bg-muted px-3 py-2 text-sm">
+          You start this one by hand, from its page, by ticking the lists it should go to.
+        </p>
+      )}
+
+      <div className={forDatabase ? "hidden" : "flex flex-col gap-2"}>
         <Label>What starts it</Label>
         <Select
           name="triggerType"
@@ -180,7 +213,7 @@ export function FlowForm({
         </Select>
       </div>
 
-      <div className="flex flex-col gap-2 border-t pt-4">
+      <div className={forDatabase ? "hidden" : "flex flex-col gap-2 border-t pt-4"}>
         <Label>Only for these leads (optional)</Label>
         <p className="text-xs text-muted-foreground">
           The trigger above decides <strong>when</strong> a run starts; this decides{" "}

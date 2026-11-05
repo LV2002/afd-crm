@@ -1,6 +1,8 @@
 import type { NavBadgeKey } from "@/lib/nav/badge-permissions";
 import { formatTerm, type TerminologyMap } from "@/lib/terminology/terms";
 
+import { settingsNavFor } from "@/lib/settings/nav";
+
 import type { PermissionCode } from "./permissions";
 import type { SessionUser } from "./session";
 import { can } from "./session";
@@ -180,7 +182,13 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
 ];
 
 export function navItemsFor(user: SessionUser, terms: TerminologyMap): NavItem[] {
-  return NAV_ITEM_DEFS.filter((item) => !item.permission || can(user, item.permission)).map(
+  return NAV_ITEM_DEFS.filter((item) => {
+    // Settings is a menu of screens, each with its own permission. Gating the
+    // tab on `settings.manage` hid it from a role that was given only SLA,
+    // targets or discount authority, so they held the key and never saw the door.
+    if (item.href === "/settings") return settingsNavFor(user).length > 0;
+    return !item.permission || can(user, item.permission);
+  }).map(
     (item) => ({
       href: item.href,
       iconKey: item.iconKey,
