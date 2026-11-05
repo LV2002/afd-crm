@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { CounsellorLinks, type CounsellorLink } from "@/components/layout/counsellor-links";
 import { NavBadge } from "@/components/layout/nav-badge";
 import { NAV_ICONS } from "@/components/layout/nav-icons";
-import type { NavItem } from "@/lib/auth/nav";
+import { NAV_GROUP_LABELS, type NavItem } from "@/lib/auth/nav";
 import type { NavBadgeCounts } from "@/lib/nav/badge-permissions";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +36,10 @@ export function Sidebar({
 
   return (
     <nav className="flex flex-col gap-1 p-3">
-      {items.map((item) => {
+      {items.map((item, index) => {
+        // A heading wherever the department changes, including back to "none".
+        const heading =
+          item.group && item.group !== items[index - 1]?.group ? NAV_GROUP_LABELS[item.group] : null;
         const hasChildren = item.href === DASHBOARD_HREF && counsellors.length > 0;
         const isOpen = hasChildren && (pathname === item.href || pathname.startsWith(`${item.href}/`));
         // With people nested underneath, Dashboard itself is "here" only on
@@ -49,6 +52,12 @@ export function Sidebar({
         const Icon = NAV_ICONS[item.iconKey];
         return (
           <div key={item.href} className="flex flex-col gap-0.5">
+          {!item.group && items[index - 1]?.group && <div className="mx-3 my-2 border-t" />}
+          {heading && (
+            <p className="mt-3 px-3 pb-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {heading}
+            </p>
+          )}
           <Link
             href={item.href}
             className={cn(

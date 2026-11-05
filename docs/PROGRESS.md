@@ -8925,3 +8925,7 @@ Stubbed: files over 4 MB (video, big PDFs) — needs direct-to-storage upload. N
 - **Bank balance check**: an admin enters the balance read off the bank's own app; it is compared with the statement for that date (`bank_balance_checks`, append-only). A disagreement, or a date the statement doesn't reach, counts as open.
 - **Cash**: Leon will not deposit cash, so cash is kept in its own ledger and checked by counting. `cash_counts` (append-only) stores the count and what the books expected at the time; a difference needs an explanation; a box not counted for 8 days is flagged; cash reversals in the last 60 days are listed with who and why. `bank.reconcile` is relabelled "Match and review bank and cash".
 - Not built: cash receipts being sent to the family automatically (the strongest check on unrecorded cash), and an approval step for large cash payouts.
+
+## Sidebar grouped by department
+
+The sidebar now has department headings: **Sales** (Leads, Follow-ups, Unassigned, Database, Chats), **Accounts** (Admissions, Finance), **Marketing** (Ad Performance) and **Academics** (Students). Dashboard, Student Profile Forms, Insights, Ask AI and Settings stay outside any department. A heading appears only when the person can see at least one screen in it. Routes and permissions are unchanged.
