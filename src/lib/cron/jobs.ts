@@ -4,6 +4,7 @@ import { expectOk, type NightlyJob } from "@/lib/cron/nightly-runner";
 
 import { GET as adSpendGoogle } from "@/app/api/cron/ad-spend-sync/google/route";
 import { GET as adSpendMeta } from "@/app/api/cron/ad-spend-sync/meta/route";
+import { GET as bankMatch } from "@/app/api/cron/bank-match/route";
 import { GET as googleConversions } from "@/app/api/cron/google-conversions/route";
 import { GET as outcomeReport } from "@/app/api/cron/outcome-report/route";
 import { GET as paymentReminders } from "@/app/api/cron/payment-reminders/route";
@@ -96,6 +97,7 @@ export function frequentJobs(request: Request): NightlyJob[] {
 /** Numbers somebody reads during the day. Hourly. */
 export function hourlyJobs(request: Request): NightlyJob[] {
   return [
+    job("bank-match", "Bank reconciliation matching", bankMatch, 4000, request),
     job("ad-spend-sync/meta", "Meta ad spend", adSpendMeta, 6000, request),
     job("ad-spend-sync/google", "Google ad spend", adSpendGoogle, 6000, request),
     // Diffed against what was last sent, so an hourly run that finds

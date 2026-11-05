@@ -4907,3 +4907,15 @@ Leon wants to send a WhatsApp broadcast "only to the database, not the people in
 **Automation flows for the database (superseding the earlier "not extended").** A run now has exactly one subject, a lead or a contact (check constraint), and a flow's audience is fixed at creation so existing runs can't be orphaned. Contact flows are manual-start per list: there is no lead event to trigger them, and automatic enrolment on joining a list would message people the moment an import finished. Consent and lead-exclusion reuse the broadcast rules (`messageableContactIds`) and are re-checked at each step.
 
 **Contact reads use the caller's RLS client,** so `contact.read` is what lets somebody compose to them; the lead-exclusion lookup is existence-only on the direct client.
+
+## 2026-11-05: bank reconciliation
+
+**Pairs are separate rows, not columns on the ledger or the statement.** The ledger stays append-only and the statement lines unchanged; `bank_matches` holds one active pair per line and per entry (partial unique indexes), and undoing sets it inactive with who and why. A waiver (a line accepted as having no entry) is the same table with no entry, so setting aside is as visible as pairing.
+
+**Strictly one line to one entry, exact amounts.** A lump deposit covering several fees can't be paired yet. Wrong pairs are worse than open ones, because open ones are visible; the planner pairs nothing when it is ambiguous.
+
+**The books and the bank's side are supplied by different people.** `bank.import` and `bank.reconcile` are not granted to accounts. Without that, whoever keeps the books could also upload a statement shaped to match them. Assumption to confirm with Leon: he, or a co-admin, uploads statements.
+
+**Checking starts at an account's first statement line,** and entries within 3 days of its last line are "waiting", not missing. Otherwise the first import would flag the whole history and every fresh entry.
+
+**PDF reading refuses on any balance break.** The CSV reader only warns, because the file comes straight from the bank's export. A PDF's columns are inferred from word positions, so a misread would put money in the wrong direction; the running balance is the check that can tell.

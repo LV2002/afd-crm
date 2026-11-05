@@ -12,7 +12,7 @@ loadEnv({ path: ".env.local", override: true });
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set.");
 
 const { db } = await import("../src/lib/db/client");
-const { bankStatementLines, centers, financeAccounts, financeTransactions } = await import(
+const { bankMatches, bankStatementLines, centers, financeAccounts, financeTransactions } = await import(
   "../src/lib/db/schema"
 );
 const { resolveBankLines, saveStatementLines } = await import("../src/lib/finance/bank-ledger");
@@ -21,10 +21,12 @@ const { parseBankStatement } = await import("../src/lib/finance/bank-statement")
 const MARKER = "BankLedgerTest";
 let centerId: string;
 let accountId: string;
+let centerIdOfTest: string | undefined;
 
 async function sweep() {
   const accts = await db.select({ id: financeAccounts.id }).from(financeAccounts).where(like(financeAccounts.name, `${MARKER}%`));
   for (const a of accts) {
+    await db.delete(bankMatches).where(eq(bankMatches.centerId, centerIdOfTest ?? a.id));
     await db.delete(bankStatementLines).where(eq(bankStatementLines.accountId, a.id));
     // The ledger is append-only for the app's roles; the test owns the DB.
     await db.delete(financeTransactions).where(eq(financeTransactions.accountId, a.id));
@@ -37,6 +39,7 @@ beforeAll(async () => {
   await sweep();
   const [c] = await db.insert(centers).values({ name: `${MARKER} centre`, city: "Kochi" }).returning({ id: centers.id });
   centerId = c.id;
+  centerIdOfTest = c.id;
   const [a] = await db
     .insert(financeAccounts)
     .values({ name: `${MARKER} bank`, centerId, type: "bank" })

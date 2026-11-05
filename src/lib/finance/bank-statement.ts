@@ -137,7 +137,7 @@ export function parseStatementAmount(raw: string): number | null {
   return negative ? -paise : paise;
 }
 
-function normalise(text: string): string {
+export function normalise(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
@@ -192,7 +192,7 @@ function findColumns(header: string[]): Columns | null {
   };
 }
 
-function fingerprintOf(parts: {
+export function fingerprintOf(parts: {
   occurredOn: string;
   direction: string;
   amountPaise: number;

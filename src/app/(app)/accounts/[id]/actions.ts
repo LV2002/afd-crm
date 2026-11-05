@@ -1,13 +1,14 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { batches, centers, enrolments, leads } from "@/lib/db/schema";
+import { batches, centers, enrolments, financeAccounts, leads } from "@/lib/db/schema";
+import { matchSoon } from "@/lib/finance/reconcile";
 import { formatINR, parseRupeesToPaise } from "@/lib/format/currency";
 import { dropAdmission, restoreAdmission } from "@/lib/enrolment/drop-admission";
 import { recordPayment } from "@/lib/enrolment/record-payment";
@@ -77,6 +78,17 @@ export async function recordPaymentAction(
     }
   }
 
+  // Money with no account is money nobody can check against the bank. Once
+  // the institute has accounts, every payment has to say where it went.
+  if (!accountId) {
+    const [anyAccount] = await db
+      .select({ id: financeAccounts.id })
+      .from(financeAccounts)
+      .where(and(eq(financeAccounts.isActive, true), isNull(financeAccounts.deletedAt)))
+      .limit(1);
+    if (anyAccount) return { error: "Choose which account the money went into." };
+  }
+
   let result;
   try {
     result = await db.transaction((tx) =>
@@ -95,6 +107,8 @@ export async function recordPaymentAction(
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not record payment." };
   }
+
+  if (accountId) await matchSoon(db, [accountId]);
 
   const supabase = await createClient();
   await writeAuditLog(supabase, {

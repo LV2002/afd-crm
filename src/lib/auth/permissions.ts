@@ -245,6 +245,20 @@ export const PERMISSIONS = [
     description:
       "Add and edit accounts and opening balances, and reverse or correct a posted entry.",
   },
+  {
+    code: "bank.import",
+    label: "Upload bank statements",
+    category: "Finance",
+    description:
+      "Upload a bank statement. Kept apart from recording entries on purpose: whoever keeps the books should not also supply the bank's side.",
+  },
+  {
+    code: "bank.reconcile",
+    label: "Match and review bank transactions",
+    category: "Finance",
+    description:
+      "Pair statement lines with ledger entries by hand, undo a pair, and accept a line as having no entry. Run the automatic matching.",
+  },
 
   // Academics
   {

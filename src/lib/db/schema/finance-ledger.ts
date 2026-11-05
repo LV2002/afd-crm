@@ -255,3 +255,49 @@ export const bankStatementLines = pgTable(
     check("bank_lines_amount_positive", sql`amount_paise > 0`),
   ],
 );
+
+/**
+ * One pairing of a bank statement line with the ledger entry it belongs to.
+ *
+ * The point of the whole table: every rupee the bank shows is accounted for
+ * by an entry in the books, and every entry in a bank account is proved by a
+ * line on the statement. A line or entry with no active pair is an exception
+ * and is listed until somebody deals with it.
+ *
+ * Pairs are never deleted. Undoing one sets `active = false` and records who
+ * and why, so a pair that was made and later undone is still visible. A
+ * `waived` row (no ledger entry) is a line somebody with authority accepted
+ * as having none, and is reviewable the same way.
+ */
+export const bankMatches = pgTable(
+  "bank_matches",
+  {
+    id: idColumn(),
+    bankLineId: uuid("bank_line_id")
+      .notNull()
+      .references(() => bankStatementLines.id, { onDelete: "restrict" }),
+    transactionId: uuid("transaction_id").references(() => financeTransactions.id, {
+      onDelete: "restrict",
+    }),
+    centerId: uuid("center_id")
+      .notNull()
+      .references(() => centers.id, { onDelete: "restrict" }),
+    /** auto | categorised | manual | waived */
+    method: text("method").$type<"auto" | "categorised" | "manual" | "waived">().notNull(),
+    matchedBy: uuid("matched_by").references(() => profiles.id, { onDelete: "set null" }),
+    note: text("note"),
+    matchedAt: timestamp("matched_at", { withTimezone: true }).notNull().defaultNow(),
+    active: boolean("active").notNull().default(true),
+    unmatchedBy: uuid("unmatched_by").references(() => profiles.id, { onDelete: "set null" }),
+    unmatchedAt: timestamp("unmatched_at", { withTimezone: true }),
+    unmatchReason: text("unmatch_reason"),
+  },
+  (t) => [
+    uniqueIndex("bank_matches_line_active_uq").on(t.bankLineId).where(sql`active`),
+    uniqueIndex("bank_matches_txn_active_uq")
+      .on(t.transactionId)
+      .where(sql`active and transaction_id is not null`),
+    index("bank_matches_center_idx").on(t.centerId, t.active),
+    check("bank_matches_waiver_check", sql`(method = 'waived') = (transaction_id is null)`),
+  ],
+);

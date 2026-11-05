@@ -20,6 +20,7 @@ const TABS: Tab[] = [
   { href: "/finance/reports/cash-flow", label: "Cash flow" },
   { href: "/finance/transactions", label: "Transactions" },
   { href: "/finance/ledger", label: "Account ledger" },
+  { href: "/finance/reconcile", label: "Reconciliation" },
   { href: "/finance/bank", label: "Bank import", needs: "record" },
   { href: "/finance/record", label: "Record entry", needs: "record" },
   { href: "/finance/accounts", label: "Bank & cash accounts", needs: "manage" },
@@ -28,9 +29,12 @@ const TABS: Tab[] = [
 export function FinanceNav({
   canRecord,
   canManage,
+  openItems = 0,
 }: {
   canRecord: boolean;
   canManage: boolean;
+  /** Bank-reconciliation exceptions, shown in red beside the tab. */
+  openItems?: number;
 }) {
   const pathname = usePathname();
 
@@ -58,6 +62,11 @@ export function FinanceNav({
             )}
           >
             {tab.label}
+            {tab.href === "/finance/reconcile" && openItems > 0 && (
+              <span className="ml-1.5 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                {openItems}
+              </span>
+            )}
           </Link>
         );
       })}

@@ -10,6 +10,7 @@ import { rupeesToPaise } from "@/lib/enrolment/instalment-plan";
 import { createClient } from "@/lib/supabase/server";
 
 import { assertAccountInScope } from "./account-scope";
+import { matchSoon } from "./reconcile";
 import { correctTransaction, postEntry, postTransfer, reverseTransaction } from "./post";
 
 export interface FinanceFormState {
@@ -106,6 +107,8 @@ async function recordSimpleEntry(
     }),
   );
 
+  await matchSoon(db, [parsed.data.accountId]);
+
   const supabase = await createClient();
   await writeAuditLog(supabase, {
     actorId: user!.id,
@@ -158,6 +161,8 @@ export async function recordTransfer(
       source: "transfer",
     }),
   );
+
+  await matchSoon(db, [fromAccountId, toAccountId]);
 
   const supabase = await createClient();
   await writeAuditLog(supabase, {

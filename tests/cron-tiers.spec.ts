@@ -51,10 +51,11 @@ describe("what belongs on which schedule", () => {
     ]);
   });
 
-  it("puts spend and audiences on the hourly tier", () => {
+  it("puts spend, audiences and bank matching on the hourly tier", () => {
     expect(keysOf(hourlyJobs(request)).sort()).toEqual([
       "ad-spend-sync/google",
       "ad-spend-sync/meta",
+      "bank-match",
       "retargeting-sync/google",
       "retargeting-sync/meta",
     ]);

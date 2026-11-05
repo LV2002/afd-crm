@@ -1,17 +1,19 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { writeAuditLog } from "@/lib/audit/log";
-import { getCurrentUser } from "@/lib/auth/session";
+import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { bankStatementLines } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 
 import { assertAccountInScope } from "./account-scope";
-import { parseBankStatement, type StatementLine } from "./bank-statement";
+import { parseBankStatement, type ParsedStatement, type StatementLine } from "./bank-statement";
+import { parseBankPdf } from "./bank-statement-pdf";
+import { autoMatchAccount } from "./reconcile";
 import { SKIP_REASONS } from "./bank-constants";
 import { getFinanceCategories } from "./get-finance";
 import { resolveBankLines, saveStatementLines } from "./bank-ledger";
@@ -43,6 +45,8 @@ export interface ImportPreview {
   to: string | null;
   inPaise: number;
   outPaise: number;
+  /** Set when there is a stretch with no statement between the last import and this file. */
+  gapWarning: string | null;
 }
 
 export interface PreviewState {
@@ -72,19 +76,30 @@ export async function previewStatement(
 
   const scope = await assertAccountInScope(accountId, "finance.record");
   if (!scope.ok) return { error: scope.error };
+  // Supplying the bank's side is a separate permission from keeping the
+  // books, so the person recording entries cannot also supply the
+  // statement they will be checked against.
+  const importer = await getCurrentUser();
+  if (!importer || !can(importer, "bank.import")) {
+    return { error: "Uploading bank statements is limited to people with that permission." };
+  }
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "Choose the statement file." };
   if (file.size > MAX_FILE_BYTES) return { error: "That file is over 3 MB — export a shorter period." };
-  if (/\.(xlsx?|pdf)$/i.test(file.name)) {
+  if (/\.xlsx?$/i.test(file.name)) {
     return {
-      error:
-        "Upload the statement as CSV. In Excel use File → Save As → CSV; most bank portals have a CSV download beside the PDF.",
+      error: "Upload the statement as a PDF or CSV. In Excel use File → Save As → CSV.",
     };
   }
 
-  // Read straight into a string. The File object lives only in this request.
-  const parsed = parseBankStatement(await file.text());
+  // Read straight into memory. The File object lives only in this request,
+  // and the password is used once to open it and goes no further.
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+  const parsed: ParsedStatement = isPdf
+    ? await parseBankPdf(bytes, String(formData.get("password") ?? ""))
+    : parseBankStatement(new TextDecoder().decode(bytes));
   if (parsed.error) return { error: parsed.error };
   if (parsed.lines.length === 0) return { error: "No transactions were found in that file." };
   if (parsed.lines.length > MAX_LINES) {
@@ -94,6 +109,17 @@ export async function previewStatement(
   const known = new Set(await existingFingerprints(accountId, parsed.lines.map((l) => l.fingerprint)));
   const fresh = parsed.lines.filter((l) => !known.has(l.fingerprint));
   const dates = parsed.lines.map((l) => l.occurredOn).sort();
+
+  // A month with no statement is a month nobody checked. Say so rather than
+  // letting two statements with a hole between them look complete.
+  const [latest] = await db
+    .select({ last: sql<string | null>`max(${bankStatementLines.occurredOn})::text` })
+    .from(bankStatementLines)
+    .where(eq(bankStatementLines.accountId, accountId));
+  let gapWarning: string | null = null;
+  if (latest?.last && dates[0] && Date.parse(dates[0]) - Date.parse(latest.last) > 7 * 86_400_000) {
+    gapWarning = `The last statement imported for this account ends on ${latest.last}, and this one starts on ${dates[0]}. Nothing between those dates has been checked. Upload the missing statement too.`;
+  }
 
   return {
     preview: {
@@ -108,6 +134,7 @@ export async function previewStatement(
       to: dates.at(-1) ?? null,
       inPaise: fresh.filter((l) => l.direction === "in").reduce((s, l) => s + l.amountPaise, 0),
       outPaise: fresh.filter((l) => l.direction === "out").reduce((s, l) => s + l.amountPaise, 0),
+      gapWarning,
     },
   };
 }
@@ -162,6 +189,9 @@ export async function importLines(
   const scope = await assertAccountInScope(parsed.data.accountId, "finance.record");
   if (!scope.ok) return { error: scope.error };
   const user = await getCurrentUser();
+  if (!user || !can(user, "bank.import")) {
+    return { error: "Uploading bank statements is limited to people with that permission." };
+  }
 
   const inserted = await saveStatementLines(db, {
     accountId: parsed.data.accountId,
@@ -169,6 +199,9 @@ export async function importLines(
     importedBy: user?.id ?? null,
     lines: parsed.data.lines,
   });
+  // Pair what can be paired straight away; the rest is listed under
+  // Reconciliation for somebody to look at.
+  const paired = await autoMatchAccount(db, parsed.data.accountId);
 
   const supabase = await createClient();
   await writeAuditLog(supabase, {
@@ -176,14 +209,14 @@ export async function importLines(
     action: "finance.bank_import",
     entityType: "bank_statement_lines",
     entityId: parsed.data.accountId,
-    after: { offered: parsed.data.lines.length, saved: inserted },
+    after: { offered: parsed.data.lines.length, saved: inserted, autoMatched: paired },
   });
 
   revalidateBank();
   const dupes = parsed.data.lines.length - inserted;
   return {
     success:
-      `${inserted} new transaction${inserted === 1 ? "" : "s"} added to the list below.` +
+      `${inserted} new transaction${inserted === 1 ? "" : "s"} added; ${paired} paired automatically with entries already in the books.` +
       (dupes > 0 ? ` ${dupes} were already there.` : ""),
   };
 }
@@ -229,6 +262,14 @@ export async function categoriseLines(
   for (const accountId of new Set(lines.map((l) => l.accountId))) {
     const scope = await assertAccountInScope(accountId, "finance.record");
     if (!scope.ok) return { error: scope.error };
+  }
+
+  const skipRequested = parsed.data.choice.startsWith("skip:");
+  const actor = await getCurrentUser();
+  // Setting a line aside means accepting that it has no entry in the books.
+  // That is a review decision, not a bookkeeping one.
+  if (skipRequested && (!actor || !can(actor, "bank.reconcile"))) {
+    return { error: "Only someone who reviews bank transactions can set a line aside." };
   }
 
   const skipReason = parsed.data.choice.startsWith("skip:")

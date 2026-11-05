@@ -58,11 +58,24 @@ export default async function BankImportPage({
     );
   }
 
+  const canImport = can(user, "bank.import");
+  const canReconcile = can(user, "bank.reconcile");
   const accountNames = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
 
   return (
     <div className="flex flex-col gap-8">
-      <ImportPanel accounts={accounts.map((a) => ({ id: a.id, name: a.name }))} />
+      {canImport ? (
+        <ImportPanel accounts={accounts.map((a) => ({ id: a.id, name: a.name }))} />
+      ) : (
+        <p className="max-w-3xl rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+          Bank statements are uploaded by the people who review the bank side, not by whoever keeps the books. Lines
+          they upload appear below for you to record; anything not yet in the books is listed under{" "}
+          <Link href="/finance/reconcile" className="font-medium underline">
+            Reconciliation
+          </Link>
+          .
+        </p>
+      )}
       <PendingQueue
         lines={pending.lines}
         total={pending.total}
@@ -73,7 +86,7 @@ export default async function BankImportPage({
         filters={{ account: params.account ?? "", dir: params.dir ?? "", q: params.q ?? "" }}
         incomeCategories={categories.income.map((c) => c.label)}
         expenseCategories={categories.expense.map((c) => c.label)}
-        skipOptions={SKIP_OPTIONS}
+        skipOptions={canReconcile ? SKIP_OPTIONS : []}
       />
     </div>
   );
