@@ -135,8 +135,20 @@ export function leaveBalance(input: {
   policy: LeavePolicy;
   requests: LeaveRow[];
   holidays: ReadonlySet<string>;
+  /**
+   * The balances on the latest payslip, as of the end of its month. Payroll is
+   * the book of record: it has already applied the probation cap and turned
+   * leave without a balance into loss of pay. When there is one for this year
+   * it replaces the opening balances, and only leave after that month is
+   * counted on top of it.
+   */
+  closing?: { asOf: string; sl: number; cl: number } | null;
 }): LeaveBalance {
-  const { employee, year, policy, requests, holidays } = input;
+  const { year, policy, requests, holidays } = input;
+  const closing = input.closing && Number(input.closing.asOf.slice(0, 4)) === year ? input.closing : null;
+  const employee: EmployeeLeaveFacts = closing
+    ? { ...input.employee, openingSl: closing.sl, openingCl: closing.cl, openingAsOf: closing.asOf }
+    : input.employee;
   const from = `${year}-01-01`;
   const to = `${year}-12-31`;
   const openingYear = employee.openingAsOf ? Number(employee.openingAsOf.slice(0, 4)) : null;
@@ -161,13 +173,15 @@ export function leaveBalance(input: {
     const entitled = useOpening && opening !== null ? opening : entitlement(annual, employee.dateOfJoining, year, policy.joiningMonthCounts);
     const used = tally(kind, "approved");
     const pending = tally(kind, "pending");
-    return {
-      entitled,
-      used,
-      pending,
-      remaining: Math.max(0, entitled - used),
-      overdrawn: Math.max(0, used - entitled),
-    };
+    const remaining = Math.max(0, entitled - used);
+    if (closing) {
+      // Shown against the year's allowance, so "5 of 6 · 1 taken" still reads right
+      // when the figure underneath is the payslip's closing balance.
+      const yearly = entitlement(annual, employee.dateOfJoining, year, policy.joiningMonthCounts);
+      const allowance = Math.max(yearly, remaining);
+      return { entitled: allowance, used: allowance - remaining, pending, remaining, overdrawn: Math.max(0, used - entitled) };
+    }
+    return { entitled, used, pending, remaining, overdrawn: Math.max(0, used - entitled) };
   };
 
   let lopDays = 0;

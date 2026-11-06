@@ -166,6 +166,23 @@ export async function getDirectReports(userId: string): Promise<Array<{ id: stri
   return [...rows];
 }
 
+const monthEnd = (month: string) =>
+  `${month}-${String(new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate()).padStart(2, "0")}`;
+
+/** The latest current payslip's closing leave balances for each employee, within a year. */
+async function latestClosings(employeeIds: string[], year: number): Promise<Map<string, { asOf: string; sl: number; cl: number }>> {
+  const out = new Map<string, { asOf: string; sl: number; cl: number }>();
+  if (employeeIds.length === 0) return out;
+  const rows = await db.execute<{ employee_id: string; month: string; sl: string | number; cl: string | number }>(sql`
+    select distinct on (employee_id) employee_id, month, sl_closing as sl, cl_closing as cl
+    from payslips
+    where status = 'current' and month like ${`${year}-%`}
+    order by employee_id, month desc
+  `);
+  for (const r of rows) out.set(r.employee_id, { asOf: monthEnd(r.month), sl: Number(r.sl), cl: Number(r.cl) });
+  return out;
+}
+
 export async function balanceFor(employee: EmployeeRow, year: number, policy?: LeavePolicy): Promise<LeaveBalance & { probationLop: number }> {
   const base = policy ?? (await loadPolicy(db));
   // Their own days off, not the company's.
@@ -175,7 +192,8 @@ export async function balanceFor(employee: EmployeeRow, year: number, policy?: L
     .select({ kind: leaveRequests.kind, fromDate: leaveRequests.fromDate, toDate: leaveRequests.toDate, status: leaveRequests.status })
     .from(leaveRequests)
     .where(eq(leaveRequests.employeeId, employee.id));
-  const balance = leaveBalance({ employee, year, policy: p, requests, holidays });
+  const closing = (await latestClosings([employee.id], year)).get(employee.id) ?? null;
+  const balance = leaveBalance({ employee, year, policy: p, requests, holidays, closing });
 
   // Approved sick/casual days that probation will turn into loss of pay.
   const days = requests
@@ -194,6 +212,7 @@ export async function balancesForAll(list: EmployeeRow[], year: number): Promise
   const byEmployee = new Map<string, typeof allRequests>();
   for (const r of allRequests) byEmployee.set(r.employeeId, [...(byEmployee.get(r.employeeId) ?? []), r]);
 
+  const closings = await latestClosings(list.map((e) => e.id), year);
   const holidayCache = new Map<string, Set<string>>();
   const out = new Map<string, LeaveBalance>();
   for (const e of list) {
@@ -204,7 +223,7 @@ export async function balancesForAll(list: EmployeeRow[], year: number): Promise
       holidayCache.set(key, holidays);
     }
     const own = { ...policy, weeklyOff: weeklyOffOf((await loadWeek(db, e.id)).week) };
-    out.set(e.id, leaveBalance({ employee: e, year, policy: own, requests: byEmployee.get(e.id) ?? [], holidays }));
+    out.set(e.id, leaveBalance({ employee: e, year, policy: own, requests: byEmployee.get(e.id) ?? [], holidays, closing: closings.get(e.id) ?? null }));
   }
   return out;
 }

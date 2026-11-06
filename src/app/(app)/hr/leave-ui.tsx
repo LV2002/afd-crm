@@ -20,13 +20,13 @@ export function kindText(kind: RequestRow["kind"]) {
 }
 
 /** Sick and casual: what is left, what is waiting on approval. */
-export function BalanceCards({ balance }: { balance: LeaveBalance & { probationLop?: number } }) {
+export function BalanceCards({ balance, stacked = false }: { balance: LeaveBalance & { probationLop?: number }; stacked?: boolean }) {
   const cards = [
     { label: "Sick leave", pool: balance.sick },
     { label: "Casual leave", pool: balance.casual },
   ];
   return (
-    <div className="grid max-w-xl gap-3 sm:grid-cols-2">
+    <div className={stacked ? "grid gap-3" : "grid max-w-xl gap-3 sm:grid-cols-2"}>
       {cards.map(({ label, pool }) => (
         <div key={label} className="rounded-lg border p-3">
           <p className="text-xs text-muted-foreground">

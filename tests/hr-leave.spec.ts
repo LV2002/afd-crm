@@ -143,3 +143,39 @@ describe("helpers", () => {
     ]);
   });
 });
+
+describe("balances after a payslip", () => {
+  const employee = { dateOfJoining: "2020-01-01", openingSl: null, openingCl: null, openingAsOf: null };
+  const none = new Set<string>();
+
+  it("starts from the payslip's closing balance and counts only leave after that month", () => {
+    // October's payslip closed on 4 sick and 5 casual: some leave was paid then.
+    const b = leaveBalance({
+      employee, year: 2026, policy: POLICY, holidays: none,
+      closing: { asOf: "2026-10-31", sl: 4, cl: 5 },
+      requests: [
+        { kind: "sick", fromDate: "2026-10-12", toDate: "2026-10-13", status: "approved" }, // already in the payslip
+        { kind: "sick", fromDate: "2026-11-03", toDate: "2026-11-03", status: "approved" }, // after it
+      ],
+    });
+    expect(b.sick.remaining).toBe(3);
+    expect(b.casual.remaining).toBe(5);
+    // Still shown against the year's six, so it reads "3 of 6, 3 taken".
+    expect(b.sick).toMatchObject({ entitled: 6, used: 3 });
+  });
+
+  it("a payslip's loss of pay is respected: the balance is what payroll left, not what the requests imply", () => {
+    // Payroll turned a leave into loss of pay (probation), so it never came off the balance.
+    const b = leaveBalance({
+      employee, year: 2026, policy: POLICY, holidays: none,
+      closing: { asOf: "2026-10-31", sl: 6, cl: 6 },
+      requests: [{ kind: "casual", fromDate: "2026-10-12", toDate: "2026-10-12", status: "approved" }],
+    });
+    expect(b.casual.remaining).toBe(6);
+  });
+
+  it("ignores a payslip from last year", () => {
+    const b = leaveBalance({ employee, year: 2027, policy: POLICY, holidays: none, closing: { asOf: "2026-12-31", sl: 1, cl: 0 }, requests: [] });
+    expect(b.sick.remaining).toBe(6);
+  });
+});
