@@ -215,14 +215,15 @@ export async function balancesForAll(list: EmployeeRow[], year: number): Promise
   const closings = await latestClosings(list.map((e) => e.id), year);
   const holidayCache = new Map<string, Set<string>>();
   const out = new Map<string, LeaveBalance>();
-  for (const e of list) {
-    const key = e.centerId ?? "all";
-    let holidays = holidayCache.get(key);
-    if (!holidays) {
-      holidays = new Set((await loadHolidays(db, e.centerId)).map((h) => h.onDate));
-      holidayCache.set(key, holidays);
-    }
-    const own = { ...policy, weeklyOff: weeklyOffOf((await loadWeek(db, e.id)).week) };
+  const centerKeys = [...new Set(list.map((e) => e.centerId))];
+  const [weeks, holidayLists] = await Promise.all([
+    Promise.all(list.map((e) => loadWeek(db, e.id))),
+    Promise.all(centerKeys.map((c) => loadHolidays(db, c))),
+  ]);
+  centerKeys.forEach((c, i) => holidayCache.set(c ?? "all", new Set(holidayLists[i].map((h) => h.onDate))));
+  for (const [i, e] of list.entries()) {
+    const holidays = holidayCache.get(e.centerId ?? "all") ?? new Set<string>();
+    const own = { ...policy, weeklyOff: weeklyOffOf(weeks[i].week) };
     out.set(e.id, leaveBalance({ employee: e, year, policy: own, requests: byEmployee.get(e.id) ?? [], holidays, closing: closings.get(e.id) ?? null }));
   }
   return out;

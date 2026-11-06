@@ -32,11 +32,13 @@ const hhmm = (t: string | null) => (t ? t.slice(0, 5) : "");
 
 /** The employee's own week if they have one, otherwise the company's. */
 export async function loadWeek(tx: DbExecutor, employeeId: string): Promise<{ week: WeekSchedule; custom: boolean }> {
-  const [settings] = await tx.select().from(payrollSettings).where(eq(payrollSettings.id, 1));
-  const policy = await loadPolicy(tx);
+  const [[settings], policy, rows] = await Promise.all([
+    tx.select().from(payrollSettings).where(eq(payrollSettings.id, 1)),
+    loadPolicy(tx),
+    tx.select().from(employeeSchedules).where(eq(employeeSchedules.employeeId, employeeId)),
+  ]);
   const fallback = defaultWeek(policy.weeklyOff, hhmm(settings?.shiftStart ?? "09:30"), hhmm(settings?.shiftEnd ?? "17:30"));
 
-  const rows = await tx.select().from(employeeSchedules).where(eq(employeeSchedules.employeeId, employeeId));
   if (rows.length === 0) return { week: fallback, custom: false };
   const week = fallback.map((d) => ({ ...d }));
   for (const r of rows) {

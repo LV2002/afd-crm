@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { hasIntegrationCredential, integrationEncryptionStatus } from "@/lib/integrations/credentials";
 import { DEFAULT_RETARGETING_WINDOW_DAYS } from "@/lib/integrations/audience-sync";
+import { db } from "@/lib/db/client";
+import { biometricDevices } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 
 import { RetargetingForm } from "./retargeting-form";
@@ -28,6 +30,7 @@ export default async function IntegrationsPage() {
   const websiteConnected = await hasIntegrationCredential("website", "signing_secret");
 
   const supabase = await createClient();
+  const eSSLConnected = (await db.select({ id: biometricDevices.id }).from(biometricDevices).limit(1)).length > 0;
   const { data: org } = await supabase
     .from("org_settings")
     .select("retargeting_window_days")
@@ -80,6 +83,12 @@ export default async function IntegrationsPage() {
           ? "An endpoint for any service that can post JSON — a course platform, a form builder, a landing page."
           : `${customWebhookCount} endpoint${customWebhookCount === 1 ? "" : "s"}, each with its own URL and source name.`,
       connected: customWebhookCount > 0,
+    },
+    {
+      href: "/settings/integrations/essl",
+      name: "eSSL biometric attendance",
+      description: "Punch devices, the relay key, shift times and punch imports for the attendance report.",
+      connected: eSSLConnected,
     },
     { href: null, name: "Telephony", description: "Click-to-call and call logging. Coming soon.", connected: false },
   ];

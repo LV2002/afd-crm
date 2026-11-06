@@ -344,7 +344,7 @@
   }
 
   /* Scrollbars that belong to the theme rather than the OS. */
-  * {
+  html, .overflow-auto, .overflow-x-auto, .overflow-y-auto {
     scrollbar-width: thin;
     scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
   }
