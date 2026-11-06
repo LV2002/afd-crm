@@ -8,7 +8,7 @@ import { employeeForUser, loadHolidays } from "@/lib/hr/service";
 import { payslips } from "@/lib/db/schema";
 import { loadPayrollSettings } from "@/lib/payroll/service";
 import { formatINR } from "@/lib/format/currency";
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { ApplyLeaveForm, CancelButton, DecideButtons } from "../hr-forms";
 import { BalanceCards, StatusBadge, dayText, kindText, rangeText } from "../leave-ui";
@@ -16,7 +16,8 @@ import { BalanceCards, StatusBadge, dayText, kindText, rangeText } from "../leav
 export const dynamic = "force-dynamic";
 
 /** Everything an employee needs in one place: their leave, the company holidays, and what is waiting on them. */
-export default async function MyHrPage() {
+export default async function MyHrPage({ searchParams }: { searchParams: Promise<{ all?: string }> }) {
+  const showAll = (await searchParams).all === "1";
   const user = await getCurrentUser();
   if (!user || !can(user, "hr.self")) return <AccessDenied />;
 
@@ -59,93 +60,136 @@ export default async function MyHrPage() {
     )
     .orderBy(desc(payslips.month))
     .limit(36);
+  // Payslips made but not yet approved: the employee is told one is on its way, not shown it.
+  const waitingMonths = payroll.requireApproval
+    ? (
+        await db
+          .select({ month: payslips.month })
+          .from(payslips)
+          .where(and(eq(payslips.employeeId, employee.id), eq(payslips.status, "current"), isNull(payslips.approvedAt)))
+          .orderBy(desc(payslips.month))
+      ).map((r) => r.month)
+    : [];
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = holidays.filter((h) => h.onDate >= today).slice(0, 12);
 
+  const requests = showAll ? mine : mine.slice(0, 5);
+  const slips = showAll ? mySlips : mySlips.slice(0, 6);
+  const more = mine.length > 5 || mySlips.length > 6;
+
   return (
-    <div className="flex flex-col gap-8">
-      <section className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold">{employee.name}</h2>
-        <p className="text-sm text-muted-foreground">
-          {[employee.designation, employee.department, employee.empNo].filter(Boolean).join(" · ")}
-        </p>
-      </section>
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      {/* Left: what you do. Right: where you stand, always in view. */}
+      <div className="flex min-w-0 flex-col gap-6">
+        <section className="flex flex-col gap-0.5">
+          <h2 className="text-lg font-semibold">{employee.name}</h2>
+          <p className="text-sm text-muted-foreground">
+            {[employee.designation, employee.department, employee.empNo].filter(Boolean).join(" · ")}
+          </p>
+        </section>
 
-      {awaiting.length > 0 && <Awaiting rows={awaiting} />}
+        {awaiting.length > 0 && <Awaiting rows={awaiting} />}
 
-      <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-semibold">My leave</h3>
-        <BalanceCards balance={balance} />
-        {balance.lopDays > 0 && <p className="text-xs text-muted-foreground">Loss of pay and half days this year: {balance.lopDays} days.</p>}
-      </section>
-
-      <ApplyLeaveForm />
-
-      <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-semibold">My requests</h3>
-        {mine.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing yet.</p>
-        ) : (
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <tbody>
-                {mine.map((r) => (
-                  <tr key={r.id} className="border-t first:border-t-0">
-                    <td className="p-2">
-                      <Link href={`/hr/leave/${r.id}`} className="underline">
-                        #{r.leaveNo}
-                      </Link>
-                    </td>
-                    <td className="p-2">{kindText(r.kind)}</td>
-                    <td className="p-2">{rangeText(r)}</td>
-                    <td className="p-2">{r.days} day{r.days === 1 ? "" : "s"}</td>
-                    <td className="p-2">
-                      <StatusBadge status={r.status} />
-                      {r.decisionNote && <span className="ml-2 text-xs text-muted-foreground">{r.decisionNote}</span>}
-                    </td>
-                    <td className="p-2">
-                      {(r.status === "pending" || (r.status === "approved" && r.fromDate > today)) && <CancelButton requestId={r.id} />}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <details className="group rounded-lg border">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold">
+            Apply for leave
+            <span className="text-xs font-normal text-muted-foreground group-open:hidden">Open the form</span>
+          </summary>
+          <div className="border-t p-4">
+            <ApplyLeaveForm />
           </div>
-        )}
-      </section>
+        </details>
 
-      <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-semibold">Company holidays</h3>
-        {upcoming.length === 0 ? (
-          <p className="text-sm text-muted-foreground">None coming up.</p>
-        ) : (
-          <ul className="text-sm">
-            {upcoming.map((h) => (
-              <li key={`${h.onDate}-${h.name}`}>
-                {dayText(h.onDate)} — {h.name}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        <section className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold">My requests</h3>
+          {mine.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nothing yet.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full text-sm">
+                <tbody>
+                  {requests.map((r) => (
+                    <tr key={r.id} className="border-t first:border-t-0">
+                      <td className="p-2">
+                        <Link href={`/hr/leave/${r.id}`} className="underline">
+                          #{r.leaveNo}
+                        </Link>
+                      </td>
+                      <td className="p-2">{kindText(r.kind)}</td>
+                      <td className="p-2">{rangeText(r)}</td>
+                      <td className="p-2">{r.days}d</td>
+                      <td className="p-2">
+                        <StatusBadge status={r.status} />
+                        {r.decisionNote && <span className="ml-2 text-xs text-muted-foreground">{r.decisionNote}</span>}
+                      </td>
+                      <td className="p-2">
+                        {(r.status === "pending" || (r.status === "approved" && r.fromDate > today)) && <CancelButton requestId={r.id} />}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
-      <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-semibold">Payslips</h3>
-        {mySlips.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Your salary slips appear here once they have been approved.</p>
-        ) : (
-          <ul className="text-sm">
-            {mySlips.map((s) => (
-              <li key={s.id}>
-                <Link href={`/hr/payroll/${s.id}`} className="underline">
-                  {new Date(`${s.month}-01T12:00:00Z`).toLocaleString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" })}
-                </Link>{" "}
-                · net {formatINR(s.netPaise)}
-              </li>
-            ))}
-          </ul>
+        <section className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold">Payslips</h3>
+          {waitingMonths.length > 0 && (
+            <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+              Your payslip for{" "}
+              {waitingMonths
+                .map((m) => new Date(`${m}-01T12:00:00Z`).toLocaleString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" }))
+                .join(", ")}{" "}
+              {waitingMonths.length === 1 ? "has" : "have"} been prepared and will appear here as soon as it is approved.
+            </p>
+          )}
+          {slips.length === 0 && waitingMonths.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Your salary slips appear here once they have been approved.</p>
+          ) : slips.length === 0 ? null : (
+            <ul className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+              {slips.map((s) => (
+                <li key={s.id} className="flex justify-between gap-3">
+                  <Link href={`/hr/payroll/${s.id}`} className="underline">
+                    {new Date(`${s.month}-01T12:00:00Z`).toLocaleString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" })}
+                  </Link>
+                  <span className="text-muted-foreground">{formatINR(s.netPaise)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {more && (
+          <Link href={showAll ? "/hr/me" : "/hr/me?all=1"} className="w-fit text-sm font-medium underline">
+            {showAll ? "Show less" : "Show all requests and payslips"}
+          </Link>
         )}
-      </section>
+      </div>
+
+      <aside className="flex flex-col gap-5 lg:sticky lg:top-20">
+        <section className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold">My leave</h3>
+          <BalanceCards balance={balance} stacked />
+          {balance.lopDays > 0 && <p className="text-xs text-muted-foreground">Loss of pay and half days this year: {balance.lopDays} days.</p>}
+        </section>
+
+        <section className="flex flex-col gap-1.5">
+          <h3 className="text-sm font-semibold">Coming holidays</h3>
+          {upcoming.length === 0 ? (
+            <p className="text-sm text-muted-foreground">None coming up.</p>
+          ) : (
+            <ul className="text-sm">
+              {upcoming.slice(0, 5).map((h) => (
+                <li key={`${h.onDate}-${h.name}`} className="flex justify-between gap-3 py-0.5">
+                  <span>{h.name}</span>
+                  <span className="text-muted-foreground">{dayText(h.onDate)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </aside>
     </div>
   );
 }

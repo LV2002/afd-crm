@@ -8955,3 +8955,8 @@ New **HR** department in the sidebar: **My HR** (everyone), **Employees** and **
 - **PDF payslips** (`lib/payroll/pdf.ts`, pdfkit): per slip and whole month; "Rs." because the standard PDF fonts have no rupee glyph.
 - **Biometric:** the relay endpoint also takes a CSV body; `scripts/essl-relay/relay.py` is a template (not run against a real eSSL database); setup guide in `docs/ESSL-SETUP.md`.
 - **Visual refresh:** new surface, border, shadow and accent tokens in light and dark, panels and tables styled once in the base layer, a redesigned sidebar (pill items, left accent, department headings) and header, rounder buttons, pill badges.
+
+## My HR: two columns; leave balance follows the payslip
+
+- **My HR** is now two columns: the leave balance and coming holidays on the right (stays in view), and on the left the apply form (collapsed until opened), the latest five requests and the latest six payslips, with "Show all". Employees whose payslip has been made but not approved are told it is on its way.
+- **Leave balance follows the payslip.** The latest current payslip's closing balance for the year is the starting point, and only approved leave after that month is counted on top. Payroll is the book of record: it has already applied the probation cap, turned leave without a balance into loss of pay, and included any leave typed into the payslip form. Shown against the year's allowance ("3 of 6, 3 taken"). A regenerated payslip moves it again. Employee list balances follow the same rule.

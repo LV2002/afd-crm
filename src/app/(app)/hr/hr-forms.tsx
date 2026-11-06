@@ -24,8 +24,7 @@ export function ApplyLeaveForm() {
   const [state, action, pending] = useActionState(applyLeave, initial);
   const [kind, setKind] = useState("casual");
   return (
-    <form action={action} className="flex max-w-xl flex-col gap-3 rounded-lg border p-4">
-      <h3 className="text-sm font-semibold">Apply for leave</h3>
+    <form action={action} className="flex max-w-xl flex-col gap-3">
       <div className="flex flex-wrap gap-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="leave-kind">Kind</Label>
