@@ -8977,3 +8977,10 @@ New **HR** department in the sidebar: **My HR** (everyone), **Employees** and **
 ## Open items for Leon
 
 - **Come back to the eSSL integration**: verify the ADMS device push against the real device, and set up the relay key / device serials in Settings → Integrations → eSSL.
+
+## Past income in the ledger; multi-year courses (migration 0127)
+
+- **Past payments now post to the finance ledger**, dated the day the money was received, into the account the accountant picks, tagged `source = 'history'`. Every income report (month, year, collections) counts them; account balances, cash counts and the unfiltered ledger statement leave them out, because they describe what an account holds today. A reversal of a past payment keeps the tag. Bank matching can still pair them with a statement when one covers that date.
+- **Programme length** is a course setting (Settings → Courses & batches, "Programme length (years)", stored in the course's metadata, default 1). A student on a 2-year course shows "year 1 of 2" / "year 2 of 2" and stays on the Students list for both years: filtering by an academic year includes students who joined in an earlier year that the programme still covers, as well as those sitting in that year's batch.
+- `students.intake_year` is copied from the enrolment when the student is created (backfilled for existing students), so academics never has to read the accounts tables for it.
+- Not built: moving a student to the next year's batch in one click (the existing batch change still does it), and a separate second-year fee (the agreed fee plan covers the whole programme).

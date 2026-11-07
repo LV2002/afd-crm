@@ -7,6 +7,8 @@ import { filterTerm } from "@/lib/db/filter-term";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { formatDateIST } from "@/lib/format/date";
 import { maskPhone } from "@/lib/leads/mask-phone";
+import { currentAcademicStartYear, formatAcademicYear } from "@/lib/enrolment/academic-year";
+import { courseDurations } from "@/lib/enrolment/course-catalog";
 import { createClient } from "@/lib/supabase/server";
 
 import { StudentFilters, type StudentFilterOption } from "./student-filters";
@@ -20,6 +22,7 @@ interface StudentRow {
   current_course: string | null;
   status: string;
   joined_at: string;
+  intake_year: string | null;
   centers: { name: string } | null;
   batches: { name: string } | null;
 }
@@ -76,7 +79,7 @@ export default async function StudentsPage({
 
   let query = supabase
     .from("students")
-    .select("id, student_code, full_name, phone, current_course, status, joined_at, centers(name), batches(name)")
+    .select("id, student_code, full_name, phone, current_course, status, joined_at, intake_year, centers(name), batches(name)")
     .is("deleted_at", null)
     // The roster is people academics has accepted. A student whose payment
     // cleared this morning is on the Onboarding tab instead — appearing
@@ -88,17 +91,31 @@ export default async function StudentsPage({
   if (centerId) query = query.eq("center_id", centerId);
   if (course) query = query.eq("current_course", course);
   if (batchId) query = query.eq("current_batch_id", batchId);
+  const durations = await courseDurations();
   if (year) {
-    // The AFD academic year is a property of the batch, so "2027-28
-    // students" are the ones sitting in a 2027-28 batch. Somebody not yet
-    // in any batch has no year to match.
+    // A student belongs to an academic year in two ways: they sit in that
+    // year's batch, or that year falls within the programme they joined —
+    // a second-year student of a two-year course is a student of the year
+    // after the one they joined in, whether or not anybody has moved them
+    // to the new batch yet.
     const { data: yearBatches } = await supabase
       .from("batches")
       .select("id")
       .eq("academic_year", year)
       .is("deleted_at", null)
       .returns<Array<{ id: string }>>();
-    query = query.in("current_batch_id", (yearBatches ?? []).map((b) => b.id));
+    const startYear = Number(/^(\d{4})-/.exec(year)?.[1]);
+    const clauses = [`intake_year.eq.${year}`];
+    const ids = (yearBatches ?? []).map((b) => b.id);
+    if (ids.length > 0) clauses.push(`current_batch_id.in.(${ids.join(",")})`);
+    if (Number.isFinite(startYear)) {
+      for (let back = 1; back <= 4; back += 1) {
+        const joinedIn = formatAcademicYear(startYear - back);
+        const courses = [...durations].filter(([code, years]) => years > back && /^[a-z0-9_-]+$/i.test(code)).map(([code]) => code);
+        if (courses.length > 0) clauses.push(`and(intake_year.eq.${joinedIn},current_course.in.(${courses.join(",")}))`);
+      }
+    }
+    query = query.or(clauses.join(","));
   }
   if (joinedFrom) query = query.gte("joined_at", `${joinedFrom}T00:00:00+05:30`);
   // Exclusive upper bound on the next day, so "to 15 July" includes
@@ -203,7 +220,22 @@ export default async function StudentsPage({
               </TableCell>
               <TableCell className="font-mono text-sm text-muted-foreground">{maskPhone(row.phone)}</TableCell>
               <TableCell>{row.centers?.name ?? "—"}</TableCell>
-              <TableCell>{row.current_course ?? "—"}</TableCell>
+              <TableCell>
+                {row.current_course ?? "—"}
+                {(() => {
+                  const length = row.current_course ? (durations.get(row.current_course) ?? 1) : 1;
+                  const joined = Number(/^(\d{4})-/.exec(row.intake_year ?? "")?.[1]);
+                  if (length < 2 || !Number.isFinite(joined)) return null;
+                  const reference = /^\d{4}-/.test(year) ? Number(year.slice(0, 4)) : currentAcademicStartYear();
+                  const n = reference - joined + 1;
+                  if (n < 1) return null;
+                  return (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {n > length ? "programme ended" : `year ${n} of ${length}`}
+                    </span>
+                  );
+                })()}
+              </TableCell>
               <TableCell>{row.batches?.name ?? "—"}</TableCell>
               <TableCell>
                 <Badge variant={row.status === "active" ? "default" : "secondary"}>{row.status}</Badge>

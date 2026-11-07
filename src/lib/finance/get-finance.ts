@@ -98,6 +98,9 @@ export async function getAccountsWithBalances(
     supabase
       .from("finance_transactions")
       .select("account_id, direction, amount_paise")
+      // What an account holds today: income from before the CRM is in the
+      // reports but was never in this box or bank account's books.
+      .or("source.is.null,source.neq.history")
       .returns<Array<{ account_id: string; direction: FinanceDirection; amount_paise: number }>>(),
     supabase.from("centers").select("id, name").returns<Array<{ id: string; name: string }>>(),
   ]);
@@ -134,6 +137,8 @@ export interface LedgerFilter {
   /** Inclusive `YYYY-MM-DD`. */
   from?: string;
   to?: string;
+  /** Leave out income from before the CRM — for a running balance. */
+  excludeHistory?: boolean;
   /** Newest first, so `limit` keeps the latest rows rather than the oldest. */
   newest?: boolean;
   limit?: number;
@@ -163,6 +168,7 @@ export async function getLedgerEntries(
     if (filter.accountId) query = query.eq("account_id", filter.accountId);
     if (filter.centerId) query = query.eq("center_id", filter.centerId);
     if (filter.kind) query = query.eq("kind", filter.kind);
+    if (filter.excludeHistory) query = query.or("source.is.null,source.neq.history");
     if (filter.from) query = query.gte("occurred_on", filter.from);
     if (filter.to) query = query.lte("occurred_on", filter.to);
 

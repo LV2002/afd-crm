@@ -9,7 +9,7 @@ import {
   studentBatches,
   students,
 } from "@/lib/db/schema";
-import { FEE_CATEGORY, postEntry } from "@/lib/finance/post";
+import { FEE_CATEGORY, HISTORY_SOURCE, postEntry } from "@/lib/finance/post";
 
 export interface RecordPaymentInput {
   enrolmentId: string;
@@ -111,7 +111,10 @@ export async function recordPayment(tx: DbExecutor, input: RecordPaymentInput): 
       studentId: enrolment.studentId,
       course: enrolment.course,
       recordedBy: input.recordedBy,
-      source: "payment",
+      // Rows for money received before the CRM are tagged so account balances,
+      // which describe the present, can leave them out while every income
+      // report still counts them.
+      source: enrolment.isHistorical ? HISTORY_SOURCE : "payment",
     });
     financeTransactionId = posted.id;
   }
@@ -153,6 +156,7 @@ export async function recordPayment(tx: DbExecutor, input: RecordPaymentInput): 
       targetExams: lead.interestedExams,
       targetExamYear: lead.examYear,
       currentCourse: enrolment.course,
+      intakeYear: enrolment.academicYear,
       // The batch the counsellor picked at Gate 1, carried across rather
       // than left for somebody to fill in afterwards. Before this, a
       // student arrived in academics with no class group and the batch

@@ -71,7 +71,7 @@ export function RecordPaymentForm({
           <Label htmlFor="payment-received-on">Date received</Label>
           <Input id="payment-received-on" name="receivedOn" type="date" required max={new Date().toISOString().slice(0, 10)} />
           <p className="text-xs text-muted-foreground">
-            A past admission: the payment is recorded against the student on this date and kept out of the current cash ledger and bank matching.
+            A past admission: the payment is recorded on this date, so it counts in that year&apos;s income. It does not change what the account holds today.
           </p>
         </div>
       )}

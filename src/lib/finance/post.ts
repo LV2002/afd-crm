@@ -17,6 +17,11 @@ import type { FinanceDirection, FinanceKind } from "./ledger-math";
  */
 
 export const FEE_CATEGORY = "Course Fees";
+/**
+ * `finance_transactions.source` for income from before the CRM. Counted in
+ * every income report; left out of what an account holds today.
+ */
+export const HISTORY_SOURCE = "history";
 export const TRANSFER_CATEGORY = "Fund Transfer";
 
 export interface PostEntryInput {
@@ -201,7 +206,9 @@ export async function reverseTransaction(
     reversesTransactionId: original.id,
     reversalReason: input.reason,
     recordedBy: input.recordedBy,
-    source: input.source,
+    // A reversal of past income stays with it, so the pair nets to zero in
+    // both the reports and the balances.
+    source: original.source === HISTORY_SOURCE ? HISTORY_SOURCE : input.source,
   });
 
   return { reversal, original };

@@ -9,7 +9,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { batchCapacity } from "@/lib/batches/roster";
 import { db } from "@/lib/db/client";
 import { batches, centers, dropdownOptions } from "@/lib/db/schema";
-import { COURSE_MODE_KEY } from "@/lib/enrolment/course-catalog";
+import { COURSE_MODE_KEY, programmeYears } from "@/lib/enrolment/course-catalog";
 import { formatINR } from "@/lib/format/currency";
 import { formatDateIST } from "@/lib/format/date";
 
@@ -113,6 +113,9 @@ export default async function CoursesPage() {
               ) : (
                 <Badge variant="destructive">No mode</Badge>
               )}
+              {programmeYears(course.metadata) > 1 && (
+                <Badge variant="outline">{programmeYears(course.metadata)}-year programme</Badge>
+              )}
               {!course.isActive && <Badge variant="outline">off</Badge>}
               <div className="ml-auto flex items-center gap-2">
                 {canEditCourses && (
@@ -121,6 +124,7 @@ export default async function CoursesPage() {
                       courseValue={course.value}
                       name={course.label}
                       mode={modeValue}
+                      years={programmeYears(course.metadata)}
                       modes={modes}
                     />
                     <CourseToggle courseValue={course.value} isActive={course.isActive} />

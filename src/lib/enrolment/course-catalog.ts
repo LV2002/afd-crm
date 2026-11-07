@@ -16,6 +16,25 @@ import { dropdownOptions } from "@/lib/db/schema";
  */
 export const COURSE_MODE_KEY = "mode";
 
+/** Metadata key: how many academic years the programme runs. Missing means one. */
+export const COURSE_YEARS_KEY = "years";
+
+/** Reads a programme length out of a course's metadata: a whole number from 1 to 5, else 1. */
+export function programmeYears(metadata: Record<string, unknown> | null | undefined): number {
+  const raw = metadata?.[COURSE_YEARS_KEY];
+  const n = typeof raw === "number" ? raw : Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= 5 ? n : 1;
+}
+
+/** course value -> programme length in years, for every live course. */
+export async function courseDurations(): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ value: dropdownOptions.value, metadata: dropdownOptions.metadata })
+    .from(dropdownOptions)
+    .where(and(eq(dropdownOptions.category, "course"), isNull(dropdownOptions.deletedAt)));
+  return new Map(rows.map((r) => [r.value, programmeYears(r.metadata)]));
+}
+
 /** course value -> mode value, for every live course that has one. */
 export async function courseModes(): Promise<Map<string, string>> {
   const rows = await db

@@ -8,9 +8,10 @@ loadEnv({ path: ".env.local", override: true });
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set.");
 
 const { db } = await import("../src/lib/db/client");
-const { centers, enrolments, leads, payments, receipts, students } = await import("../src/lib/db/schema");
+const { centers, enrolments, financeAccounts, financeTransactions, leads, payments, receipts, students } = await import("../src/lib/db/schema");
 const { confirmAdmission } = await import("../src/lib/enrolment/confirm-admission");
 const { recordPayment } = await import("../src/lib/enrolment/record-payment");
+const { programmeYears } = await import("../src/lib/enrolment/course-catalog");
 const { parsePastAdmissions, parseLooseDate } = await import("../src/lib/enrolment/parse-past-admissions");
 
 const MARKER = "PastAdmissionTest";
@@ -20,6 +21,7 @@ async function sweep() {
   const ls = await db.select({ id: leads.id }).from(leads).where(like(leads.studentName, `${MARKER}%`));
   for (const l of ls) {
     for (const e of await db.select({ id: enrolments.id }).from(enrolments).where(eq(enrolments.leadId, l.id))) {
+      await db.delete(financeTransactions).where(eq(financeTransactions.enrolmentId, e.id));
       await db.delete(receipts).where(eq(receipts.enrolmentId, e.id));
       await db.delete(payments).where(eq(payments.enrolmentId, e.id));
     }
@@ -27,6 +29,7 @@ async function sweep() {
   }
   await db.delete(students).where(like(students.fullName, `${MARKER}%`));
   await db.delete(leads).where(like(leads.studentName, `${MARKER}%`));
+  await db.delete(financeAccounts).where(like(financeAccounts.name, `${MARKER}%`));
   await db.delete(centers).where(like(centers.name, `${MARKER}%`));
 }
 
@@ -81,5 +84,36 @@ describe("a past admission", () => {
     expect(paid.financeTransactionId).toBeNull();
     const [s] = await db.select().from(students).where(eq(students.id, paid.studentId!));
     expect(s.onboardedAt).not.toBeNull();
+  });
+});
+
+describe("past income in the ledger", () => {
+  it("posts on the date received, tagged as history, and records the intake year", async () => {
+    const [account] = await db.insert(financeAccounts).values({ name: `${MARKER} bank`, centerId, type: "bank" }).returning({ id: financeAccounts.id });
+    const [lead] = await db.insert(leads).values({ studentName: `${MARKER} two`, primaryPhone: "+919800000098", centerId }).returning({ id: leads.id });
+    const { enrolmentId } = await db.transaction((tx) =>
+      confirmAdmission(tx, {
+        leadId: lead.id, course: "Foundation", centerId, mode: "hybrid", academicYear: "2025-26",
+        totalFeePaiseOverride: 5000000, confirmedBy: null, enrolledAt: new Date("2025-07-01T12:00:00+05:30"), historical: true,
+      }),
+    );
+    const paid = await db.transaction((tx) =>
+      recordPayment(tx, { enrolmentId, amountPaise: 1000000, method: "neft", recordedBy: null, accountId: account.id, receivedAt: new Date("2025-08-05T12:00:00+05:30") }),
+    );
+    const [t] = await db.select().from(financeTransactions).where(eq(financeTransactions.id, paid.financeTransactionId!));
+    expect(t.occurredOn).toBe("2025-08-05");
+    expect(t.source).toBe("history");
+    const [s] = await db.select().from(students).where(eq(students.id, paid.studentId!));
+    expect(s.intakeYear).toBe("2025-26");
+  });
+});
+
+describe("programme length", () => {
+  it("defaults to one year and accepts 1 to 5", () => {
+    expect(programmeYears(null)).toBe(1);
+    expect(programmeYears({ years: 2 })).toBe(2);
+    expect(programmeYears({ years: "3" })).toBe(3);
+    expect(programmeYears({ years: 9 })).toBe(1);
+    expect(programmeYears({ years: 1.5 })).toBe(1);
   });
 });

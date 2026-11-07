@@ -84,6 +84,8 @@ export const students = pgTable("students", {
   status: studentStatusEnum("status").notNull().default("active"),
   targetExams: text("target_exams").array(),
   targetExamYear: text("target_exam_year"),
+  /** The academic year they joined in, e.g. 2025-26. Copied at creation. */
+  intakeYear: text("intake_year"),
   currentCourse: text("current_course"),
   currentBatchId: uuid("current_batch_id").references((): AnyPgColumn => batches.id, {
     onDelete: "set null",

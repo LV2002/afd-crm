@@ -9,7 +9,7 @@ import { activeDropdownValues } from "@/lib/config/dropdown-values";
 import { db } from "@/lib/db/client";
 import { batches, dropdownOptions } from "@/lib/db/schema";
 import { OPTION_VALUE_PATTERN, slugifyValue } from "@/lib/dropdowns/option-helpers";
-import { COURSE_MODE_KEY } from "@/lib/enrolment/course-catalog";
+import { COURSE_MODE_KEY, COURSE_YEARS_KEY } from "@/lib/enrolment/course-catalog";
 import { createClient } from "@/lib/supabase/server";
 
 export interface CourseFormState {
@@ -41,6 +41,10 @@ export async function saveCourse(_prev: CourseFormState, formData: FormData): Pr
   const mode = String(formData.get("mode") ?? "").trim();
 
   if (!label) return { error: "Give the course a name." };
+  const years = Number(String(formData.get("years") ?? "1").trim() || "1");
+  if (!Number.isInteger(years) || years < 1 || years > 5) {
+    return { error: "Programme length is a whole number of years, from 1 to 5." };
+  }
   const modes = await activeDropdownValues("preferred_mode");
   if (!mode || !modes.includes(mode)) {
     return { error: "Pick the course's mode." };
@@ -66,7 +70,7 @@ export async function saveCourse(_prev: CourseFormState, formData: FormData): Pr
     await db.transaction(async (tx) => {
       await tx
         .update(dropdownOptions)
-        .set({ label, metadata: { ...(row.metadata ?? {}), [COURSE_MODE_KEY]: mode }, updatedAt: new Date() })
+        .set({ label, metadata: { ...(row.metadata ?? {}), [COURSE_MODE_KEY]: mode, [COURSE_YEARS_KEY]: years }, updatedAt: new Date() })
         .where(eq(dropdownOptions.id, row.id));
       if (previousMode !== mode) {
         await tx
@@ -82,7 +86,7 @@ export async function saveCourse(_prev: CourseFormState, formData: FormData): Pr
       entityType: "dropdown_options",
       entityId: row.id,
       before: { mode: previousMode },
-      after: { label, mode },
+      after: { label, mode, years },
     });
     revalidatePath("/settings/courses");
     return {
@@ -123,7 +127,7 @@ export async function saveCourse(_prev: CourseFormState, formData: FormData): Pr
         label,
         isActive: true,
         deletedAt: null,
-        metadata: { ...(clash.metadata ?? {}), [COURSE_MODE_KEY]: mode },
+        metadata: { ...(clash.metadata ?? {}), [COURSE_MODE_KEY]: mode, [COURSE_YEARS_KEY]: years },
         updatedAt: new Date(),
       })
       .where(eq(dropdownOptions.id, clash.id));
@@ -137,7 +141,7 @@ export async function saveCourse(_prev: CourseFormState, formData: FormData): Pr
       value,
       label,
       sortOrder: Number(next),
-      metadata: { [COURSE_MODE_KEY]: mode },
+      metadata: { [COURSE_MODE_KEY]: mode, [COURSE_YEARS_KEY]: years },
     });
   }
 
@@ -145,7 +149,7 @@ export async function saveCourse(_prev: CourseFormState, formData: FormData): Pr
     actorId: user.id,
     action: "course.create",
     entityType: "dropdown_options",
-    after: { value, label, mode, revived: Boolean(clash) },
+    after: { value, label, mode, years, revived: Boolean(clash) },
   });
   revalidatePath("/settings/courses");
   return { success: clash ? `Brought back ${label}.` : `Added ${label}. Now add its batches below.` };

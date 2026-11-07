@@ -53,7 +53,7 @@ export default async function AccountLedgerPage({
     );
   }
 
-  const entries = await getLedgerEntries(supabase, { accountId: selected.id, from, to });
+  const entries = await getLedgerEntries(supabase, { accountId: selected.id, from, to, excludeHistory: !(from || to) });
   const reversed = reversedIds(entries);
 
   // Reverse / correct from the statement itself, as on Transactions: an entry
@@ -116,6 +116,11 @@ export default async function AccountLedgerPage({
               : "Does not reconcile — check with an admin"}
         </span>
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        Fee income entered for admissions from before the CRM is counted in the income reports for its year. It is not part of what this account holds
+        today, so it appears here only when you pick a date range.
+      </p>
 
       {entries.length === 0 ? (
         <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">

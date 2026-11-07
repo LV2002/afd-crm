@@ -388,7 +388,7 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
           {canRecordPayment && (
             <RecordPaymentForm
               enrolmentId={id}
-              accounts={enrolment.is_historical ? [] : financeAccounts}
+              accounts={financeAccounts}
               historical={enrolment.is_historical}
               suggestedAmount={nextDue ? String(nextDue.outstandingPaise / 100) : undefined}
               suggestedNote={

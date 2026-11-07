@@ -61,7 +61,7 @@ export async function recordPaymentAction(
   const referenceRaw = formData.get("reference");
   const reference = typeof referenceRaw === "string" && referenceRaw.trim() ? referenceRaw.trim() : null;
 
-  let accountId = String(formData.get("accountId") ?? "").trim();
+  const accountId = String(formData.get("accountId") ?? "").trim();
 
   const [enrolment] = await db.select().from(enrolments).where(eq(enrolments.id, enrolmentId));
   if (!enrolment || enrolment.deletedAt) {
@@ -79,9 +79,9 @@ export async function recordPaymentAction(
   }
 
   // A past admission typed in from before the CRM: the money arrived on a
-  // date in the past and went into whatever account it went into then. It
-  // is recorded against the student with that date, and kept out of the
-  // cash ledger and bank matching, which only describe the present.
+  // date in the past. It is recorded against the student with that date and
+  // posted to the ledger on that date, so income reports cover the years
+  // before the CRM; account balances leave it out (see HISTORY_SOURCE).
   let receivedAt: Date | undefined;
   if (enrolment.isHistorical) {
     const on = String(formData.get("receivedOn") ?? "").trim();
@@ -91,12 +91,11 @@ export async function recordPaymentAction(
       return { error: "That date is not valid for a past payment." };
     }
     receivedAt = when;
-    accountId = "";
   }
 
   // Money with no account is money nobody can check against the bank. Once
   // the institute has accounts, every payment has to say where it went.
-  if (!accountId && !enrolment.isHistorical) {
+  if (!accountId) {
     const [anyAccount] = await db
       .select({ id: financeAccounts.id })
       .from(financeAccounts)
