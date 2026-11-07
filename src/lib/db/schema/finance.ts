@@ -158,6 +158,12 @@ export const enrolments = pgTable("enrolments", {
   droppedBy: uuid("dropped_by").references(() => profiles.id, { onDelete: "set null" }),
   /** Why they left, in the words of whoever recorded it. Read by three departments, so it is never optional in the UI. */
   dropReason: text("drop_reason"),
+  /**
+   * Typed in from before the CRM existed, for the record of past intake and
+   * income. Never chased for money, never announced, never counted as
+   * current work — see the history import.
+   */
+  isHistorical: boolean("is_historical").notNull().default(false),
   enrolledAt: timestamp("enrolled_at", { withTimezone: true }).notNull().defaultNow(),
   salesToAccountsAt: timestamp("sales_to_accounts_at", { withTimezone: true }),
   salesToAccountsBy: uuid("sales_to_accounts_by").references(() => profiles.id, { onDelete: "set null" }),

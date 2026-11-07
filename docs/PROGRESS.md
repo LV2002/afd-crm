@@ -8965,3 +8965,15 @@ New **HR** department in the sidebar: **My HR** (everyone), **Employees** and **
 
 - eSSL devices, relay key, shift times, punch import and unmapped codes now live at `/settings/integrations/essl` (card on the Integrations list). HR → Attendance keeps only the report and links there.
 - Speed: Finance tab badge (exceptions count) cached 60 s instead of a full reconciliation on every finance page; reconciliation suggestions indexed by Map (were quadratic); attendance, payroll review, leave balances and `loadWeek` now run their independent queries in parallel; the thin-scrollbar CSS no longer applies to every element.
+
+## Past admissions import (migration 0126)
+
+- **Accounts → Admissions → "Add past admissions"** (`/accounts/history`, `settings.manage`): paste one student per line — name, phone, course, optionally join date (dd/mm/yyyy) and total fee — for a chosen centre and academic year. Each goes through `resolveOrCreateLead()` (source *Past admission*, so it never counts toward any ad) and `confirmAdmission()`, marked `enrolments.is_historical`. A repeat phone number attaches to the person already here.
+- Historical admissions are never chased: excluded from payment reminders and the "new admissions" queue; no lead/payment/student notifications, no welcome flow; their student record is created already onboarded.
+- The accountant opens each one and enters the fee plan and every payment; the payment form asks for **Date received** and keeps it out of the cash ledger and bank matching (those describe the present). Receipts still get numbers from the live sequence.
+- Admissions page: a per-academic-year summary (admissions, paid in full / part / nothing / fee not entered, billed, collected, pending), a year filter, and a **Past admissions** tab with each student's payment state.
+- Not built: a bulk import of historical payments (the accountant enters them one by one, as asked).
+
+## Open items for Leon
+
+- **Come back to the eSSL integration**: verify the ADMS device push against the real device, and set up the relay key / device serials in Settings → Integrations → eSSL.

@@ -25,6 +25,9 @@ export interface ConfirmAdmissionInput {
   totalFeePaiseOverride?: number | null;
   discountPaise?: number;
   confirmedBy: string | null;
+  /** History import only: when they actually joined, and that this is a past record. */
+  enrolledAt?: Date;
+  historical?: boolean;
 }
 
 export interface ConfirmAdmissionResult {
@@ -108,7 +111,7 @@ export async function confirmAdmission(
     throw new Error("confirmAdmission: discount cannot exceed the total fee");
   }
 
-  const now = new Date();
+  const now = input.enrolledAt ?? new Date();
 
   const [enrolment] = await tx
     .insert(enrolments)
@@ -122,6 +125,7 @@ export async function confirmAdmission(
       totalFeePaise,
       discountPaise,
       netFeePaise,
+      isHistorical: input.historical === true,
       enrolledAt: now,
       salesToAccountsAt: now,
       salesToAccountsBy: input.confirmedBy,

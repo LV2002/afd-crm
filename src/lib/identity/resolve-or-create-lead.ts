@@ -87,6 +87,12 @@ export interface ResolveLeadInput {
    * knowing however the lead got there.
    */
   suppressArrivalNotice?: boolean;
+  /**
+   * A person who already joined, typed in for the record. Still goes through
+   * identity resolution and assignment like every other lead, but nobody is
+   * told and no welcome flow starts: they are not new news.
+   */
+  historical?: boolean;
 }
 
 export interface ResolveLeadResult {
@@ -132,7 +138,7 @@ export async function resolveOrCreateLead(rawInput: ResolveLeadInput): Promise<R
   // max: 1 (see lib/db/client.ts), so a second connection opened while the
   // transaction still holds the first would deadlock — and a notification
   // about a lead that then fails to commit would be a lie besides.
-  if (result.isNewLead) {
+  if (result.isNewLead && !input.historical) {
     await notifyLeadArrived(
       result.leadId,
       input.source,

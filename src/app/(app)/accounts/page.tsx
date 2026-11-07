@@ -21,6 +21,8 @@ interface EnrolmentQueueRow {
   down_payment_due_date: string | null;
   status: string;
   dropped_at: string | null;
+  academic_year: string;
+  is_historical: boolean;
   sales_to_accounts_at: string | null;
   accounts_to_academics_at: string | null;
   leads: { student_name: string; primary_phone: string } | null;
@@ -39,9 +41,9 @@ interface EnrolmentQueueRow {
 export default async function AccountsQueuePage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ filter?: string; year?: string }>;
 }) {
-  const { filter } = await searchParams;
+  const { filter, year } = await searchParams;
   // Defaults to the new admissions, because that is the job: a confirmed
   // admission sitting unpaid is somebody waiting to be chased. The full
   // list is one click away for recording a later instalment, and the
@@ -49,6 +51,7 @@ export default async function AccountsQueuePage({
   // through the working one.
   const showAll = filter === "all";
   const showDropped = filter === "dropped";
+  const showPast = filter === "past";
 
   const user = await getCurrentUser();
   if (!user || !can(user, "payment.read")) return <AccessDenied />;
@@ -59,7 +62,7 @@ export default async function AccountsQueuePage({
   const { data: enrolmentRows, error } = await supabase
     .from("enrolments")
     .select(
-      "id, lead_id, course, net_fee_paise, down_payment_paise, down_payment_due_date, status, dropped_at, sales_to_accounts_at, accounts_to_academics_at, leads(student_name, primary_phone), centers(name)",
+      "id, lead_id, course, net_fee_paise, down_payment_paise, down_payment_due_date, status, dropped_at, academic_year, is_historical, sales_to_accounts_at, accounts_to_academics_at, leads(student_name, primary_phone), centers(name)",
     )
     .is("deleted_at", null)
     .order("sales_to_accounts_at", { ascending: true })
@@ -131,10 +134,39 @@ export default async function AccountsQueuePage({
   const dropped = sorted.filter((row) => row.dropped_at !== null);
   // A student who left is not waiting to be chased, so they never appear
   // in the work queue however unpaid they are.
+  // Past admissions typed in from before the CRM are never "waiting for a
+  // first payment" — they have their own list and their own summary.
   const newAdmissions = sorted.filter(
-    (row) => row.accounts_to_academics_at === null && row.dropped_at === null,
+    (row) => row.accounts_to_academics_at === null && row.dropped_at === null && !row.is_historical,
   );
-  const visible = showDropped ? dropped : showAll ? sorted : newAdmissions;
+  const past = sorted.filter((row) => row.is_historical);
+
+  const paymentStateOf = (row: EnrolmentQueueRow): "none" | "unpaid" | "part" | "full" => {
+    const paid = paidByEnrolmentId.get(row.id) ?? 0;
+    if (row.net_fee_paise <= 0) return "none";
+    if (paid <= 0) return "unpaid";
+    return paid >= row.net_fee_paise ? "full" : "part";
+  };
+
+  // One line per academic year across everything admitted, so "how many
+  // joined last year and how many have paid up" is a glance, not a sum.
+  const byYear = new Map<
+    string,
+    { admissions: number; dropped: number; billed: number; collected: number; full: number; part: number; unpaid: number; none: number }
+  >();
+  for (const row of sorted) {
+    const y = byYear.get(row.academic_year) ?? { admissions: 0, dropped: 0, billed: 0, collected: 0, full: 0, part: 0, unpaid: 0, none: 0 };
+    y.admissions += 1;
+    if (row.dropped_at) y.dropped += 1;
+    y.billed += row.net_fee_paise;
+    y.collected += paidByEnrolmentId.get(row.id) ?? 0;
+    y[paymentStateOf(row)] += 1;
+    byYear.set(row.academic_year, y);
+  }
+  const yearSummary = [...byYear.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+
+  const base = showDropped ? dropped : showPast ? past : showAll ? sorted : newAdmissions;
+  const visible = year ? base.filter((row) => row.academic_year === year) : base;
 
   return (
     <div className="flex flex-col gap-4">
@@ -153,6 +185,12 @@ export default async function AccountsQueuePage({
         */}
         <p className="max-w-2xl text-sm text-muted-foreground">
           Open a student to record a payment, or to mark them as dropped if they leave.
+          {can(user, "settings.manage") && (
+            <>
+              {" "}
+              <Link href="/accounts/history" className="underline">Add past admissions</Link> to bring in last year&apos;s students.
+            </>
+          )}
         </p>
       </div>
 
@@ -160,7 +198,7 @@ export default async function AccountsQueuePage({
         <Link
           href="/accounts"
           className={
-            showAll || showDropped
+            showAll || showDropped || showPast
               ? "rounded-md px-3 py-1.5 text-muted-foreground hover:bg-accent/50"
               : "rounded-md bg-accent px-3 py-1.5 font-medium"
           }
@@ -178,6 +216,16 @@ export default async function AccountsQueuePage({
           All ({sorted.length})
         </Link>
         <Link
+          href="/accounts?filter=past"
+          className={
+            showPast
+              ? "rounded-md bg-accent px-3 py-1.5 font-medium"
+              : "rounded-md px-3 py-1.5 text-muted-foreground hover:bg-accent/50"
+          }
+        >
+          Past admissions ({past.length})
+        </Link>
+        <Link
           href="/accounts?filter=dropped"
           className={
             showDropped
@@ -188,6 +236,48 @@ export default async function AccountsQueuePage({
           Dropped ({dropped.length})
         </Link>
       </div>
+
+      {yearSummary.length > 0 && (
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="p-2">Academic year</th>
+                <th className="p-2">Admissions</th>
+                <th className="p-2">Paid in full</th>
+                <th className="p-2">Part paid</th>
+                <th className="p-2">Nothing paid</th>
+                <th className="p-2">Fee not entered</th>
+                <th className="p-2">Billed</th>
+                <th className="p-2">Collected</th>
+                <th className="p-2">Pending</th>
+              </tr>
+            </thead>
+            <tbody>
+              {yearSummary.map(([y, t]) => (
+                <tr key={y} className="border-t">
+                  <td className="p-2 font-medium">
+                    <Link href={`/accounts?filter=all&year=${y}`} className="underline">{y}</Link>
+                  </td>
+                  <td className="p-2">{t.admissions}{t.dropped > 0 ? ` (${t.dropped} dropped)` : ""}</td>
+                  <td className="p-2">{t.full}</td>
+                  <td className="p-2">{t.part}</td>
+                  <td className="p-2">{t.unpaid}</td>
+                  <td className="p-2">{t.none}</td>
+                  <td className="p-2">{formatINR(t.billed)}</td>
+                  <td className="p-2">{formatINR(t.collected)}</td>
+                  <td className="p-2">{formatINR(Math.max(0, t.billed - t.collected))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {year && (
+        <p className="text-sm text-muted-foreground">
+          Showing {year} only. <Link href={`/accounts?filter=${filter ?? "all"}`} className="underline">Show every year</Link>
+        </p>
+      )}
 
       <Table>
         <TableHeader>
@@ -200,7 +290,7 @@ export default async function AccountsQueuePage({
             <TableHead>Status</TableHead>
             <TableHead>Fee plan</TableHead>
             <TableHead>Next due</TableHead>
-            <TableHead>Confirmed</TableHead>
+            <TableHead>{showPast ? "Joined" : "Confirmed"}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -227,6 +317,10 @@ export default async function AccountsQueuePage({
                 <TableCell>
                   {row.dropped_at ? (
                     <Badge variant="destructive">Dropped</Badge>
+                  ) : row.is_historical ? (
+                    <Badge variant={paymentStateOf(row) === "full" ? "secondary" : "outline"}>
+                      {{ full: "Paid in full", part: "Part paid", unpaid: "Nothing paid", none: "Fee not entered" }[paymentStateOf(row)]}
+                    </Badge>
                   ) : (
                     <Badge variant={row.accounts_to_academics_at ? "secondary" : "outline"}>
                       {row.accounts_to_academics_at ? row.status : "awaiting first payment"}
@@ -262,6 +356,8 @@ export default async function AccountsQueuePage({
               <TableCell colSpan={9} className="text-center text-muted-foreground">
                 {showDropped
                   ? "Nobody has dropped out."
+                  : showPast
+                    ? "No past admissions added yet."
                   : showAll
                     ? "Nothing here yet."
                     : "No new admissions waiting. Everything confirmed has had its first payment recorded."}

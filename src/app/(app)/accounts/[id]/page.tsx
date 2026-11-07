@@ -46,6 +46,7 @@ interface EnrolmentDetail {
   net_fee_paise: number;
   status: string;
   dropped_at: string | null;
+  is_historical: boolean;
   drop_reason: string | null;
   pending_discount_paise: number | null;
   pending_discount_at: string | null;
@@ -78,7 +79,7 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
   const { data: enrolment } = await supabase
     .from("enrolments")
     .select(
-      "id, lead_id, course, batch_id, center_id, mode, academic_year, total_fee_paise, discount_paise, discount_name, down_payment_paise, down_payment_due_date, fee_notes, net_fee_paise, status, dropped_at, drop_reason, pending_discount_paise, pending_discount_at, enrolled_at, sales_to_accounts_at, accounts_to_academics_at, student_id, leads(student_name, primary_phone), centers(name)",
+      "id, lead_id, course, batch_id, center_id, mode, academic_year, total_fee_paise, discount_paise, discount_name, down_payment_paise, down_payment_due_date, fee_notes, net_fee_paise, status, dropped_at, is_historical, drop_reason, pending_discount_paise, pending_discount_at, enrolled_at, sales_to_accounts_at, accounts_to_academics_at, student_id, leads(student_name, primary_phone), centers(name)",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -387,7 +388,8 @@ export default async function EnrolmentDetailPage({ params }: { params: Promise<
           {canRecordPayment && (
             <RecordPaymentForm
               enrolmentId={id}
-              accounts={financeAccounts}
+              accounts={enrolment.is_historical ? [] : financeAccounts}
+              historical={enrolment.is_historical}
               suggestedAmount={nextDue ? String(nextDue.outstandingPaise / 100) : undefined}
               suggestedNote={
                 nextDue

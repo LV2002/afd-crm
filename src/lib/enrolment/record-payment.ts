@@ -29,6 +29,8 @@ export interface RecordPaymentInput {
    * missing.
    */
   accountId?: string | null;
+  /** History import only: the day the money actually arrived. */
+  receivedAt?: Date;
 }
 
 export interface RecordPaymentResult {
@@ -77,6 +79,7 @@ export async function recordPayment(tx: DbExecutor, input: RecordPaymentInput): 
       method: input.method,
       reference: input.reference ?? null,
       recordedBy: input.recordedBy,
+      ...(input.receivedAt ? { receivedAt: input.receivedAt } : {}),
     })
     .returning({ id: payments.id });
 
@@ -95,7 +98,7 @@ export async function recordPayment(tx: DbExecutor, input: RecordPaymentInput): 
   let financeTransactionId: string | null = null;
   if (input.accountId) {
     const posted = await postEntry(tx, {
-      occurredOn: new Date().toISOString().slice(0, 10),
+      occurredOn: (input.receivedAt ?? new Date()).toISOString().slice(0, 10),
       direction: "in",
       kind: "fee",
       accountId: input.accountId,
@@ -155,10 +158,12 @@ export async function recordPayment(tx: DbExecutor, input: RecordPaymentInput): 
       // student arrived in academics with no class group and the batch
       // column on the students list was permanently blank.
       currentBatchId: enrolment.batchId,
+      // Somebody who joined years ago is not waiting to be onboarded.
+      ...(enrolment.isHistorical ? { onboardedAt: input.receivedAt ?? new Date() } : {}),
     })
     .returning({ id: students.id });
 
-  const now = new Date();
+  const now = input.receivedAt ?? new Date();
 
   // The roster row as well as the pointer on the student. `current_batch_id`
   // answers "which batch are they in now"; `student_batches` is the history,

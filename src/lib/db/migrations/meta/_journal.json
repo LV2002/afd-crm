@@ -883,6 +883,13 @@
       "when": 1795096808000,
       "tag": "0125_schedules_adjustments_advances",
       "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1795183208000,
+      "tag": "0126_historical_admissions",
+      "breakpoints": true
     }
   ]
 }
