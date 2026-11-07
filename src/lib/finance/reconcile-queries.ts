@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import "server-only";
 
 import { sql } from "drizzle-orm";
@@ -218,6 +219,24 @@ export async function getReconciliation(centerIds: string[] | null, centerId?: s
   // Which entries count as missing: those inside the period the statements
   // cover. Before the first statement there is nothing to check against, and
   // the last few days are simply not on a statement yet.
+  // Indexed once: the old per-row filter scanned every line for every entry
+  // and vice versa — quadratic on a year of statements.
+  const key = (x: { accountId: string; direction: string; amountPaise: number }) =>
+    `${x.accountId}|${x.direction}|${x.amountPaise}`;
+  const linesByKey = new Map<string, typeof lineList>();
+  for (const l of lineList) {
+    const k = key(l);
+    const arr = linesByKey.get(k);
+    if (arr) arr.push(l);
+    else linesByKey.set(k, [l]);
+  }
+  const entriesByKey = new Map<string, typeof entriesAll>();
+  for (const e of entriesAll) {
+    const k = key(e);
+    const arr = entriesByKey.get(k);
+    if (arr) arr.push(e);
+    else entriesByKey.set(k, [e]);
+  }
   let awaiting = 0;
   const entries: ExceptionEntry[] = [];
   for (const e of entriesAll) {
@@ -231,8 +250,8 @@ export async function getReconciliation(centerIds: string[] | null, centerId?: s
     }
     entries.push({
       ...e,
-      suggestions: lineList
-        .filter((l) => l.accountId === e.accountId && l.direction === e.direction && l.amountPaise === e.amountPaise)
+      suggestions: (linesByKey.get(key(e)) ?? [])
+        .slice()
         .sort((x, y) => daysBetween(x.occurredOn, e.occurredOn) - daysBetween(y.occurredOn, e.occurredOn))
         .slice(0, 3)
         .map((l) => ({ id: l.id, occurredOn: l.occurredOn, particulars: l.particulars })),
@@ -241,8 +260,8 @@ export async function getReconciliation(centerIds: string[] | null, centerId?: s
 
   const lines: ExceptionLine[] = lineList.map((l) => ({
     ...l,
-    suggestions: entriesAll
-      .filter((e) => e.accountId === l.accountId && e.direction === l.direction && e.amountPaise === l.amountPaise)
+    suggestions: (entriesByKey.get(key(l)) ?? [])
+      .slice()
       .sort((x, y) => daysBetween(x.occurredOn, l.occurredOn) - daysBetween(y.occurredOn, l.occurredOn))
       .slice(0, 3)
       .map((e) => ({
@@ -404,6 +423,15 @@ export async function getReconciliation(centerIds: string[] | null, centerId?: s
 
 /** The number on the tab: everything that needs a person to look. */
 export async function countExceptions(centerIds: string[] | null): Promise<number> {
+  // Shown on a tab of every finance page, so it is cached for a minute
+  // rather than recomputed from the whole ledger on each navigation.
+  return unstable_cache(() => countExceptionsUncached(centerIds), ["finance-exceptions", (centerIds ?? ["all"]).slice().sort().join(",")], {
+    revalidate: 60,
+    tags: ["finance-exceptions"],
+  })();
+}
+
+async function countExceptionsUncached(centerIds: string[] | null): Promise<number> {
   const r = await getReconciliation(centerIds);
   // A bank balance that disagrees with the statement, or a count that came
   // up short or over, is open until the next check says otherwise.

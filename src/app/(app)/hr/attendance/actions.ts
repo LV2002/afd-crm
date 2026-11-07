@@ -39,6 +39,7 @@ export async function importPunchFile(_prev: AttendanceFormState, formData: Form
   const result = await ingestPunches(db, parsed.punches, { source: "csv" });
   await audit(user, "attendance.import", "csv", { received: result.received, added: result.added, skipped: parsed.skipped });
   revalidatePath("/hr/attendance");
+  revalidatePath("/settings/integrations/essl");
   return {
     success:
       `${result.added} new punch${result.added === 1 ? "" : "es"} added (${result.received - result.added} were already here` +
@@ -54,6 +55,7 @@ export async function mapPunchCode(_prev: AttendanceFormState, formData: FormDat
   if (!result.ok) return { error: result.error };
   await audit(user, "attendance.map_code", String(formData.get("employeeId")), { code: String(formData.get("code")), claimed: result.claimed });
   revalidatePath("/hr", "layout");
+  revalidatePath("/settings/integrations/essl");
   return { success: `Mapped. ${result.claimed} waiting punch${result.claimed === 1 ? "" : "es"} now count.` };
 }
 
@@ -66,6 +68,7 @@ export async function saveShift(_prev: AttendanceFormState, formData: FormData):
   await db.update(payrollSettings).set({ shiftStart: start, shiftEnd: end, updatedBy: user.id, updatedAt: new Date() }).where(eq(payrollSettings.id, 1));
   await audit(user, "attendance.shift", "1", { start, end });
   revalidatePath("/hr/attendance");
+  revalidatePath("/settings/integrations/essl");
   return { success: "Saved." };
 }
 
@@ -79,6 +82,7 @@ export async function generateKey(): Promise<AttendanceFormState> {
     .where(eq(payrollSettings.id, 1));
   await audit(user, "attendance.key_generated", "1", {});
   revalidatePath("/hr/attendance");
+  revalidatePath("/settings/integrations/essl");
   return { success: "New key made. Copy it now: it is not shown again, and any relay using the old key stops working.", key };
 }
 
@@ -95,6 +99,7 @@ export async function addDevice(_prev: AttendanceFormState, formData: FormData):
   if (inserted.length === 0) return { error: "That device is already registered." };
   await audit(user, "attendance.device_add", inserted[0].id, { serial });
   revalidatePath("/hr/attendance");
+  revalidatePath("/settings/integrations/essl");
   return { success: "Registered. It will be accepted the next time it connects." };
 }
 
