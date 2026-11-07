@@ -75,6 +75,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage", "batch.manage"],
   },
   {
+    href: "/settings/onboarding",
+    label: "Student Onboarding",
+    description: "The checklist a new student must complete before they join the Students list",
+    permissions: ["settings.manage"],
+  },
+  {
     href: "/settings/payment-reminders",
     label: "Payment Reminders",
     description: "When and how an unpaid instalment gets chased",

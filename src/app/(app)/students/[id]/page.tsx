@@ -1,4 +1,8 @@
 import Link from "next/link";
+
+import { getStudentChecklist } from "@/lib/students/onboarding-checklist";
+
+import { OnboardingChecklist } from "./onboarding-checklist";
 import { notFound } from "next/navigation";
 import { Printer } from "lucide-react";
 
@@ -168,6 +172,14 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
             </div>
           ))}
         </div>
+      )}
+
+      {!student.onboarded_at && (
+        <OnboardingChecklist
+          studentId={id}
+          items={await getStudentChecklist(supabase, id)}
+          canEdit={can(user, "student.update")}
+        />
       )}
 
       {enrolment && planOptions && (

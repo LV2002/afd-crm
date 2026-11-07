@@ -8,6 +8,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -140,3 +141,32 @@ export const studentBatches = pgTable("student_batches", {
   leftAt: timestamp("left_at", { withTimezone: true }),
   reason: text("reason"),
 });
+
+/**
+ * What must be done before a new student is onboarded — a list an admin
+ * edits (Settings → Onboarding), not a fixed set of steps.
+ */
+export const onboardingItems = pgTable("onboarding_items", {
+  id: idColumn(),
+  label: text("label").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  ...timestamps(),
+  ...softDelete(),
+});
+
+/** Which onboarding items have been ticked off for which student, and by whom. */
+export const studentOnboardingChecks = pgTable(
+  "student_onboarding_checks",
+  {
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => onboardingItems.id, { onDelete: "cascade" }),
+    checkedBy: uuid("checked_by").references(() => profiles.id, { onDelete: "set null" }),
+    checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.studentId, t.itemId] })],
+);

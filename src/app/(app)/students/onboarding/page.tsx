@@ -11,13 +11,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { can, getCurrentUser } from "@/lib/auth/session";
-import { formatDateIST } from "@/lib/format/date";
 import { maskPhone } from "@/lib/leads/mask-phone";
-import { daysWaiting, waitingBand } from "@/lib/students/onboarding-queue";
+import { checklistProgress } from "@/lib/students/onboarding-checklist";
 import { createClient } from "@/lib/supabase/server";
 
 import { StudentsTabs } from "../students-tabs";
-import { OnboardButton } from "./onboard-button";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +24,7 @@ interface Row {
   student_code: string;
   full_name: string;
   phone: string;
+  email: string | null;
   current_course: string | null;
   joined_at: string;
   centers: { name: string } | null;
@@ -58,7 +57,7 @@ export default async function OnboardingPage() {
   const { data: rows, error } = await supabase
     .from("students")
     .select(
-      "id, student_code, full_name, phone, current_course, joined_at, centers(name), batches(name)",
+      "id, student_code, full_name, phone, email, current_course, joined_at, centers(name), batches(name)",
     )
     .is("deleted_at", null)
     .is("onboarded_at", null)
@@ -68,7 +67,7 @@ export default async function OnboardingPage() {
   if (error) throw new Error(`Failed to load the onboarding queue: ${error.message}`);
 
   const queue = rows ?? [];
-  const canOnboard = can(user, "student.update");
+  const progress = await checklistProgress(supabase, queue.map((r) => r.id));
 
   return (
     <div className="flex flex-col gap-4">
@@ -77,32 +76,27 @@ export default async function OnboardingPage() {
       <div>
         <h1 className="text-2xl font-semibold">Onboarding</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Students whose first payment has cleared. They are not on the main student list yet —
-          mark onboarding complete once they have been contacted, placed in a batch and given
-          whatever your centre gives a new student.
+          Students whose first payment has cleared. Open a student to see their profile form, print it,
+          and tick off each onboarding item. They move to the Students list when every item is done.
         </p>
       </div>
 
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Code</TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Phone</TableHead>
-            <TableHead>Centre</TableHead>
+            <TableHead>Email</TableHead>
             <TableHead>Course</TableHead>
             <TableHead>Batch</TableHead>
-            <TableHead>Paid on</TableHead>
-            <TableHead>Waiting</TableHead>
-            {canOnboard && <TableHead className="text-right">Action</TableHead>}
+            <TableHead>Checklist</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {queue.map((row) => {
-            const days = daysWaiting(row.joined_at);
+            const done = progress.done.get(row.id) ?? 0;
             return (
               <TableRow key={row.id}>
-                <TableCell className="font-mono text-xs">{row.student_code}</TableCell>
                 <TableCell>
                   <Link href={`/students/${row.id}`} className="font-medium hover:underline">
                     {row.full_name}
@@ -113,36 +107,23 @@ export default async function OnboardingPage() {
                   non-negotiable #6 is about bulk views, and this is one —
                   the full number is on the student's own page.
                 */}
-                <TableCell className="font-mono text-sm text-muted-foreground">
-                  {maskPhone(row.phone)}
-                </TableCell>
-                <TableCell>{row.centers?.name ?? "—"}</TableCell>
+                <TableCell className="font-mono text-sm text-muted-foreground">{maskPhone(row.phone)}</TableCell>
+                <TableCell className={row.email ? "" : "text-muted-foreground"}>{row.email ?? "—"}</TableCell>
                 <TableCell>{row.current_course ?? "—"}</TableCell>
                 <TableCell className={row.batches?.name ? "" : "text-muted-foreground"}>
                   {row.batches?.name ?? "No batch yet"}
                 </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatDateIST(row.joined_at, "d MMM yyyy")}
-                </TableCell>
                 <TableCell>
-                  <Badge variant={waitingBand(days) === "overdue" ? "destructive" : "secondary"}>
-                    {days === 0 ? "Today" : `${days} day${days === 1 ? "" : "s"}`}
+                  <Badge variant={progress.total > 0 && done >= progress.total ? "default" : "secondary"}>
+                    {progress.total === 0 ? "Nothing to tick" : `${done} of ${progress.total}`}
                   </Badge>
                 </TableCell>
-                {canOnboard && (
-                  <TableCell className="text-right">
-                    <OnboardButton studentId={row.id} name={row.full_name} />
-                  </TableCell>
-                )}
               </TableRow>
             );
           })}
           {queue.length === 0 && (
             <TableRow>
-              <TableCell
-                colSpan={canOnboard ? 9 : 8}
-                className="py-10 text-center text-muted-foreground"
-              >
+              <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                 Nobody waiting. Every student who has paid has been onboarded.
               </TableCell>
             </TableRow>

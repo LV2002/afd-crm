@@ -333,7 +333,7 @@ export async function getReconciliation(centerIds: string[] | null, centerId?: s
       select a.id, a.name, c.name as center_name,
              a.opening_balance_paise + coalesce((
                select sum(case when t.direction in ('in','transfer_in') then t.amount_paise else -t.amount_paise end)
-               from finance_transactions t where t.account_id = a.id and coalesce(t.source, '') <> 'history'), 0) as book,
+               from finance_transactions t where t.account_id = a.id and (a.opening_as_of is null or t.occurred_on > a.opening_as_of)), 0) as book,
              k.counted_on::text as counted_on, (k.counted_paise - k.expected_paise) as variance, kp.full_name as counted_by
       from finance_accounts a
       join centers c on c.id = a.center_id

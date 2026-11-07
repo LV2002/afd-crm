@@ -117,6 +117,7 @@ export default async function FinanceAccountsPage() {
             centerId: a.center_id,
             type: a.type,
             openingBalancePaise: a.opening_balance_paise,
+            openingAsOf: a.opening_as_of,
             floatPaise: a.float_paise,
             isActive: a.is_active,
           }))}

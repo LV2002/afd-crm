@@ -111,9 +111,7 @@ export async function recordPayment(tx: DbExecutor, input: RecordPaymentInput): 
       studentId: enrolment.studentId,
       course: enrolment.course,
       recordedBy: input.recordedBy,
-      // Rows for money received before the CRM are tagged so account balances,
-      // which describe the present, can leave them out while every income
-      // report still counts them.
+      // Tagged so past income entered for the record is recognisable.
       source: enrolment.isHistorical ? HISTORY_SOURCE : "payment",
     });
     financeTransactionId = posted.id;

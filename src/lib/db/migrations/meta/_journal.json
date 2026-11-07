@@ -897,6 +897,20 @@
       "when": 1795269608000,
       "tag": "0127_student_intake_year",
       "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "7",
+      "when": 1795356008000,
+      "tag": "0128_opening_as_of",
+      "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "7",
+      "when": 1795442408000,
+      "tag": "0129_onboarding_checklist",
+      "breakpoints": true
     }
   ]
 }

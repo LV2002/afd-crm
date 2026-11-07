@@ -81,7 +81,8 @@ export async function recordPaymentAction(
   // A past admission typed in from before the CRM: the money arrived on a
   // date in the past. It is recorded against the student with that date and
   // posted to the ledger on that date, so income reports cover the years
-  // before the CRM; account balances leave it out (see HISTORY_SOURCE).
+  // before the CRM; whether it adds to the balance depends on the account's
+  // opening date.
   let receivedAt: Date | undefined;
   if (enrolment.isHistorical) {
     const on = String(formData.get("receivedOn") ?? "").trim();

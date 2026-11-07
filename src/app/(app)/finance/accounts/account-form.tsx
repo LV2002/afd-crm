@@ -17,6 +17,7 @@ export interface EditableAccount {
   centerId: string;
   type: "bank" | "cash" | "petty_cash";
   openingBalancePaise: number;
+  openingAsOf: string | null;
   floatPaise: number | null;
   isActive: boolean;
 }
@@ -129,7 +130,14 @@ export function AccountForm({
             placeholder="0"
           />
           <p className="text-xs text-muted-foreground">
-            The balance on the day the CRM took over. Everything after it comes from the ledger.
+            The balance at the end of the date below. Everything dated after it comes from the ledger.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="openingAsOf">Opening balance as of</Label>
+          <Input id="openingAsOf" name="openingAsOf" type="date" defaultValue={editing?.openingAsOf ?? ""} />
+          <p className="text-xs text-muted-foreground">
+            e.g. 31 March 2025. Entries on or before this day stay out of the balance but still count in income reports. Leave blank to count every entry.
           </p>
         </div>
       </div>

@@ -350,6 +350,11 @@ export async function saveAccount(
     return { error: "Enter the opening balance as a number, or leave it blank." };
   }
 
+  const openingAsOfRaw = String(formData.get("openingAsOf") ?? "").trim();
+  if (openingAsOfRaw !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(openingAsOfRaw)) {
+    return { error: "Pick the date the opening balance is as of." };
+  }
+
   const floatRaw = String(formData.get("float") ?? "").trim();
   const floatPaise = floatRaw === "" ? null : rupeesToPaise(floatRaw);
   if (floatRaw !== "" && floatPaise === null) {
@@ -366,6 +371,7 @@ export async function saveAccount(
     center_id: parsed.data.centerId,
     type: parsed.data.type,
     opening_balance_paise: openingBalancePaise,
+    opening_as_of: openingAsOfRaw || null,
     float_paise: parsed.data.type === "petty_cash" ? floatPaise : null,
     is_active: formData.get("isActive") === "on",
     updated_at: new Date().toISOString(),

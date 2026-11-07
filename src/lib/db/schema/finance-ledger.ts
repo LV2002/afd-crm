@@ -65,6 +65,12 @@ export const financeAccounts = pgTable(
     type: financeAccountTypeEnum("type").notNull(),
     openingBalancePaise: bigint("opening_balance_paise", { mode: "number" }).notNull().default(0),
     /**
+     * The day the opening balance is struck: the closing balance of that day.
+     * Only entries dated after it add to the balance; earlier ones still
+     * count in income and expense reports. Null means every entry counts.
+     */
+    openingAsOf: date("opening_as_of"),
+    /**
      * Petty cash only: the float this box is topped up to. A balance
      * below a fifth of it is flagged, which is what the workbook's
      * "Petty Cash Float" config did — per account here, because two
