@@ -8965,3 +8965,27 @@ New **HR** department in the sidebar: **My HR** (everyone), **Employees** and **
 
 - eSSL devices, relay key, shift times, punch import and unmapped codes now live at `/settings/integrations/essl` (card on the Integrations list). HR → Attendance keeps only the report and links there.
 - Speed: Finance tab badge (exceptions count) cached 60 s instead of a full reconciliation on every finance page; reconciliation suggestions indexed by Map (were quadratic); attendance, payroll review, leave balances and `loadWeek` now run their independent queries in parallel; the thin-scrollbar CSS no longer applies to every element.
+
+## Past admissions import (migration 0126)
+
+- **Accounts → Admissions → "Add past admissions"** (`/accounts/history`, `settings.manage`): paste one student per line — name, phone, course, optionally join date (dd/mm/yyyy) and total fee — for a chosen centre and academic year. Each goes through `resolveOrCreateLead()` (source *Past admission*, so it never counts toward any ad) and `confirmAdmission()`, marked `enrolments.is_historical`. A repeat phone number attaches to the person already here.
+- Historical admissions are never chased: excluded from payment reminders and the "new admissions" queue; no lead/payment/student notifications, no welcome flow; their student record is created already onboarded.
+- The accountant opens each one and enters the fee plan and every payment; the payment form asks for **Date received** and keeps it out of the cash ledger and bank matching (those describe the present). Receipts still get numbers from the live sequence.
+- Admissions page: a per-academic-year summary (admissions, paid in full / part / nothing / fee not entered, billed, collected, pending), a year filter, and a **Past admissions** tab with each student's payment state.
+- Not built: a bulk import of historical payments (the accountant enters them one by one, as asked).
+
+## Open items for Leon
+
+- **Come back to the eSSL integration**: verify the ADMS device push against the real device, and set up the relay key / device serials in Settings → Integrations → eSSL.
+
+## Past income in the ledger; opening dates; multi-year courses; onboarding checklist (migrations 0127-0129)
+
+- **Past payments post to the finance ledger**, dated the day the money was received, into the account the accountant picks (tagged `source = 'history'`). Every report counts them.
+- **Opening balance as of a date** (migration 0128, Finance → Accounts): an account's opening balance is struck at the end of a date (e.g. 31 Mar 2025); every entry dated after it adds to the balance, so after entering 1 Apr 2025 to today the book balance should equal the latest bank statement. Entries on or before that date (earlier years entered for the record) stay out of the balance but count in income reports; the ledger shows them when a date range is picked. Cash counts use the same rule. Blank date = every entry counts.
+- **Programme length** is a course setting (Settings → Courses & batches, "Programme length (years)", stored in the course's metadata, default 1). A student on a 2-year course shows "year 1 of 2" / "year 2 of 2" and stays on the Students list for both years: filtering by an academic year includes students who joined in an earlier year that the programme still covers, as well as those sitting in that year's batch.
+- `students.intake_year` is copied from the enrolment when the student is created (backfilled for existing students), so academics never has to read the accounts tables for it.
+- Not built: moving a student to the next year's batch in one click (the existing batch change still does it), and a separate second-year fee (the agreed fee plan covers the whole programme).
+
+- **Managers can see their team** (migration 0128): `profiles`/`user_centers` were readable only through `users.manage`, so a co-admin without it saw no counsellors in the sidebar or the Dashboard table. Holding `report.center` (centre scope) or `report.org`/`report.center` (all) now lets you read the people whose numbers you may open. Test: `tests/manager-sees-team.spec.ts`.
+- **Onboarding checklist** (migration 0129): Settings → Student Onboarding defines the items (add, rename, reorder, switch off). A student in onboarding shows a tick box per item on their profile (with the existing Print profile button); "Mark onboarding complete" works only when every active item is ticked — checked again on the server. The onboarding list shows name, phone (masked), email, course, batch and checklist progress; the red count sits beside Onboarding on the tab and beside Students in the sidebar and falls as students finish. Completion refreshes the whole layout so both counts update.
+- Not yet in the config export bundle: onboarding items (like the HR and payment-reminder settings, they are classed as configuration for resets only).

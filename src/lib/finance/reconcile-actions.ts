@@ -158,6 +158,7 @@ export async function countCash(_prev: ReconcileFormState, formData: FormData): 
   const [row] = await db.execute<{ book: string }>(sql`
     select ${account.openingBalancePaise}::bigint + coalesce(sum(case when direction in ('in','transfer_in') then amount_paise else -amount_paise end), 0) as book
     from finance_transactions where account_id = ${accountId}::uuid and occurred_on <= ${countedOn}::date
+      and (${account.openingAsOf}::date is null or occurred_on > ${account.openingAsOf}::date)
   `);
   const expectedPaise = Number(row?.book ?? 0);
   const variance = countedPaise - expectedPaise;

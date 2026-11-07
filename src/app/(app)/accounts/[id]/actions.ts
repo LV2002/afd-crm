@@ -78,6 +78,22 @@ export async function recordPaymentAction(
     }
   }
 
+  // A past admission typed in from before the CRM: the money arrived on a
+  // date in the past. It is recorded against the student with that date and
+  // posted to the ledger on that date, so income reports cover the years
+  // before the CRM; whether it adds to the balance depends on the account's
+  // opening date.
+  let receivedAt: Date | undefined;
+  if (enrolment.isHistorical) {
+    const on = String(formData.get("receivedOn") ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(on)) return { error: "Enter the date this payment was received." };
+    const when = new Date(`${on}T12:00:00+05:30`);
+    if (Number.isNaN(when.getTime()) || when > new Date() || on < "2015-01-01") {
+      return { error: "That date is not valid for a past payment." };
+    }
+    receivedAt = when;
+  }
+
   // Money with no account is money nobody can check against the bank. Once
   // the institute has accounts, every payment has to say where it went.
   if (!accountId) {
@@ -102,6 +118,7 @@ export async function recordPaymentAction(
         // The payment is still recorded; the finance reports show it under
         // "not attributed to an account" rather than pretending otherwise.
         accountId: accountId || null,
+        receivedAt,
       }),
     );
   } catch (err) {
@@ -122,7 +139,7 @@ export async function recordPaymentAction(
   // The counsellor who sold it wants to know the money arrived; accounts
   // wants a record of the receipt. Both come off one configurable event.
   const [payingLead] = await db.select().from(leads).where(eq(leads.id, enrolment.leadId));
-  await notify({
+  if (!enrolment.isHistorical) await notify({
     eventKey: "payment.recorded",
     context: {
       student_name: payingLead?.studentName ?? "Student",
@@ -142,7 +159,7 @@ export async function recordPaymentAction(
   // event from `payment.recorded` because it is a different fact told to
   // different people: the counsellor hears that the money arrived, and
   // academics hears that somebody has joined and is waiting on them.
-  if (result.isFirstPayment) {
+  if (result.isFirstPayment && !enrolment.isHistorical) {
     const [centre] = enrolment.centerId
       ? await db.select({ name: centers.name }).from(centers).where(eq(centers.id, enrolment.centerId))
       : [];

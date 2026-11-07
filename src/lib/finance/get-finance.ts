@@ -32,6 +32,7 @@ export interface AccountRow {
   center_id: string;
   type: "bank" | "cash" | "petty_cash";
   opening_balance_paise: number;
+  opening_as_of: string | null;
   float_paise: number | null;
   is_active: boolean;
 }
@@ -65,7 +66,7 @@ export async function getAccounts(
 ): Promise<AccountRow[]> {
   let query = supabase
     .from("finance_accounts")
-    .select("id, name, center_id, type, opening_balance_paise, float_paise, is_active")
+    .select("id, name, center_id, type, opening_balance_paise, opening_as_of, float_paise, is_active")
     .is("deleted_at", null)
     .order("name");
 
@@ -97,8 +98,8 @@ export async function getAccountsWithBalances(
     getAccounts(supabase, options),
     supabase
       .from("finance_transactions")
-      .select("account_id, direction, amount_paise")
-      .returns<Array<{ account_id: string; direction: FinanceDirection; amount_paise: number }>>(),
+      .select("account_id, direction, amount_paise, occurred_on")
+      .returns<Array<{ account_id: string; direction: FinanceDirection; amount_paise: number; occurred_on: string }>>(),
     supabase.from("centers").select("id, name").returns<Array<{ id: string; name: string }>>(),
   ]);
 
@@ -106,8 +107,14 @@ export async function getAccountsWithBalances(
     ? allAccounts.filter((a) => a.center_id === options.centerId)
     : allAccounts;
 
+  // The opening balance is struck on a date: entries on or before it are
+  // already inside it (or belong to an earlier year), so they stay out of
+  // the balance while every report still counts them.
+  const openingAsOf = new Map(allAccounts.map((a) => [a.id, a.opening_as_of]));
   const byAccount = new Map<string, Array<{ direction: FinanceDirection; amountPaise: number }>>();
   for (const entry of entries ?? []) {
+    const asOf = openingAsOf.get(entry.account_id);
+    if (asOf && entry.occurred_on <= asOf) continue;
     const list = byAccount.get(entry.account_id) ?? [];
     list.push({ direction: entry.direction, amountPaise: entry.amount_paise });
     byAccount.set(entry.account_id, list);
@@ -134,6 +141,8 @@ export interface LedgerFilter {
   /** Inclusive `YYYY-MM-DD`. */
   from?: string;
   to?: string;
+  /** Only entries dated after this day (exclusive) — an account's opening date. */
+  after?: string;
   /** Newest first, so `limit` keeps the latest rows rather than the oldest. */
   newest?: boolean;
   limit?: number;
@@ -163,6 +172,7 @@ export async function getLedgerEntries(
     if (filter.accountId) query = query.eq("account_id", filter.accountId);
     if (filter.centerId) query = query.eq("center_id", filter.centerId);
     if (filter.kind) query = query.eq("kind", filter.kind);
+    if (filter.after) query = query.gt("occurred_on", filter.after);
     if (filter.from) query = query.gte("occurred_on", filter.from);
     if (filter.to) query = query.lte("occurred_on", filter.to);
 

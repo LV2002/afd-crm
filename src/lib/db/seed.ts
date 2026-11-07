@@ -338,6 +338,7 @@ const DROPDOWN_SEEDS: DropdownSeed[] = [
       { value: "knorish", label: "Knorish" },
       { value: "whatsapp", label: "WhatsApp" },
       { value: "instagram", label: "Instagram" },
+      { value: "past_admission", label: "Past admission" },
       { value: "other", label: "Other" },
     ],
   },

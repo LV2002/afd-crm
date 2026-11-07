@@ -17,6 +17,8 @@ import type { FinanceDirection, FinanceKind } from "./ledger-math";
  */
 
 export const FEE_CATEGORY = "Course Fees";
+/** `finance_transactions.source` for income entered for the record, from before the CRM. */
+export const HISTORY_SOURCE = "history";
 export const TRANSFER_CATEGORY = "Fund Transfer";
 
 export interface PostEntryInput {

@@ -53,7 +53,7 @@ export default async function AccountLedgerPage({
     );
   }
 
-  const entries = await getLedgerEntries(supabase, { accountId: selected.id, from, to });
+  const entries = await getLedgerEntries(supabase, { accountId: selected.id, from, to, after: from || to ? undefined : (selected.opening_as_of ?? undefined) });
   const reversed = reversedIds(entries);
 
   // Reverse / correct from the statement itself, as on Transactions: an entry
@@ -116,6 +116,12 @@ export default async function AccountLedgerPage({
               : "Does not reconcile — check with an admin"}
         </span>
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        {selected.opening_as_of
+          ? `The opening balance is the balance at the end of ${selected.opening_as_of}. Entries dated on or before that day count in the income and expense reports but not in this balance, so they appear here only when you pick a date range.`
+          : "Every entry adds to this balance. Set an opening date on the account to start the books partway through."}
+      </p>
 
       {entries.length === 0 ? (
         <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">

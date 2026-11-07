@@ -99,7 +99,7 @@ async function run(request: Request) {
       confirmedAt: enrolments.salesToAccountsAt,
     })
     .from(enrolments)
-    .where(and(isNull(enrolments.deletedAt), isNull(enrolments.droppedAt)));
+    .where(and(isNull(enrolments.deletedAt), isNull(enrolments.droppedAt), eq(enrolments.isHistorical, false)));
 
   if (liveEnrolments.length === 0) {
     return NextResponse.json({ asOf, rules: rules.length, sent: 0, skipped: 0, failed: 0 });

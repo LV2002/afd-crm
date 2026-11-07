@@ -25,9 +25,12 @@ const METHODS = [
 export function RecordPaymentForm({
   enrolmentId,
   accounts,
+  historical = false,
   suggestedAmount,
   suggestedNote,
 }: {
+  /** A past admission: the payment needs the date it was actually received. */
+  historical?: boolean;
   enrolmentId: string;
   /** The next amount due, in rupees, to save typing it. Blank when nothing is scheduled. */
   suggestedAmount?: string;
@@ -62,6 +65,16 @@ export function RecordPaymentForm({
           />
         </div>
       </div>
+
+      {historical && (
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="payment-received-on">Date received</Label>
+          <Input id="payment-received-on" name="receivedOn" type="date" required max={new Date().toISOString().slice(0, 10)} />
+          <p className="text-xs text-muted-foreground">
+            A past admission: the payment is recorded on this date in the account&apos;s ledger, so it counts in that year&apos;s income. It adds to the account&apos;s balance only if it is dated after the account&apos;s opening date.
+          </p>
+        </div>
+      )}
 
       {accounts.length > 0 && (
         <div className="flex flex-col gap-2">

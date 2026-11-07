@@ -43,6 +43,8 @@ export const CONFIG_TABLES = [
   "integration_credentials",
   "notification_settings",
   "org_settings",
+  // What must be ticked before a new student is onboarded: an admin's list.
+  "onboarding_items",
   "payment_reminder_rules",
   // The fixed registry of permission primitives. Seeded from code.
   "permissions",
@@ -96,6 +98,8 @@ export const CONFIG_TABLES = [
 
 /** Cleared by a reset: a record of something that happened. */
 export const DATA_TABLES = [
+  // Which onboarding items have been ticked for which student.
+  "student_onboarding_checks",
   // Who is in which retargeting audience. Rebuilt from the leads by the
   // nightly sync, so there is nothing here to preserve.
   "ad_audience_contact_members",

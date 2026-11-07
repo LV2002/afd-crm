@@ -22,11 +22,14 @@ export function CourseForm({
   courseValue,
   name = "",
   mode = "",
+  years = 1,
   modes,
 }: {
   courseValue?: string;
   name?: string;
   mode?: string;
+  /** How many academic years the programme runs. */
+  years?: number;
   modes: Array<{ value: string; label: string }>;
 }) {
   const [open, setOpen] = useState(false);
@@ -70,6 +73,21 @@ export function CourseForm({
             options={modes}
             placeholder="Online or hybrid"
           />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor={`course-years-${courseValue ?? "new"}`}>Programme length (years)</Label>
+          <Input
+            id={`course-years-${courseValue ?? "new"}`}
+            name="years"
+            type="number"
+            min={1}
+            max={5}
+            step={1}
+            defaultValue={years}
+          />
+          <p className="text-xs text-muted-foreground">
+            A two-year course keeps its students on the roster for both years.
+          </p>
         </div>
       </div>
       <div className="flex items-center gap-2">
