@@ -249,6 +249,7 @@ export interface CompRow {
   reason: string | null;
   status: "pending" | "approved" | "rejected" | "cancelled";
   decisionNote: string | null;
+  decidedByName: string | null;
 }
 
 /** Comp working day requests, newest first. */
@@ -261,16 +262,18 @@ export async function getCompRequests(filter: { employeeId?: string; employeeIds
   }
   if (filter.status) conditions.push(eq(compDayRequests.status, filter.status as CompRow["status"]));
   const rows = await db
-    .select({ r: compDayRequests, employeeName: employees.name })
+    .select({ r: compDayRequests, employeeName: employees.name, decidedByName: profiles.fullName })
     .from(compDayRequests)
     .innerJoin(employees, eq(employees.id, compDayRequests.employeeId))
+    .leftJoin(profiles, eq(profiles.id, compDayRequests.decidedBy))
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(compDayRequests.createdAt))
     .limit(filter.limit ?? 100);
-  return rows.map(({ r, employeeName }) => ({
+  return rows.map(({ r, employeeName, decidedByName }) => ({
     id: r.id,
     employeeId: r.employeeId,
     employeeName,
+    decidedByName,
     workDate: r.workDate,
     workPart: r.workPart,
     offDate: r.offDate,

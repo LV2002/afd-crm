@@ -183,33 +183,14 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     label: "Students",
   },
   {
-    // Everybody with a login: their own leave, holidays and payslips.
-    href: "/hr/me",
+    // One entry. Everything inside HR (My HR, Employees, Leave, Comp days,
+    // Attendance, Payroll, Policy) is a tab along the top of the HR pages, so
+    // the sidebar does not repeat them. Shown to anyone who can open any of
+    // those tabs — see `navItemsFor`.
+    href: "/hr",
     group: "hr",
     iconKey: "hr-me",
-    permission: "hr.self",
-    label: "My HR",
-  },
-  {
-    href: "/hr/employees",
-    group: "hr",
-    iconKey: "hr-people",
-    permission: "hr.read",
-    label: "Employees",
-  },
-  {
-    href: "/hr/leave",
-    group: "hr",
-    iconKey: "hr-people",
-    permission: "hr.read",
-    label: "Leave",
-  },
-  {
-    href: "/hr/payroll",
-    group: "hr",
-    iconKey: "hr-people",
-    permission: "payroll.read",
-    label: "Payroll",
+    label: "HR",
   },
   {
     href: "/profile-forms",
@@ -233,6 +214,7 @@ export function navItemsFor(user: SessionUser, terms: TerminologyMap): NavItem[]
     // tab on `settings.manage` hid it from a role that was given only SLA,
     // targets or discount authority, so they held the key and never saw the door.
     if (item.href === "/settings") return settingsNavFor(user).length > 0;
+    if (item.href === "/hr") return can(user, "hr.self") || can(user, "hr.read") || can(user, "payroll.read");
     return !item.permission || can(user, item.permission);
   }).map(
     (item) => ({
