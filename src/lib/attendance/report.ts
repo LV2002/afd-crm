@@ -25,6 +25,10 @@ export interface DayRow {
   adjustment?: AdjustmentKind;
   /** Worked on a day off or a holiday: earns a comp-off. */
   workedOffDay?: boolean;
+  /** An approved comp working day: working today in return for a day off elsewhere. */
+  compWork?: "full" | "half";
+  /** An approved comp day off: taking today (all or half of it) in return for work elsewhere. */
+  compOff?: "full" | "half";
 }
 
 export interface AttendanceReport {
@@ -34,6 +38,8 @@ export interface AttendanceReport {
   singlePunchDays: number;
   compOffTaken: number;
   workedOffDays: number;
+  /** Comp working days that came and went with no punch: the swap's day off was given for work not done. */
+  compWorkMissed: number;
   lateMinutes: number;
   earlyMinutes: number;
   suggestions: PayrollEntry[];
@@ -61,6 +67,9 @@ export function buildAttendance(input: {
   leave: ReadonlyMap<string, string>;
   /** What HR marked, by date. */
   adjustments?: ReadonlyMap<string, AdjustmentKind>;
+  /** Approved comp working days (work on a day off) and comp days off, by date. */
+  compWork?: ReadonlyMap<string, "full" | "half">;
+  compOff?: ReadonlyMap<string, "full" | "half">;
   /** Days after this are not judged yet. */
   today: string;
 }): AttendanceReport {
@@ -84,14 +93,24 @@ export function buildAttendance(input: {
     const sched = input.week[dow];
     const start = toMinutes(sched.start);
     const end = toMinutes(sched.end);
-    const worked = adj === "worked_off_day" && mins.length > 0;
+    const compWork = input.compWork?.get(date);
+    const compOff = input.compOff?.get(date);
+    const worked = (adj === "worked_off_day" || compWork !== undefined) && mins.length > 0;
+    base.compWork = compWork;
+    base.compOff = compOff;
 
     if (input.dateOfJoining && date < input.dateOfJoining) days.push({ ...base, status: "before_joining" });
     else if (date > input.today) days.push({ ...base, status: "upcoming" });
     else if (!sched.working) days.push({ ...base, status: "off", first: mins.length ? hhmm(mins[0]) : null, workedOffDay: worked });
     else if (input.holidays.has(date)) days.push({ ...base, status: "holiday", first: mins.length ? hhmm(mins[0]) : null, workedOffDay: worked });
     else if (input.leave.has(date)) days.push({ ...base, status: "leave", leaveKind: input.leave.get(date), first: mins.length ? hhmm(mins[0]) : null });
-    else if (adj === "comp_off") days.push({ ...base, status: "comp_off" });
+    else if (adj === "comp_off" || compOff === "full") days.push({ ...base, status: "comp_off" });
+    else if (compOff === "half") {
+      // Half of today is the day off; the other half is worked. Late and early
+      // are not judged against a full shift, and no punch at all costs half a day.
+      if (mins.length === 0) days.push({ ...base, status: "absent" });
+      else days.push({ ...base, status: "present", first: hhmm(mins[0]), last: mins.length > 1 ? hhmm(mins[mins.length - 1]) : null });
+    }
     else if (mins.length < 2 && adj === "present") days.push({ ...base, status: "present", first: mins.length ? hhmm(mins[0]) : null });
     else if (mins.length === 0) days.push({ ...base, status: "absent" });
     else if (mins.length === 1) days.push({ ...base, status: "single", first: hhmm(mins[0]) });
@@ -112,7 +131,9 @@ export function buildAttendance(input: {
 
   const suggestions: PayrollEntry[] = [];
   for (const day of days) {
-    if (day.status === "absent") suggestions.push({ date: day.date, type: "lop", notes: "No biometric punch" });
+    if (day.status === "absent" && day.compOff === "half") {
+      suggestions.push({ date: day.date, type: "half_day", notes: "Half-day comp off, and no punch for the other half" });
+    } else if (day.status === "absent") suggestions.push({ date: day.date, type: "lop", notes: "No biometric punch" });
     if (day.status === "single") suggestions.push({ date: day.date, type: "miss_punch", notes: `Only one punch (${day.first})` });
     if (day.lateMinutes > 0) suggestions.push({ date: day.date, type: "late", minutes: day.lateMinutes, notes: `In ${day.first}` });
     if (day.earlyMinutes > 0) suggestions.push({ date: day.date, type: "early", minutes: day.earlyMinutes, notes: `Out ${day.last}` });
@@ -125,6 +146,7 @@ export function buildAttendance(input: {
     singlePunchDays: days.filter((d) => d.status === "single").length,
     compOffTaken: days.filter((d) => d.status === "comp_off").length,
     workedOffDays: days.filter((d) => d.workedOffDay).length,
+    compWorkMissed: days.filter((d) => d.compWork && d.punches === 0 && d.date <= input.today).length,
     lateMinutes: days.reduce((t, d) => t + d.lateMinutes, 0),
     earlyMinutes: days.reduce((t, d) => t + d.earlyMinutes, 0),
     suggestions,

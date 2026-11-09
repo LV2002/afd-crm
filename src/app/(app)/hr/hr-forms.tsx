@@ -275,6 +275,10 @@ export function HolidayForm({ centers }: { centers: Array<{ id: string; name: st
           ))}
         </select>
       </div>
+      <label className="flex items-center gap-2 pb-2 text-sm">
+        <input type="checkbox" name="isOptional" className="size-4" />
+        Optional (each person takes one)
+      </label>
       <Button type="submit" disabled={pending}>
         Add
       </Button>

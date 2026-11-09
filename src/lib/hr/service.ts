@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { DbExecutor } from "@/lib/db/client";
-import { companyHolidays, employees, hrSettings, leaveRequests, type LeaveKind } from "@/lib/db/schema";
+import { companyHolidays, employeeOptionalHolidays, employees, hrSettings, leaveRequests, type LeaveKind } from "@/lib/db/schema";
 
 import { countLeaveDays, rangesOverlap, type LeavePolicy } from "./leave";
 import { loadWeek, weeklyOffOf } from "./schedule";
@@ -27,14 +27,37 @@ export async function loadPolicy(tx: DbExecutor): Promise<LeavePolicy> {
   };
 }
 
-/** Company holidays that apply to a centre (or to every centre). */
-export async function loadHolidays(tx: DbExecutor, centerId: string | null): Promise<Array<{ onDate: string; name: string }>> {
-  const rows = await tx
-    .select({ onDate: companyHolidays.onDate, name: companyHolidays.name, centerId: companyHolidays.centerId })
-    .from(companyHolidays)
-    .where(isNull(companyHolidays.deletedAt))
-    .orderBy(companyHolidays.onDate);
-  return rows.filter((r) => r.centerId === null || r.centerId === centerId).map((r) => ({ onDate: r.onDate, name: r.name }));
+/**
+ * Company holidays that apply to a centre (or to every centre).
+ *
+ * Optional holidays are left out unless `employeeId` is given and that person
+ * has chosen them: an optional holiday is a holiday only for whoever took it.
+ */
+export async function loadHolidays(
+  tx: DbExecutor,
+  centerId: string | null,
+  employeeId?: string | null,
+): Promise<Array<{ onDate: string; name: string }>> {
+  const [rows, picks] = await Promise.all([
+    tx
+      .select({
+        id: companyHolidays.id,
+        onDate: companyHolidays.onDate,
+        name: companyHolidays.name,
+        centerId: companyHolidays.centerId,
+        isOptional: companyHolidays.isOptional,
+      })
+      .from(companyHolidays)
+      .where(isNull(companyHolidays.deletedAt))
+      .orderBy(companyHolidays.onDate),
+    employeeId
+      ? tx.select({ holidayId: employeeOptionalHolidays.holidayId }).from(employeeOptionalHolidays).where(eq(employeeOptionalHolidays.employeeId, employeeId))
+      : Promise.resolve([] as Array<{ holidayId: string }>),
+  ]);
+  const chosen = new Set(picks.map((p) => p.holidayId));
+  return rows
+    .filter((r) => (r.centerId === null || r.centerId === centerId) && (!r.isOptional || chosen.has(r.id)))
+    .map((r) => ({ onDate: r.onDate, name: r.name }));
 }
 
 export async function employeeForUser(tx: DbExecutor, userId: string) {
@@ -69,7 +92,7 @@ export async function applyForLeave(
   if (!employee || employee.status !== "active") return { ok: false, error: "You can't apply for leave right now." };
 
   const policy = await loadPolicy(tx);
-  const holidays = new Set((await loadHolidays(tx, employee.centerId)).map((h) => h.onDate));
+  const holidays = new Set((await loadHolidays(tx, employee.centerId, employee.id)).map((h) => h.onDate));
   // Their own working week: somebody whose day off is a Saturday is not charged leave for it.
   const weeklyOff = weeklyOffOf((await loadWeek(tx, employeeId)).week);
   const days = countLeaveDays(kind, input.fromDate, toDate, holidays, weeklyOff);

@@ -113,6 +113,7 @@ async function reviewOne(
         flags.push(`${report.singlePunchDays} with one punch`);
       if (report.compOffTaken > 0)
         flags.push(`${report.compOffTaken} comp-off`);
+      if (report.compWorkMissed > 0) flags.push(`${report.compWorkMissed} comp working day${report.compWorkMissed === 1 ? "" : "s"} with no punch`);
       if (report.workedOffDays > 0)
         flags.push(`${report.workedOffDays} worked on a day off`);
     }

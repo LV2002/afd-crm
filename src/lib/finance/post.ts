@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 
 import { db, type DbExecutor } from "@/lib/db/client";
-import { financeAccounts, financeTransactions } from "@/lib/db/schema";
+import { bankMatches, bankStatementLines, financeAccounts, financeTransactions } from "@/lib/db/schema";
 
 import type { FinanceDirection, FinanceKind } from "./ledger-math";
 
@@ -269,6 +269,35 @@ export async function correctTransaction(
     recordedBy: input.recordedBy,
     source: input.source,
   });
+
+  // An entry made from a bank statement line is tied to that line. Fixing its
+  // category, description or date does not change what the bank saw, so the
+  // line stays tied — now to the corrected entry — and the reversal and the
+  // superseded original, which never touched the bank, drop out of the
+  // exceptions. If the correction changes the amount or the account, the
+  // bank no longer agrees with it and the pairing is left alone.
+  const sameBankFacts = (input.accountId ?? original.accountId) === original.accountId && amountPaise === original.amountPaise;
+  if (sameBankFacts) {
+    const [match] = await tx
+      .select()
+      .from(bankMatches)
+      .where(and(eq(bankMatches.transactionId, original.id), eq(bankMatches.active, true)));
+    if (match) {
+      await tx
+        .update(bankMatches)
+        .set({ active: false, unmatchedBy: input.recordedBy ?? null, unmatchedAt: new Date(), unmatchReason: `moved to the corrected entry #${replacement.txnNo}` })
+        .where(eq(bankMatches.id, match.id));
+      await tx.insert(bankMatches).values({
+        bankLineId: match.bankLineId,
+        transactionId: replacement.id,
+        centerId: match.centerId,
+        method: match.method === "waived" ? "manual" : match.method,
+        matchedBy: input.recordedBy ?? null,
+        note: `corrects #${original.txnNo}`,
+      });
+      await tx.update(bankStatementLines).set({ transactionId: replacement.id }).where(eq(bankStatementLines.transactionId, original.id));
+    }
+  }
 
   return { reversal, replacement };
 }

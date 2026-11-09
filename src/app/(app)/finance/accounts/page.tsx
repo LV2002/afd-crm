@@ -14,6 +14,7 @@ import { getAccountsWithBalances } from "@/lib/finance/get-finance";
 import { createClient } from "@/lib/supabase/server";
 
 import { AccountForm } from "./account-form";
+import { DeleteAccountButton } from "./delete-account-button";
 
 /**
  * Every bank account, cash box and petty cash float.
@@ -63,6 +64,7 @@ export default async function FinanceAccountsPage() {
                 <TableHead className="text-right">Opening</TableHead>
                 <TableHead className="text-right">Balance</TableHead>
                 <TableHead className="text-right">Entries</TableHead>
+                <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -94,14 +96,18 @@ export default async function FinanceAccountsPage() {
                   <TableCell className="text-right text-muted-foreground">
                     {account.entryCount}
                   </TableCell>
+                  <TableCell className="text-right">
+                    <DeleteAccountButton accountId={account.id} name={account.name} />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         )}
         <p className="text-xs text-muted-foreground">
-          An account with history is never deleted — switch it off instead, so its entries keep
-          pointing somewhere.
+          Delete removes an account added by mistake. An account with any history (entries, bank
+          statement lines, cash counts) is never deleted — switch it off instead (untick Active when
+          editing it), so its entries keep pointing somewhere.
         </p>
       </section>
 

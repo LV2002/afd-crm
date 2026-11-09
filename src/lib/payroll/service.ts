@@ -135,7 +135,7 @@ async function laterExists(tx: DbExecutor, employeeId: string, month: string): P
 export async function approvedLeaveEntries(tx: DbExecutor, employeeId: string, month: string): Promise<PayrollEntry[]> {
   const [emp] = await tx.select({ centerId: employees.centerId }).from(employees).where(eq(employees.id, employeeId));
   const weeklyOff = weeklyOffOf((await loadWeek(tx, employeeId)).week);
-  const holidays = new Set((await loadHolidays(tx, emp?.centerId ?? null)).map((h) => h.onDate));
+  const holidays = new Set((await loadHolidays(tx, emp?.centerId ?? null, employeeId)).map((h) => h.onDate));
   const monthStart = `${month}-01`;
   const monthEnd = `${month}-${String(new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate()).padStart(2, "0")}`;
   const rows = await tx

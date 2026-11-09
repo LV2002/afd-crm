@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { writeAuditLog } from "@/lib/audit/log";
@@ -402,4 +403,69 @@ export async function saveAccount(
   revalidatePath("/finance/accounts");
   revalidateFinance();
   return { success: accountId ? "Account saved." : "Account created." };
+}
+
+/**
+ * Removes an account that was set up by mistake.
+ *
+ * Only an account with no history can go: nothing posted to it, no bank
+ * statement lines, no cash counts and no balance checks. Anything else would
+ * leave records pointing at an account that is no longer there, so for those
+ * the answer is to switch the account off. The row is soft-deleted, like
+ * everything else, so the audit trail keeps what it was called.
+ */
+export async function deleteAccount(accountId: string): Promise<FinanceFormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "finance.manage")) {
+    return { error: "You don't have permission to do that." };
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(accountId)) {
+    return { error: "That account does not exist." };
+  }
+
+  const supabase = await createClient();
+  const { data: account } = await supabase
+    .from("finance_accounts")
+    .select("id, name, center_id")
+    .eq("id", accountId)
+    .is("deleted_at", null)
+    .maybeSingle<{ id: string; name: string; center_id: string }>();
+  if (!account) return { error: "That account does not exist, or is outside your access." };
+
+  const [used] = await db.execute<{ entries: string; lines: string; counts: string; checks: string }>(sql`
+    select
+      (select count(*) from finance_transactions where account_id = ${accountId}::uuid) as entries,
+      (select count(*) from bank_statement_lines where account_id = ${accountId}::uuid) as lines,
+      (select count(*) from cash_counts where account_id = ${accountId}::uuid) as counts,
+      (select count(*) from bank_balance_checks where account_id = ${accountId}::uuid) as checks
+  `);
+  const parts = [
+    [Number(used.entries), "ledger entr", "y", "ies"],
+    [Number(used.lines), "bank statement line", "", "s"],
+    [Number(used.counts), "cash count", "", "s"],
+    [Number(used.checks), "balance check", "", "s"],
+  ] as const;
+  const has = parts.filter(([n]) => n > 0).map(([n, word, one, many]) => `${n} ${word}${n === 1 ? one : many}`);
+  if (has.length > 0) {
+    return {
+      error: `${account.name} has ${has.join(", ")}, so it can't be deleted — its history has to keep pointing somewhere. Switch it off instead (untick Active when editing it) and it disappears from every list you pick from.`,
+    };
+  }
+
+  const { error } = await supabase
+    .from("finance_accounts")
+    .update({ deleted_at: new Date().toISOString(), is_active: false, updated_at: new Date().toISOString() })
+    .eq("id", accountId);
+  if (error) return { error: error.message };
+
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "finance_account.delete",
+    entityType: "finance_accounts",
+    entityId: accountId,
+    before: { name: account.name },
+  });
+  revalidatePath("/finance/accounts");
+  revalidateFinance();
+  return { success: `${account.name} deleted.` };
 }

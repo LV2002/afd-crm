@@ -7,8 +7,10 @@ import { z } from "zod";
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser, type SessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { companyHolidays, employees, hrSettings, leaveRequests, profiles } from "@/lib/db/schema";
+import { companyHolidays, compDayRequests, employees, hrSettings, leaveRequests, profiles, type CompPart } from "@/lib/db/schema";
 import { LEAVE_KIND_LABELS } from "@/lib/hr/leave";
+import { applyCompDay, cancelCompDay, decideCompDay, PART_LABEL } from "@/lib/hr/comp-days";
+import { chooseOptionalHoliday, clearOptionalChoice } from "@/lib/hr/optional-holidays";
 import { applyForLeave, cancelLeave, decideLeave, employeeForUser, wouldCreateCycle } from "@/lib/hr/service";
 import { saveWeek, validateWeek, type WeekSchedule } from "@/lib/hr/schedule";
 import { notify } from "@/lib/notifications/notify";
@@ -192,8 +194,9 @@ export async function addHoliday(_prev: HrFormState, formData: FormData): Promis
     .from(companyHolidays)
     .where(and(eq(companyHolidays.onDate, onDate), eq(companyHolidays.name, name), isNull(companyHolidays.deletedAt)));
   if (exists.length > 0) return { error: "That holiday is already on the list." };
-  const [row] = await db.insert(companyHolidays).values({ onDate, name, centerId, createdBy: user.id }).returning({ id: companyHolidays.id });
-  await audit(user, "hr.holiday_add", "company_holidays", row.id, { onDate, name, centerId });
+  const isOptional = formData.get("isOptional") === "on";
+  const [row] = await db.insert(companyHolidays).values({ onDate, name, centerId, isOptional, createdBy: user.id }).returning({ id: companyHolidays.id });
+  await audit(user, "hr.holiday_add", "company_holidays", row.id, { onDate, name, centerId, isOptional });
   revalidate();
   return { success: "Added." };
 }
@@ -330,4 +333,124 @@ export async function saveWorkingWeek(_prev: HrFormState, formData: FormData): P
   await audit(user, "hr.schedule_update", "employees", employeeId, { week });
   revalidate();
   return { success: "Saved. Leave, late coming and early exit now follow this week." };
+}
+
+
+const todayIst = () => new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10);
+const part = (v: FormDataEntryValue | null): CompPart => (v === "half" ? "half" : "full");
+
+/** Asks to work a day off in return for another day off. */
+export async function requestCompDay(_prev: HrFormState, formData: FormData): Promise<HrFormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "hr.self")) return { error: "You don't have permission to do that." };
+  const employee = await employeeForUser(db, user.id);
+  if (!employee) return { error: "Your login isn't linked to an employee record yet. Ask HR." };
+
+  const input = {
+    employeeId: employee.id,
+    workDate: String(formData.get("workDate") ?? ""),
+    workPart: part(formData.get("workPart")),
+    offDate: String(formData.get("offDate") ?? ""),
+    offPart: part(formData.get("offPart")),
+    reason: blank(formData.get("reason")),
+    today: todayIst(),
+  };
+  const result = await applyCompDay(db, input);
+  if (!result.ok) return { error: result.error };
+
+  await audit(user, "hr.comp_apply", "comp_day_requests", result.id, { ...input, today: undefined });
+  await notify({
+    eventKey: "leave.requested",
+    context: {
+      employee_name: employee.name,
+      leave_type: "Comp working day",
+      from_date: input.offDate,
+      to_date: input.offDate,
+      days: input.offPart === "half" ? 0.5 : 1,
+      reason: `Works ${input.workDate} (${PART_LABEL[input.workPart]}) for ${input.offDate} (${PART_LABEL[input.offPart]}). ${input.reason ?? ""}`.trim(),
+    },
+    href: "/hr/me",
+    entityType: "comp_day_requests",
+    entityId: result.id,
+    centerId: employee.centerId,
+    ownerId: result.approverUserId,
+    actorId: user.id,
+  });
+  revalidate();
+  return { success: result.approverUserId ? "Sent for approval." : "Sent to HR. You have no manager set, so HR approves it." };
+}
+
+export async function decideCompDayRequest(_prev: HrFormState, formData: FormData): Promise<HrFormState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "You don't have permission to do that." };
+  const requestId = String(formData.get("requestId") ?? "");
+  const decision = formData.get("decision") === "rejected" ? "rejected" : "approved";
+  const result = await decideCompDay(db, {
+    requestId,
+    user: { id: user.id, isHr: can(user, "hr.manage") },
+    decision,
+    note: blank(formData.get("note")),
+  });
+  if (!result.ok) return { error: result.error };
+
+  await audit(user, `hr.comp_${decision}`, "comp_day_requests", requestId, { note: blank(formData.get("note")) });
+  const [r] = await db.select().from(compDayRequests).where(eq(compDayRequests.id, requestId));
+  const [me] = await db.select({ name: profiles.fullName }).from(profiles).where(eq(profiles.id, user.id));
+  await notify({
+    eventKey: "leave.decided",
+    context: {
+      leave_type: "Comp working day",
+      from_date: r.offDate,
+      to_date: r.offDate,
+      decision: decision === "approved" ? "approved" : "turned down",
+      decided_by: me?.name ?? "HR",
+      note: r.decisionNote ?? "",
+    },
+    href: "/hr/me",
+    entityType: "comp_day_requests",
+    entityId: requestId,
+    ownerId: result.employeeUserId,
+    actorId: user.id,
+  });
+  revalidate();
+  return { success: decision === "approved" ? "Approved." : "Turned down." };
+}
+
+export async function cancelCompDayRequest(_prev: HrFormState, formData: FormData): Promise<HrFormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "hr.self")) return { error: "You don't have permission to do that." };
+  const requestId = String(formData.get("requestId") ?? "");
+  const result = await cancelCompDay(db, { requestId, userId: user.id, today: todayIst() });
+  if (!result.ok) return { error: result.error };
+  await audit(user, "hr.comp_cancel", "comp_day_requests", requestId, {});
+  revalidate();
+  return { success: "Withdrawn." };
+}
+
+/** An employee takes one of the optional holidays. The rest close to them for the year. */
+export async function takeOptionalHoliday(_prev: HrFormState, formData: FormData): Promise<HrFormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "hr.self")) return { error: "You don't have permission to do that." };
+  const employee = await employeeForUser(db, user.id);
+  if (!employee) return { error: "Your login isn't linked to an employee record yet. Ask HR." };
+  const holidayId = String(formData.get("holidayId") ?? "");
+  const result = await chooseOptionalHoliday(db, { employeeId: employee.id, centerId: employee.centerId, holidayId, userId: user.id, today: todayIst() });
+  if (!result.ok) return { error: result.error };
+  await audit(user, "hr.optional_holiday_take", "employees", employee.id, { holidayId, name: result.name, onDate: result.onDate });
+  revalidate();
+  return { success: `${result.name} is now your holiday.` };
+}
+
+/** HR undoes a choice that has not come round yet. */
+export async function resetOptionalHoliday(_prev: HrFormState, formData: FormData): Promise<HrFormState> {
+  const user = await hrManager();
+  if (!user) return { error: "You don't have permission to do that." };
+  const employeeId = String(formData.get("employeeId") ?? "");
+  const year = Number(formData.get("year"));
+  if (!Number.isInteger(year)) return { error: "Missing year." };
+  const result = await clearOptionalChoice(db, { employeeId, year, today: todayIst() });
+  if (!result.ok) return { error: result.error };
+  await audit(user, "hr.optional_holiday_reset", "employees", employeeId, { year });
+  revalidate();
+  return { success: "Reset." };
 }

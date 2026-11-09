@@ -292,3 +292,55 @@ describe("cash on the reconciliation page", () => {
     await db.delete(financeTransactions).where(eq(financeTransactions.accountId, cashId));
   });
 });
+
+describe("correcting an entry made from a bank statement line", () => {
+  const MARK = "CorrectMatchTest";
+  let accountId: string;
+  let centerId: string;
+
+  beforeAll(async () => {
+    const [c] = await db.insert(centers).values({ name: `${MARK} centre`, city: "x" }).returning({ id: centers.id });
+    centerId = c.id;
+    const [a] = await db.insert(financeAccounts).values({ name: `${MARK} bank`, centerId, type: "bank" }).returning({ id: financeAccounts.id });
+    accountId = a.id;
+  });
+  afterAll(async () => {
+    await db.execute(sql`delete from bank_matches where center_id = ${centerId}::uuid`);
+    await db.execute(sql`delete from bank_statement_lines where account_id = ${accountId}::uuid`);
+    await db.execute(sql`delete from finance_transactions where account_id = ${accountId}::uuid`);
+    await db.delete(financeAccounts).where(eq(financeAccounts.id, accountId));
+    await db.delete(centers).where(eq(centers.id, centerId));
+  });
+
+  async function importedLine(fp: string, amountPaise: number) {
+    const [l] = await db
+      .insert(bankStatementLines)
+      .values({ accountId, centerId, occurredOn: "2026-04-10", particulars: `UPI ${fp}`, direction: "out", amountPaise, fingerprint: `${MARK}-${fp}` })
+      .returning();
+    await resolveBankLines(db, { lines: [l], direction: "out", choice: "Office Supplies", skipReason: null, userId: null });
+    const [posted] = await db.select().from(bankStatementLines).where(eq(bankStatementLines.id, l.id));
+    return { lineId: l.id, txnId: posted.transactionId! };
+  }
+
+  it("keeps the statement line tied to the corrected entry when only the category changes", async () => {
+    const { lineId, txnId } = await importedLine("a", 12345);
+    const { correctTransaction } = await import("../src/lib/finance/post");
+    const { unmatchedLedgerRows } = await import("../src/lib/finance/reconcile");
+    const { replacement } = await correctTransaction(db, { transactionId: txnId, reason: "wrong category", category: "Rent", description: "April rent" });
+
+    const active = await db.select().from(bankMatches).where(eq(bankMatches.bankLineId, lineId));
+    expect(active.filter((m) => m.active).map((m) => m.transactionId)).toEqual([replacement.id]);
+    const [row] = await db.select().from(bankStatementLines).where(eq(bankStatementLines.id, lineId));
+    expect(row.transactionId).toBe(replacement.id);
+    expect(await unmatchedLedgerRows(db, accountId)).toEqual([]);
+  });
+
+  it("leaves the pairing alone when the amount changes, because the bank no longer agrees", async () => {
+    const { lineId, txnId } = await importedLine("b", 20000);
+    const { correctTransaction } = await import("../src/lib/finance/post");
+    const { replacement } = await correctTransaction(db, { transactionId: txnId, reason: "typo", amountPaise: 21000 });
+    const active = (await db.select().from(bankMatches).where(eq(bankMatches.bankLineId, lineId))).filter((m) => m.active);
+    expect(active.map((m) => m.transactionId)).toEqual([txnId]);
+    expect(active.map((m) => m.transactionId)).not.toContain(replacement.id);
+  });
+});
