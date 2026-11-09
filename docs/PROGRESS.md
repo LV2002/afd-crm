@@ -8999,3 +8999,6 @@ New **HR** department in the sidebar: **My HR** (everyone), **Employees** and **
 
 - **HR navigation**: the sidebar now has a single **HR** entry (visible to anyone who can open any HR tab); My HR, Employees, Leave, Comp days, Attendance, Payroll and Policy & holidays are the tabs along the top of every HR page, no longer repeated in the sidebar. `/hr` opens the first tab the person may see.
 - **Comp days approval page** (`/hr/comp`, HR → Comp days): every comp working day request with status filter; HR (`hr.manage`) approves or turns down pending ones there, managers still decide from My HR.
+
+- **Delete a finance account** (Finance → Bank & cash accounts → Delete): only for an account with no history — no ledger entries, bank statement lines, cash counts or balance checks. Soft-deleted, audited. Anything with history is switched off instead.
+- **Correcting a bank-imported entry** (Transactions → Correct: date, account, category, amount, description) now carries the bank-statement pairing to the corrected entry when the account and amount are unchanged, so fixing a category no longer leaves a phantom reversal and an unmatched replacement in the reconciliation exceptions. If the amount or account changes, the pairing stays with the original, because the bank no longer agrees. Test: `tests/bank-reconcile.spec.ts`.
