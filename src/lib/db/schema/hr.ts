@@ -86,11 +86,61 @@ export const companyHolidays = pgTable(
     onDate: date("on_date").notNull(),
     name: text("name").notNull(),
     centerId: uuid("center_id").references(() => centers.id, { onDelete: "cascade" }),
+    /** Not given to everybody: each person may take one optional holiday a year. */
+    isOptional: boolean("is_optional").notNull().default(false),
     createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (t) => [uniqueIndex("company_holidays_uq").on(t.onDate, t.name).where(sql`deleted_at is null`)],
+);
+
+/** Which optional holiday a person took this year. One per person per year. */
+export const employeeOptionalHolidays = pgTable(
+  "employee_optional_holidays",
+  {
+    employeeId: uuid("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "cascade" }),
+    holidayId: uuid("holiday_id")
+      .notNull()
+      .references(() => companyHolidays.id, { onDelete: "cascade" }),
+    year: integer("year").notNull(),
+    chosenAt: timestamp("chosen_at", { withTimezone: true }).notNull().defaultNow(),
+    chosenBy: uuid("chosen_by").references(() => profiles.id, { onDelete: "set null" }),
+  },
+  (t) => [primaryKey({ columns: [t.employeeId, t.year] })],
+);
+
+export type CompPart = "full" | "half";
+
+/** Working on a day off in return for another day off. */
+export const compDayRequests = pgTable(
+  "comp_day_requests",
+  {
+    id: idColumn(),
+    employeeId: uuid("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "restrict" }),
+    workDate: date("work_date").notNull(),
+    workPart: text("work_part").$type<CompPart>().notNull(),
+    offDate: date("off_date").notNull(),
+    offPart: text("off_part").$type<CompPart>().notNull(),
+    reason: text("reason"),
+    status: text("status").$type<"pending" | "approved" | "rejected" | "cancelled">().notNull().default("pending"),
+    approverUserId: uuid("approver_user_id").references(() => profiles.id, { onDelete: "set null" }),
+    decidedBy: uuid("decided_by").references(() => profiles.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    decisionNote: text("decision_note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("comp_day_requests_employee_idx").on(t.employeeId, t.offDate),
+    index("comp_day_requests_status_idx").on(t.status, t.offDate),
+    check("comp_day_parts", sql`off_part = 'half' or work_part = 'full'`),
+    check("comp_day_distinct", sql`work_date <> off_date`),
+  ],
 );
 
 export type LeaveKind = "sick" | "casual" | "lop" | "half_day";

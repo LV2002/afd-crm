@@ -3,7 +3,7 @@ import "server-only";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
-import { centers, employees, leaveRequests, profiles } from "@/lib/db/schema";
+import { centers, compDayRequests, companyHolidays, employeeOptionalHolidays, employees, leaveRequests, profiles } from "@/lib/db/schema";
 
 import { leaveBalance, workingDates, type LeaveBalance, type LeavePolicy } from "./leave";
 import { probationLopDays } from "@/lib/payroll/calc";
@@ -187,7 +187,7 @@ export async function balanceFor(employee: EmployeeRow, year: number, policy?: L
   const base = policy ?? (await loadPolicy(db));
   // Their own days off, not the company's.
   const p = { ...base, weeklyOff: weeklyOffOf((await loadWeek(db, employee.id)).week) };
-  const holidays = new Set((await loadHolidays(db, employee.centerId)).map((h) => h.onDate));
+  const holidays = new Set((await loadHolidays(db, employee.centerId, employee.id)).map((h) => h.onDate));
   const requests = await db
     .select({ kind: leaveRequests.kind, fromDate: leaveRequests.fromDate, toDate: leaveRequests.toDate, status: leaveRequests.status })
     .from(leaveRequests)
@@ -221,10 +221,62 @@ export async function balancesForAll(list: EmployeeRow[], year: number): Promise
     Promise.all(centerKeys.map((c) => loadHolidays(db, c))),
   ]);
   centerKeys.forEach((c, i) => holidayCache.set(c ?? "all", new Set(holidayLists[i].map((h) => h.onDate))));
+  // Each person's own optional holiday joins the shared list for them alone.
+  const picks = await db
+    .select({ employeeId: employeeOptionalHolidays.employeeId, onDate: companyHolidays.onDate })
+    .from(employeeOptionalHolidays)
+    .innerJoin(companyHolidays, eq(companyHolidays.id, employeeOptionalHolidays.holidayId))
+    .where(isNull(companyHolidays.deletedAt));
+  const picksBy = new Map<string, string[]>();
+  for (const p of picks) picksBy.set(p.employeeId, [...(picksBy.get(p.employeeId) ?? []), p.onDate]);
   for (const [i, e] of list.entries()) {
-    const holidays = holidayCache.get(e.centerId ?? "all") ?? new Set<string>();
+    const shared = holidayCache.get(e.centerId ?? "all") ?? new Set<string>();
+    const holidays = picksBy.has(e.id) ? new Set([...shared, ...(picksBy.get(e.id) ?? [])]) : shared;
     const own = { ...policy, weeklyOff: weeklyOffOf(weeks[i].week) };
     out.set(e.id, leaveBalance({ employee: e, year, policy: own, requests: byEmployee.get(e.id) ?? [], holidays, closing: closings.get(e.id) ?? null }));
   }
   return out;
+}
+
+export interface CompRow {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  workDate: string;
+  workPart: "full" | "half";
+  offDate: string;
+  offPart: "full" | "half";
+  reason: string | null;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  decisionNote: string | null;
+}
+
+/** Comp working day requests, newest first. */
+export async function getCompRequests(filter: { employeeId?: string; employeeIds?: string[]; status?: string; limit?: number } = {}): Promise<CompRow[]> {
+  const conditions = [];
+  if (filter.employeeId) conditions.push(eq(compDayRequests.employeeId, filter.employeeId));
+  if (filter.employeeIds) {
+    if (filter.employeeIds.length === 0) return [];
+    conditions.push(inArray(compDayRequests.employeeId, filter.employeeIds));
+  }
+  if (filter.status) conditions.push(eq(compDayRequests.status, filter.status as CompRow["status"]));
+  const rows = await db
+    .select({ r: compDayRequests, employeeName: employees.name })
+    .from(compDayRequests)
+    .innerJoin(employees, eq(employees.id, compDayRequests.employeeId))
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(compDayRequests.createdAt))
+    .limit(filter.limit ?? 100);
+  return rows.map(({ r, employeeName }) => ({
+    id: r.id,
+    employeeId: r.employeeId,
+    employeeName,
+    workDate: r.workDate,
+    workPart: r.workPart,
+    offDate: r.offDate,
+    offPart: r.offPart,
+    reason: r.reason,
+    status: r.status,
+    decisionNote: r.decisionNote,
+  }));
 }

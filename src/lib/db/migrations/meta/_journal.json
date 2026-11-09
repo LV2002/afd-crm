@@ -911,6 +911,13 @@
       "when": 1795442408000,
       "tag": "0129_onboarding_checklist",
       "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1795528808000,
+      "tag": "0130_comp_days_optional_holidays",
+      "breakpoints": true
     }
   ]
 }

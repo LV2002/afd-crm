@@ -5,6 +5,7 @@ import { and, eq, gte, isNull, lt } from "drizzle-orm";
 import type { DbExecutor } from "@/lib/db/client";
 import { attendanceAdjustments, attendancePunches, employees } from "@/lib/db/schema";
 import { loadWeek } from "@/lib/hr/schedule";
+import { approvedCompDays } from "@/lib/hr/comp-days";
 import { loadHolidays } from "@/lib/hr/service";
 import { approvedLeaveEntries } from "@/lib/payroll/service";
 
@@ -16,8 +17,9 @@ export async function loadAttendanceReport(tx: DbExecutor, employeeId: string, m
   if (!emp || !emp.biometricCode) return null;
 
   const { week } = await loadWeek(tx, emp.id);
-  const holidays = new Set((await loadHolidays(tx, emp.centerId)).map((h) => h.onDate));
+  const holidays = new Set((await loadHolidays(tx, emp.centerId, emp.id)).map((h) => h.onDate));
   const leave = new Map((await approvedLeaveEntries(tx, emp.id, month)).map((e) => [e.date, e.type]));
+  const comp = await approvedCompDays(tx, emp.id, month);
 
   // A day's punches can fall either side of midnight UTC, so the window is padded.
   const from = new Date(`${month}-01T00:00:00+05:30`);
@@ -41,6 +43,8 @@ export async function loadAttendanceReport(tx: DbExecutor, employeeId: string, m
     dateOfJoining: emp.dateOfJoining,
     punches: rows.map((r) => r.at),
     leave,
+    compWork: comp.work,
+    compOff: comp.off,
     today: new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10),
   });
 }
