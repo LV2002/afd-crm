@@ -9,6 +9,7 @@ import {
   integer,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -361,4 +362,33 @@ export const bankBalanceChecks = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("bank_balance_checks_account_idx").on(t.accountId, t.asOf)],
+);
+
+export type FinanceAlertMetric = "bank_balance" | "income_fy";
+
+/** A mark worth knowing about before money reaches it, e.g. 20 lakh or 1 crore. */
+export const financeAlertRules = pgTable("finance_alert_rules", {
+  id: idColumn(),
+  label: text("label").notNull(),
+  metric: text("metric").$type<FinanceAlertMetric>().notNull(),
+  limitPaise: bigint("limit_paise", { mode: "number" }).notNull(),
+  /** Warn when the figure reaches this share of the mark. */
+  warnPercent: integer("warn_percent").notNull().default(90),
+  isActive: boolean("is_active").notNull().default(true),
+  ...timestamps(),
+  ...softDelete(),
+});
+
+/** Which stage of which mark has already been announced, so it is said once. */
+export const financeAlertState = pgTable(
+  "finance_alert_state",
+  {
+    ruleId: uuid("rule_id")
+      .notNull()
+      .references(() => financeAlertRules.id, { onDelete: "cascade" }),
+    periodKey: text("period_key").notNull(),
+    stage: text("stage").$type<"warn" | "reached">().notNull(),
+    notifiedAt: timestamp("notified_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.ruleId, t.periodKey, t.stage] })],
 );

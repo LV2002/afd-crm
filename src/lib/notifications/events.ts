@@ -375,7 +375,34 @@ export const NOTIFICATION_EVENTS = [
     defaultTitle: "Leave request: {{employee_name}}",
     defaultBody: "{{leave_type}}, {{from_date}} to {{to_date}} ({{days}} days). {{reason}}",
     defaultNotifyOwner: true,
-    defaultNotifyRoleCodes: ["hr"],
+    defaultNotifyRoleCodes: ["hr", "co_admin", "admin"],
+  },
+  {
+    // The same audience as a leave request: the manager who approves it,
+    // and the people who oversee HR. Never the person asking.
+    key: "comp.requested",
+    label: "Comp working day requested",
+    description:
+      "An employee asked to work a day off in return for another day off. Tells their manager, who approves it, plus HR, co-admins and admins.",
+    category: "HR",
+    variables: ["employee_name", "work_date", "work_part", "off_date", "off_part", "reason"],
+    defaultTitle: "Comp day request: {{employee_name}}",
+    defaultBody: "Works {{work_date}} ({{work_part}}), takes {{off_date}} off ({{off_part}}). {{reason}}",
+    defaultNotifyOwner: true,
+    defaultNotifyRoleCodes: ["hr", "co_admin", "admin"],
+  },
+  {
+    // Raised by the finance-thresholds sweep, never by a person acting.
+    key: "finance.threshold",
+    label: "Money approaching a mark",
+    description:
+      "The combined bank balance, or income so far this financial year, is close to (or has passed) a mark you set in Settings → Finance alerts — such as ₹20 lakh or ₹1 crore.",
+    category: "Money",
+    variables: ["metric", "amount", "limit", "status"],
+    defaultTitle: "{{metric}} is {{status}} {{limit}}",
+    defaultBody: "{{metric}} stands at {{amount}}.",
+    defaultNotifyOwner: false,
+    defaultNotifyRoleCodes: ["accounts", "admin"],
   },
   {
     key: "payroll.ready",

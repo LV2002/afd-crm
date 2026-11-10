@@ -360,16 +360,16 @@ export async function requestCompDay(_prev: HrFormState, formData: FormData): Pr
 
   await audit(user, "hr.comp_apply", "comp_day_requests", result.id, { ...input, today: undefined });
   await notify({
-    eventKey: "leave.requested",
+    eventKey: "comp.requested",
     context: {
       employee_name: employee.name,
-      leave_type: "Comp working day",
-      from_date: input.offDate,
-      to_date: input.offDate,
-      days: input.offPart === "half" ? 0.5 : 1,
-      reason: `Works ${input.workDate} (${PART_LABEL[input.workPart]}) for ${input.offDate} (${PART_LABEL[input.offPart]}). ${input.reason ?? ""}`.trim(),
+      work_date: input.workDate,
+      work_part: PART_LABEL[input.workPart],
+      off_date: input.offDate,
+      off_part: PART_LABEL[input.offPart],
+      reason: input.reason ?? "",
     },
-    href: "/hr/me",
+    href: "/hr/comp",
     entityType: "comp_day_requests",
     entityId: result.id,
     centerId: employee.centerId,
