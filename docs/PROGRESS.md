@@ -9020,3 +9020,5 @@ New **HR** department in the sidebar: **My HR** (everyone), **Employees** and **
 
 - A batch has **Runs for (years)** (1–5; new batches default to their course's programme length, existing ones were set from it). A two-year batch from 2026-27 is also a batch of 2027-28: its students stay on the Students list for both years and show "year 1 of 2" / "year 2 of 2", with no moving of students. Chosen over a multi-select of years so the years are always consecutive and the batch keeps one start year (which fee lookups, admission and reports key on). The courses page shows the span ("2026-27 to 2027-28"); the Students year filter offers every year a batch covers.
 - Students with no batch yet are still placed by the year they joined and their course's programme length (`lib/students/year-filter.ts`).
+
+- **Search in Admissions** (Accounts → Admissions): a search box above the tabs finds an admission by student name, phone number (any format, three digits or more), course, centre or academic year; several words must all match. It looks through every tab, not just the open one. Phones stay masked in the list.
