@@ -30,6 +30,10 @@ export default async function PastAdmissionsPage() {
           chased for money on a past admission, and the payments stay out of the current bank matching.
         </p>
       </div>
+      <p className="text-sm">
+        Have the students in a sheet, with their phone numbers and profile details?{" "}
+        <Link href="/accounts/history/students" className="font-medium underline">Import them from a file instead</Link>.
+      </p>
       <HistoryForm centers={data ?? []} years={years} />
     </div>
   );

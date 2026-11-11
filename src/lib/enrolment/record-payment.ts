@@ -3,13 +3,12 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { DbExecutor } from "@/lib/db/client";
 import {
   enrolments,
-  leads,
   payments,
   receipts,
-  studentBatches,
-  students,
 } from "@/lib/db/schema";
 import { FEE_CATEGORY, HISTORY_SOURCE, postEntry } from "@/lib/finance/post";
+
+import { createStudentFromEnrolment } from "./create-student";
 
 export interface RecordPaymentInput {
   enrolmentId: string;
@@ -136,63 +135,25 @@ export async function recordPayment(tx: DbExecutor, input: RecordPaymentInput): 
     };
   }
 
-  const [lead] = await tx.select().from(leads).where(eq(leads.id, enrolment.leadId));
-  if (!lead) {
-    throw new Error(`recordPayment: lead ${enrolment.leadId} not found`);
-  }
-
-  const [student] = await tx
-    .insert(students)
-    .values({
-      leadId: lead.id,
-      fullName: lead.studentName,
-      phone: lead.primaryPhone,
-      parentPhone: lead.parentPhone,
-      email: lead.email,
-      dob: lead.dob,
-      centerId: enrolment.centerId,
-      targetExams: lead.interestedExams,
-      targetExamYear: lead.examYear,
-      currentCourse: enrolment.course,
-      intakeYear: enrolment.academicYear,
-      // The batch the counsellor picked at Gate 1, carried across rather
-      // than left for somebody to fill in afterwards. Before this, a
-      // student arrived in academics with no class group and the batch
-      // column on the students list was permanently blank.
-      currentBatchId: enrolment.batchId,
-      // Somebody who joined years ago is not waiting to be onboarded.
-      ...(enrolment.isHistorical ? { onboardedAt: input.receivedAt ?? new Date() } : {}),
-    })
-    .returning({ id: students.id });
-
-  const now = input.receivedAt ?? new Date();
-
-  // The roster row as well as the pointer on the student. `current_batch_id`
-  // answers "which batch are they in now"; `student_batches` is the history,
-  // and a student who moves batch later needs both to stay truthful.
-  if (enrolment.batchId) {
-    await tx.insert(studentBatches).values({
-      studentId: student.id,
-      batchId: enrolment.batchId,
-      joinedAt: now,
-    });
-  }
-  await tx
-    .update(enrolments)
-    .set({
-      studentId: student.id,
-      status: "active",
-      accountsToAcademicsAt: now,
-      accountsToAcademicsBy: input.recordedBy,
-    })
-    .where(eq(enrolments.id, input.enrolmentId));
+  // The student may already exist: an admission imported from before the CRM
+  // is made a student when it is imported, not when its first payment is typed.
+  const studentId =
+    enrolment.studentId ??
+    (
+      await createStudentFromEnrolment(tx, {
+        enrolmentId: input.enrolmentId,
+        recordedBy: input.recordedBy,
+        joinedAt: input.receivedAt,
+        onboarded: enrolment.isHistorical,
+      })
+    ).studentId;
 
   return {
     paymentId: payment.id,
     receiptId: receipt.id,
     receiptNo: receipt.receiptNo,
     isFirstPayment: true,
-    studentId: student.id,
+    studentId,
     financeTransactionId,
   };
 }
