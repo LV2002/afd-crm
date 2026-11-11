@@ -45,6 +45,8 @@ export const CONFIG_TABLES = [
   "org_settings",
   // What must be ticked before a new student is onboarded: an admin's list.
   "onboarding_items",
+  // The marks worth a warning (₹20 lakh, ₹1 crore) — an admin's list.
+  "finance_alert_rules",
   "payment_reminder_rules",
   // The fixed registry of permission primitives. Seeded from code.
   "permissions",
@@ -98,6 +100,8 @@ export const CONFIG_TABLES = [
 
 /** Cleared by a reset: a record of something that happened. */
 export const DATA_TABLES = [
+  // Which stage of which mark has already been announced.
+  "finance_alert_state",
   // Which onboarding items have been ticked for which student.
   "student_onboarding_checks",
   // Who is in which retargeting audience. Rebuilt from the leads by the

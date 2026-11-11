@@ -81,6 +81,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     permissions: ["settings.manage"],
   },
   {
+    href: "/settings/finance-alerts",
+    label: "Finance Alerts",
+    description: "Get told before the bank balance or the year's income reaches a mark, like ₹20 lakh or ₹1 crore",
+    permissions: ["settings.manage"],
+  },
+  {
     href: "/settings/payment-reminders",
     label: "Payment Reminders",
     description: "When and how an unpaid instalment gets chased",
