@@ -9,6 +9,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { batchCapacity } from "@/lib/batches/roster";
 import { db } from "@/lib/db/client";
 import { batches, centers, dropdownOptions } from "@/lib/db/schema";
+import { batchYearsLabel } from "@/lib/enrolment/academic-year";
 import { COURSE_MODE_KEY, programmeYears } from "@/lib/enrolment/course-catalog";
 import { formatINR } from "@/lib/format/currency";
 import { formatDateIST } from "@/lib/format/date";
@@ -59,6 +60,7 @@ export default async function CoursesPage() {
         course: batches.course,
         centerName: centers.name,
         academicYear: batches.academicYear,
+        years: batches.years,
         feePaise: batches.feePaise,
         startDate: batches.startDate,
         capacity: batches.capacity,
@@ -152,7 +154,7 @@ export default async function CoursesPage() {
                         {batch.name}
                       </Link>
                       <span className="text-muted-foreground">
-                        {batch.centerName ?? "—"} · {batch.academicYear}
+                        {batch.centerName ?? "—"} · {batchYearsLabel(batch.academicYear, batch.years)}
                         {batch.startDate ? ` · from ${formatDateIST(batch.startDate, "d MMM yyyy")}` : ""}
                       </span>
                       <span className="ml-auto flex items-center gap-3">

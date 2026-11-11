@@ -4,7 +4,7 @@ import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { centers } from "@/lib/db/schema";
-import { courseChoices } from "@/lib/enrolment/course-catalog";
+import { courseChoices, courseDurations } from "@/lib/enrolment/course-catalog";
 
 import { BatchForm } from "../batch-form";
 
@@ -37,6 +37,7 @@ export default async function NewBatchPage({
   const courses = await courseChoices();
   const { course: wanted } = await searchParams;
   const course = courses.find((c) => c.value === wanted) ?? courses[0];
+  const durations = await courseDurations();
 
   return (
     <div className="flex flex-col gap-4">
@@ -54,6 +55,7 @@ export default async function NewBatchPage({
           course: course?.value ?? "",
           fee: "",
           academicYear: "",
+          years: String(durations.get(course?.value ?? "") ?? 1),
           startDate: "",
           endDate: "",
           capacity: "",

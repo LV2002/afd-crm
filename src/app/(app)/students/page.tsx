@@ -7,7 +7,8 @@ import { filterTerm } from "@/lib/db/filter-term";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { formatDateIST } from "@/lib/format/date";
 import { maskPhone } from "@/lib/leads/mask-phone";
-import { currentAcademicStartYear, formatAcademicYear } from "@/lib/enrolment/academic-year";
+import { batchYearsLabel, currentAcademicStartYear, formatAcademicYear, startYearOf } from "@/lib/enrolment/academic-year";
+import { studentYearClauses } from "@/lib/students/year-filter";
 import { courseDurations } from "@/lib/enrolment/course-catalog";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,7 +25,7 @@ interface StudentRow {
   joined_at: string;
   intake_year: string | null;
   centers: { name: string } | null;
-  batches: { name: string } | null;
+  batches: { name: string; academic_year: string; years: number } | null;
 }
 
 /** The four values `student_status` can take. A fixed vocabulary, not a dropdown. */
@@ -79,7 +80,7 @@ export default async function StudentsPage({
 
   let query = supabase
     .from("students")
-    .select("id, student_code, full_name, phone, current_course, status, joined_at, intake_year, centers(name), batches(name)")
+    .select("id, student_code, full_name, phone, current_course, status, joined_at, intake_year, centers(name), batches(name, academic_year, years)")
     .is("deleted_at", null)
     // The roster is people academics has accepted. A student whose payment
     // cleared this morning is on the Onboarding tab instead — appearing
@@ -92,29 +93,19 @@ export default async function StudentsPage({
   if (course) query = query.eq("current_course", course);
   if (batchId) query = query.eq("current_batch_id", batchId);
   const durations = await courseDurations();
+  // Every batch with the years it runs: a two-year batch from 2026-27 is a
+  // batch of 2027-28 as well, so its students are 2027-28 students too.
+  const { data: allBatches } = await supabase
+    .from("batches")
+    .select("id, name, academic_year, years")
+    .is("deleted_at", null)
+    .order("name")
+    .returns<Array<{ id: string; name: string; academic_year: string; years: number }>>();
   if (year) {
-    // A student belongs to an academic year in two ways: they sit in that
-    // year's batch, or that year falls within the programme they joined —
-    // a second-year student of a two-year course is a student of the year
-    // after the one they joined in, whether or not anybody has moved them
-    // to the new batch yet.
-    const { data: yearBatches } = await supabase
-      .from("batches")
-      .select("id")
-      .eq("academic_year", year)
-      .is("deleted_at", null)
-      .returns<Array<{ id: string }>>();
-    const startYear = Number(/^(\d{4})-/.exec(year)?.[1]);
-    const clauses = [`intake_year.eq.${year}`];
-    const ids = (yearBatches ?? []).map((b) => b.id);
-    if (ids.length > 0) clauses.push(`current_batch_id.in.(${ids.join(",")})`);
-    if (Number.isFinite(startYear)) {
-      for (let back = 1; back <= 4; back += 1) {
-        const joinedIn = formatAcademicYear(startYear - back);
-        const courses = [...durations].filter(([code, years]) => years > back && /^[a-z0-9_-]+$/i.test(code)).map(([code]) => code);
-        if (courses.length > 0) clauses.push(`and(intake_year.eq.${joinedIn},current_course.in.(${courses.join(",")}))`);
-      }
-    }
+    // A student belongs to an academic year when they sit in a batch that
+    // covers it. Somebody with no batch yet is placed by the year they joined
+    // and their course's programme length instead.
+    const clauses = studentYearClauses({ year, batches: allBatches ?? [], durations });
     query = query.or(clauses.join(","));
   }
   if (joinedFrom) query = query.gte("joined_at", `${joinedFrom}T00:00:00+05:30`);
@@ -133,7 +124,7 @@ export default async function StudentsPage({
   // The filter options come from what exists, not from a hardcoded list:
   // centres and batches are rows, and the course list is the same
   // admin-editable dropdown the rest of the system uses.
-  const [{ data: rows, error }, { data: centreRows }, { data: batchRows }, { data: courseRows }] =
+  const [{ data: rows, error }, { data: centreRows }, { data: courseRows }] =
     await Promise.all([
       query.order("joined_at", { ascending: false }).returns<StudentRow[]>(),
       supabase
@@ -143,12 +134,6 @@ export default async function StudentsPage({
         .is("deleted_at", null)
         .order("name")
         .returns<Array<{ id: string; name: string }>>(),
-      supabase
-        .from("batches")
-        .select("id, name, academic_year")
-        .is("deleted_at", null)
-        .order("name")
-        .returns<Array<{ id: string; name: string; academic_year: string }>>(),
       supabase
         .from("dropdown_options")
         .select("value, label")
@@ -183,15 +168,21 @@ export default async function StudentsPage({
 
       <StudentFilters
         values={{ search, centerId, course, batchId, status, year, joinedFrom, joinedTo }}
-        years={[...new Set((batchRows ?? []).map((row) => row.academic_year))]
+        years={[
+          ...new Set(
+            (allBatches ?? []).flatMap((row) =>
+              Array.from({ length: Math.max(1, row.years) }, (_, i) => formatAcademicYear(startYearOf(row.academic_year) + i)).filter((y) => !y.startsWith("NaN")),
+            ),
+          ),
+        ]
           .sort()
           .reverse()
           .map((value) => ({ value, label: value }))}
         centres={(centreRows ?? []).map((row) => ({ value: row.id, label: row.name }))}
         courses={(courseRows ?? []).map((row) => ({ value: row.value, label: row.label }))}
-        batches={(batchRows ?? []).map((row) => ({
+        batches={(allBatches ?? []).map((row) => ({
           value: row.id,
-          label: `${row.name} · ${row.academic_year}`,
+          label: `${row.name} · ${batchYearsLabel(row.academic_year, row.years)}`,
         }))}
         statuses={STATUSES}
       />
@@ -223,8 +214,11 @@ export default async function StudentsPage({
               <TableCell>
                 {row.current_course ?? "—"}
                 {(() => {
-                  const length = row.current_course ? (durations.get(row.current_course) ?? 1) : 1;
-                  const joined = Number(/^(\d{4})-/.exec(row.intake_year ?? "")?.[1]);
+                  // The batch says how long the programme runs and when it began;
+                  // a student with no batch yet falls back to their course and
+                  // the year they joined.
+                  const length = row.batches ? row.batches.years : row.current_course ? (durations.get(row.current_course) ?? 1) : 1;
+                  const joined = startYearOf(row.batches?.academic_year ?? row.intake_year ?? "");
                   if (length < 2 || !Number.isFinite(joined)) return null;
                   const reference = /^\d{4}-/.test(year) ? Number(year.slice(0, 4)) : currentAcademicStartYear();
                   const n = reference - joined + 1;

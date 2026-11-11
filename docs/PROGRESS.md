@@ -9015,3 +9015,8 @@ New **HR** department in the sidebar: **My HR** (everyone), **Employees** and **
 - Profile details (DOB, parents, address, school, board, exams) go to the lead's columns; stream, 10th/12th %, hobbies, art teacher and discipline go in as one system note on the lead. Photo and ID links are not imported.
 - `createStudentFromEnrolment()` now holds the student-creation step that `recordPayment()` used inline; a student who already exists is not created a second time when the first payment is recorded later.
 - Not matched automatically: anything the sheet's formatting carried — struck-through names do not survive a CSV export, so dropped students have to be marked in the `dropped` column.
+
+## Batches that run for more than one year (migration 0132)
+
+- A batch has **Runs for (years)** (1–5; new batches default to their course's programme length, existing ones were set from it). A two-year batch from 2026-27 is also a batch of 2027-28: its students stay on the Students list for both years and show "year 1 of 2" / "year 2 of 2", with no moving of students. Chosen over a multi-select of years so the years are always consecutive and the batch keeps one start year (which fee lookups, admission and reports key on). The courses page shows the span ("2026-27 to 2027-28"); the Students year filter offers every year a batch covers.
+- Students with no batch yet are still placed by the year they joined and their course's programme length (`lib/students/year-filter.ts`).

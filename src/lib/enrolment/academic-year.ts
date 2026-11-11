@@ -65,3 +65,22 @@ export function academicYearOptions(
 
   return options;
 }
+
+/** The start year of an academic year name: "2026-27" -> 2026, or NaN. */
+export function startYearOf(academicYear: string): number {
+  return Number(/^(\d{4})-/.exec(academicYear)?.[1]);
+}
+
+/** Does a batch that starts in `batchYear` and runs `years` years cover `year`? */
+export function batchCoversYear(batchYear: string, years: number, year: string): boolean {
+  const start = startYearOf(batchYear);
+  const target = startYearOf(year);
+  return Number.isFinite(start) && Number.isFinite(target) && target >= start && target <= start + Math.max(1, years) - 1;
+}
+
+/** "2026-27" for a one-year batch, "2026-27 to 2027-28" for a two-year one. */
+export function batchYearsLabel(batchYear: string, years: number): string {
+  const start = startYearOf(batchYear);
+  if (years <= 1 || !Number.isFinite(start)) return batchYear;
+  return `${batchYear} to ${formatAcademicYear(start + years - 1)}`;
+}

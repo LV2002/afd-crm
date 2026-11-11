@@ -57,6 +57,8 @@ export async function saveBatch(_prev: BatchFormState, formData: FormData): Prom
     return { error: "That course has no mode yet. Set it on the Courses page first." };
   }
   if (!academicYear) return { error: "Enter the academic year." };
+  const years = Number(String(formData.get("years") ?? "1").trim() || "1");
+  if (!Number.isInteger(years) || years < 1 || years > 5) return { error: "A batch runs for a whole number of years, from 1 to 5." };
 
   // A centre head may only create batches at their own centres. `all`
   // scope (admins) passes anything.
@@ -97,6 +99,7 @@ export async function saveBatch(_prev: BatchFormState, formData: FormData): Prom
     course,
     mode,
     academicYear,
+    years,
     feePaise,
     capacity,
     startDate,

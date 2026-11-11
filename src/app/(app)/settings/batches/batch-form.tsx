@@ -22,6 +22,7 @@ export interface BatchFormValues {
   course: string;
   fee: string;
   academicYear: string;
+  years: string;
   startDate: string;
   endDate: string;
   capacity: string;
@@ -84,6 +85,23 @@ export function BatchForm({
             options={academicYearOptions(values.academicYear || null)}
             placeholder="Choose a year"
           />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="batch-years">Runs for (years)</Label>
+          <input
+            id="batch-years"
+            name="years"
+            type="number"
+            min={1}
+            max={5}
+            step={1}
+            defaultValue={values.years}
+            className="h-9 rounded-md border bg-background px-3 text-sm"
+          />
+          <p className="text-xs text-muted-foreground">
+            A two-year batch started in 2026-27 is still a batch in 2027-28. Its students stay on the Students list for both years without being moved.
+          </p>
         </div>
 
         <div className="flex flex-col gap-2">
