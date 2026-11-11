@@ -111,6 +111,12 @@ export const batches = pgTable("batches", {
   course: text("course").notNull(),
   mode: text("mode").notNull(),
   academicYear: text("academic_year").notNull(),
+  /**
+   * How many academic years the batch runs for, starting at `academic_year`.
+   * A two-year batch from 2026-27 is also a batch of 2027-28, so its students
+   * stay on the Students list for both years without being moved.
+   */
+  years: integer("years").notNull().default(1),
   startDate: date("start_date"),
   endDate: date("end_date"),
   capacity: integer("capacity"),

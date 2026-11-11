@@ -9,7 +9,7 @@ loadEnv({ path: ".env.local", override: true });
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set.");
 
 const { db } = await import("../src/lib/db/client");
-const { centers, enrolments, leads, payments, receipts, students } = await import("../src/lib/db/schema");
+const { batches, centers, enrolments, leads, payments, receipts, studentBatches, students } = await import("../src/lib/db/schema");
 const { confirmAdmission } = await import("../src/lib/enrolment/confirm-admission");
 const { createStudentFromEnrolment } = await import("../src/lib/enrolment/create-student");
 const { dropAdmission } = await import("../src/lib/enrolment/drop-admission");
@@ -73,6 +73,7 @@ describe("a student made without a payment", () => {
       await db.delete(enrolments).where(eq(enrolments.leadId, l.id));
     }
     await db.delete(students).where(like(students.fullName, `${MARK}%`));
+    await db.delete(batches).where(like(batches.name, `${MARK}%`));
     await db.delete(leads).where(like(leads.studentName, `${MARK}%`));
     await db.delete(centers).where(like(centers.name, `${MARK}%`));
   }
@@ -128,5 +129,24 @@ describe("a student made without a payment", () => {
     await db.transaction((tx) => dropAdmission(tx, { enrolmentId, reason: "Dropped — struck out in the admission ledger", droppedBy: null }));
     const [s] = await db.select().from(students).where(eq(students.id, studentId));
     expect(s.status).toBe("dropped");
+  });
+
+  it("joins the chosen batch: the student sits in it and the batch's fee is not charged", async () => {
+    const [batch] = await db
+      .insert(batches)
+      .values({ name: `${MARK} batch`, centerId, course: "Foundation", mode: "hybrid", academicYear: "2026-27", feePaise: 8_000_000 })
+      .returning({ id: batches.id });
+    const [lead] = await db.insert(leads).values({ studentName: `${MARK} batch kid`, primaryPhone: "+919900099911", centerId }).returning({ id: leads.id });
+    const joined = new Date("2026-05-20T12:00:00+05:30");
+    const adm = await db.transaction((tx) =>
+      confirmAdmission(tx, { leadId: lead.id, course: "Foundation", centerId, mode: "hybrid", academicYear: "2026-27", batchId: batch.id, totalFeePaiseOverride: 0, confirmedBy: null, enrolledAt: joined, historical: true }),
+    );
+    const { studentId } = await db.transaction((tx) => createStudentFromEnrolment(tx, { enrolmentId: adm.enrolmentId, recordedBy: null, joinedAt: joined, onboarded: true }));
+    const [s] = await db.select().from(students).where(eq(students.id, studentId));
+    expect(s.currentBatchId).toBe(batch.id);
+    const rows = await db.select().from(studentBatches).where(eq(studentBatches.studentId, studentId));
+    expect(rows).toHaveLength(1);
+    const [e] = await db.select().from(enrolments).where(eq(enrolments.id, adm.enrolmentId));
+    expect(e).toMatchObject({ batchId: batch.id, netFeePaise: 0, totalFeePaise: 0 });
   });
 });
