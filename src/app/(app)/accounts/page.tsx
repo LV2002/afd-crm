@@ -7,6 +7,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { formatDateIST } from "@/lib/format/date";
 import { formatINR } from "@/lib/format/currency";
 import { effectiveDownPaymentDue, planStatus, type PlanStatus } from "@/lib/enrolment/plan-status";
+import { admissionMatches } from "@/lib/enrolment/search-admissions";
 import { maskPhone } from "@/lib/leads/mask-phone";
 import { createClient } from "@/lib/supabase/server";
 
@@ -41,9 +42,10 @@ interface EnrolmentQueueRow {
 export default async function AccountsQueuePage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string; year?: string }>;
+  searchParams: Promise<{ filter?: string; year?: string; q?: string }>;
 }) {
-  const { filter, year } = await searchParams;
+  const { filter, year, q } = await searchParams;
+  const query = (q ?? "").trim().slice(0, 100);
   // Defaults to the new admissions, because that is the job: a confirmed
   // admission sitting unpaid is somebody waiting to be chased. The full
   // list is one click away for recording a later instalment, and the
@@ -166,7 +168,19 @@ export default async function AccountsQueuePage({
   const yearSummary = [...byYear.entries()].sort((a, b) => b[0].localeCompare(a[0]));
 
   const base = showDropped ? dropped : showPast ? past : showAll ? sorted : newAdmissions;
-  const visible = year ? base.filter((row) => row.academic_year === year) : base;
+  // A search looks through every admission, whichever tab is open: typing a
+  // name into "New admissions" and being told there is nobody called that, when
+  // she is on the other tab, is the search failing at its one job.
+  const visible = query
+    ? sorted.filter((row) =>
+        admissionMatches(
+          { studentName: row.leads?.student_name ?? null, phone: row.leads?.primary_phone ?? null, course: row.course, centreName: row.centers?.name ?? null, academicYear: row.academic_year },
+          query,
+        ),
+      )
+    : year
+      ? base.filter((row) => row.academic_year === year)
+      : base;
 
   return (
     <div className="flex flex-col gap-4">
@@ -193,6 +207,26 @@ export default async function AccountsQueuePage({
           )}
         </p>
       </div>
+
+      <form action="/accounts" method="get" className="flex max-w-xl items-center gap-2">
+        <input
+          name="q"
+          type="search"
+          defaultValue={query}
+          placeholder="Search by name, phone, course, centre or year"
+          aria-label="Search admissions"
+          className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
+        />
+        <button type="submit" className="h-9 rounded-md border px-3 text-sm font-medium hover:bg-accent/50">Search</button>
+        {query && (
+          <Link href="/accounts" className="text-sm text-muted-foreground underline">Clear</Link>
+        )}
+      </form>
+      {query && (
+        <p className="text-sm text-muted-foreground">
+          {visible.length} admission{visible.length === 1 ? "" : "s"} match &ldquo;{query}&rdquo;, across every tab.
+        </p>
+      )}
 
       <div className="flex items-center gap-2 text-sm">
         <Link
@@ -354,7 +388,9 @@ export default async function AccountsQueuePage({
           {visible.length === 0 && (
             <TableRow>
               <TableCell colSpan={9} className="text-center text-muted-foreground">
-                {showDropped
+                {query
+                  ? "No admission matches that."
+                  : showDropped
                   ? "Nobody has dropped out."
                   : showPast
                     ? "No past admissions added yet."
