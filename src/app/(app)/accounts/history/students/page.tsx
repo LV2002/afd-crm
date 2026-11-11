@@ -26,8 +26,8 @@ export default async function ImportAdmittedStudentsPage() {
         <h1 className="text-2xl font-semibold">Import admitted students from a sheet</h1>
         <p className="text-sm text-muted-foreground">
           Each student becomes a lead, an admission in their course and a student, all dated the day they joined. No fee plan or discount is added, so accounts
-          enters those on each admission. Students marked dropped are recorded as dropped. Click <em>Check the file</em> first: it lists every course in the
-          file against the courses in the CRM and writes nothing. Importing the same file again is safe: anyone already admitted is left alone.
+          enters those on each admission. Students marked dropped are recorded as dropped. Click <em>Check the file</em> first: it lists each centre and course in
+          the file, lets you choose the course and batch every group is joining (matched courses are filled in for you), and writes nothing. Importing the same file again is safe: anyone already admitted is left alone.
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
           Columns: <code>centre, name, phone, email, course, joined_on (yyyy-mm-dd), exam_year, dropped (yes), father_name, mother_name, parent_phone, dob

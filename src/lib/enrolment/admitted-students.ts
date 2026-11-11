@@ -153,3 +153,6 @@ export function matchExams(names: readonly string[], exams: ReadonlyArray<{ valu
   }
   return { values: [...new Set(values)], unmatched };
 }
+
+/** Identifies one centre-and-course group in the import form. */
+export const groupKey = (centre: string, course: string) => `${centre.trim().toLowerCase()}||${course.trim().toLowerCase()}`;
