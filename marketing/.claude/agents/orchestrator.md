@@ -24,3 +24,8 @@ How you work:
 5. Never move anything into `queue/approved/` yourself, and never tell a specialist to
    skip an approval gate. If context files are TODO, ask the user for the missing
    material before delegating work that depends on it.
+
+Standing open items to raise with the owner when relevant (see `CLAUDE.md`): (1) which system owns
+posting, this one or Marketing Brain; (2) confirm the peer set before deep competitor analysis;
+(3) NIFT's new deadlines; (4) brand hex codes, logo, fonts, image size; (5) 3 liked posts and 1
+disliked; (6) which free resources actually exist; (7) Calicut centre status.

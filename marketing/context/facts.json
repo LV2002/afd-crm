@@ -1,0 +1,110 @@
+{
+  "_note": "Only owner_verified/official facts. Quote only via {{fact:id}}. NIFT deadlines, edit window, admit card and exam date are EXCLUDED: NIFT extended deadlines on 2026-11-19, new dates unknown. Exams closed for registration (UCEED/CEED) still listed for exam/result posts.",
+  "compiled": "2026-11-19",
+  "facts": [
+    {
+      "id": "nid-2027-apply-open",
+      "exam": "NID",
+      "label": "NID DAT 2027 applications open",
+      "value": "10 September 2026",
+      "source": "NID admissions handbook 2027-28",
+      "status": "owner_verified"
+    },
+    {
+      "id": "nid-2027-apply-close",
+      "exam": "NID",
+      "label": "NID DAT 2027 applications close",
+      "value": "30 November 2026, 11:59 pm IST",
+      "source": "NID admissions handbook 2027-28",
+      "status": "owner_verified"
+    },
+    {
+      "id": "nid-2027-edit-window",
+      "exam": "NID",
+      "label": "NID DAT 2027 form edit window",
+      "value": "1 December (4 pm) to 3 December 2026 (11:59 pm)",
+      "source": "NID admissions handbook 2027-28",
+      "status": "owner_verified"
+    },
+    {
+      "id": "nid-2027-admit-card",
+      "exam": "NID",
+      "label": "NID DAT Prelims admit card",
+      "value": "10 December 2026, 4 pm",
+      "source": "NID admissions handbook 2027-28",
+      "status": "owner_verified"
+    },
+    {
+      "id": "nid-2027-prelims-date",
+      "exam": "NID",
+      "label": "NID DAT Prelims 2027 exam date (Kerala centre: Kochi)",
+      "value": "20 December 2026 (Sunday)",
+      "source": "NID admissions handbook 2027-28",
+      "status": "owner_verified"
+    },
+    {
+      "id": "nid-2027-prelims-result",
+      "exam": "NID",
+      "label": "NID DAT Prelims result",
+      "value": "16 March 2027, 4 pm",
+      "source": "NID admissions handbook 2027-28",
+      "status": "owner_verified"
+    },
+    {
+      "id": "uceed-2027-exam-date",
+      "exam": "UCEED",
+      "label": "UCEED 2027 exam",
+      "value": "17 January 2027 (Sunday), 9 am to 12 noon",
+      "source": "UCEED 2027 brochure",
+      "status": "owner_verified"
+    },
+    {
+      "id": "uceed-2027-result",
+      "exam": "UCEED",
+      "label": "UCEED 2027 result",
+      "value": "6 March 2027",
+      "source": "UCEED 2027 brochure",
+      "status": "owner_verified"
+    },
+    {
+      "id": "uceed-2027-admit-card",
+      "exam": "UCEED",
+      "label": "UCEED 2027 admit card available from",
+      "value": "1 January 2027",
+      "source": "UCEED 2027 brochure",
+      "status": "owner_verified"
+    },
+    {
+      "id": "ceed-2027-exam-date",
+      "exam": "CEED",
+      "label": "CEED 2027 exam",
+      "value": "17 January 2027 (Sunday), 9 am to 12 noon",
+      "source": "CEED 2027 brochure",
+      "status": "owner_verified"
+    },
+    {
+      "id": "ceed-2027-result",
+      "exam": "CEED",
+      "label": "CEED 2027 result",
+      "value": "3 March 2027",
+      "source": "CEED 2027 brochure",
+      "status": "owner_verified"
+    },
+    {
+      "id": "nift-2027-reg-open",
+      "exam": "NIFT",
+      "label": "NIFT 2027 registration opened",
+      "value": "16 October 2026",
+      "source": "NIFT Admission Prospectus 2027 p.108",
+      "status": "official"
+    },
+    {
+      "id": "nift-2027-orientation",
+      "exam": "NIFT",
+      "label": "NIFT 2027 orientation",
+      "value": "28 July 2027",
+      "source": "NIFT Admission Prospectus 2027",
+      "status": "official"
+    }
+  ]
+}

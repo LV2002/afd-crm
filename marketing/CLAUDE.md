@@ -1,72 +1,96 @@
-# AFD India Marketing System — shared context
+# AFD India Marketing System: shared context
 
-Every agent in `.claude/agents/` and the orchestrator read this file first. It is the
-single source of truth about the company, the audience and the rules. Keep it short; deep
-material lives in `context/` and is loaded on demand.
+Every agent in `.claude/agents/` and the orchestrator read this file first. It is the single
+source of truth about the company, the audience and the rules. Deep material lives in
+`context/` and is loaded on demand. Compiled 2026-11-19 from the owner's Marketing Brain
+project and company chats. Anything marked UNKNOWN is genuinely unknown: ask, do not guess.
 
 ## Company
-AFD India: 25-year-old coaching institute that prepares students for design and
-architecture entrance exams — **NIFT, NID, UCEED** (also CEED, NATA, JEE Paper 2).
-Centres in Kochi and Kannur (Kerala), expanding. About 200 leads a month.
-Courses: Foundation, DWO, DAO, DRH, Crash, Repeat Batch, MDes, Consultancy.
-The CRM (the parent repo, `../`) is where every lead lands. Marketing feeds it; it does
-not replace it.
+AFD India ("afdindia", afdindia.com, built on Knorish): coaching for design and architecture
+entrance exams in Kerala, plus online coaching for students elsewhere. Exams: NIFT, NID,
+UCEED, CEED, NATA, JEE Main Paper 2. The site says "more than 25 years"; the founding year
+and proof are UNKNOWN, so never state a number of years in content.
+- Centres: Kochi (Edappally), Kannur. Calicut appears in the site footer but is NOT confirmed;
+  do not mention it. Other cities on the site are coaching pages only.
+- Courses (names): Foundation, DWO, DAO, DRH, Crash, Repeat Batch, MDes, Consultancy; the
+  site lists Design/Architecture Regular, Weekend, Advanced, Summer, Synopsis, NIFT
+  Situation Test, NID Studio Test, Portfolio Development, IIT Capsule. What DWO, DAO, DRH
+  stand for: UNKNOWN. Fees exist but are off limits in content (see rules).
+- About 200 leads a month. Lead forms write to a Google Sheet first, then the CRM (the parent
+  repo `../`), HMAC-signed.
+- Channels: Instagram (instagram.com/afdindia, confirm), Facebook, YouTube
+  (@afdindia.design.coaching), LinkedIn, Google Business Profiles (Kochi, Kannur).
+- Voice of the brand: the academy director, first person. Whether the director is the
+  person named "Julie James" in old config: UNKNOWN, do not name anyone.
 
 ## Audience
-Students aged **14–20** interested in design as a career, and their parents (parents pay
-and decide; students discover). Mostly Kerala, also wider India. Platform: Instagram first.
-Because many are minors: no pressure tactics, no fake urgency, no collecting more personal
-data than needed, no income/placement claims we cannot prove.
+Students interested in design as a career, ages **14 to 20** (the owner's definition), in
+Classes 9 to 12 and drop-year, with some graduates and PG students on the long tail. Parents
+pay and decide; students discover. Core Kerala, goal all-India (online). Motivations, fears
+and parent worries: UNKNOWN. Many readers are minors: no pressure, no fake urgency, no
+collecting more personal data than needed.
+
+## Hard content rules (the owner's, apply to every agent and every draft)
+1. English only. No em dashes or en dashes anywhere.
+2. **Never mention fees, prices, costs, discounts, EMI, "Rs" or the rupee symbol.**
+3. Never invent facts: no results, alumni, student numbers, awards, anecdotes, handles, phone numbers.
+4. Dates, deadlines, ages and exam figures only as `{{fact:id}}` placeholders with ids from
+   `context/facts.json` (status `official` or `owner_verified`). No fact, leave the detail out.
+5. No superlatives or promised results (full banned list in `context/brand-voice.md`). The
+   website's "No.1 coaching centre" claim is unverified: never repeat it. "Up to 90% scholarship"
+   (AFDSAT) is unverified: never promote it.
+6. Name no students from the toppers page (inconsistent data, consent unconfirmed).
+7. Promise a free resource only if it is marked existing, with a tested link, in
+   `context/offers-and-resources.md`.
+8. **Nothing publishes without the owner's approval. Never post twice. A global kill switch
+   defaults off.** Reworking old posts also needs approval.
 
 ## Knowledge files (load only what the task needs)
-- `context/exam-calendar.md` — exam dates, registration windows, result dates. Source for any date claim.
-- `context/brand-voice.md` — tone, words we use and avoid, example posts.
-- `context/content-playbook.md` — formats, hooks, editing styles that have worked for us.
-- `context/offers-and-resources.md` — free resources, lead magnets, their trigger keywords, links.
-- `research/` — competitor and niche findings written by the content strategist, dated.
-- `../docs/` — CRM docs (fees, SLAs, Meta app setup) when a question touches the product side.
+- `context/exam-calendar.md`: dates and eligibility, with status. Read its "Newest news" first (NIFT deadlines were extended, new dates unknown).
+- `context/facts.json`: the only citeable facts.
+- `context/brand-voice.md`: voice, banned words, design taste.
+- `context/content-playbook.md`: carousel contract, pillars, hypotheses.
+- `context/carousel-design.md`: look, sizes, colours (partly UNKNOWN).
+- `context/offers-and-resources.md`: free resources, triggers, contacts, automation rules.
+- `research/`: strategist findings, dated. `../docs/`: CRM docs (Meta app setup, SLAs).
 
-If a file is empty or marked TODO, say so and ask the user. Never invent exam dates, fees,
-results, or testimonials.
+## Existing system: Marketing Brain (decision needed)
+The owner already runs **Marketing Brain** (private repo `LV2002/Marketing-Brain`, TypeScript,
+localhost:4310): Social Studio (plans ideas, writes carousel JSON via the Claude CLI, lints,
+versions, approval), Page Studio, SEO Intelligence, Analyst. Its posting state machine
+(`@mb/publisher`) exists; real Instagram adapters are not built, and slide rendering to JPEG
+is not built. This system must complement it, not fork it: the carousel-maker emits the
+same JSON contract (see `context/content-playbook.md`) so output can be imported there.
+Which system owns scheduling and posting: OPEN, ask the owner before building posting.
 
 ## The agents
 | Agent | Job | Writes to |
 |---|---|---|
-| orchestrator | Chat with the user; split work; call the others; report back | — |
-| content-strategist | Research what works in the niche; hooks, formats, editing styles; produce a content plan | `research/`, `queue/ideas/` |
-| carousel-maker | Turn an approved idea into carousel slides (copy + design spec + files) | `queue/drafts/` |
-| poster | Publish items that a human has approved | moves `approved/` → `posted/` |
-| comment-replier | Draft or send replies to comments | `queue/drafts/` or posts per trigger rules |
-| dm-agent | Send a free resource by DM to people who comment a trigger keyword | log in `queue/posted/` |
+| orchestrator | Chat with the owner; split work; delegate; report back | n/a |
+| content-strategist | Research the niche; hooks, formats, editing; plan ideas | `research/`, `queue/ideas/` |
+| carousel-maker | Idea to carousel JSON + design spec + caption | `queue/drafts/` |
+| poster | Publish or hand over owner-approved items | `approved/` to `posted/` |
+| comment-replier | Draft replies to comments | `queue/drafts/` |
+| dm-agent | DM an existing free resource to people who comment its keyword | log in `queue/posted/` |
 
-## Workflow and approval gates
-`ideas/ → drafts/ → approved/ → posted/` (or `rejected/`). One markdown file per item,
-named `YYYY-MM-DD-slug.md`, with front-matter: `status`, `format`, `exam`, `hook`, `cta`,
+## Workflow and gates
+`ideas/ > drafts/ > approved/ > posted/` (or `rejected/`). One markdown file per item,
+`YYYY-MM-DD-slug.md`, front-matter: `status`, `format`, `exam`, `hook`, `cta`,
 `scheduled_for`, `ig_media_id` (after posting).
+1. Only the owner moves a file into `approved/`. Approval of one post is not approval of the next.
+2. Comment replies and DMs are draft-only until a row in `offers-and-resources.md` is `Enabled: yes`.
+3. Credentials come from environment variables only (`IG_USER_ID`, `META_PAGE_TOKEN`). Never write tokens to files.
+4. Every outward action is logged: what, where, when, which file.
 
-Hard rules:
-1. **Only a human moves a file into `approved/`.** The poster publishes nothing else.
-2. Comment replies and DMs are **draft-only** until the user enables an automation rule in
-   `context/offers-and-resources.md` (keyword, resource, reply text). Rule-matched
-   comment-to-DM may run automatically; anything else stays a draft.
-3. Never post, reply or DM in a way the user did not approve in kind. Approval of one
-   post is not approval of the next.
-4. Credentials come from environment variables only (`IG_USER_ID`, `META_PAGE_TOKEN`).
-   Never write tokens into files or the repo.
-5. Every outward action is logged: what, where, when, which file.
-
-## Instagram platform facts (check before promising a capability)
-- Publishing carousels (2–10 items) uses the Instagram Content Publishing API and needs
-  `instagram_content_publish`; replying to comments needs `instagram_manage_comments`.
-  Neither is in the current CRM Meta app (it has `instagram_basic` and
-  `instagram_manage_messages` only — see `../docs/META-APP-SETUP.md`). Adding them means
-  another App Review (`../docs/META-APP-REVIEW.md`). Until then, the poster prepares the
-  post for manual upload.
-- A comment can receive one private-reply DM, within 7 days of the comment. DMs outside
-  that window need the user to have messaged us first (24h window).
-- The Instagram account must be a Business/Creator account linked to a Facebook Page.
+## Instagram platform facts (verify before promising a capability)
+- Carousel publishing (2 to 10 images, public HTTPS JPEG, alt text up to 1000 chars) needs
+  `instagram_content_publish`; comment replies need `instagram_manage_comments`. The CRM's Meta
+  app has `instagram_basic` and `instagram_manage_messages` only (`../docs/META-APP-SETUP.md`);
+  a Meta developer app review is pending. Until approved, the poster hands over a ready package.
+- One private-reply DM per comment, within 7 days. Other DMs need the user to have messaged first (24h window).
+- Account must be Business/Creator, linked to a Facebook Page.
 
 ## Lead handoff
-Anyone who replies to a DM with interest should become a lead through the CRM's single
-ingestion path (`resolveOrCreateLead()` then `applyAssignment()`), source = Instagram.
-The dm-agent never writes leads to the database itself; it flags them for the CRM webhook.
+Interested people become leads through the CRM's single ingestion path
+(`resolveOrCreateLead()` then `applyAssignment()`), source = Instagram. Agents never write
+leads themselves; the CRM's webhook does.

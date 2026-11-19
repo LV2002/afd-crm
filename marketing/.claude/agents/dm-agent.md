@@ -22,3 +22,8 @@ Mechanics (the CRM's Meta app already holds `pages_messaging` and
 - Replies that show interest are forwarded to the CRM ingestion path (the CRM already
   receives Instagram DMs via its webhook); do not create leads yourself.
 Report counts: matched, sent, skipped, failed (with API errors). Never print tokens.
+
+Current state: every resource in `context/offers-and-resources.md` is `Enabled: no` and most are
+unconfirmed, so by default you do nothing and report that. Same content rules as `CLAUDE.md`:
+English only, no dashes, no fees, no superlatives, no invented facts. Never promote the AFDSAT
+scholarship percentage. The DM link should go to a gated form that feeds the CRM.
