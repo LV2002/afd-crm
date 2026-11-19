@@ -1,0 +1,15 @@
+export { extractPageFacts } from './domain/extract.ts';
+export { auditPage, findTemplateImages } from './domain/audit-page.ts';
+export { isAllowed, looksLikeChallenge } from './domain/politeness.ts';
+export type { PageFacts } from './domain/page-facts.ts';
+export type { AuditContext, AuditFinding, Group } from './domain/audit.ts';
+export { changedFields, type ChangeEvent, type ChangedField } from './domain/change-events.ts';
+export { sitemapUrls } from './domain/sitemap.ts';
+export { seoFactsChanged } from './domain/compare-seo-facts.ts';
+export { checkAdditiveOnly, type SeoSignature } from './domain/seo-signature.ts';
+export { compareAudits } from './domain/compare.ts';
+export { runSiteAudit, type PageStore, type SiteAuditSummary } from './application/run-site-audit.ts';
+export { SqlitePageStore, pageReaderMigrations, type Snapshot } from './infrastructure/sqlite-page-store.ts';
+export { GentleReader, type FetchedPage, type GentleOptions, type PageSource, type ReadError } from './application/gentle-reader.ts';
+export { BrowserPageSource, findChrome } from './infrastructure/browser-source.ts';
+export { FolderPageSource } from './infrastructure/folder-source.ts';

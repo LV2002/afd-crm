@@ -22,7 +22,7 @@ up". Old median slide had 16 words; the aim moved to real substance per slide.
 - Each slide: short title (up to 120 chars), at most 3 lines, at most 45 words.
 - Caption: two or three short sentences, ends with a question, no hashtags, at most 2200 chars.
 - Default CTA: "Save this for later and send it to a friend preparing for the same exam", unless a real free resource is attached.
-- Dates, deadlines, ages and exam figures only as `{{fact:id}}` placeholders, ids from `context/facts.json`. If no fact exists, leave the detail out.
+- Dates, deadlines, ages and exam figures only as `{{fact:id}}` placeholders, ids from `config/facts.seed.json`. If no fact exists, leave the detail out.
 
 ## Content pillars (placeholders in Marketing Brain; the owner's own 5 to 8 are still open)
 | Pillar | Weight | Examples |

@@ -1,0 +1,76 @@
+{
+  "intents": {
+    "dates": {
+      "headline": "Never miss a {exam} deadline",
+      "body": "Share your name and number. A mentor will call you with the key dates and the next step for {exam}.",
+      "strip": "Deadlines matter. Get the {exam} dates explained by a mentor.",
+      "button": "Call me with the dates",
+      "offerKind": "career-call"
+    },
+    "syllabus": {
+      "headline": "Know exactly what to study for {exam}",
+      "body": "A mentor can walk you through the syllabus and turn it into a plan that fits your weeks.",
+      "strip": "Not sure where to start? A mentor can turn the syllabus into a plan.",
+      "button": "Plan my preparation",
+      "offerKind": "demo-class"
+    },
+    "eligibility": {
+      "headline": "Not sure you are eligible for {exam}?",
+      "body": "Share your details and a mentor will check them against the official rules with you.",
+      "strip": "Wondering if you qualify? A mentor can check with you.",
+      "button": "Check my eligibility",
+      "offerKind": "career-call"
+    },
+    "papers": {
+      "headline": "Practise with real {exam} papers",
+      "body": "Get the free practice papers and see what the exam really asks.",
+      "strip": "Free practice papers for {exam}, sent to you.",
+      "button": "Send me the papers",
+      "offerKind": "lead-magnet"
+    },
+    "preparation": {
+      "headline": "Get a preparation plan for {exam}",
+      "body": "Try a free demo class and meet the mentors before you decide anything.",
+      "strip": "See how we teach {exam}. Try a free demo class.",
+      "button": "Book my free demo class",
+      "offerKind": "demo-class"
+    },
+    "colleges": {
+      "headline": "Find the right college for your goals",
+      "body": "A mentor can help you understand your options and plan the steps to get there.",
+      "strip": "Unsure which college to aim for? Talk to a mentor.",
+      "button": "Talk to a mentor",
+      "offerKind": "career-call"
+    },
+    "coaching": {
+      "headline": "See how we teach {exam}",
+      "body": "Sit in on a free demo class at Kochi or Kannur and meet the mentors.",
+      "strip": "Visit a free demo class and meet the mentors.",
+      "button": "Book my free demo class",
+      "offerKind": "demo-class"
+    },
+    "career": {
+      "headline": "Find the design path that fits you",
+      "body": "Talk to a mentor about courses, careers and the exams that lead to them.",
+      "strip": "Choosing a design career? Talk to a mentor first.",
+      "button": "Request a free call",
+      "offerKind": "career-call"
+    },
+    "general": {
+      "headline": "Talk to a mentor about {exam}",
+      "body": "Tell us which exam you are aiming for and a mentor will point you to the right first step.",
+      "strip": "Questions about {exam}? A mentor can help.",
+      "button": "Request a call back",
+      "offerKind": "demo-class"
+    }
+  },
+  "returning": {
+    "headline": "Still thinking about {exam}?",
+    "body": "You have been reading about it. Share your number and a mentor will answer your questions.",
+    "button": "Talk to a mentor"
+  },
+  "inline": { "firstAfterSection": 2, "everyNSections": 3, "max": 2 },
+  "slideIn": { "enabled": true, "afterScrollPct": 55, "afterSeconds": 40, "hideDays": 7 },
+  "whatsappWithExam": "Hi, I am reading \"{title}\" on afdindia.com and have a question about {exam}.",
+  "whatsappNoExam": "Hi, I am reading \"{title}\" on afdindia.com and have a question."
+}

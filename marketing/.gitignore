@@ -1,2 +1,7 @@
 assets/*-preview/
-research/keywords/spend.json
+node_modules/
+secrets/*
+data/
+publish/
+.env
+!secrets/.gitkeep

@@ -1,0 +1,24 @@
+{
+  "centres": [
+    {
+      "id": "kochi",
+      "streetAddress": "",
+      "locality": "",
+      "postalCode": "",
+      "mapsUrl": "https://share.google/kxp9jszK7pEc25pc3",
+      "mapEmbedUrl": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3928.837500403784!2d76.30900557580878!3d10.030264990076711!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3b080d530f2c7db9%3A0x7af878664eff59a7!2safdindia%20-%20NID%20%7C%20NIFT%20%7C%20UCEED%20%7C%20NATA%20Coaching%20Centre!5e0!3m2!1sen!2sin!4v1793124407501!5m2!1sen!2sin",
+      "reviewsUrl": "",
+      "openingHours": ""
+    },
+    {
+      "id": "kannur",
+      "streetAddress": "",
+      "locality": "",
+      "postalCode": "",
+      "mapsUrl": "https://share.google/6FW32fIhu6Vo82BW6",
+      "mapEmbedUrl": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3904.378858657905!2d75.37317197583081!3d11.878685788345189!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ba43d6f8628a8c9%3A0xdc31c7dddeaa3f72!2safdindia%20-%20NID%20%7C%20NIFT%20%7C%20UCEED%20%7C%20NATA%20Coaching%20Centre!5e0!3m2!1sen!2sin!4v1793124488669!5m2!1sen!2sin",
+      "reviewsUrl": "",
+      "openingHours": ""
+    }
+  ]
+}

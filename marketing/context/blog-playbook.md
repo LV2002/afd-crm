@@ -30,7 +30,7 @@ Do not copy the old posts' em dashes, stale 2026 dates or repeated boilerplate.
 ## Types of page
 hub (one complete guide per exam), comparison (NID vs NIFT, B.Des vs B.Arch: never say one is
 better), question page, college page (facts only), local page (see below), tool/career guide.
-Comparison and college pages use only facts from `context/facts.json` or official documents; where a
+Comparison and college pages use only facts from `config/facts.seed.json` or official documents; where a
 point is not a fact, tell the reader to check the official brochure.
 
 ## Local pages ("UCEED coaching in Ernakulam")
@@ -65,15 +65,19 @@ flow back and pages can be judged on admissions. The site-wide footer script (Ma
 conversion actions on URLs starting `/publisher` or `/user`. Conversion changes must never alter existing
 SEO (URLs, titles, headings, text, schema) of live pages.
 
-## Knorish delivery (no server access)
-Final page = six paste-in pieces: meta title, meta description, keywords, header code (Article and FAQ
-JSON-LD), body HTML (no script, style or event handlers), footer code. Marketing Brain's `buildKnorishPackage`
-makes these from a checked draft. Until that is wired into this system, the blog-writer delivers the
-markdown draft, meta fields, keyword plan and FAQ JSON-LD, and the owner runs the six-piece build.
-Protected pages (city pages, `config/protected-pages.json` in Marketing Brain) are never edited.
+## Knorish delivery (no server access): built in `tools/knorish-build.mjs`
+Final page = six paste-in pieces: meta title, meta description, meta keywords, header code (page design plus Article, FAQ,
+breadcrumb and centre JSON-LD), page body, footer code (the form script). The page body is the **article only**: breadcrumb,
+title, byline, tailored call-to-action strip, key takeaways, contents, sections, callouts, FAQ accordion, closing CTA, centres
+block, author card, "read next", the right-hand rail (contents, live key dates, the exam's free resource, mentor buttons) and
+the bottom call bar. It contains no site top navigation and no site footer: those stay Knorish's. The body is refused if it
+contains a script, style, event handler or any iframe that is not Google's map. Facts stay live (tagged, refreshed by the
+footer script). Run: `LEAD_FORM_ENDPOINT=<Apps Script /exec address> node tools/knorish-build.mjs queue/approved/<file>.md`
+(the address is deliberately not stored in this repository). Output: `publish/<slug>/`. Protected pages (city pages) are never edited.
 
 ## Keyword rules
-Primary keyword chosen from `research/keywords/<date>.json` (volume, India). Prefer a keyword with real
-volume that the site has no page for, or a page ranking 5 to 15 that can be reworked. One primary keyword
+Primary keyword chosen from `research/keywords/plan-<date>.md` (free demand signals, no search volumes: Search Console
+impressions and how many autocomplete seeds suggest it). Prefer a keyword people clearly want that the site has no page for,
+or a page ranking 5 to 15 that can be reworked. One primary keyword
 per page; do not make a second page for a keyword an existing page already covers. Estimated clicks are
 estimates and must be labelled so; nobody can promise a ranking.

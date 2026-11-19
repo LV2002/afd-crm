@@ -1,0 +1,7 @@
+{
+  "name": "@mb/facts",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@mb/platform": "*", "zod": "^4.6.7" }
+}

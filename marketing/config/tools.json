@@ -1,0 +1,194 @@
+{
+  "tools": [
+    {
+      "kind": "dob-cutoff",
+      "id": "age-uceed",
+      "exam": "UCEED",
+      "title": "Check your UCEED age eligibility",
+      "factId": "uceed-2027-age",
+      "note": "This applies the age rule printed in the UCEED brochure. It is a guide: read the official brochure before you apply.",
+      "categories": [
+        {
+          "label": "Open, EWS or OBC-NCL",
+          "bornOnOrAfter": "2002-10-01"
+        },
+        {
+          "label": "SC, ST or PwD",
+          "bornOnOrAfter": "1997-10-01"
+        }
+      ]
+    },
+    {
+      "kind": "dob-cutoff",
+      "id": "age-nid",
+      "exam": "NID",
+      "title": "Check your NID age eligibility",
+      "factId": "nid-2027-age",
+      "note": "This applies the age rule printed in the NID admissions handbook. It is a guide: read the official handbook before you apply.",
+      "categories": [
+        {
+          "label": "General or Gen-EWS",
+          "bornOnOrAfter": "2006-07-01"
+        },
+        {
+          "label": "OBC-NCL, SC or ST",
+          "bornOnOrAfter": "2003-07-01"
+        },
+        {
+          "label": "PwD",
+          "bornOnOrAfter": "2001-07-01"
+        }
+      ]
+    },
+    {
+      "kind": "age-on-date",
+      "id": "age-nift",
+      "exam": "NIFT",
+      "title": "Check your NIFT age eligibility",
+      "factId": "nift-2027-age",
+      "note": "This applies the age rule printed in the NIFT prospectus for the undergraduate programmes. It is a guide: read the official prospectus before you apply.",
+      "asOn": "2027-08-01",
+      "youngerThanYears": 24,
+      "categories": [
+        {
+          "label": "General, EWS or OBC-NCL",
+          "extraYears": 0
+        },
+        {
+          "label": "SC, ST or PwD",
+          "extraYears": 5
+        }
+      ]
+    },
+    {
+      "kind": "choice",
+      "id": "eligibility-uceed",
+      "exam": "UCEED",
+      "title": "Can you apply for UCEED?",
+      "factId": "uceed-2027-eligibility",
+      "note": "This applies the eligibility rule printed in the UCEED brochure. It is a guide: read the official brochure before you apply.",
+      "questions": [
+        {
+          "id": "class12",
+          "text": "Your Class 12",
+          "options": [
+            {
+              "value": "passed-2026",
+              "label": "Passed in 2026"
+            },
+            {
+              "value": "appearing-2027",
+              "label": "Appearing in 2027 for the first time"
+            },
+            {
+              "value": "other",
+              "label": "Passed earlier, or appeared before"
+            }
+          ]
+        },
+        {
+          "id": "attempts",
+          "text": "UCEED attempts so far",
+          "options": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "one",
+              "label": "One (last year)"
+            },
+            {
+              "value": "two",
+              "label": "Two, or one that was not last year"
+            }
+          ]
+        }
+      ],
+      "outcomes": [
+        {
+          "when": {
+            "class12": "other"
+          },
+          "verdict": "no",
+          "text": "The rule asks for Class 12 passed in 2026, or appearing in 2027 for the first time. Read the official brochure for any exception."
+        },
+        {
+          "when": {
+            "attempts": "two"
+          },
+          "verdict": "no",
+          "text": "The rule allows at most two attempts, in consecutive years. Read the official brochure to check your case."
+        },
+        {
+          "when": {},
+          "verdict": "yes",
+          "text": "On this rule you can apply. Any Class 12 stream is allowed. Check the official brochure for the details."
+        }
+      ]
+    },
+    {
+      "kind": "choice",
+      "id": "eligibility-nift",
+      "exam": "NIFT",
+      "title": "Which NIFT programme can you apply for?",
+      "factId": "nift-2027-eligibility-ug",
+      "note": "This applies the undergraduate eligibility rule printed in the NIFT prospectus. It is a guide: read the official prospectus before you apply.",
+      "questions": [
+        {
+          "id": "course",
+          "text": "Programme you want",
+          "options": [
+            {
+              "value": "bdes",
+              "label": "B.Des (design)"
+            },
+            {
+              "value": "bftech",
+              "label": "B.F.Tech (fashion technology)"
+            }
+          ]
+        },
+        {
+          "id": "maths",
+          "text": "Mathematics in Class 12",
+          "options": [
+            {
+              "value": "yes",
+              "label": "Yes, I studied it"
+            },
+            {
+              "value": "no",
+              "label": "No"
+            }
+          ]
+        }
+      ],
+      "outcomes": [
+        {
+          "when": {
+            "course": "bdes"
+          },
+          "verdict": "yes",
+          "text": "On this rule B.Des is open to Class 12 students of any stream. Check the official prospectus for the other routes and details."
+        },
+        {
+          "when": {
+            "course": "bftech",
+            "maths": "yes"
+          },
+          "verdict": "yes",
+          "text": "On this rule you can apply for B.F.Tech, which needs Mathematics. Check the official prospectus for the details."
+        },
+        {
+          "when": {
+            "course": "bftech",
+            "maths": "no"
+          },
+          "verdict": "no",
+          "text": "B.F.Tech needs Mathematics, or an engineering diploma. B.Des is open to any stream. Read the official prospectus for your case."
+        }
+      ]
+    }
+  ]
+}

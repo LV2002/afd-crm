@@ -1,0 +1,28 @@
+{
+  "endpoint": "",
+  "centres": [
+    {
+      "id": "kochi",
+      "name": "Kochi",
+      "phone": "9895484652",
+      "whatsapp": "919895484652"
+    },
+    {
+      "id": "kannur",
+      "name": "Kannur",
+      "phone": "9895484651",
+      "whatsapp": "919895484651"
+    }
+  ],
+  "primaryCentreId": "kochi",
+  "exams": [
+    "NIFT",
+    "NID",
+    "UCEED",
+    "CEED",
+    "NATA",
+    "JEE Paper 2",
+    "Not sure yet"
+  ],
+  "_note": "Apps Script /exec address is NOT stored in this public repo. Set LEAD_FORM_ENDPOINT in the environment when building pages."
+}

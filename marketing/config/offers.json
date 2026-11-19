@@ -1,0 +1,92 @@
+{
+  "offers": [
+    {
+      "id": "demo-class",
+      "kind": "demo-class",
+      "title": "Try a free demo class",
+      "promise": "Sit in on a real class and meet the mentors before you decide anything.",
+      "button": "Book my free demo class",
+      "exams": [],
+      "deliverUrl": ""
+    },
+    {
+      "id": "nid-question-bank",
+      "kind": "lead-magnet",
+      "title": "Free NID question bank with solutions",
+      "promise": "Past papers, solved step by step, so you can see what the exam really asks.",
+      "button": "Send me the question bank",
+      "exams": [
+        "NID"
+      ],
+      "deliverUrl": "/page/nid-b-des-solved-question-bank-self-study"
+    },
+    {
+      "id": "nata-past-papers",
+      "kind": "lead-magnet",
+      "title": "NATA previous year question papers",
+      "promise": "Practise with real papers and check your answers against the solutions.",
+      "button": "Send me the papers",
+      "exams": [
+        "NATA",
+        "JEE Paper 2"
+      ],
+      "deliverUrl": "/page/nata-past-question-papers"
+    },
+    {
+      "id": "self-study-materials",
+      "kind": "lead-magnet",
+      "title": "Free self-study materials for design entrance exams",
+      "promise": "Study notes and practice material you can start using today.",
+      "button": "Send me the materials",
+      "exams": [
+        "NIFT",
+        "UCEED",
+        "CEED"
+      ],
+      "deliverUrl": "/page/self-study-materials-nata-nift-nid"
+    },
+    {
+      "id": "career-call",
+      "kind": "career-call",
+      "title": "Free career guidance call",
+      "promise": "Talk to a mentor about which design or architecture path suits you.",
+      "button": "Request a call",
+      "exams": [],
+      "deliverUrl": ""
+    },
+    {
+      "id": "career-webinar",
+      "kind": "webinar",
+      "title": "Design careers webinar",
+      "promise": "Learn about careers, courses and entrance exams in design, architecture and fashion.",
+      "button": "Save my seat",
+      "exams": [],
+      "deliverUrl": "/page/design-career-webinar"
+    },
+    {
+      "id": "afdsat",
+      "kind": "scholarship-test",
+      "title": "Take the AFDSAT",
+      "promise": "get upto 90% scholarship",
+      "button": "Apply for AFDSAT",
+      "exams": [],
+      "deliverUrl": "",
+      "resourceId": "",
+      "look": "black"
+    }
+  ],
+  "deadlineFacts": [
+    {
+      "exam": "UCEED",
+      "factId": "uceed-2027-reg-close"
+    },
+    {
+      "exam": "CEED",
+      "factId": "ceed-2027-reg-close"
+    },
+    {
+      "exam": "NID",
+      "factId": "nid-2027-apply-close"
+    }
+  ]
+}

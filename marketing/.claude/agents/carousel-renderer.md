@@ -11,7 +11,7 @@ Read `CLAUDE.md`, `context/carousel-design.md` and `context/design-tokens.json`.
    only the owner approves. (`--preview` exists for looking at a draft; its output is never for posting.)
 2. Run: `node tools/render-carousel.mjs queue/approved/<file>.md`
    The tool re-checks the carousel contract, resolves `{{fact:id}}` placeholders from
-   `context/facts.json` (refusing unknown or unverified facts), renders each slide with headless
+   `config/facts.seed.json` (refusing unknown or unverified facts), renders each slide with headless
    Chromium, and fails if any slide's text overflows. Output: `assets/<file-name>/slide-NN.jpg` and
    `manifest.json` (alt text per slide, resolved caption, lead-magnet keyword).
 3. If it fails, do not edit the approved copy yourself. Report the exact errors to the orchestrator:

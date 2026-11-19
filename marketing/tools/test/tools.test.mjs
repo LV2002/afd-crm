@@ -5,11 +5,11 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDraft, lintCarousel, loadFacts } from '../lib/carousel.mjs';
-import { candidates, checkBudget, fetchVolumes, rank } from '../lib/keywords.mjs';
+import { candidates, collate, expansionQueries, plan, suggest } from '../lib/keywords.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const rules = JSON.parse(readFileSync(`${root}/config/copy-rules.json`, 'utf8'));
-const facts = loadFacts(`${root}/context/facts.json`);
+const facts = loadFacts(`${root}/config/facts.seed.json`);
 const sample = () => parseDraft(readFileSync(`${root}/tools/test/fixtures/sample.md`, 'utf8')).carousel;
 
 test('sample carousel passes the contract', () => {
@@ -47,27 +47,11 @@ test('keyword candidates cover exams x places and templates without duplicates',
   assert.equal(new Set(keys).size, keys.length);
   assert.ok(keys.includes('nid coaching in kochi')); assert.ok(keys.includes('nata coaching online')); assert.ok(keys.includes('nid studio test')); assert.ok(!keys.includes('nata studio test'));
 });
-test('budget cap of zero blocks paid calls; a cap lets them through until exceeded', () => {
-  assert.match(checkBudget(0, 0, 0.1), /cap/); assert.equal(checkBudget(5, 1, 0.1), null); assert.match(checkBudget(5, 4.95, 0.1), /past the cap/);
-});
-test('fetchVolumes parses a DataForSEO reply and reports auth and server errors', async () => {
-  const ok = { ok: true, status: 200, json: async () => ({ cost: 0.08, tasks: [{ status_code: 20000, result: [{ keyword: 'NID Eligibility', search_volume: 2400, competition_index: 12 }] }] }) };
-  const r = await fetchVolumes(['nid eligibility'], { login: 'a', password: 'b', fetchImpl: async () => ok });
-  assert.equal(r.volumes['nid eligibility'].volume, 2400); assert.equal(r.costUsd, 0.08);
-  assert.match((await fetchVolumes(['x'], { login: '', password: '' })).error, /not set/);
-  assert.match((await fetchVolumes(['x'], { login: 'a', password: 'b', fetchImpl: async () => ({ ok: false, status: 401 }) })).error, /refused/);
-  assert.match((await fetchVolumes(['x'], { login: 'a', password: 'b', fetchImpl: async () => { throw new Error('x'); } })).error, /reach/);
-});
-test('rank sorts by volume and puts unknown last', () => {
-  const r = rank([{ keyword: 'a' }, { keyword: 'b' }, { keyword: 'c' }], { b: { volume: 50, competition: 1 }, a: { volume: 10, competition: 1 } });
-  assert.deepEqual(r.map((x) => x.keyword), ['b', 'a', 'c']);
-});
-
 import { guard, checkBlog } from '../lib/copy.mjs';
 test('copy guard blocks dashes, fees, anecdotes, unknown facts; passes clean text', () => {
   const bad = guard('I remember a student. The fee is Rs 500 — {{fact:nope}}', rules, facts).blocking.join('\n');
   assert.match(bad, /dash/); assert.match(bad, /fee/); assert.match(bad, /anecdote/); assert.match(bad, /Unknown or unverified fact/);
-  assert.deepEqual(guard('Plan your week. {{fact:nid-2027-prelims-date}}', rules, facts).blocking, []);
+  assert.deepEqual(guard('Plan your week. {{fact:nid-2027-dat-prelims-date}}', rules, facts).blocking, []);
 });
 test('blog check enforces title, meta, H1, takeaways, question H2s', () => {
   const meta = 'x'.repeat(130);
@@ -76,4 +60,33 @@ test('blog check enforces title, meta, H1, takeaways, question H2s', () => {
   const bad = checkBlog(good.replace('# NID DAT eligibility', '# Something else'), 'nid dat eligibility').blocking.join('\n');
   assert.match(bad, /H1 must contain/);
   assert.match(checkBlog('no header', 'x').blocking.join(), /===/);
+});
+
+test('autocomplete expansion builds quick and full query sets', () => {
+  const q = expansionQueries(['NID'], 'quick'); assert.ok(q.includes('nid') && q.includes('how nid') && q.includes('nid after 12th'));
+  assert.equal(expansionQueries(['NID'], 'full').length, q.length + 26);
+});
+test('suggest is gentle: uses the cache, honours the cap, stops at the first 429, never throws on a network error', async () => {
+  const ok = (arr) => async () => ({ ok: true, status: 200, json: async () => ['q', arr] });
+  const cache = {};
+  const r1 = await suggest(['a', 'b', 'c'], { fetchImpl: ok(['x y', 'x z']), delayMs: 0, max: 2, cache });
+  assert.equal(r1.used, 2); assert.match(r1.stopped, /cap/);
+  let calls = 0; const counting = async () => { calls++; return { ok: true, status: 200, json: async () => ['q', ['n']] }; };
+  await suggest(['a', 'b'], { fetchImpl: counting, delayMs: 0, cache }); assert.equal(calls, 0, 'cached queries are not requested again');
+  const limited = await suggest(['p', 'q'], { fetchImpl: async () => ({ ok: false, status: 429, json: async () => ({}) }), delayMs: 0, cache: {} });
+  assert.match(limited.stopped, /429/); assert.equal(limited.used, 1);
+  assert.match((await suggest(['p'], { fetchImpl: async () => { throw new Error('x'); }, delayMs: 0, cache: {} })).stopped, /reach/);
+});
+test('collate counts seeds and best rank; plan ranks rework and new-page candidates above one-offs', () => {
+  const rows = collate([{ source: 'google', results: [{ query: 'nid', suggestions: ['nid dat syllabus', 'nid eligibility'] }, { query: 'how nid', suggestions: ['nid eligibility'] }] }]);
+  const elig = rows.find((r) => r.term === 'nid eligibility'); assert.equal(elig.seedCount, 2); assert.equal(elig.bestRank, 1);
+  const ranked = plan({ suggestions: rows, gscQueries: [{ query: 'nid dat cutoff', impressions: 400, clicks: 0, position: 9 }], pageOf: { 'nid dat cutoff': '/blog/post/cutoff' } });
+  assert.equal(ranked[0].keyword, 'nid dat cutoff'); assert.match(ranked[0].reasons.join(), /rework/);
+  assert.match(ranked.find((r) => r.keyword === 'nid eligibility').reasons.join(), /new page candidate/);
+  assert.match(ranked.find((r) => r.keyword === 'nid dat syllabus').reasons.join(), /one-off/);
+});
+
+test('plan drops fee and price searches (house rule) when told to', () => {
+  const rows = plan({ suggestions: [{ term: 'nid coaching fees', seedCount: 3, bestRank: 1, sources: ['google'] }, { term: 'nid syllabus', seedCount: 3, bestRank: 2, sources: ['google'] }], exclude: (k) => /fee/.test(k) });
+  assert.deepEqual(rows.map((r) => r.keyword), ['nid syllabus']);
 });

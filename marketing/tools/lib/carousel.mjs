@@ -18,7 +18,8 @@ export function parseDraft(text) {
 
 export function loadFacts(path) {
   const f = JSON.parse(readFileSync(path, 'utf8'));
-  return new Map(f.facts.filter((x) => x.status === 'official' || x.status === 'owner_verified').map((x) => [x.id, x]));
+  const list = Array.isArray(f) ? f : f.facts;
+  return new Map(list.filter((x) => x.status === 'official' || x.status === 'owner_verified').map((x) => [x.id, x]));
 }
 
 const PLACEHOLDER = /\{\{fact:([a-z0-9-]+)\}\}/g;

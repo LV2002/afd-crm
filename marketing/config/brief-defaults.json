@@ -1,0 +1,16 @@
+{
+  "audience": "Class 12 students in Kerala and their parents",
+  "searchIntent": "informational",
+  "contentGoal": "education",
+  "funnelStage": "middle",
+  "cta": {
+    "text": "Book a free demo class"
+  },
+  "readerAnswers": {
+    "who": "A Class 12 student, or a parent, in Kerala deciding how to prepare",
+    "outcome": "Knows exactly what to do next to prepare well",
+    "whyUs": "A coaching academy that teaches only design and architecture entrance exams",
+    "proof": "Clear, checked exam information and practical preparation steps",
+    "nextStep": "Book a free demo class"
+  }
+}

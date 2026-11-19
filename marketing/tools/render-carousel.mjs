@@ -22,7 +22,7 @@ if (!preview && meta.status !== 'approved') {
 }
 const rules = JSON.parse(readFileSync(`${root}/config/copy-rules.json`, 'utf8'));
 const tokens = JSON.parse(readFileSync(`${root}/context/design-tokens.json`, 'utf8'));
-const facts = loadFacts(`${root}/context/facts.json`);
+const facts = loadFacts(`${root}/config/facts.seed.json`);
 
 const { blocking, advisory } = lintCarousel(carousel, rules, facts);
 if (blocking.length) { console.error('Draft fails the carousel contract:\n- ' + blocking.join('\n- ')); process.exit(1); }

@@ -1,0 +1,451 @@
+[
+  {
+    "id": "uceed-2027-exam-date",
+    "exam": "UCEED",
+    "label": "UCEED 2027 exam date and time",
+    "value": "Sunday 17 January 2027, 9:00 am to 12:00 noon",
+    "source": "UCEED 2027 brochure (www.uceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified",
+    "date": "2027-01-17"
+  },
+  {
+    "id": "uceed-2027-duration",
+    "exam": "UCEED",
+    "label": "UCEED 2027 duration and marks",
+    "value": "3 hours, 300 marks, English only",
+    "source": "UCEED 2027 brochure (www.uceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "uceed-2027-reg-open",
+    "exam": "UCEED",
+    "label": "UCEED 2027 registration opens",
+    "value": "1 October 2026",
+    "source": "UCEED 2027 brochure (www.uceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified",
+    "date": "2026-10-01"
+  },
+  {
+    "id": "uceed-2027-reg-close",
+    "exam": "UCEED",
+    "label": "UCEED 2027 registration closes (regular fee)",
+    "value": "31 October 2026",
+    "source": "UCEED 2027 brochure (www.uceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified",
+    "date": "2026-10-31"
+  },
+  {
+    "id": "uceed-2027-reg-late",
+    "exam": "UCEED",
+    "label": "UCEED 2027 late registration closes",
+    "value": "6 November 2026, 5:00 pm",
+    "source": "UCEED 2027 brochure (www.uceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified",
+    "date": "2026-11-06"
+  },
+  {
+    "id": "uceed-2027-admit-card",
+    "exam": "UCEED",
+    "label": "UCEED 2027 admit card from",
+    "value": "1 January 2027",
+    "source": "UCEED 2027 brochure (www.uceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified",
+    "date": "2027-01-01"
+  },
+  {
+    "id": "uceed-2027-result",
+    "exam": "UCEED",
+    "label": "UCEED 2027 results",
+    "value": "6 March 2027",
+    "source": "UCEED 2027 brochure (www.uceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified",
+    "date": "2027-03-06"
+  },
+  {
+    "id": "uceed-2027-fee-general",
+    "exam": "UCEED",
+    "label": "UCEED 2027 fee, general and other candidates",
+    "value": "Rs 4,000 (plus Rs 500 late fee)",
+    "source": "UCEED 2027 brochure (www.uceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "uceed-2027-fee-women-reserved",
+    "exam": "UCEED",
+    "label": "UCEED 2027 fee, women and SC/ST/PwD",
+    "value": "Rs 2,000 (plus Rs 500 late fee)",
+    "source": "UCEED 2027 brochure (www.uceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "uceed-2027-part-a",
+    "exam": "UCEED",
+    "label": "UCEED 2027 Part A",
+    "value": "Computer based, 200 marks, up to 2 hours: 14 numerical questions, 15 multiple select, 28 multiple choice",
+    "source": "UCEED 2027 brochure (www.uceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "uceed-2027-part-b",
+    "exam": "UCEED",
+    "label": "UCEED 2027 Part B",
+    "value": "Drawing and design aptitude, 100 marks, up to 1 hour, two questions answered in a booklet",
+    "source": "UCEED 2027 brochure (www.uceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "uceed-2027-eligibility",
+    "exam": "UCEED",
+    "label": "UCEED 2027 eligibility",
+    "value": "Class XII passed in 2026 or appearing in 2027 for the first time, any stream; at most two attempts in consecutive years",
+    "source": "UCEED 2027 brochure (www.uceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "uceed-2027-age",
+    "exam": "UCEED",
+    "label": "UCEED 2027 age limit",
+    "value": "Born on or after 1 October 2002 (Open, EWS, OBC-NCL); on or after 1 October 1997 (SC, ST, PwD)",
+    "source": "UCEED 2027 brochure (www.uceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "uceed-2027-participating-iits",
+    "exam": "UCEED",
+    "label": "Institutes admitting through UCEED",
+    "value": "IIT Bombay, IIT Delhi, IIT Guwahati, IIT Hyderabad, IIT Indore, IIT Roorkee and IIITDM Jabalpur",
+    "source": "UCEED 2027 brochure (www.uceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "ceed-2027-exam-date",
+    "exam": "CEED",
+    "label": "CEED 2027 exam date and time",
+    "value": "Sunday 17 January 2027, 9:00 am to 12:00 noon",
+    "source": "CEED 2027 brochure (www.ceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified",
+    "date": "2027-01-17"
+  },
+  {
+    "id": "ceed-2027-reg-close",
+    "exam": "CEED",
+    "label": "CEED 2027 registration closes (regular fee)",
+    "value": "31 October 2026",
+    "source": "CEED 2027 brochure (www.ceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified",
+    "date": "2026-10-31"
+  },
+  {
+    "id": "ceed-2027-reg-late",
+    "exam": "CEED",
+    "label": "CEED 2027 late registration closes",
+    "value": "6 November 2026, 5:00 pm",
+    "source": "CEED 2027 brochure (www.ceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified",
+    "date": "2026-11-06"
+  },
+  {
+    "id": "ceed-2027-result",
+    "exam": "CEED",
+    "label": "CEED 2027 results",
+    "value": "3 March 2027",
+    "source": "CEED 2027 brochure (www.ceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified",
+    "date": "2027-03-03"
+  },
+  {
+    "id": "ceed-2027-fee-general",
+    "exam": "CEED",
+    "label": "CEED 2027 fee, general and other candidates",
+    "value": "Rs 4,000 (plus Rs 500 late fee)",
+    "source": "CEED 2027 brochure (www.ceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "ceed-2027-fee-women-reserved",
+    "exam": "CEED",
+    "label": "CEED 2027 fee, women and SC/ST/PwD",
+    "value": "Rs 2,000 (plus Rs 500 late fee)",
+    "source": "CEED 2027 brochure (www.ceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "ceed-2027-part-a",
+    "exam": "CEED",
+    "label": "CEED 2027 Part A",
+    "value": "Computer based, 150 marks, 1 hour: 8 numerical, 10 multiple select, 26 multiple choice",
+    "source": "CEED 2027 brochure (www.ceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "ceed-2027-part-b",
+    "exam": "CEED",
+    "label": "CEED 2027 Part B",
+    "value": "Design, drawing and writing, 100 marks, 2 hours, five questions",
+    "source": "CEED 2027 brochure (www.ceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "ceed-2027-scoring",
+    "exam": "CEED",
+    "label": "CEED 2027 final score",
+    "value": "0.25 x Part A marks + 0.75 x Part B marks; Part B is checked only for candidates shortlisted on Part A",
+    "source": "CEED 2027 brochure (www.ceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "ceed-2027-limits",
+    "exam": "CEED",
+    "label": "CEED age and attempts",
+    "value": "No age limit and no limit on the number of attempts",
+    "source": "CEED 2027 brochure (www.ceed.iitb.ac.in), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "nid-2027-apply-open",
+    "exam": "NID",
+    "label": "NID 2027 applications open",
+    "value": "10 September 2026",
+    "source": "NID admissions handbook 2027-28 (admissions.nid.edu), read 2026-10-14",
+    "status": "owner_verified",
+    "date": "2026-09-10"
+  },
+  {
+    "id": "nid-2027-apply-close",
+    "exam": "NID",
+    "label": "NID 2027 applications close",
+    "value": "11:59 pm IST on Monday 30 November 2026",
+    "source": "NID admissions handbook 2027-28 (admissions.nid.edu), read 2026-10-14",
+    "status": "owner_verified",
+    "date": "2026-11-30"
+  },
+  {
+    "id": "nid-2027-dat-prelims-date",
+    "exam": "NID",
+    "label": "NID DAT Prelims 2027 date",
+    "value": "Sunday 20 December 2026",
+    "source": "NID admissions handbook 2027-28 (admissions.nid.edu), read 2026-10-14",
+    "status": "owner_verified",
+    "date": "2026-12-20"
+  },
+  {
+    "id": "nid-2027-admit-card",
+    "exam": "NID",
+    "label": "NID DAT Prelims admit card",
+    "value": "From 4 pm on 10 December 2026",
+    "source": "NID admissions handbook 2027-28 (admissions.nid.edu), read 2026-10-14",
+    "status": "owner_verified",
+    "date": "2026-12-10"
+  },
+  {
+    "id": "nid-2027-prelims-result",
+    "exam": "NID",
+    "label": "NID DAT Prelims result",
+    "value": "4 pm on 16 March 2027",
+    "source": "NID admissions handbook 2027-28 (admissions.nid.edu), read 2026-10-14",
+    "status": "owner_verified",
+    "date": "2027-03-16"
+  },
+  {
+    "id": "nid-2027-mains",
+    "exam": "NID",
+    "label": "NID DAT Mains 2027 dates",
+    "value": "To be announced by NID",
+    "source": "NID admissions handbook 2027-28 (admissions.nid.edu), read 2026-10-14",
+    "status": "pending"
+  },
+  {
+    "id": "nid-2027-fee-general",
+    "exam": "NID",
+    "label": "NID 2027 application fee, General, EWS and OBC-NCL",
+    "value": "Rs 3,000",
+    "source": "NID admissions handbook 2027-28 (admissions.nid.edu), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "nid-2027-fee-women",
+    "exam": "NID",
+    "label": "NID 2027 application fee, women (except SC/ST/PwD)",
+    "value": "Rs 2,000",
+    "source": "NID admissions handbook 2027-28 (admissions.nid.edu), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "nid-2027-fee-scst",
+    "exam": "NID",
+    "label": "NID 2027 application fee, SC and ST",
+    "value": "Rs 1,500",
+    "source": "NID admissions handbook 2027-28 (admissions.nid.edu), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "nid-2027-fee-pwd",
+    "exam": "NID",
+    "label": "NID 2027 application fee, PwD",
+    "value": "Rs 500",
+    "source": "NID admissions handbook 2027-28 (admissions.nid.edu), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "nid-2027-age",
+    "exam": "NID",
+    "label": "NID 2027 age limit",
+    "value": "Born on or after 1 July 2006 (General, EWS); 1 July 2003 (OBC-NCL, SC, ST); 1 July 2001 (PwD)",
+    "source": "NID admissions handbook 2027-28 (admissions.nid.edu), read 2026-10-14",
+    "status": "owner_verified"
+  },
+  {
+    "id": "nift-2027-notification",
+    "exam": "NIFT",
+    "label": "NIFT 2027 notification",
+    "value": "Published: online registration opened on 16 October 2026",
+    "source": "NIFT Admission Prospectus 2027, printed p.108 (official); supersedes the earlier 'not published yet' note",
+    "status": "official"
+  },
+  {
+    "id": "nata-2027-dates",
+    "exam": "NATA",
+    "label": "NATA 2027 dates",
+    "value": "Not announced yet",
+    "source": "nata.in shows only the 2026 cycle, read 2026-10-14",
+    "status": "pending"
+  },
+  {
+    "id": "jee-main-2027-paper-2",
+    "exam": "JEE Main",
+    "label": "JEE Main 2027 Paper 2A and 2B dates",
+    "value": "Not announced yet",
+    "source": "nta.ac.in shows only the 2026 cycle, read 2026-10-14",
+    "status": "pending"
+  },
+  {
+    "id": "nift-2027-reg-open",
+    "exam": "NIFT",
+    "label": "NIFT 2027 registration opens",
+    "value": "16 October 2026",
+    "source": "NIFT Admission Prospectus 2027, printed p.108 (official)",
+    "status": "official",
+    "date": "2026-10-16"
+  },
+  {
+    "id": "nift-2027-reg-close",
+    "exam": "NIFT",
+    "label": "NIFT 2027 last date to register",
+    "value": "NIFT extended its deadlines; the new date is not announced here yet",
+    "source": "NIFT Admission Prospectus 2027, printed p.108 (official) | SUPERSEDED 2026-11-19: owner reports NIFT extended its deadlines; the prospectus date was \"16 November 2026\"; new dates unknown, do not publish",
+    "status": "pending"
+  },
+  {
+    "id": "nift-2027-reg-late",
+    "exam": "NIFT",
+    "label": "NIFT 2027 last date to register with late fee",
+    "value": "NIFT extended its deadlines; the new date is not announced here yet",
+    "source": "NIFT Admission Prospectus 2027, printed p.108 (official) | SUPERSEDED 2026-11-19: owner reports NIFT extended its deadlines; the prospectus date was \"21 November 2026\"; new dates unknown, do not publish",
+    "status": "pending"
+  },
+  {
+    "id": "nift-2027-admit-card",
+    "exam": "NIFT",
+    "label": "NIFT 2027 admit card (online only)",
+    "value": "NIFT extended its deadlines; the new date is not announced here yet",
+    "source": "NIFT Admission Prospectus 2027, printed p.108 (official) | SUPERSEDED 2026-11-19: owner reports NIFT extended its deadlines; the prospectus date was \"4 January 2027\"; new dates unknown, do not publish",
+    "status": "pending"
+  },
+  {
+    "id": "nift-2027-exam-date",
+    "exam": "NIFT",
+    "label": "NIFT 2027 entrance exam (B.Des and B.F.Tech)",
+    "value": "NIFT extended its deadlines; the new date is not announced here yet",
+    "source": "NIFT Admission Prospectus 2027, printed p.108 (official) | SUPERSEDED 2026-11-19: owner reports NIFT extended its deadlines; the prospectus date was \"10 January 2027\"; new dates unknown, do not publish",
+    "status": "pending"
+  },
+  {
+    "id": "nift-2027-centres-kerala",
+    "exam": "NIFT",
+    "label": "Where the NIFT 2027 entrance exam is held in Kerala",
+    "value": "Ernakulam (also Alappuzha, Kottayam and Kochi), Kannur, Kollam, Malappuram, Palakkad, Kozhikode, Thiruvananthapuram and Thrissur",
+    "source": "NIFT Admission Prospectus 2027, list of entrance examination centres, printed p.123 to 125 (official)",
+    "status": "official"
+  },
+  {
+    "id": "uceed-2027-centres-kerala",
+    "exam": "UCEED",
+    "label": "Where the UCEED 2027 exam is held in Kerala",
+    "value": "Ernakulam, Kozhikode, Thiruvananthapuram and Thrissur",
+    "source": "UCEED 2027 Information Brochure, cities, printed p.13 (official)",
+    "status": "official"
+  },
+  {
+    "id": "ceed-2027-centres-kerala",
+    "exam": "CEED",
+    "label": "Where the CEED 2027 exam is held in Kerala",
+    "value": "Ernakulam, Kozhikode, Thiruvananthapuram and Thrissur",
+    "source": "CEED 2027 Brochure, examination cities, printed p.6 (official)",
+    "status": "official"
+  },
+  {
+    "id": "nid-2027-dat-centre-kerala",
+    "exam": "NID",
+    "label": "Where the NID DAT Prelims is held in Kerala",
+    "value": "Kochi",
+    "source": "NID Admissions Handbook 2027-28, test centres for DAT Prelims, printed p.27 (official)",
+    "status": "official"
+  },
+  {
+    "id": "nift-2027-kannur-seats",
+    "exam": "NIFT",
+    "label": "NIFT Kannur seats in 2027",
+    "value": "NIFT Kannur has 238 seats in 2027, of which 49 are for Kerala domicile candidates",
+    "source": "NIFT Admission Prospectus 2027, seat table, printed p.110 (official)",
+    "status": "official"
+  },
+  {
+    "id": "nift-2027-kerala-domicile",
+    "exam": "NIFT",
+    "label": "How Kerala domicile is decided for NIFT Kannur",
+    "value": "Domicile is the state where the school of Class 12 is located. Kerala domicile candidates can opt for the preferential seats at NIFT Kannur, and the choice is made at registration",
+    "source": "NIFT Admission Prospectus 2027, state domicile category, printed p.120 to 121 (official)",
+    "status": "official"
+  },
+  {
+    "id": "afd-online-coaching",
+    "exam": "AFD India",
+    "label": "AFD India online coaching",
+    "value": "AFD India offers online coaching programmes for design entrance exams, as well as classes at its Kochi and Kannur centres",
+    "source": "Confirmed by the owner in chat, 2026-10-27",
+    "status": "owner_verified"
+  },
+  {
+    "id": "nift-2027-nri-registration",
+    "exam": "NIFT",
+    "label": "NIFT 2027 registration for NRI, Foreign National, OCI and SAARC candidates",
+    "value": "NRI, Foreign National, OCI and SAARC candidates register from 16 October 2026 to 31 March 2027",
+    "source": "NIFT Admission Prospectus 2027, admissions calendar, printed p.108 (official)",
+    "status": "official",
+    "date": "2027-03-31"
+  },
+  {
+    "id": "afd-online-how-it-works",
+    "exam": "AFD India",
+    "label": "How AFD India online coaching works (class days and hours, how work is reviewed, how to join a demo class)",
+    "value": "Not provided yet",
+    "source": "To be written by the owner",
+    "status": "pending"
+  },
+  {
+    "id": "nift-2027-age",
+    "exam": "NIFT",
+    "label": "NIFT 2027 undergraduate age rule",
+    "value": "Candidates must be under 24 years on 1 August 2027; the limit is relaxed by five years for SC, ST and PwD candidates",
+    "source": "NIFT Admission Prospectus 2027, UG eligibility, printed p.112. Taken from the extracted prospectus notes (docs/context/nift-2027-prospectus.md); re-check against the PDF page before approving the tool page",
+    "status": "official"
+  },
+  {
+    "id": "nift-2027-eligibility-ug",
+    "exam": "NIFT",
+    "label": "NIFT 2027 undergraduate eligibility",
+    "value": "B.Des: Class 12 pass in any stream, or an equivalent route; B.F.Tech: the same routes with Mathematics, or an engineering diploma",
+    "source": "NIFT Admission Prospectus 2027, UG eligibility, printed p.112 to 113. Taken from the extracted prospectus notes (docs/context/nift-2027-prospectus.md); re-check against the PDF page before approving the tool page",
+    "status": "official"
+  }
+]

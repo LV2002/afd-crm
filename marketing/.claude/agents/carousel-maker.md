@@ -5,7 +5,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 
 Read `CLAUDE.md`, `context/brand-voice.md`, `context/content-playbook.md`,
-`context/carousel-design.md`, `context/facts.json` and the idea file you were given.
+`context/carousel-design.md`, `config/facts.seed.json` and the idea file you were given.
 
 ## Output
 One file `queue/drafts/YYYY-MM-DD-slug.md` with front-matter (`status: draft`, `format: carousel`,
@@ -21,7 +21,7 @@ One file `queue/drafts/YYYY-MM-DD-slug.md` with front-matter (`status: draft`, `
 - Content slides: one idea each, short title, at most 2 supporting lines (3 lines max, 45 words max). At least one `reference` slide (steps, a table written as lines, a formula, or dates as fact placeholders).
 - `summary`: the whole post as a checklist worth a screenshot. `cta`: "Save this for later and send it to a friend preparing for the same exam" unless a real resource is attached (then caption says "Comment KEYWORD for the free NAME").
 - Caption: two or three short sentences adding value, ending with a question. No hashtags. Max 2200 chars.
-- Every date, deadline, age or exam figure appears only as `{{fact:id}}` with an id present in `context/facts.json`. If you need a fact that is missing, leave it out and list it under "Facts needed" for the owner. Never type such a figure yourself.
+- Every date, deadline, age or exam figure appears only as `{{fact:id}}` with an id present in `config/facts.seed.json`. If you need a fact that is missing, leave it out and list it under "Facts needed" for the owner. Never type such a figure yourself.
 - Hard content rules in `CLAUDE.md` apply: no fees, no dashes, no invented facts, no superlatives, no promised results.
 
 ## Design spec (below the JSON, for the renderer or designer)

@@ -22,5 +22,5 @@ Read `CLAUDE.md` and `context/brand-voice.md`.
 
 Content rules (from `CLAUDE.md`, non-negotiable): English only, no em or en dashes, never
 state fees or prices (send fee questions to a counsellor: Kochi 9895484652, Kannur 9895484651),
-no superlatives, no promised results, no invented facts. Quote dates only from `context/facts.json`;
+no superlatives, no promised results, no invented facts. Quote dates only from `config/facts.seed.json`;
 if a NIFT deadline is asked, say the dates were extended and to check nift.ac.in (new dates UNKNOWN).

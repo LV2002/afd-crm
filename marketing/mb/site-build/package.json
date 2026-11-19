@@ -1,0 +1,7 @@
+{
+  "name": "@mb/site-build",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@mb/platform": "*", "@mb/facts": "*", "@mb/content-quality": "*", "@mb/lead-intake": "*", "@mb/knorish": "*", "@mb/analytics": "*", "zod": "^4.6.7" }
+}

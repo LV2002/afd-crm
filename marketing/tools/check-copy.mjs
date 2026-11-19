@@ -14,7 +14,7 @@ const opt = (n) => { const i = a.indexOf(`--${n}`); return i >= 0 ? a[i + 1] : u
 if (!file) { console.error('Usage: check-copy.mjs <file> [--blog --keyword "..."]'); process.exit(2); }
 const text = readFileSync(resolve(file), 'utf8');
 const rules = JSON.parse(readFileSync(`${root}/config/copy-rules.json`, 'utf8'));
-const facts = loadFacts(`${root}/context/facts.json`);
+const facts = loadFacts(`${root}/config/facts.seed.json`);
 const g = guard(text, rules, facts);
 let blocking = g.blocking; let advisory = g.advisory;
 if (a.includes('--blog')) {

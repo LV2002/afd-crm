@@ -1,0 +1,12 @@
+export type { Ga4LeadDay, Ga4PageDay, Ga4SourceDay, GscPageDay, GscPageQuery, GscQueryDay, Source } from './domain/types.ts';
+export { addDays, dateRange } from './domain/dates.ts';
+export { buildDashboard, type Dashboard, type Delta } from './domain/dashboard.ts';
+export { buildWorkNext, type Goal, type Kind, type Opportunity, type PageSignals, type WorkInput, type WorkNext } from './domain/work-next.ts';
+export { DEFAULT_WORK_RULES, WorkRulesSchema, type WorkRules } from './domain/work-rules.ts';
+export type { AnalyticsStore, SearchDemandPort, SyncLogEntry, WebTrafficPort } from './application/ports.ts';
+export type { AnalyticsReader, Totals } from './domain/reader.ts';
+export { syncAnalytics, type SyncDeps, type SyncSummary } from './application/sync.ts';
+export { GoogleSearchConsole, type SearchConsoleOptions } from './infrastructure/search-console.ts';
+export { GoogleAnalytics4, type Analytics4Options } from './infrastructure/analytics-4.ts';
+export { SqliteAnalytics, analyticsMigrations } from './infrastructure/sqlite-analytics.ts';
+export { expectedCtr } from './domain/ctr.ts';

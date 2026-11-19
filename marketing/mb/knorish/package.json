@@ -1,0 +1,17 @@
+{
+  "name": "@mb/knorish",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mb/platform": "*",
+    "@mb/facts": "*",
+    "@mb/content-quality": "*",
+    "@mb/lead-intake": "*",
+    "@mb/topics": "*",
+    "marked": "^16.0.0",
+    "cheerio": "^1.2.0"
+  }
+}

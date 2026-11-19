@@ -1,0 +1,24 @@
+{
+  "sentenceWords": {
+    "target": 18.8,
+    "tolerance": 5
+  },
+  "shortSentencePct": {
+    "target": 10,
+    "tolerance": 8
+  },
+  "youPer1000": {
+    "target": 26,
+    "tolerance": 10
+  },
+  "questionsPer1000": {
+    "target": 2.3,
+    "tolerance": 3
+  },
+  "paragraphWords": {
+    "target": 37,
+    "tolerance": 15
+  },
+  "maxExclamationsPer1000": 1,
+  "firstPerson": "advice-only"
+}

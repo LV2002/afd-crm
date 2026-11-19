@@ -35,7 +35,7 @@ collecting more personal data than needed.
 2. **Never mention fees, prices, costs, discounts, EMI, "Rs" or the rupee symbol.**
 3. Never invent facts: no results, alumni, student numbers, awards, anecdotes, handles, phone numbers.
 4. Dates, deadlines, ages and exam figures only as `{{fact:id}}` placeholders with ids from
-   `context/facts.json` (status `official` or `owner_verified`). No fact, leave the detail out.
+   `config/facts.seed.json` (status `official` or `owner_verified`). No fact, leave the detail out.
 5. No superlatives or promised results (full banned list in `context/brand-voice.md`). The
    website's "No.1 coaching centre" claim is unverified: never repeat it. "Up to 90% scholarship"
    (AFDSAT) is unverified: never promote it.
@@ -47,24 +47,23 @@ collecting more personal data than needed.
 
 ## Knowledge files (load only what the task needs)
 - `context/exam-calendar.md`: dates and eligibility, with status. Read its "Newest news" first (NIFT deadlines were extended, new dates unknown).
-- `context/facts.json`: the only citeable facts.
+- `config/facts.seed.json`: the only citeable facts.
 - `context/brand-voice.md`: voice, banned words, design taste.
 - `context/content-playbook.md`: carousel contract, pillars, hypotheses.
 - `context/carousel-design.md`: look, sizes, colours (partly UNKNOWN).
 - `context/offers-and-resources.md`: free resources, triggers, contacts, automation rules.
 - `context/blog-playbook.md`: blog structure, keyword rules, CTAs, forms and CRM, Knorish delivery.
 - `context/learnings.md`: dated lessons from performance. `context/design-tokens.json`: the renderer's colours, fonts, sizes.
-- `performance/`: data exports to analyse (see its README). `config/`: copy rules, keyword seeds, places, budget cap.
+- `performance/`: data exports to analyse (see its README). `config/`: copy rules, facts, offers, forms, CTA playbook, keyword seeds and places, Google sites.
 - `research/`: strategist findings, dated. `../docs/`: CRM docs (Meta app setup, SLAs).
 
 ## Marketing Brain (the old system) and how this replaces it
-The owner is retiring Marketing Brain (private repo `LV2002/Marketing-Brain`, TypeScript, localhost:4310)
-as an app and its Social Studio, and using this multi-agent system as the marketing brain. Its rules,
-voice, facts, keyword templates, CTA playbook, offers and blog writer are ported here (`context/`,
-`config/`). Its tested pieces stay available as a toolbox until replaced: Search Console and GA4 readers,
-the lead-form script (Google Sheet first, then CRM, HMAC-signed), the outcomes feedback loop, the six-piece
-Knorish package builder, and the page-before/after learning loop. Not yet wired into this system: the
-Knorish builder and the analytics readers. Do not tell the owner they work here until they are.
+The owner has retired Marketing Brain (private repo `LV2002/Marketing-Brain`, localhost:4310) as an app. Its rules, voice,
+facts, keyword templates, CTA playbook, offers and blog writer are ported into `context/` and `config/`, and its tested
+code is now **vendored here in `mb/`** (platform, facts, content-quality, lead-intake, topics, knorish, analytics,
+page-reader, plus new `site-build` and `google-data`), with 368 of its own tests passing plus new ones. Nothing here needs
+the old app or its Mac. Still not ported: its social studio and publisher (replaced by the agents), the page audit and
+rework screens, and the outcomes screens. The lead-form Apps Script lives in `mb/lead-intake/apps-script/` (already deployed).
 
 ## The content piece and the cycle
 One approved topic (a "piece") becomes: a carousel (always: Google Business Profile and Instagram), a reel
@@ -72,20 +71,24 @@ script (when it suits: YouTube and Instagram), and a keyword-researched blog art
 recommends reel or carousel for Instagram with a reason. Cycle: learn > plan > approve > build > approve >
 render > post > learn. Performance lessons live in `context/learnings.md` and the strategist must read them.
 
-## Tools (run from this folder; `npm test` runs their tests)
+## Tools (run from this folder; `npm test` runs all tests)
+Run Google and autocomplete tools on the owner's computer: this cloud sandbox cannot reach Google.
 - `node tools/render-carousel.mjs <approved-draft.md>`: checks the carousel contract, resolves facts, renders 1080x1350 JPEGs to `assets/<name>/` with `manifest.json`. `--preview` for drafts.
-- `node tools/keywords.mjs [--dry-run] [--exam NID,NIFT] [--extra "..."]`: DataForSEO volumes (India, English). Blocked until `config/budget.json` has a monthly cap above 0 and `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD` are set. Not yet run against the live service.
+- `LEAD_FORM_ENDPOINT=... node tools/knorish-build.mjs <approved-blog.md>`: the six Knorish paste-in pieces in `publish/<slug>/` (article only, no site navigation or footer) with PASTE-STEPS.md and preview.html.
 - `node tools/check-copy.mjs <file> [--blog --keyword "..."]`: banned words, dashes, fees, unknown facts; blog structure and meta lengths.
+- `node tools/google-sync.mjs [--report-only] [--page /path --published yyyy-mm-dd]`: Search Console + GA4 into `data/analytics.db`, report to `performance/google/`. Needs `secrets/google-service-account.json`.
+- `node tools/suggest.mjs [--dry-run] [--exam NID] [--source google,youtube] [--depth full]`: free Google and YouTube autocomplete expansion into `research/keywords/`. Gentle, capped, cached.
+- `node tools/keyword-plan.mjs`: ranks keyword opportunities from autocomplete plus Search Console. Demand signals only, no search volumes. Fee and price searches excluded.
 
 ## The agents
 | Agent | Job | Writes to |
 |---|---|---|
 | orchestrator | Chat with the owner; run the cycle; delegate; report | n/a |
-| content-strategist | Niche + competitor research, keyword volumes, monthly plan of pieces | `research/`, `queue/ideas/` |
+| content-strategist | Niche + competitor research, free keyword research, monthly plan of pieces | `research/`, `queue/ideas/` |
 | carousel-maker | Idea to carousel JSON, caption, design spec | `queue/drafts/` |
 | carousel-renderer | Approved carousel to JPEG slides with alt text | `assets/` |
-| reel-scriptwriter | Reel script, shot list, editing notes, YouTube metadata | `queue/drafts/` |
-| blog-writer | Keyword-optimised, conversion-ready article + meta + FAQ schema | `queue/drafts/` |
+| reel-scriptwriter | Reel brief for the creator studio: talking and faceless versions, YouTube metadata | `queue/drafts/` |
+| blog-writer | Keyword-optimised, conversion-ready article; then the Knorish build | `queue/drafts/`, `publish/` |
 | poster | Publish or hand over owner-approved items | `approved/` to `posted/` |
 | comment-replier | Draft replies to comments | `queue/drafts/` |
 | dm-agent | DM an existing free resource to people who comment its keyword | log in `queue/posted/` |
