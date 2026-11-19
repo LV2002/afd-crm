@@ -90,3 +90,91 @@ test('plan drops fee and price searches (house rule) when told to', () => {
   const rows = plan({ suggestions: [{ term: 'nid coaching fees', seedCount: 3, bestRank: 1, sources: ['google'] }, { term: 'nid syllabus', seedCount: 3, bestRank: 2, sources: ['google'] }], exclude: (k) => /fee/.test(k) });
   assert.deepEqual(rows.map((r) => r.keyword), ['nid syllabus']);
 });
+
+import { alreadySent, isOptOut, matchComment, optedOut, syncOffers, validateRegistry } from '../lib/resources.mjs';
+import { OffersConfigSchema } from '@mb/lead-intake';
+const siteUrl = 'https://afdindia.com';
+const live = (over = {}) => ({ id: 'nid-plan', title: 'NID weekly practice plan', promise: 'A week by week drawing plan you can start today.', description: '', exam: 'NID', keyword: 'NIDPLAN', button: 'Send me the plan', format: 'pdf', status: 'live', landingUrl: 'https://afdindia.com/blog/post/nid-plan', linkTested: true, linkTestedOn: '2026-11-20', driveRegistered: true, dmEnabled: true, dmText: 'Hi! Here is your NID weekly plan: {link}', pieces: [], ...over });
+const regOf = (resources, placements = []) => ({ resources, placements });
+const placed = (r, postId = '111') => ({ resourceId: r.id, keyword: r.keyword, platform: 'instagram', postId, piece: 'x' });
+
+test('registry validation: unique keywords, common words, fees, untested links, wrong host', () => {
+  const ctx = { rules, facts, siteUrl };
+  assert.deepEqual(validateRegistry(regOf([live()]), ctx), []);
+  assert.match(validateRegistry(regOf([live(), live({ id: 'other' })]), ctx).join(), /already used/);
+  assert.match(validateRegistry(regOf([live({ keyword: 'FREE' })]), ctx).join(), /common word/);
+  assert.match(validateRegistry(regOf([live({ dmText: 'The fee is Rs 500 {link}' })]), ctx).join(), /dmText/);
+  assert.match(validateRegistry(regOf([live({ linkTested: false })]), ctx).join(), /not been tested/);
+  assert.match(validateRegistry(regOf([live({ landingUrl: 'https://example.com/x' })]), ctx).join(), /landingUrl/);
+  assert.match(validateRegistry(regOf([live({ status: 'made', dmEnabled: true })]), ctx).join(), /not live/);
+  const r = live(); assert.match(validateRegistry(regOf([r], [{ ...placed(r), keyword: 'WRONG' }]), ctx).join(), /does not match/);
+});
+
+test('match: the right resource for the right comment on the right post, and nothing when unsure', () => {
+  const a = live(); const b = live({ id: 'nata-pack', keyword: 'NATAPACK', landingUrl: 'https://afdindia.com/blog/post/nata-pack', dmText: 'NATA pack: {link}' });
+  const reg = regOf([a, b], [placed(a, '111'), placed(b, '222'), placed(b, '111')]);
+  const m = (postId, text) => matchComment(reg, { platform: 'instagram', postId, text });
+  assert.equal(m('111', 'nidplan please!').action, 'send-dm');
+  assert.equal(m('111', '#NIDPLAN').message, 'Hi! Here is your NID weekly plan: https://afdindia.com/blog/post/nid-plan');
+  assert.equal(m('222', 'NIDPLAN').action, 'none', 'a keyword that belongs to another post is not a match here');
+  assert.equal(m('222', 'natapack').resourceId, 'nata-pack');
+  assert.equal(m('111', 'love this, thanks').action, 'none');
+  assert.equal(m('999', 'NIDPLAN').action, 'none');
+  const bySc = regOf([a], [{ ...placed(a, '111'), shortcode: 'Cabc123' }]);
+  assert.equal(matchComment(bySc, { platform: 'instagram', postId: 'Cabc123', text: 'NIDPLAN' }).action, 'send-dm', 'a post can be matched by its URL shortcode too');
+  assert.equal(m('111', 'NIDPLANNING').action, 'none', 'whole word only');
+  assert.equal(m('111', 'NIDPLAN and NATAPACK').action, 'draft-only', 'two resources in one comment goes to the owner');
+});
+
+test('match refuses to send when the resource is not live, not tested, or DMs are off', () => {
+  const m = (r) => matchComment(regOf([r], [placed(r)]), { platform: 'instagram', postId: '111', text: 'NIDPLAN' });
+  assert.equal(m(live({ status: 'made' })).action, 'draft-only');
+  assert.equal(m(live({ linkTested: false })).action, 'draft-only');
+  assert.equal(m(live({ dmEnabled: false })).action, 'draft-only');
+  assert.equal(m(live()).action, 'send-dm');
+});
+
+test('send log: one DM per person per resource, opt-outs are permanent, opt-out words are recognised', () => {
+  const log = [{ resourceId: 'nid-plan', person: 'p1', action: 'sent' }, { resourceId: 'nid-plan', person: 'p2', action: 'opted-out' }];
+  assert.ok(alreadySent(log, 'nid-plan', 'p1')); assert.ok(!alreadySent(log, 'nid-plan', 'p3')); assert.ok(!alreadySent(log, 'other', 'p1'));
+  assert.ok(optedOut(log, 'p2')); assert.ok(!optedOut(log, 'p1'));
+  assert.ok(isOptOut('STOP')); assert.ok(isOptOut(' unsubscribe. ')); assert.ok(!isOptOut('please do not stop sending'));
+});
+
+test('a live resource becomes a valid blog offer card; others are left out', () => {
+  const offers = JSON.parse(readFileSync(`${root}/config/offers.json`, 'utf8'));
+  const { offers: next, added } = syncOffers(regOf([live(), live({ id: 'in-drive-one', keyword: 'DRIVEONE', status: 'in-drive', landingUrl: '' }), live({ id: 'made-one', keyword: 'MADEONE', status: 'made' })]), offers, siteUrl);
+  assert.deepEqual(added, ['nid-plan', 'in-drive-one']);
+  const parsed = OffersConfigSchema.safeParse({ ...next, offers: next.offers.map(({ generatedFromResource, ...o }) => o) });
+  assert.ok(parsed.success, JSON.stringify(parsed.error?.issues));
+  assert.equal(next.offers.find((o) => o.id === 'nid-plan').deliverUrl, '/blog/post/nid-plan');
+  assert.equal(next.offers.find((o) => o.id === 'in-drive-one').resourceId, 'in-drive-one');
+});
+
+test('carousel gate: a comment-a-word post needs a live, tested resource and the right caption', () => {
+  const r = live(); const reg = regOf([r]);
+  const c = () => { const x = sample(); x.leadMagnetKeyword = 'NIDPLAN'; x.slides.at(-1).lines = ['Comment NIDPLAN for the free weekly plan.']; x.caption = 'Steady practice wins. Comment NIDPLAN for the free NID weekly plan. Which day will you start?'; return x; };
+  assert.deepEqual(lintCarousel(c(), rules, facts, reg).blocking, []);
+  assert.match(lintCarousel(c(), rules, facts, regOf([live({ linkTested: false })])).blocking.join(), /untested link/);
+  assert.match(lintCarousel(c(), rules, facts, regOf([live({ keyword: 'OTHERWORD' })])).blocking.join(), /not a registered resource/);
+  const noAsk = c(); noAsk.caption = 'Steady practice wins. Which day will you start?';
+  assert.match(lintCarousel(noAsk, rules, facts, reg).blocking.join(), /must ask people to "Comment NIDPLAN"/);
+  const stray = sample(); stray.caption = 'Comment SECRETWORD for the guide. Ready?';
+  assert.match(lintCarousel(stray, rules, facts, reg).blocking.join(), /no leadMagnetKeyword/);
+});
+
+test('resource renderer makes a PDF from a registered resource, resolves facts, and refuses an unregistered one or a fee', () => {
+  const dir = `${root}/resources/zz-test-resource`; const tmp = `${root}/tools/test/fixtures/_reg.json`; const bad = `${root}/tools/test/fixtures/_bad.md`;
+  const reg = { resources: [live({ id: 'zz-test-resource', keyword: 'ZZTESTKEY', title: 'Test resource', promise: 'A test promise that is long enough.', exam: 'NID' })], placements: [] };
+  writeFileSync(tmp, JSON.stringify(reg));
+  const run = (file, env = {}) => spawnSync('node', [`${root}/tools/render-resource.mjs`, file], { encoding: 'utf8', env: { ...process.env, RESOURCES_FILE: tmp, ...env } });
+  try {
+    const ok = run(`${root}/tools/test/fixtures/resource.md`);
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.equal(readFileSync(`${dir}/zz-test-resource.pdf`).subarray(0, 5).toString(), '%PDF-');
+    writeFileSync(bad, readFileSync(`${root}/tools/test/fixtures/resource.md`, 'utf8').replace('Draw every day', 'The fee is Rs 500. Draw every day'));
+    assert.equal(run(bad).status, 1);
+    writeFileSync(tmp, JSON.stringify({ resources: [], placements: [] }));
+    const unreg = run(`${root}/tools/test/fixtures/resource.md`); assert.equal(unreg.status, 1); assert.match(unreg.stderr, /not in config\/resources\.json/);
+  } finally { rmSync(dir, { recursive: true, force: true }); rmSync(tmp, { force: true }); rmSync(bad, { force: true }); }
+});

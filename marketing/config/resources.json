@@ -1,0 +1,9 @@
+{
+  "_note": "Registry of free resources. id is also the Drive 'Resource ID' (Sheet Resources tab) and the offer id. keyword is what people comment. A resource can only be promised or DM'd when status is live AND linkTested is true. Edit with tools/resources.mjs, not by hand, where possible.",
+  "resources": [
+    { "id": "nid-question-bank", "title": "Free NID question bank with solutions", "promise": "Past papers, solved step by step, so you can see what the exam really asks.", "description": "", "exam": "NID", "keyword": "NIDBANK", "button": "Send me the question bank", "format": "page", "status": "existing-unverified", "existingPage": true, "landingUrl": "https://afdindia.com/page/nid-b-des-solved-question-bank-self-study", "linkTested": false, "linkTestedOn": "", "driveRegistered": false, "dmEnabled": false, "dmText": "", "pieces": [] },
+    { "id": "nata-past-papers", "title": "NATA previous year question papers", "promise": "Practise with real papers and check your answers against the solutions.", "description": "", "exam": "NATA", "keyword": "NATAPAPERS", "button": "Send me the papers", "format": "page", "status": "existing-unverified", "existingPage": true, "landingUrl": "https://afdindia.com/page/nata-past-question-papers", "linkTested": false, "linkTestedOn": "", "driveRegistered": false, "dmEnabled": false, "dmText": "", "pieces": [] },
+    { "id": "self-study-materials", "title": "Free self-study materials for design entrance exams", "promise": "Study notes and practice material you can start using today.", "description": "", "exam": "", "keyword": "STUDYKIT", "button": "Send me the materials", "format": "page", "status": "existing-unverified", "existingPage": true, "landingUrl": "https://afdindia.com/page/self-study-materials-nata-nift-nid", "linkTested": false, "linkTestedOn": "", "driveRegistered": false, "dmEnabled": false, "dmText": "", "pieces": [] }
+  ],
+  "placements": []
+}

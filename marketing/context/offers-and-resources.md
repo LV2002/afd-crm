@@ -1,6 +1,6 @@
 # Offers, resources and automation rules
 
-**Nothing here is enabled for automation.** Status of each is unconfirmed by the owner.
+**The machine-readable source of truth is `config/resources.json` (the free-resource registry); this table is a human summary and may lag.** **Nothing here is enabled for automation.** Status of each is unconfirmed by the owner.
 Never advertise a resource until its row says `Exists: yes` and has a link.
 
 | Resource (id in Marketing Brain `config/offers.json`) | Exists? | Suggested trigger | Delivery page on site | DM text | Enabled |

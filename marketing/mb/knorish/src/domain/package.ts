@@ -32,7 +32,7 @@ export interface BuildContext {
   // Where each centre is (Google Maps link, embed, address). Without it, or with empty fields, no centres block is added.
   readonly centres?: CentresConfig;
   // Shown on the author card; the card appears only when a bio is given.
-  readonly authorProfile?: { readonly role: string; readonly bio: string; readonly photoUrl: string };
+  readonly authorProfile?: { readonly role: string; readonly bio: string; readonly photoUrl: string; readonly url?: string };
   // Other posts to point to at the end of an article.
   readonly related?: readonly { readonly title: string; readonly path: string }[];
   readonly demoUrl?: string;
@@ -123,7 +123,7 @@ export function buildArticleHtml(ctx: BuildContext, req: BuildRequest): Result<{
   };
   const html = styleArticle(body.value.html, {
     variant: req.kind, title: req.draft.seoTitle, topic: req.topic ?? 'Design entrance', siteUrl: ctx.siteUrl,
-    author: req.kind === 'blog' ? { name: ctx.author, role: ctx.authorProfile?.role ?? '', bio: ctx.authorProfile?.bio ?? '', photoUrl: ctx.authorProfile?.photoUrl ?? '' } : undefined,
+    author: req.kind === 'blog' ? { name: ctx.author, role: ctx.authorProfile?.role ?? '', bio: ctx.authorProfile?.bio ?? '', photoUrl: ctx.authorProfile?.photoUrl ?? '', url: ctx.authorProfile?.url ?? '' } : undefined,
     dateLabel: dateLabel(ctx.now), related: req.draft.brief.geo?.links ?? req.draft.brief.plan?.links ?? ctx.related ?? [], trail: trailOf(req), centresBlock: ctx.centres === undefined ? '' : renderCentresBlock(ctx.centres, ctx.forms, centreOrder(req)), centres: ctx.forms.centres, demoUrl: ctx.demoUrl ?? '/page/demo-class', railOffer, keyDates: keyDatesFor(ctx, exam), ctas, exam, intent,
   });
   if (ctaError !== undefined) return err([ctaError]);
@@ -150,7 +150,7 @@ export function buildKnorishPackage(ctx: BuildContext, req: BuildRequest): Resul
 
   const schema = [
     req.kind === 'blog'
-      ? articleLd({ headline: draft.seoTitle, description: draft.metaDescription, author: ctx.author, siteName: ctx.siteName, siteUrl: ctx.siteUrl, path: req.path, publishedAt: ctx.now, modifiedAt: ctx.now })
+      ? articleLd({ headline: draft.seoTitle, description: draft.metaDescription, author: ctx.author, authorUrl: ctx.authorProfile?.url, authorJobTitle: ctx.authorProfile?.role, siteName: ctx.siteName, siteUrl: ctx.siteUrl, path: req.path, publishedAt: ctx.now, modifiedAt: ctx.now })
       : '',
     article.value.qa.length >= 2 ? faqLd(article.value.qa) : '',
     ...centreSchemas(ctx),

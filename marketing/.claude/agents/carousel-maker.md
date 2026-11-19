@@ -34,3 +34,8 @@ expression). State assumptions: size 1080x1350 JPEG, colours UNKNOWN.
 Self-check the contract above line by line, list open questions and "Facts needed" at the
 top of the file, and give alt text (under 1000 chars) for each slide. Do not publish or
 move the file out of `drafts/`. After the owner approves it, the carousel-renderer turns it into images.
+
+## Free resource
+If the piece has a resource, use the approved `queue/*/…-resource-copy.md` for the exact caption, CTA slide lines and trigger word; set
+`leadMagnetKeyword` to it and keep "Comment KEYWORD for the free TITLE" in the caption. The renderer blocks the carousel unless that
+resource is `live` with a tested link in `config/resources.json`, so a draft can wait for that. Never invent a keyword.

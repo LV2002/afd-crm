@@ -2,6 +2,9 @@ export interface ArticleInfo {
   readonly headline: string;
   readonly description: string;
   readonly author: string;
+  // The author's profile page and job title, so the Person in the markup is a real, linkable entity.
+  readonly authorUrl?: string | undefined;
+  readonly authorJobTitle?: string | undefined;
   readonly siteName: string;
   readonly siteUrl: string;
   readonly path: string;
@@ -19,7 +22,7 @@ export const articleLd = (a: ArticleInfo): string =>
     '@type': 'Article',
     headline: a.headline,
     description: a.description,
-    author: { '@type': 'Person', name: a.author },
+    author: { '@type': 'Person', name: a.author, ...(a.authorUrl === undefined || a.authorUrl === '' ? {} : { url: a.authorUrl.startsWith('http') ? a.authorUrl : `${a.siteUrl}${a.authorUrl}` }), ...(a.authorJobTitle === undefined || a.authorJobTitle === '' ? {} : { jobTitle: a.authorJobTitle }) },
     publisher: { '@type': 'Organization', name: a.siteName, url: a.siteUrl },
     mainEntityOfPage: `${a.siteUrl}${a.path}`,
     datePublished: a.publishedAt.toISOString(),

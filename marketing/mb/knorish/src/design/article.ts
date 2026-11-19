@@ -6,7 +6,7 @@ export interface ArticleOptions {
   readonly title: string; // used if the text has no H1
   readonly topic: string; // the small label above the title, e.g. NID
   readonly siteUrl: string;
-  readonly author: { readonly name: string; readonly role: string; readonly bio: string; readonly photoUrl: string } | undefined;
+  readonly author: { readonly name: string; readonly role: string; readonly bio: string; readonly photoUrl: string; readonly url?: string } | undefined;
   readonly dateLabel: string; // "16 October 2026"
   readonly related: readonly { readonly title: string; readonly path: string }[];
   readonly centres: readonly { readonly name: string; readonly phone: string; readonly whatsapp: string }[];
@@ -104,7 +104,7 @@ export function styleArticle(bodyHtml: string, o: ArticleOptions): string {
 
   const acts = o.centres.flatMap((c) => [`<a class="ap-btn ap-a" href="tel:${esc(c.phone)}">Call ${esc(c.name)}</a>`, `<a class="ap-btn ap-w" href="https://wa.me/${esc(c.whatsapp)}">WhatsApp ${esc(c.name)}</a>`]).join('');
   const end = o.centres.length === 0 ? '' : `<section class="ap-end"><p class="ap-lh">Talk to a mentor before you decide</p><p>Tell us which exam you are aiming for and we will point you to the right first step.</p><div class="ap-acts">${acts}<a class="ap-btn ap-x" href="${esc(o.demoUrl)}">Book a free demo class</a></div></section>`;
-  const authorCard = o.variant === 'blog' && o.author !== undefined && o.author.bio !== '' ? `<section class="ap-author" aria-label="About the author">${avatar(96)}<div><p class="ap-an">About ${esc(o.author.name)}</p>${o.author.role === '' ? '' : `<p class="r">${esc(o.author.role)}</p>`}<p>${esc(o.author.bio)}</p></div></section>` : '';
+  const authorCard = o.variant === 'blog' && o.author !== undefined && o.author.bio !== '' ? `<section class="ap-author" aria-label="About the author">${avatar(96)}<div><p class="ap-an">About ${(o.author.url ?? '') === '' ? esc(o.author.name) : `<a href="${esc((o.author.url ?? '').startsWith('http') ? (o.author.url ?? '') : `${o.siteUrl}${o.author.url ?? ''}`)}">${esc(o.author.name)}</a>`}</p>${o.author.role === '' ? '' : `<p class="r">${esc(o.author.role)}</p>`}<p>${esc(o.author.bio)}</p></div></section>` : '';
   const next = o.related.length === 0 ? '' : `<p class="ap-nh">Read next</p><div class="ap-next">${o.related.slice(0, 6).map((r) => `<a href="${esc(r.path)}">${esc(r.title)}<span>Read the guide &rarr;</span></a>`).join('')}</div>`;
 
   const main = `${header}${htmlOf(intro)}${parts.join('')}${ctas === undefined ? end : ctas.closing}${o.centresBlock}${authorCard}${next}`;

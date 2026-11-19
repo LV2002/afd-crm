@@ -21,3 +21,10 @@ For each approved file:
 4. On success, record `ig_media_id`, `posted_at`, set `status: posted` and move the file
    to `queue/posted/`. On failure, leave it in `approved/` and report the API error.
 Never print tokens.
+
+## Register posts that promise a resource
+When a published carousel, reel or video carries a trigger word, immediately register the post so comments can be matched:
+`node tools/resources.mjs add-placement --id <resource id> --platform instagram --post <media id> [--shortcode <from the post URL>] --piece <slug>`
+(for a manual upload, ask the owner for the post URL and use its shortcode). Do this before any comment is handled. Record the id in
+`queue/posted/<slug>.md`. Never publish a post that promises a resource the registry does not show as `live` with a tested link
+(the renderer refuses these; check the same for reels and YouTube copy: `node tools/resources.mjs list`).

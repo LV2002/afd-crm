@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { listOf, parseBlogDraft } from './blog-draft.ts';
 import { toolBlocks, toolSpecs } from './tools-state.ts';
 
-const SiteSchema = z.object({ siteName: z.string(), siteUrl: z.string(), author: z.string(), authorRole: z.string().default(''), authorBio: z.string().default(''), authorPhotoUrl: z.string().default('') });
+const SiteSchema = z.object({ siteName: z.string(), siteUrl: z.string(), author: z.string(), authorRole: z.string().default(''), authorBio: z.string().default(''), authorPhotoUrl: z.string().default(''), authorUrl: z.string().default('') });
 const json = (path: string): unknown => JSON.parse(readFileSync(path, 'utf8'));
 
 export function loadFacts(path: string): Result<Map<string, Fact>, string> {
@@ -36,7 +36,7 @@ export function loadBuildContext(root: string, o: { now: Date; endpoint?: string
   const offerFacts = new Map([...facts.value.values()].map((x) => [x.id, { value: x.value, date: x.date, usable: isUsable(x) }]));
   return ok({
     facts: facts.value, rules: rules.value, forms: formsConfig, now: o.now, author: site.data.author, siteName: site.data.siteName, siteUrl: site.data.siteUrl,
-    authorProfile: { role: site.data.authorRole, bio: site.data.authorBio, photoUrl: site.data.authorPhotoUrl },
+    authorProfile: { role: site.data.authorRole, bio: site.data.authorBio, photoUrl: site.data.authorPhotoUrl, url: site.data.authorUrl },
     ...(cta.success ? { cta: cta.data } : {}), ...(centres.success ? { centres: centres.data } : {}),
     tools: tools.byId, toolsByExam: tools.byExam, brand: loadBrand(`${root}/config/brand.json`),
     offers: { config: offers.data, ctx: { forms: formsConfig, today: istDate(o.now), facts: offerFacts }, exam: undefined },

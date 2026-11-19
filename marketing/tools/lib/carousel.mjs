@@ -36,7 +36,7 @@ export function resolveFacts(str, facts, problems, where) {
 const words = (s) => s.trim().split(/\s+/).filter(Boolean).length;
 
 // Returns { blocking: string[], advisory: string[] } using the contract in context/content-playbook.md.
-export function lintCarousel(c, rules, facts) {
+export function lintCarousel(c, rules, facts, registry) {
   const blocking = []; const advisory = [];
   const slides = Array.isArray(c.slides) ? c.slides : [];
   if (slides.length < 5) blocking.push(`Only ${slides.length} slides; at least 5 are required (7 to 10 is the target).`);
@@ -84,5 +84,13 @@ export function lintCarousel(c, rules, facts) {
   }
   if (c.leadMagnetKeyword !== undefined && (typeof c.leadMagnetKeyword !== 'string' || c.leadMagnetKeyword.length < 2 || c.leadMagnetKeyword.length > 20))
     blocking.push('leadMagnetKeyword must be 2 to 20 characters.');
+  if (c.leadMagnetKeyword !== undefined && registry) {
+    const r = registry.resources.find((x) => x.keyword.toUpperCase() === String(c.leadMagnetKeyword).toUpperCase());
+    if (!r) blocking.push(`leadMagnetKeyword "${c.leadMagnetKeyword}" is not a registered resource (config/resources.json).`);
+    else if (!(r.status === 'live' && r.linkTested === true)) blocking.push(`Resource "${r.id}" is ${r.status}${r.linkTested === true ? '' : ' with an untested link'}: a post cannot promise it until it is live with a tested link.`);
+    if (typeof c.caption === 'string' && !new RegExp(`comment\\s+${c.leadMagnetKeyword}\\b`, 'i').test(c.caption)) blocking.push(`The caption must ask people to "Comment ${c.leadMagnetKeyword}".`);
+  } else if (registry && typeof c.caption === 'string' && /\b[Cc]omment\s+[A-Z0-9]{4,}\b/.test(c.caption)) {
+    blocking.push('The caption asks people to comment a word but no leadMagnetKeyword is set.');
+  }
   return { blocking, advisory };
 }

@@ -6,7 +6,7 @@
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
+import { launchBrowser } from './lib/browser.mjs';
 import { parseDraft, loadFacts, lintCarousel, resolveFacts } from './lib/carousel.mjs';
 import { slideDocument, mascotDataUri } from './lib/slides.mjs';
 
@@ -24,7 +24,8 @@ const rules = JSON.parse(readFileSync(`${root}/config/copy-rules.json`, 'utf8'))
 const tokens = JSON.parse(readFileSync(`${root}/context/design-tokens.json`, 'utf8'));
 const facts = loadFacts(`${root}/config/facts.seed.json`);
 
-const { blocking, advisory } = lintCarousel(carousel, rules, facts);
+const registry = JSON.parse(readFileSync(`${root}/config/resources.json`, 'utf8'));
+const { blocking, advisory } = lintCarousel(carousel, rules, facts, registry);
 if (blocking.length) { console.error('Draft fails the carousel contract:\n- ' + blocking.join('\n- ')); process.exit(1); }
 
 const problems = [];
@@ -41,8 +42,7 @@ rmSync(outDir, { recursive: true, force: true }); mkdirSync(outDir, { recursive:
 const accent = tokens.examAccent[meta.exam] ?? tokens.examAccent.default;
 const ctx = { tokens, meta, accent, root, mascotUri: mascotDataUri(tokens, root), examChips: ['NIFT', 'NID', 'UCEED', 'CEED', 'NATA'] };
 
-const { chromium } = createRequire(import.meta.url)('playwright');
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: tokens.size, deviceScaleFactor: 1 });
 const manifest = [];
 const overflow = [];

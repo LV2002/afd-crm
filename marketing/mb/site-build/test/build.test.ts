@@ -30,6 +30,17 @@ describe('blog draft to Knorish package', () => {
     expect(pkg.pageBody).toContain('class="afd-post"');
   });
 
+  it('credits every blog post to Julie James, academic director, with her author card and a linked Person in the markup', () => {
+    const r = buildBlog(root, sample, { now, endpoint });
+    if (!r.ok) throw new Error(r.error.join('; '));
+    const { pkg } = r.value;
+    expect(pkg.pageBody).toContain('<b>Julie James</b>, Academic Director');
+    expect(pkg.pageBody).toContain('class="ap-author"');
+    expect(pkg.pageBody).toContain('<a href="https://afdindia.com/page/julie-james-design-tutor">Julie James</a>');
+    const person = /"author":(\{[^}]*\})/.exec(pkg.headerCode)?.[1] ?? '';
+    expect(JSON.parse(person)).toEqual({ '@type': 'Person', name: 'Julie James', url: 'https://afdindia.com/page/julie-james-design-tutor', jobTitle: 'Academic Director' });
+  });
+
   it('refuses to build without a form address, so the live endpoint never has to live in the repo', () => {
     const r = buildBlog(root, sample, { now });
     expect(!r.ok && r.error.join(' ')).toMatch(/LEAD_FORM_ENDPOINT/);

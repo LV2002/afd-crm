@@ -27,7 +27,9 @@ the latest `research/keywords/plan-*.md` (free keyword plan: demand signals, not
    `###` question headings and answers, so keep the FAQ section's questions and 40 to 60 word answers exact.
 6. **Checks.** Run `node tools/check-copy.mjs <file> --blog --keyword "<primary>" --secondary "<a,b>"`.
    Fix every BLOCKING item. Report advisory items honestly. A forms-and-offers dry run is part of the build below.
-7. **Conversion and CRM.** Do not write form HTML or scripts. Put `{{offer:ID@top|middle|closing}}` (offer ids from the
+7. **Conversion and CRM.** Do not write form HTML or scripts. If the piece has a free resource (registry id in the idea or resource copy file), put
+   `{{offer:<resource id>@top}}` near the top and use the two sentences the resource-copywriter gave you; that card carries the form that
+   delivers the file and the lead goes to the Sheet and the CRM. The blog URL is the landing page the DM will point to. Put `{{offer:ID@top|middle|closing}}` (offer ids from the
    playbook) or `{{form:Button label}}` alone on a line where a form belongs. The builder renders forms that send each
    enquiry to the Google Sheet and then the CRM, adds the right-hand rail (contents, live key dates, the exam's free
    resource, mentor buttons), tailored calls to action, the centres block, the author card and "read next".

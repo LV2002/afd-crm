@@ -28,8 +28,9 @@ UNKNOWN: ask the owner for it and adapt the "Creator studio brief" section to it
 6. **Editing notes for the creator studio:** pacing (cuts per 10 seconds), transitions, caption style, music mood (no
    named copyrighted tracks), what to cut. Cite the peer pattern or learning it follows (from `research/` or
    `context/learnings.md`) and label it a hypothesis if untested.
-7. **Instagram caption** (two or three short sentences ending in a question, no hashtags) and the comment keyword only
-   if a real resource is attached and its row in `context/offers-and-resources.md` is enabled.
+7. **Instagram caption** (two or three short sentences ending in a question, no hashtags). If the piece has a resource, use the
+   approved resource copy file for the spoken CTA ("Comment KEYWORD"), on-screen text and caption, in both versions. Only promise a
+   resource that `config/resources.json` shows as `live` with a tested link.
 8. **YouTube:** title (under 70 characters, keyword first), description (2 to 3 short paragraphs, a link to the matching
    blog article once published, a CTA to the demo class or career call), 5 to 8 tags, thumbnail text (max 4 words). Mark
    Short vs long.
