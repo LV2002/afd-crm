@@ -18,7 +18,7 @@ Image size and exact brand values are UNKNOWN. Ask before final visuals.
   Always use the cut-outs, never the cropped older files.
 - CTA slide: dark, big headline with yellow highlight, sub line, exam chips, "Call or WhatsApp",
   phone pill, www.afdindia.com, source line bottom-left, "Save for later" pill.
-  Use phones from `offers-and-resources.md`, NOT the outdated 98954 84652.
+  Phones: Kochi 98954 84652, Kannur 98954 84651 (these are the confirmed 9895484652 and 9895484651; an earlier export wrongly called 98954 84652 outdated, but it is the same number).
 
 ## Sizes (assumption, confirm)
 Feed posters were 1080x1350 (4:5). Instagram crops a carousel to the first image's shape.

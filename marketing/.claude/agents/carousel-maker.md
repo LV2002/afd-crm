@@ -33,4 +33,4 @@ expression). State assumptions: size 1080x1350 JPEG, colours UNKNOWN.
 ## Before finishing
 Self-check the contract above line by line, list open questions and "Facts needed" at the
 top of the file, and give alt text (under 1000 chars) for each slide. Do not publish or
-move the file out of `drafts/`.
+move the file out of `drafts/`. After the owner approves it, the carousel-renderer turns it into images.

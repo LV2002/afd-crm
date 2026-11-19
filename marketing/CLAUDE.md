@@ -52,26 +52,44 @@ collecting more personal data than needed.
 - `context/content-playbook.md`: carousel contract, pillars, hypotheses.
 - `context/carousel-design.md`: look, sizes, colours (partly UNKNOWN).
 - `context/offers-and-resources.md`: free resources, triggers, contacts, automation rules.
+- `context/blog-playbook.md`: blog structure, keyword rules, CTAs, forms and CRM, Knorish delivery.
+- `context/learnings.md`: dated lessons from performance. `context/design-tokens.json`: the renderer's colours, fonts, sizes.
+- `performance/`: data exports to analyse (see its README). `config/`: copy rules, keyword seeds, places, budget cap.
 - `research/`: strategist findings, dated. `../docs/`: CRM docs (Meta app setup, SLAs).
 
-## Existing system: Marketing Brain (decision needed)
-The owner already runs **Marketing Brain** (private repo `LV2002/Marketing-Brain`, TypeScript,
-localhost:4310): Social Studio (plans ideas, writes carousel JSON via the Claude CLI, lints,
-versions, approval), Page Studio, SEO Intelligence, Analyst. Its posting state machine
-(`@mb/publisher`) exists; real Instagram adapters are not built, and slide rendering to JPEG
-is not built. This system must complement it, not fork it: the carousel-maker emits the
-same JSON contract (see `context/content-playbook.md`) so output can be imported there.
-Which system owns scheduling and posting: OPEN, ask the owner before building posting.
+## Marketing Brain (the old system) and how this replaces it
+The owner is retiring Marketing Brain (private repo `LV2002/Marketing-Brain`, TypeScript, localhost:4310)
+as an app and its Social Studio, and using this multi-agent system as the marketing brain. Its rules,
+voice, facts, keyword templates, CTA playbook, offers and blog writer are ported here (`context/`,
+`config/`). Its tested pieces stay available as a toolbox until replaced: Search Console and GA4 readers,
+the lead-form script (Google Sheet first, then CRM, HMAC-signed), the outcomes feedback loop, the six-piece
+Knorish package builder, and the page-before/after learning loop. Not yet wired into this system: the
+Knorish builder and the analytics readers. Do not tell the owner they work here until they are.
+
+## The content piece and the cycle
+One approved topic (a "piece") becomes: a carousel (always: Google Business Profile and Instagram), a reel
+script (when it suits: YouTube and Instagram), and a keyword-researched blog article (website). The strategist
+recommends reel or carousel for Instagram with a reason. Cycle: learn > plan > approve > build > approve >
+render > post > learn. Performance lessons live in `context/learnings.md` and the strategist must read them.
+
+## Tools (run from this folder; `npm test` runs their tests)
+- `node tools/render-carousel.mjs <approved-draft.md>`: checks the carousel contract, resolves facts, renders 1080x1350 JPEGs to `assets/<name>/` with `manifest.json`. `--preview` for drafts.
+- `node tools/keywords.mjs [--dry-run] [--exam NID,NIFT] [--extra "..."]`: DataForSEO volumes (India, English). Blocked until `config/budget.json` has a monthly cap above 0 and `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD` are set. Not yet run against the live service.
+- `node tools/check-copy.mjs <file> [--blog --keyword "..."]`: banned words, dashes, fees, unknown facts; blog structure and meta lengths.
 
 ## The agents
 | Agent | Job | Writes to |
 |---|---|---|
-| orchestrator | Chat with the owner; split work; delegate; report back | n/a |
-| content-strategist | Research the niche; hooks, formats, editing; plan ideas | `research/`, `queue/ideas/` |
-| carousel-maker | Idea to carousel JSON + design spec + caption | `queue/drafts/` |
+| orchestrator | Chat with the owner; run the cycle; delegate; report | n/a |
+| content-strategist | Niche + competitor research, keyword volumes, monthly plan of pieces | `research/`, `queue/ideas/` |
+| carousel-maker | Idea to carousel JSON, caption, design spec | `queue/drafts/` |
+| carousel-renderer | Approved carousel to JPEG slides with alt text | `assets/` |
+| reel-scriptwriter | Reel script, shot list, editing notes, YouTube metadata | `queue/drafts/` |
+| blog-writer | Keyword-optimised, conversion-ready article + meta + FAQ schema | `queue/drafts/` |
 | poster | Publish or hand over owner-approved items | `approved/` to `posted/` |
 | comment-replier | Draft replies to comments | `queue/drafts/` |
 | dm-agent | DM an existing free resource to people who comment its keyword | log in `queue/posted/` |
+| performance-analyst | Judge results from `performance/`; write lessons | `context/learnings.md`, `research/` |
 
 ## Workflow and gates
 `ideas/ > drafts/ > approved/ > posted/` (or `rejected/`). One markdown file per item,

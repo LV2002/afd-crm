@@ -1,0 +1,5 @@
+{
+  "_note": "Places combined with each exam for 'X coaching in PLACE' keywords. Edit freely.",
+  "exams": ["NIFT", "NID", "UCEED", "CEED", "NATA", "JEE Paper 2"],
+  "places": ["Kochi", "Ernakulam", "Kannur", "Kozhikode", "Calicut", "Thrissur", "Thiruvananthapuram", "Trivandrum", "Kollam", "Kottayam", "Kerala", "online"]
+}

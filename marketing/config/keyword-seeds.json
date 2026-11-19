@@ -1,0 +1,27 @@
+{
+  "seeds": [
+    { "template": "{exam} eligibility" },
+    { "template": "{exam} age limit" },
+    { "template": "{exam} syllabus" },
+    { "template": "{exam} exam pattern" },
+    { "template": "{exam} previous year question papers" },
+    { "template": "{exam} sample paper" },
+    { "template": "{exam} preparation tips" },
+    { "template": "how to prepare for {exam} at home" },
+    { "template": "{exam} exam date" },
+    { "template": "{exam} registration last date" },
+    { "template": "{exam} admit card" },
+    { "template": "{exam} result date" },
+    { "template": "{exam} for commerce students" },
+    { "template": "{exam} for science students" },
+    { "template": "{exam} for arts students" },
+    { "template": "{exam} after 12th" },
+    { "template": "is {exam} hard" },
+    { "template": "how to crack {exam}" },
+    { "template": "best books for {exam}" },
+    { "template": "{exam} online coaching" },
+    { "template": "{exam} crash course" },
+    { "template": "{exam} studio test", "exams": ["NID", "NIFT"] },
+    { "template": "{exam} drawing test", "exams": ["NATA"] }
+  ]
+}

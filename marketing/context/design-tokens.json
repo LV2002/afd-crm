@@ -1,0 +1,16 @@
+{
+  "_status": "PLACEHOLDER values taken from the website palette measured in Oct 2026 and the owner's described look. The owner must confirm hex codes, fonts and logo. Edit this file; the renderer reads it.",
+  "size": { "width": 1080, "height": 1350 },
+  "margin": 84,
+  "font": {
+    "display": "Gagalin, Montserrat, Inter, 'DejaVu Sans', sans-serif",
+    "body": "Montserrat, Inter, 'DejaVu Sans', sans-serif",
+    "fontFiles": { "Gagalin": "assets/brand/fonts/Gagalin.otf", "Montserrat": "assets/brand/fonts/Montserrat-Bold.ttf" }
+  },
+  "colors": { "ink": "#14110C", "paper": "#F7F4E6", "khaki": "#D4CC98", "highlight": "#F9A825", "dark": "#14110C", "onDark": "#F7F4E6" },
+  "examAccent": { "NIFT": "#D84315", "NID": "#1565C0", "UCEED": "#2E7D32", "CEED": "#6A1B9A", "NATA": "#00838F", "JEE Paper 2": "#AD1457", "default": "#D84315" },
+  "sizes": { "title": 76, "hookTitle": 104, "line": 44, "small": 32, "counter": 32 },
+  "contact": { "site": "www.afdindia.com", "phones": [ { "centre": "Kochi", "number": "98954 84652" }, { "centre": "Kannur", "number": "98954 84651" } ] },
+  "logo": "assets/brand/logo.png",
+  "mascot": { "dir": "assets/brand/mascot", "coverExpression": "excited", "_note": "Files like excited.png. Cover only. Never on CTA slides." }
+}

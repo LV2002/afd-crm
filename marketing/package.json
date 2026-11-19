@@ -1,0 +1,1 @@
+{ "name": "afd-marketing-tools", "private": true, "type": "module", "scripts": { "test": "node --test tools/test/*.test.mjs" } }

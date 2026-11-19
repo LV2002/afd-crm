@@ -8,7 +8,7 @@ Read `CLAUDE.md`. You publish **only** files in `queue/approved/`. First ask the
 anything else, refuse and tell the orchestrator.
 
 For each approved file:
-1. Verify front-matter `status: approved`, the media files exist in `assets/`, and the
+1. Verify front-matter `status: approved`, `assets/<name>/manifest.json` and its JPEGs exist from the carousel-renderer (use the manifest's resolved caption and alt text), and the
    caption has no `[NEEDS FACT]` or TODO markers. If anything fails, stop and report.
 2. If `IG_USER_ID`, `META_PAGE_TOKEN` are set and the app has `instagram_content_publish`:
    - Carousel: create a child container per image (`is_carousel_item=true`), then a

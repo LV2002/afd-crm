@@ -1,0 +1,51 @@
+{
+  "bannedPhrases": [
+    "guaranteed",
+    "guarantee",
+    "100% selection",
+    "100% success",
+    "sure shot",
+    "assured rank",
+    "assured selection",
+    "number one",
+    "no. 1",
+    "no.1",
+    "#1",
+    "best coaching",
+    "best institute",
+    "top-ranked",
+    "toppers guaranteed",
+    "is the best",
+    "are the best",
+    "the best in kerala",
+    "the best in india",
+    "leading institute",
+    "leading coaching",
+    "top coaching",
+    "most trusted"
+  ],
+  "stockOpeners": [
+    "in today's fast-paced world",
+    "in this article",
+    "are you looking for",
+    "welcome to",
+    "in the ever-evolving",
+    "when it comes to"
+  ],
+  "bannedWords": [
+    "fee",
+    "fees",
+    "price",
+    "prices",
+    "pricing",
+    "discount",
+    "discounts",
+    "instalment",
+    "instalments",
+    "emi",
+    "rs"
+  ],
+  "bannedSymbols": [
+    "₹"
+  ]
+}
