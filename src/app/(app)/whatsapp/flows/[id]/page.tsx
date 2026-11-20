@@ -105,6 +105,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
       db
         .select({ id: whatsappLabels.id, name: whatsappLabels.name })
         .from(whatsappLabels)
+        .where(isNull(whatsappLabels.deletedAt))
         .orderBy(asc(whatsappLabels.name)),
     ]);
 
