@@ -47,6 +47,7 @@ export const CONFIG_TABLES = [
   "onboarding_items",
   // Saved replies and the label list: what staff set up for the inbox.
   "whatsapp_saved_replies",
+  "whatsapp_auto_replies",
   "whatsapp_labels",
   // The marks worth a warning (₹20 lakh, ₹1 crore) — an admin's list.
   "finance_alert_rules",
@@ -105,6 +106,7 @@ export const CONFIG_TABLES = [
 export const DATA_TABLES = [
   // Conversation status, labels on conversations, and private notes.
   "whatsapp_conversations",
+  "whatsapp_auto_reply_log",
   "whatsapp_conversation_labels",
   "whatsapp_notes",
   // Which stage of which mark has already been announced.

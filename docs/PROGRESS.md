@@ -9049,3 +9049,7 @@ Stubbed: list messages are in the client but no flow step uses them yet. Tests: 
 
 - Broadcast recipients gained `delivered_at`, `read_at`, `replied_at`; the status webhook fills delivered/read (`applyBroadcastStatus`), the inbound handler fills replied within 7 days of the send (`markBroadcastReply`). Broadcasts list shows Delivered / Read / Replied with percentages. Broadcasts sent before this migration show no funnel numbers (Meta's status events weren't kept per recipient).
 - New **Overview** tab (`/whatsapp/overview`, campaign permission): setup checklist (connected, approved template, first reply, saved replies, active automation), number health from Meta (quality rating, daily limit tier; fails gracefully), and a click-to-chat (wa.me) link + QR builder. Added `qrcode` dependency (client-side QR).
+
+## WhatsApp: greeting and away auto-replies (Phase 2a, migration 0135)
+
+`whatsapp_auto_replies` (one row each for greeting / away: on-off, message, open days, hours in IST) and `whatsapp_auto_reply_log`. `decideAutoReply` (pure, tested) picks at most one: away beats greeting; away once per 12h per person; greeting only after 24h of silence. `maybeAutoReply` is called from the inbound webhook for the API number only (never a counsellor's own handset, never after an opt-out) and records the reply on the thread. Admin page: WhatsApp → Auto replies. Both ship switched off. Keyword "bots" already exist as automations with the inbound-keyword trigger.

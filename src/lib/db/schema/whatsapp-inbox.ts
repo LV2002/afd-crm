@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { idColumn } from "./_helpers";
 import { profiles } from "./auth";
@@ -69,3 +69,28 @@ export const whatsappNotes = pgTable("whatsapp_notes", {
   createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** The institute's greeting and away messages on the API number. One row per kind. */
+export const whatsappAutoReplies = pgTable("whatsapp_auto_replies", {
+  kind: text("kind").$type<"greeting" | "away">().primaryKey(),
+  enabled: boolean("enabled").notNull().default(false),
+  message: text("message").notNull(),
+  /** Open days, 0 = Sunday … 6 = Saturday (IST). */
+  days: integer("days").array().notNull().default(sql`'{1,2,3,4,5,6}'`),
+  opensAt: text("opens_at").notNull().default("09:00"),
+  closesAt: text("closes_at").notNull().default("18:00"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }),
+  updatedBy: uuid("updated_by").references(() => profiles.id, { onDelete: "set null" }),
+});
+
+/** When an auto-reply last went to a number, so it is never sent twice in a row. */
+export const whatsappAutoReplyLog = pgTable(
+  "whatsapp_auto_reply_log",
+  {
+    id: idColumn(),
+    phone: text("phone").notNull(),
+    kind: text("kind").notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("whatsapp_auto_reply_log_phone_kind_idx").on(t.phone, t.kind, t.sentAt)],
+);
