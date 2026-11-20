@@ -86,6 +86,20 @@ export async function submitTemplate(
     .map((i) => String(formData.get(`quickReply${i}`) ?? "").trim())
     .filter(Boolean);
 
+  const urlText = String(formData.get("urlText") ?? "").trim();
+  const urlValue = String(formData.get("urlValue") ?? "").trim();
+  const callText = String(formData.get("callText") ?? "").trim();
+  const callPhone = String(formData.get("callPhone") ?? "").trim();
+  if (urlValue && !/^https:\/\/[^\s{}]+$/.test(urlValue)) {
+    return { error: "The web address must start with https:// and have no spaces." };
+  }
+  if ((urlText && !urlValue) || (!urlText && urlValue)) return { error: "A web-page button needs both its words and its address." };
+  if (callPhone && !/^\+[1-9]\d{7,14}$/.test(callPhone)) {
+    return { error: "Use the full number with country code, like +919847012345." };
+  }
+  if ((callText && !callPhone) || (!callText && callPhone)) return { error: "A call button needs both its words and a number." };
+  if (quickReplies.length + (urlValue ? 1 : 0) + (callPhone ? 1 : 0) > 10) return { error: "Too many buttons." };
+
   if (!isValidTemplateName(name)) {
     return { error: "The name may only contain lowercase letters, digits and underscores." };
   }
@@ -113,6 +127,8 @@ export async function submitTemplate(
       header: header || undefined,
       footer: footer || undefined,
       quickReplies,
+      urlButton: urlValue ? { text: urlText, url: urlValue } : undefined,
+      callButton: callPhone ? { text: callText, phone: callPhone } : undefined,
     });
   } catch (err) {
     // Meta's own message is the useful one here — it names the rule that

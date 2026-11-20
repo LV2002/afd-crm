@@ -288,7 +288,7 @@ export interface FlowValidationIssue {
  * does not exist silently ends everybody's run, and a `wait_for_reply`
  * with no branches is a step that can only ever time out.
  */
-export function validateFlow(steps: FlowStep[]): FlowValidationIssue[] {
+export function validateFlow(steps: FlowStep[], trigger?: FlowTrigger): FlowValidationIssue[] {
   const issues: FlowValidationIssue[] = [];
   if (steps.length === 0) {
     return [{ position: null, message: "This flow has no steps yet." }];
@@ -304,7 +304,7 @@ export function validateFlow(steps: FlowStep[]): FlowValidationIssue[] {
   const firstFreeForm = sorted.find((step) => (["send_text", "send_buttons", "send_media", "ask_question"] as FlowStepKind[]).includes(step.kind));
   const firstTemplate = sorted.find((step) => step.kind === "send_template");
   const firstWait = sorted.find((step) => step.kind === "wait_for_reply");
-  if (firstFreeForm && (!firstWait || firstWait.position > firstFreeForm.position) && (!firstTemplate || firstTemplate.position > firstFreeForm.position)) {
+  if (trigger !== "inbound_keyword" && firstFreeForm && (!firstWait || firstWait.position > firstFreeForm.position) && (!firstTemplate || firstTemplate.position > firstFreeForm.position)) {
     issues.push({
       position: firstFreeForm.position,
       message: "WhatsApp only accepts a free-form message in the 24 hours after the person last wrote. Start with a template, or have a keyword start this flow.",

@@ -230,3 +230,14 @@ describe("validateFlow with the new steps", () => {
     expect(issues.some((i) => /https|link|address/i.test(i.message))).toBe(true);
   });
 });
+
+import { STARTER_FLOWS } from "../src/lib/whatsapp/starter-flows";
+
+describe("starter flows", () => {
+  for (const starter of STARTER_FLOWS) {
+    it(`${starter.name} passes validation`, () => {
+      const steps = starter.steps.map((s, i) => step(i + 1, s.kind, s.config));
+      expect(validateFlow(steps, starter.triggerType)).toEqual([]);
+    });
+  }
+});

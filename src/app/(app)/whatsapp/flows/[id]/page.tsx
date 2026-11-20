@@ -122,7 +122,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
     kind: row.kind,
     config: row.config ?? {},
   }));
-  const issues = validateFlow(steps);
+  const issues = validateFlow(steps, flow.triggerType);
 
   // Only approved templates, for the same reason the broadcast composer
   // only offers approved ones: anything else is a send that fails at

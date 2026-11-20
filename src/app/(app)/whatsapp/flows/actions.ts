@@ -2,6 +2,7 @@
 
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { parseConditions } from "@/lib/rules/parse-rule";
@@ -17,6 +18,7 @@ import {
   type FlowStepKind,
   type FlowTrigger,
 } from "@/lib/whatsapp/flow-engine";
+import { STARTER_FLOWS } from "@/lib/whatsapp/starter-flows";
 import { startFlowForContacts, startFlows } from "@/lib/whatsapp/flow-runner";
 
 export interface FlowFormState {
@@ -243,6 +245,7 @@ export async function setFlowActive(
           config: row.config ?? {},
         }),
       ),
+      (await db.select({ t: whatsappFlows.triggerType }).from(whatsappFlows).where(eq(whatsappFlows.id, flowId)))[0]?.t,
     );
     if (issues.length > 0) {
       return {
@@ -417,4 +420,41 @@ export async function startFlowForLists(
       skipped > 0 ? `; ${skipped} left out (leads, opted out, already in it, or no number)` : ""
     }. The first message goes on the next sweep, within about ten minutes.`,
   };
+}
+
+/**
+ * Copies a ready-made automation into a new, switched-off flow and opens it.
+ * Off by default for the same reason every new automation is: it should be
+ * read and edited before it can message anybody.
+ */
+export async function createStarterFlow(formData: FormData): Promise<void> {
+  const user = await requireCampaigner();
+  if (!user) return;
+  const starter = STARTER_FLOWS.find((s) => s.key === String(formData.get("key") ?? ""));
+  if (!starter) return;
+
+  const [flow] = await db
+    .insert(whatsappFlows)
+    .values({
+      name: starter.name,
+      description: starter.description,
+      triggerType: starter.triggerType,
+      triggerConfig: starter.triggerConfig,
+      createdBy: user.id,
+    })
+    .returning({ id: whatsappFlows.id });
+  await db
+    .insert(whatsappFlowSteps)
+    .values(starter.steps.map((step, index) => ({ flowId: flow.id, position: index + 1, kind: step.kind, config: step.config })));
+
+  const supabase = await createClient();
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "whatsapp.flow_create",
+    entityType: "whatsapp_flows",
+    entityId: flow.id,
+    after: { starter: starter.key },
+  });
+  revalidatePath("/whatsapp/flows");
+  redirect(`/whatsapp/flows/${flow.id}`);
 }

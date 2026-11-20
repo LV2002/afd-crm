@@ -115,3 +115,19 @@ describe("reading a template back", () => {
     expect(templatePlaceholderCount(template([{ type: "BODY", text: "No variables" }]))).toBe(0);
   });
 });
+
+import { buildTemplateComponents as buildWithLinks } from "../src/lib/integrations/whatsapp/templates";
+import { describe as d2, expect as e2, it as i2 } from "vitest";
+
+d2("template link and call buttons", () => {
+  i2("adds a web-page and a call button after the quick replies", () => {
+    const parts = buildWithLinks({
+      name: "x", language: "en", category: "UTILITY", body: "Hi",
+      quickReplies: ["Yes"],
+      urlButton: { text: "Fees", url: "https://afdindia.com/fees" },
+      callButton: { text: "Call us", phone: "+919847012345" },
+    });
+    const buttons = parts.find((c) => c.type === "BUTTONS")?.buttons;
+    e2(buttons?.map((b) => b.type)).toEqual(["QUICK_REPLY", "URL", "PHONE_NUMBER"]);
+  });
+});

@@ -102,6 +102,10 @@ export interface CreateTemplateInput {
   footer?: string;
   /** Quick replies show as tappable buttons and come back as an inbound message with that exact text. */
   quickReplies?: string[];
+  /** A button that opens a web page. A fixed address only — no per-person suffix. */
+  urlButton?: { text: string; url: string };
+  /** A button that dials a number (E.164). */
+  callButton?: { text: string; phone: string };
 }
 
 export interface CreateTemplateResult {
@@ -120,12 +124,14 @@ export function buildTemplateComponents(input: CreateTemplateInput): TemplateCom
     components.push({ type: "FOOTER", text: input.footer.trim() });
   }
   const replies = (input.quickReplies ?? []).map((text) => text.trim()).filter(Boolean);
-  if (replies.length > 0) {
-    components.push({
-      type: "BUTTONS",
-      buttons: replies.map((text) => ({ type: "QUICK_REPLY", text })),
-    });
+  const buttons: TemplateButton[] = replies.map((text) => ({ type: "QUICK_REPLY", text }));
+  if (input.urlButton?.text.trim() && input.urlButton.url.trim()) {
+    buttons.push({ type: "URL", text: input.urlButton.text.trim(), url: input.urlButton.url.trim() });
   }
+  if (input.callButton?.text.trim() && input.callButton.phone.trim()) {
+    buttons.push({ type: "PHONE_NUMBER", text: input.callButton.text.trim(), phone_number: input.callButton.phone.trim() });
+  }
+  if (buttons.length > 0) components.push({ type: "BUTTONS", buttons });
   return components;
 }
 

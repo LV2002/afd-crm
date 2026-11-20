@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,12 @@ const CATEGORIES = [
  */
 export function TemplateForm() {
   const [state, formAction, pending] = useActionState(submitTemplate, initialState);
+  const [header, setHeader] = useState("");
+  const [body, setBody] = useState("");
+  const [footer, setFooter] = useState("");
+  const [replies, setReplies] = useState(["", "", ""]);
+  const [urlText, setUrlText] = useState("");
+  const [callText, setCallText] = useState("");
 
   return (
     <form action={formAction} className="flex max-w-2xl flex-col gap-4 rounded-lg border p-4">
@@ -96,7 +102,7 @@ export function TemplateForm() {
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="template-header">Header (optional)</Label>
-        <Input id="template-header" name="header" placeholder="AFD India" />
+        <Input id="template-header" name="header" placeholder="AFD India" value={header} onChange={(e) => setHeader(e.target.value)} />
       </div>
 
       <div className="flex flex-col gap-2">
@@ -106,6 +112,8 @@ export function TemplateForm() {
           name="body"
           required
           rows={4}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
           placeholder="Hi {{1}}, your next instalment of {{2}} is due on {{3}}. Reply here if you need to talk it through."
         />
         <p className="text-xs text-muted-foreground">
@@ -117,14 +125,14 @@ export function TemplateForm() {
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="template-footer">Footer (optional)</Label>
-        <Input id="template-footer" name="footer" placeholder="AFD India, Kochi & Kannur" />
+        <Input id="template-footer" name="footer" placeholder="AFD India, Kochi & Kannur" value={footer} onChange={(e) => setFooter(e.target.value)} />
       </div>
 
       <div className="flex flex-col gap-2">
         <Label>Quick replies (optional)</Label>
         <div className="grid gap-2 sm:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <Input key={i} name={`quickReply${i}`} placeholder={`Button ${i}`} maxLength={25} />
+            <Input key={i} name={`quickReply${i}`} placeholder={`Button ${i}`} maxLength={25} value={replies[i - 1]} onChange={(e) => setReplies((r) => r.map((v, idx) => (idx === i - 1 ? e.target.value : v)))} />
           ))}
         </div>
         <p className="text-xs text-muted-foreground">
@@ -133,10 +141,43 @@ export function TemplateForm() {
         </p>
       </div>
 
+      <div className="flex flex-col gap-2">
+        <Label>Web-page and call buttons (optional)</Label>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Input name="urlText" placeholder="Button words, e.g. See fees" maxLength={25} value={urlText} onChange={(e) => setUrlText(e.target.value)} />
+          <Input name="urlValue" placeholder="https://afdindia.com/fees" />
+          <Input name="callText" placeholder="Button words, e.g. Call us" maxLength={20} value={callText} onChange={(e) => setCallText(e.target.value)} />
+          <Input name="callPhone" placeholder="+919847012345" />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label>Preview</Label>
+        <PhonePreview header={header} body={body} footer={footer} buttons={[...replies, urlText, callText]} />
+      </div>
+
       <FormMessage error={state.error} success={state.success} />
       <Button type="submit" disabled={pending} className="w-fit">
         {pending ? "Submitting…" : "Submit for approval"}
       </Button>
     </form>
+  );
+}
+
+/** How the message will look on a phone. Placeholders show as sample words so the shape is clear. */
+function PhonePreview({ header, body, footer, buttons }: { header: string; body: string; footer: string; buttons: string[] }) {
+  const sample = (text: string) => text.replace(/\{\{\s*(\d+)\s*\}\}/g, (_m, n) => ["Anjali", "₹25,000", "15 Dec", "NIFT"][Number(n) - 1] ?? `[${n}]`);
+  const shown = buttons.map((b) => b.trim()).filter(Boolean);
+  return (
+    <div className="w-72 rounded-2xl bg-[#e5ddd5] p-3 dark:bg-zinc-800">
+      <div className="rounded-lg bg-white p-2 text-sm text-zinc-900 shadow-sm">
+        {header.trim() && <p className="font-semibold">{sample(header)}</p>}
+        <p className="whitespace-pre-wrap">{body.trim() ? sample(body) : "Your message appears here."}</p>
+        {footer.trim() && <p className="mt-1 text-xs text-zinc-500">{footer}</p>}
+      </div>
+      {shown.map((b, i) => (
+        <div key={i} className="mt-1 rounded-lg bg-white p-2 text-center text-sm font-medium text-sky-600 shadow-sm">{b}</div>
+      ))}
+    </div>
   );
 }
