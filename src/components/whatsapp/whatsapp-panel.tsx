@@ -14,6 +14,7 @@ import { matchSavedReplies, type SendableTemplate } from "@/lib/whatsapp/templat
 import { addConversationNote } from "@/app/(app)/whatsapp/inbox-actions";
 import { ConversationBar } from "@/components/whatsapp/conversation-bar";
 import { MessageContent } from "@/components/whatsapp/message-content";
+import { InteractiveComposer } from "@/components/whatsapp/interactive-composer";
 import { MediaPicker } from "@/components/whatsapp/media-picker";
 import { TemplateSender } from "@/components/whatsapp/template-sender";
 import {
@@ -106,7 +107,7 @@ export function WhatsAppPanel({
   resolved?: boolean;
   notes?: InboxNote[];
 }) {
-  const [mode, setMode] = useState<"reply" | "note">("reply");
+  const [mode, setMode] = useState<"reply" | "buttons" | "note">("reply");
   const [body, setBody] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [state, setState] = useState<WhatsAppSendState>({});
@@ -150,6 +151,11 @@ export function WhatsAppPanel({
             <button type="button" role="tab" aria-selected={mode === "reply"} onClick={() => setMode("reply")} className={cn("rounded-md px-3 py-1", mode === "reply" ? "bg-accent font-medium" : "text-muted-foreground hover:bg-accent/50")}>
               Reply
             </button>
+            {withinWindow && (
+              <button type="button" role="tab" aria-selected={mode === "buttons"} onClick={() => setMode("buttons")} className={cn("rounded-md px-3 py-1", mode === "buttons" ? "bg-accent font-medium" : "text-muted-foreground hover:bg-accent/50")}>
+                Buttons &amp; lists
+              </button>
+            )}
             <button type="button" role="tab" aria-selected={mode === "note"} onClick={() => setMode("note")} className={cn("rounded-md px-3 py-1", mode === "note" ? "bg-amber-100 font-medium text-amber-950 dark:bg-amber-900/40 dark:text-amber-100" : "text-muted-foreground hover:bg-accent/50")}>
               Private note
             </button>
@@ -171,6 +177,8 @@ export function WhatsAppPanel({
               <FormMessage error={state.error} success={state.success} />
               <Button type="submit" disabled={isPending || !body.trim()} className="w-fit" variant="outline">Save note</Button>
             </form>
+          ) : mode === "buttons" && withinWindow ? (
+            <InteractiveComposer leadId={leadId || null} toPhone={toPhone} channel={channel} />
           ) : withinWindow ? (
             <form
               className="flex flex-col gap-2"

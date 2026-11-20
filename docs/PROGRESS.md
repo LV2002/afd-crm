@@ -9040,3 +9040,7 @@ Shipped: nine new automation step kinds, no migration (step `kind` is plain text
 - Contact (database) flows don't offer any of the lead-only steps.
 
 Stubbed: list messages are in the client but no flow step uses them yet. Tests: `tests/whatsapp-flow-rich-steps.spec.ts` + new cases in `flow-engine.spec.ts`.
+
+## WhatsApp: buttons & lists from the inbox (Phase 1C)
+
+`sendWhatsAppInteractive` (send-actions) + `InteractiveComposer`: a "Buttons & lists" tab beside Reply / Private note, visible only while the 24-hour window is open. Same route, permission and window rules as typed text; Meta's limits checked client-side and again on the server (`interactive.ts`). Stored on the thread as text with the options appended. A tap arrives as a normal inbound message (already mapped), so automations branch on it.

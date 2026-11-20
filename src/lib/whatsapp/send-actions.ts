@@ -6,7 +6,9 @@ import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { getIntegrationCredential } from "@/lib/integrations/credentials";
 import {
+  sendListMessage,
   sendMediaMessage,
+  sendReplyButtons,
   sendTemplateMessage,
   sendTextMessage,
   uploadMedia,
@@ -18,6 +20,7 @@ import {
   isWithinCustomerServiceWindow,
   isWithinCustomerServiceWindowForPhone,
 } from "@/lib/whatsapp/get-thread";
+import { checkListMessage, checkReplyButtons, describeInteractive } from "@/lib/whatsapp/interactive";
 import { mediaKindFor, trimCaption, validateWhatsAppMedia } from "@/lib/whatsapp/media";
 
 export interface WhatsAppSendState {
@@ -258,6 +261,66 @@ export async function sendWhatsAppMessage(
 
   return recordAndSend(leadId, toPhone, route.via, { messageType: "text", body: body.trim(), templateName: null }, (phoneNumberId, accessToken) =>
     sendTextMessage(phoneNumberId, accessToken, toPhone, body.trim()),
+  );
+}
+
+export type InteractiveInput =
+  | { kind: "buttons"; body: string; buttons: string[] }
+  | { kind: "list"; body: string; buttonText: string; rows: Array<{ title: string; description?: string }> };
+
+/**
+ * Tappable reply buttons or a pick-from list, sent into an open conversation.
+ *
+ * Same route, window and permission rules as typed text — Meta only accepts
+ * interactive messages inside the 24-hour window. The tap comes back as an
+ * ordinary inbound message carrying the option's words, which is what
+ * automations branch on.
+ */
+export async function sendWhatsAppInteractive(
+  leadId: string | null,
+  toPhone: string,
+  input: InteractiveInput,
+  channel: ReplyChannel = "own",
+): Promise<WhatsAppSendState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "You don't have permission to do that." };
+
+  const checked =
+    input.kind === "buttons"
+      ? checkReplyButtons({ body: input.body, buttons: input.buttons })
+      : checkListMessage({ body: input.body, buttonText: input.buttonText, rows: input.rows });
+  if (!checked.ok) return { error: checked.error };
+
+  const route = await replyRoute(channel, user.id, user);
+  if (!route.ok) return { error: route.error };
+
+  const supabase = await createClient();
+  const withinWindow = leadId
+    ? await isWithinCustomerServiceWindow(supabase, leadId, route.windowNumberId)
+    : await isWithinCustomerServiceWindowForPhone(supabase, toPhone, route.windowNumberId);
+  if (!withinWindow) {
+    return {
+      error: `${leadId ? "This lead hasn't" : "They haven't"} messaged ${route.label} in the last 24 hours, so WhatsApp won't accept buttons or lists. ${channel === "api" ? "Send an approved template to reopen the conversation." : "Message them from the WhatsApp Business app on your phone."}`,
+    };
+  }
+
+  if (input.kind === "buttons") {
+    const value = (checked as { ok: true; value: { body: string; buttons: string[] } }).value;
+    return recordAndSend(
+      leadId,
+      toPhone,
+      route.via,
+      { messageType: "text", body: describeInteractive("buttons", value.body, value.buttons), templateName: null },
+      (id, token) => sendReplyButtons(id, token, toPhone, value),
+    );
+  }
+  const value = (checked as { ok: true; value: { body: string; buttonText: string; rows: Array<{ title: string; description?: string }> } }).value;
+  return recordAndSend(
+    leadId,
+    toPhone,
+    route.via,
+    { messageType: "text", body: describeInteractive("list", value.body, value.rows.map((r) => r.title)), templateName: null },
+    (id, token) => sendListMessage(id, token, toPhone, value),
   );
 }
 
