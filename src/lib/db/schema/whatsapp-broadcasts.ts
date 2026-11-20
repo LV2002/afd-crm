@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -159,9 +160,20 @@ export const whatsappBroadcastRecipients = pgTable(
     waMessageId: text("wa_message_id"),
     errorMessage: text("error_message"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
+    /** Filled by the status webhook: the funnel after "sent". */
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    /** First reply after the send, filled by the inbound handler. */
+    repliedAt: timestamp("replied_at", { withTimezone: true }),
     ...timestamps(),
   },
   (t) => [
+    index("whatsapp_broadcast_recipients_wa_message_id_idx")
+      .on(t.waMessageId)
+      .where(sql`wa_message_id is not null`),
+    index("whatsapp_broadcast_recipients_phone_idx")
+      .on(t.phone)
+      .where(sql`replied_at is null`),
     uniqueIndex("whatsapp_broadcast_recipients_broadcast_id_lead_id_uq")
       .on(t.broadcastId, t.leadId)
       .where(sql`lead_id is not null`),

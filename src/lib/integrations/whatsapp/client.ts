@@ -311,3 +311,31 @@ export async function subscribeAppToWaba(wabaId: string, accessToken: string): P
     );
   }
 }
+
+export interface PhoneNumberHealth {
+  displayPhoneNumber: string | null;
+  verifiedName: string | null;
+  /** GREEN, YELLOW, RED or UNKNOWN — Meta's own quality rating. */
+  qualityRating: string | null;
+  /** e.g. TIER_1K, TIER_10K: how many people we may start a conversation with per day. */
+  messagingLimitTier: string | null;
+  status: string | null;
+}
+
+/** Meta's view of the sending number: quality rating, daily limit tier, status. Throws MetaGraphApiError on refusal. */
+export async function fetchPhoneNumberHealth(phoneNumberId: string, accessToken: string): Promise<PhoneNumberHealth> {
+  const fields = "display_phone_number,verified_name,quality_rating,messaging_limit_tier,status";
+  const response = await fetch(`${GRAPH_BASE_URL}/${phoneNumberId}?fields=${fields}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  const body = (await response.json()) as Record<string, string | undefined>;
+  if (!response.ok) throw new MetaGraphApiError(`WhatsApp Cloud API returned ${response.status} reading the number`, response.status, body);
+  return {
+    displayPhoneNumber: body.display_phone_number ?? null,
+    verifiedName: body.verified_name ?? null,
+    qualityRating: body.quality_rating ?? null,
+    messagingLimitTier: body.messaging_limit_tier ?? null,
+    status: body.status ?? null,
+  };
+}

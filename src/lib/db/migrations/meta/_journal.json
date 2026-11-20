@@ -939,6 +939,13 @@
       "when": 1795788008000,
       "tag": "0133_whatsapp_inbox_tools",
       "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "7",
+      "when": 1795874408000,
+      "tag": "0134_broadcast_funnel",
+      "breakpoints": true
     }
   ]
 }

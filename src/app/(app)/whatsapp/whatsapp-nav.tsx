@@ -41,6 +41,7 @@ const CHANNELS: Tab[] = [
 ];
 
 const BUSINESS_TABS: Tab[] = [
+  { href: "/whatsapp/overview", label: "Overview", needs: "campaign" },
   { href: "/whatsapp", label: "Inbox" },
   { href: "/whatsapp/templates", label: "Templates", needs: "campaign" },
   { href: "/whatsapp/broadcasts", label: "Broadcasts", needs: "campaign" },

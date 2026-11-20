@@ -9044,3 +9044,8 @@ Stubbed: list messages are in the client but no flow step uses them yet. Tests: 
 ## WhatsApp: buttons & lists from the inbox (Phase 1C)
 
 `sendWhatsAppInteractive` (send-actions) + `InteractiveComposer`: a "Buttons & lists" tab beside Reply / Private note, visible only while the 24-hour window is open. Same route, permission and window rules as typed text; Meta's limits checked client-side and again on the server (`interactive.ts`). Stored on the thread as text with the options appended. A tap arrives as a normal inbound message (already mapped), so automations branch on it.
+
+## WhatsApp: results funnel, number health, overview (Phase 1D, migration 0134)
+
+- Broadcast recipients gained `delivered_at`, `read_at`, `replied_at`; the status webhook fills delivered/read (`applyBroadcastStatus`), the inbound handler fills replied within 7 days of the send (`markBroadcastReply`). Broadcasts list shows Delivered / Read / Replied with percentages. Broadcasts sent before this migration show no funnel numbers (Meta's status events weren't kept per recipient).
+- New **Overview** tab (`/whatsapp/overview`, campaign permission): setup checklist (connected, approved template, first reply, saved replies, active automation), number health from Meta (quality rating, daily limit tier; fails gracefully), and a click-to-chat (wa.me) link + QR builder. Added `qrcode` dependency (client-side QR).

@@ -15,6 +15,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { formatDateIST } from "@/lib/format/date";
 import { describeSchedule } from "@/lib/whatsapp/schedule";
 import { createClient } from "@/lib/supabase/server";
+import { broadcastFunnels, pct } from "@/lib/whatsapp/broadcast-funnel";
 import { broadcastFailureReasons } from "@/lib/whatsapp/broadcast-failures";
 
 import { CancelBroadcastButton } from "./cancel-button";
@@ -66,6 +67,11 @@ export default async function WhatsAppBroadcastsPage() {
     (broadcasts ?? []).filter((b) => b.failed_count > 0).map((b) => b.id),
   );
 
+  const funnels = await broadcastFunnels(
+    supabase,
+    (broadcasts ?? []).filter((b) => b.sent_count > 0).slice(0, 25).map((b) => b.id),
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
@@ -103,6 +109,13 @@ export default async function WhatsAppBroadcastsPage() {
                 </TableCell>
                 <TableCell>
                   {b.sent_count + b.failed_count} / {b.total_recipients}
+                  {funnels.get(b.id) && (
+                    <p className="mt-1 text-xs font-normal text-muted-foreground">
+                      Delivered {funnels.get(b.id)!.delivered} ({pct(funnels.get(b.id)!.delivered, funnels.get(b.id)!.sent)}%) ·
+                      Read {funnels.get(b.id)!.read} ({pct(funnels.get(b.id)!.read, funnels.get(b.id)!.sent)}%) ·
+                      Replied {funnels.get(b.id)!.replied} ({pct(funnels.get(b.id)!.replied, funnels.get(b.id)!.sent)}%)
+                    </p>
+                  )}
                   {b.failed_count > 0 && (
                     <span className="text-destructive"> ({b.failed_count} failed)</span>
                   )}
