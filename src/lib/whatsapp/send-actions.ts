@@ -272,12 +272,20 @@ export async function sendWhatsAppMessage(
  * number's quality rating, and one number now carries the whole
  * institute's reputation.
  */
+function templateValues(input: string | string[]): string[] | undefined {
+  const list = (Array.isArray(input) ? input : [input]).map((v) => v.trim());
+  // Meta numbers the values by position, so a blank in the middle cannot just be dropped.
+  const last = list.map((v, i) => (v ? i : -1)).reduce((a, b) => Math.max(a, b), -1);
+  return last < 0 ? undefined : list.slice(0, last + 1);
+}
+
 export async function sendWhatsAppTemplate(
   leadId: string,
   toPhone: string,
   templateName: string,
   languageCode: string,
-  bodyParam: string,
+  /** One value for {{1}}, or the values for {{1}}, {{2}}… in order. */
+  bodyParam: string | string[],
 ): Promise<WhatsAppSendState> {
   const sender = await getCurrentUser();
   if (!sender || !can(sender, "whatsapp.campaign")) {
@@ -291,7 +299,7 @@ export async function sendWhatsAppTemplate(
   // "api": a template is the institute speaking, is billed to the
   // institute, and is gated on whatsapp.campaign above.
   return recordAndSend(leadId, toPhone, "api", { messageType: "template", body: null, templateName: templateName.trim() }, (phoneNumberId, accessToken) =>
-    sendTemplateMessage(phoneNumberId, accessToken, toPhone, templateName.trim(), languageCode.trim() || "en_US", bodyParam.trim() ? [bodyParam.trim()] : undefined),
+    sendTemplateMessage(phoneNumberId, accessToken, toPhone, templateName.trim(), languageCode.trim() || "en_US", templateValues(bodyParam)),
   );
 }
 

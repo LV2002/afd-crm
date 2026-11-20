@@ -39,9 +39,14 @@ export interface WhatsAppThreadSummary {
   lastDirection: "inbound" | "outbound";
   /** Already flattened for display: a media or template message has no body of its own. */
   lastMessagePreview: string;
-  /** The lead wrote last, so somebody owes them a reply. */
+  /** The lead wrote last, so somebody owes them a reply. A resolved conversation does not count. */
   awaitingReply: boolean;
   messageCount: number;
+  /** When they last wrote to us: the 24-hour reply window runs from here. */
+  lastInboundAt: string | null;
+  /** Somebody marked it done and they have not written since. */
+  resolved: boolean;
+  labelIds: string[];
 }
 
 interface MessageRow {
@@ -135,9 +140,11 @@ export async function getWhatsAppThreads(
   // latest message and everything after it is history.
   const latest = new Map<string, MessageRow>();
   const counts = new Map<string, number>();
+  const lastInbound = new Map<string, string>();
   for (const row of messages) {
     const key = threadKey(row);
     if (!latest.has(key)) latest.set(key, row);
+    if (row.direction === "inbound" && !lastInbound.has(key)) lastInbound.set(key, row.occurred_at);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
 
@@ -180,7 +187,7 @@ export async function getWhatsAppThreads(
     for (const profile of profileRows ?? []) nameById.set(profile.id, profile.full_name);
   }
 
-  return Array.from(latest.entries())
+  const threads = Array.from(latest.entries())
     .map(([key, message]): WhatsAppThreadSummary | null => {
       const lead = message.lead_id ? leadById.get(message.lead_id) : undefined;
       // A message whose lead is soft-deleted simply isn't a thread any
@@ -198,8 +205,29 @@ export async function getWhatsAppThreads(
         lastMessagePreview: preview(message),
         awaitingReply: message.direction === "inbound",
         messageCount: counts.get(key) ?? 0,
+        lastInboundAt: lastInbound.get(key) ?? null,
+        resolved: false,
+        labelIds: [],
       };
     })
     .filter((thread): thread is WhatsAppThreadSummary => thread !== null)
     .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+
+  // Status and labels live beside the messages, keyed by number.
+  const phones = [...new Set(threads.map((t) => t.phone))];
+  const [{ data: states }, { data: labelRows }] = await Promise.all([
+    supabase.from("whatsapp_conversations").select("phone, status, resolved_at").in("phone", phones).returns<Array<{ phone: string; status: string; resolved_at: string | null }>>(),
+    supabase.from("whatsapp_conversation_labels").select("phone, label_id").in("phone", phones).returns<Array<{ phone: string; label_id: string }>>(),
+  ]);
+  const stateBy = new Map((states ?? []).map((r) => [r.phone, r]));
+  const labelsBy = new Map<string, string[]>();
+  for (const r of labelRows ?? []) labelsBy.set(r.phone, [...(labelsBy.get(r.phone) ?? []), r.label_id]);
+  for (const t of threads) {
+    const st = stateBy.get(t.phone);
+    // Resolved only until they write again: a new message from them reopens it.
+    t.resolved = Boolean(st && st.status === "resolved" && st.resolved_at && (!t.lastInboundAt || t.lastInboundAt <= st.resolved_at));
+    if (t.resolved) t.awaitingReply = false;
+    t.labelIds = labelsBy.get(t.phone) ?? [];
+  }
+  return threads;
 }

@@ -45,6 +45,9 @@ export const CONFIG_TABLES = [
   "org_settings",
   // What must be ticked before a new student is onboarded: an admin's list.
   "onboarding_items",
+  // Saved replies and the label list: what staff set up for the inbox.
+  "whatsapp_saved_replies",
+  "whatsapp_labels",
   // The marks worth a warning (₹20 lakh, ₹1 crore) — an admin's list.
   "finance_alert_rules",
   "payment_reminder_rules",
@@ -100,6 +103,10 @@ export const CONFIG_TABLES = [
 
 /** Cleared by a reset: a record of something that happened. */
 export const DATA_TABLES = [
+  // Conversation status, labels on conversations, and private notes.
+  "whatsapp_conversations",
+  "whatsapp_conversation_labels",
+  "whatsapp_notes",
   // Which stage of which mark has already been announced.
   "finance_alert_state",
   // Which onboarding items have been ticked for which student.

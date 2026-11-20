@@ -9022,3 +9022,9 @@ New **HR** department in the sidebar: **My HR** (everyone), **Employees** and **
 - Students with no batch yet are still placed by the year they joined and their course's programme length (`lib/students/year-filter.ts`).
 
 - **Search in Admissions** (Accounts → Admissions): a search box above the tabs finds an admission by student name, phone number (any format, three digits or more), course, centre or academic year; several words must all match. It looks through every tab, not just the open one. Phones stay masked in the list.
+
+## WhatsApp: inbox tools (migration 0133)
+
+- **Saved replies** (WhatsApp → Saved replies & labels, `whatsapp.campaign` to manage): type `/` in a conversation to pick one, `/fees` to jump to it; `{{name}}` becomes their first name. **Labels** on conversations (Interested, Fee query, Demo class, Follow up, Wrong number to start; add your own), filterable in the inbox. **Private notes** sit between the messages, never sent. **Mark resolved** clears a chat from the open list; it reopens itself when they write again.
+- A **reply-window countdown** ("Reply window open · 5h 12m left") on every conversation, and a **template picker** replacing the typed template name: approved templates only, with the blanks to fill and a preview of exactly what they will receive. Templates with a file header are listed but sent from Broadcasts. Template sends still belong to `whatsapp.campaign`.
+- Notes, labels and status belong to a phone number and are checked against what the caller can already see in the inbox (row-level security on the messages).

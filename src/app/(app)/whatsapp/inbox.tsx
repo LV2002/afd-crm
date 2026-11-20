@@ -15,6 +15,8 @@ import {
 } from "@/lib/whatsapp/get-thread";
 import { getWhatsAppThreads, type ThreadScope } from "@/lib/whatsapp/get-threads";
 import { createClient } from "@/lib/supabase/server";
+import { chipClass } from "@/components/whatsapp/label-colours";
+import { loadConversationExtras, loadLabels, loadSavedReplies, loadSendableTemplates } from "@/lib/whatsapp/inbox-tools";
 
 import { UnmatchedThread } from "./unmatched-thread";
 import { cn } from "@/lib/utils";
@@ -46,6 +48,7 @@ export interface InboxParams {
   q?: string;
   filter?: string;
   who?: string;
+  label?: string;
 }
 
 export async function WhatsAppInbox({
@@ -67,15 +70,18 @@ export async function WhatsAppInbox({
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.read")) return <AccessDenied />;
 
-  const { thread: selectedKey, q, filter, who } = await searchParams;
+  const { thread: selectedKey, q, filter, who, label: labelFilter } = await searchParams;
   const search = (q ?? "").trim().toLowerCase();
   const onlyAwaiting = filter === "awaiting";
   const onlyUnmatched = filter === "unmatched";
+  const onlyResolved = filter === "resolved";
 
   const supabase = await createClient();
-  const threads = await getWhatsAppThreads(supabase, scope);
+  const [threads, labels] = await Promise.all([getWhatsAppThreads(supabase, scope), loadLabels(supabase)]);
+  const labelById = new Map(labels.map((l) => [l.id, l]));
 
   const awaitingCount = threads.filter((t) => t.awaitingReply).length;
+  const resolvedCount = threads.filter((t) => t.resolved).length;
   const unmatchedCount = threads.filter((t) => t.leadId === null).length;
 
   /*
@@ -103,6 +109,10 @@ export async function WhatsAppInbox({
 
   const visible = threads.filter((thread) => {
     if (onlyAwaiting && !thread.awaitingReply) return false;
+    if (onlyResolved && !thread.resolved) return false;
+    // Resolved conversations are out of the way until asked for.
+    if (!onlyResolved && thread.resolved && !search && !labelFilter) return false;
+    if (labelFilter && !thread.labelIds.includes(labelFilter)) return false;
     if (onlyUnmatched && thread.leadId !== null) return false;
     if (who === "unassigned" && thread.assignedTo) return false;
     if (who && who !== "unassigned" && thread.assignedTo !== who) return false;
@@ -147,16 +157,22 @@ export async function WhatsAppInbox({
         ])
     : [[], false];
 
+  const extras = selected ? await loadConversationExtras(supabase, selected.phone) : null;
+  const [savedReplies, templates] = selected && selected.leadId ? await Promise.all([loadSavedReplies(supabase), loadSendableTemplates()]) : [[], []];
+  const windowClosesAt = withinWindow && selected?.lastInboundAt ? new Date(new Date(selected.lastInboundAt).getTime() + 24 * 3_600_000).toISOString() : null;
+
   function href(params: Record<string, string | undefined>): string {
     const next = new URLSearchParams();
     const thread = params.thread ?? selectedKey;
     const query = params.q ?? q;
     const nextFilter = params.filter ?? filter;
     const nextWho = params.who ?? who;
+    const nextLabel = "label" in params ? params.label : labelFilter;
     if (thread) next.set("thread", thread);
     if (query) next.set("q", query);
     if (nextFilter) next.set("filter", nextFilter);
     if (nextWho) next.set("who", nextWho);
+    if (nextLabel) next.set("label", nextLabel);
     const search = next.toString();
     return search ? `${basePath}?${search}` : basePath;
   }
@@ -172,6 +188,7 @@ export async function WhatsAppInbox({
           <form action={basePath} method="get" className="flex flex-col gap-2">
             {selectedKey && <input type="hidden" name="thread" value={selectedKey} />}
             {filter && <input type="hidden" name="filter" value={filter} />}
+            {labelFilter && <input type="hidden" name="label" value={labelFilter} />}
             {who && <input type="hidden" name="who" value={who} />}
             <Input
               name="q"
@@ -182,18 +199,38 @@ export async function WhatsAppInbox({
           </form>
 
           <div className="flex flex-wrap items-center gap-1 text-sm">
-            <FilterLink href={href({ filter: "" })} active={!onlyAwaiting && !onlyUnmatched}>
-              All ({threads.length})
+            <FilterLink href={href({ filter: "", label: "" })} active={!onlyAwaiting && !onlyUnmatched && !onlyResolved && !labelFilter}>
+              Open ({threads.length - resolvedCount})
             </FilterLink>
             <FilterLink href={href({ filter: "awaiting" })} active={onlyAwaiting}>
               Needs a reply ({awaitingCount})
             </FilterLink>
+            {resolvedCount > 0 && (
+              <FilterLink href={href({ filter: "resolved" })} active={onlyResolved}>
+                Resolved ({resolvedCount})
+              </FilterLink>
+            )}
             {unmatchedCount > 0 && (
               <FilterLink href={href({ filter: "unmatched" })} active={onlyUnmatched}>
                 Not in the CRM ({unmatchedCount})
               </FilterLink>
             )}
           </div>
+
+          {labels.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1 text-sm">
+              <span className="pr-1 text-xs uppercase tracking-wide text-muted-foreground">Label</span>
+              {labels.map((l) => (
+                <Link
+                  key={l.id}
+                  href={href({ label: labelFilter === l.id ? "" : l.id })}
+                  className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium", chipClass(l.colour), labelFilter === l.id ? "ring-2 ring-primary" : "opacity-80 hover:opacity-100")}
+                >
+                  {l.name}
+                </Link>
+              ))}
+            </div>
+          )}
 
           {canSwitchCounsellor && (
             <div className="flex flex-wrap items-center gap-1 text-sm">
@@ -265,6 +302,13 @@ export async function WhatsAppInbox({
                         Not a lead
                       </Badge>
                     )}
+                    {thread.labelIds.map((id) => {
+                      const l = labelById.get(id);
+                      return l ? (
+                        <span key={id} className={cn("rounded-full px-2 py-0 text-[0.6875rem] font-medium", chipClass(l.colour))}>{l.name}</span>
+                      ) : null;
+                    })}
+                    {thread.resolved && <Badge variant="secondary" className="ml-auto">Resolved</Badge>}
                     {thread.leadId !== null && thread.awaitingReply && (
                       <Badge variant="outline" className="ml-auto">
                         Reply
@@ -298,7 +342,16 @@ export async function WhatsAppInbox({
               {selected.leadId ? (
                 <WhatsAppPanel
                   leadId={selected.leadId}
+                  leadName={selected.leadName}
                   toPhone={selected.phone}
+                  windowClosesAt={windowClosesAt}
+                  savedReplies={savedReplies}
+                  templates={templates}
+                  canSendTemplates={can(user, "whatsapp.campaign")}
+                  labels={labels}
+                  labelIds={extras?.labelIds ?? []}
+                  resolved={extras?.resolved ?? false}
+                  notes={extras?.notes ?? []}
                   messages={messages}
                   canSend={canReply}
                   withinWindow={withinWindow}
