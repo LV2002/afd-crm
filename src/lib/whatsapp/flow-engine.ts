@@ -30,9 +30,19 @@ import type { ParamSource } from "./personalise";
 /** The things a step can be. Fixed in code: each is an action the engine knows how to carry out. */
 export const FLOW_STEP_KINDS = [
   "send_template",
+  // Free-form messages. WhatsApp only takes these inside the 24 hours after
+  // the person last wrote, so they belong after a reply, never first.
+  "send_text",
+  "send_buttons",
+  "send_media",
+  "ask_question",
   "wait",
   "wait_for_reply",
+  "condition",
   "set_temperature",
+  "assign_owner",
+  "schedule_followup",
+  "add_label",
   "notify_owner",
   "stop",
 ] as const;
@@ -77,6 +87,94 @@ export interface SendTemplateConfig {
   templateName: string;
   templateLanguage: string;
   params: ParamSource[];
+}
+
+export interface SendTextConfig {
+  text: string;
+}
+
+export interface SendButtonsConfig {
+  text: string;
+  /** Up to three tappable answers. A tap comes back as their reply, so a wait_for_reply after this branches on them. */
+  buttons: string[];
+}
+
+export interface SendMediaConfig {
+  kind: "image" | "document" | "video";
+  /** A public https address Meta can fetch. */
+  url: string;
+  caption?: string;
+  filename?: string;
+}
+
+/** The lead fields a question may fill in. Fixed: each is a real column the answer is checked against. */
+export const ASK_FIELDS = {
+  email: { label: "Email address", check: "email" },
+  city: { label: "City", check: "text" },
+  district: { label: "District", check: "text" },
+  state: { label: "State", check: "text" },
+  exam_year: { label: "Exam year", check: "year" },
+  school_college: { label: "School or college", check: "text" },
+  board: { label: "Board", check: "text" },
+  father_name: { label: "Father's name", check: "text" },
+  mother_name: { label: "Mother's name", check: "text" },
+  education_status: { label: "Current class or qualification", check: "text" },
+} as const;
+export type AskField = keyof typeof ASK_FIELDS;
+
+export interface AskQuestionConfig {
+  question: string;
+  field: AskField;
+  /** How long to wait for the answer. */
+  hours: number;
+  /** Where somebody who never answers goes. Defaults to continuing. */
+  onTimeout?: FlowGoto;
+}
+
+export interface ConditionConfig {
+  conditions: { all: Array<{ field: string; op: string; value?: unknown }> };
+  /** Where somebody who matches goes. */
+  thenGoto: FlowGoto;
+  /** Where everybody else goes. */
+  elseGoto: FlowGoto;
+}
+
+/**
+ * What a typed answer becomes, or why it is not accepted.
+ *
+ * The answer is a person's words in a chat, so it is checked before it
+ * is written onto a lead: an email must look like one, a year must be a
+ * year. Anything else is trimmed and capped. A refusal carries the line
+ * to say back, so the question can be asked again.
+ */
+export function validateAnswer(field: AskField, text: string): { ok: true; value: string } | { ok: false; message: string } {
+  const value = text.trim().replace(/\s+/g, " ");
+  if (!value) return { ok: false, message: "Sorry, I didn't catch that. Could you type it again?" };
+  const check = ASK_FIELDS[field].check;
+  if (check === "email") {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value)
+      ? { ok: true, value: value.toLowerCase() }
+      : { ok: false, message: "That doesn't look like an email address. Could you type it again, like name@example.com?" };
+  }
+  if (check === "year") {
+    const year = /\b(20\d{2})\b/.exec(value)?.[1];
+    return year ? { ok: true, value: year } : { ok: false, message: "Which year? For example 2027." };
+  }
+  return value.length <= 120 ? { ok: true, value } : { ok: false, message: "That's a bit long. Could you shorten it?" };
+}
+
+export function isAskField(value: unknown): value is AskField {
+  return typeof value === "string" && value in ASK_FIELDS;
+}
+
+export function askConfig(step: FlowStep): AskQuestionConfig {
+  const config = step.config as Partial<AskQuestionConfig>;
+  return {
+    question: String(config.question ?? ""),
+    field: isAskField(config.field) ? config.field : "city",
+    hours: typeof config.hours === "number" && config.hours > 0 ? config.hours : 48,
+    onTimeout: config.onTimeout ?? "next",
+  };
 }
 
 export interface FlowStep {
@@ -195,8 +293,22 @@ export function validateFlow(steps: FlowStep[]): FlowValidationIssue[] {
   if (steps.length === 0) {
     return [{ position: null, message: "This flow has no steps yet." }];
   }
-  if (!steps.some((step) => step.kind === "send_template")) {
+  const SENDERS: readonly FlowStepKind[] = ["send_template", "send_text", "send_buttons", "send_media", "ask_question"];
+  if (!steps.some((step) => SENDERS.includes(step.kind))) {
     issues.push({ position: null, message: "This flow never sends anything." });
+  }
+  // A free-form message needs the person to have written to us in the last
+  // 24 hours. Said once, at the first one, so the editor can warn before
+  // it quietly does nothing.
+  const sorted = [...steps].sort((a, b) => a.position - b.position);
+  const firstFreeForm = sorted.find((step) => (["send_text", "send_buttons", "send_media", "ask_question"] as FlowStepKind[]).includes(step.kind));
+  const firstTemplate = sorted.find((step) => step.kind === "send_template");
+  const firstWait = sorted.find((step) => step.kind === "wait_for_reply");
+  if (firstFreeForm && (!firstWait || firstWait.position > firstFreeForm.position) && (!firstTemplate || firstTemplate.position > firstFreeForm.position)) {
+    issues.push({
+      position: firstFreeForm.position,
+      message: "WhatsApp only accepts a free-form message in the 24 hours after the person last wrote. Start with a template, or have a keyword start this flow.",
+    });
   }
 
   const positions = new Set(steps.map((step) => step.position));
@@ -207,6 +319,45 @@ export function validateFlow(steps: FlowStep[]): FlowValidationIssue[] {
       if (!config.templateName) {
         issues.push({ position: step.position, message: "Choose an approved template." });
       }
+    }
+
+    const text = (step.config as { text?: unknown }).text;
+    if (step.kind === "send_text" && !String(text ?? "").trim()) {
+      issues.push({ position: step.position, message: "Write the message." });
+    }
+    if (step.kind === "send_buttons") {
+      const config = step.config as Partial<SendButtonsConfig>;
+      const buttons = (config.buttons ?? []).filter((b) => typeof b === "string" && b.trim());
+      if (!String(config.text ?? "").trim()) issues.push({ position: step.position, message: "Write the message that comes with the buttons." });
+      if (buttons.length === 0) issues.push({ position: step.position, message: "Add at least one button." });
+      if (buttons.length > 3) issues.push({ position: step.position, message: "WhatsApp allows at most three buttons." });
+      if (buttons.some((b) => b.trim().length > 20)) issues.push({ position: step.position, message: "A button's words can be at most 20 characters." });
+    }
+    if (step.kind === "send_media") {
+      const config = step.config as Partial<SendMediaConfig>;
+      if (!/^https:\/\/\S+$/.test(String(config.url ?? ""))) issues.push({ position: step.position, message: "Give the file's public https address." });
+    }
+    if (step.kind === "ask_question") {
+      const config = askConfig(step);
+      if (!config.question.trim()) issues.push({ position: step.position, message: "Write the question." });
+      if (typeof config.onTimeout === "number" && !positions.has(config.onTimeout)) {
+        issues.push({ position: step.position, message: `There is no step ${config.onTimeout} to jump to.` });
+      }
+    }
+    if (step.kind === "condition") {
+      const config = step.config as Partial<ConditionConfig>;
+      if (!config.conditions?.all?.length) issues.push({ position: step.position, message: "Add at least one condition." });
+      for (const goto of [config.thenGoto, config.elseGoto]) {
+        if (typeof goto === "number" && !positions.has(goto)) {
+          issues.push({ position: step.position, message: `There is no step ${goto} to jump to.` });
+        }
+      }
+    }
+    if (step.kind === "assign_owner" && !(step.config as { userId?: unknown }).userId) {
+      issues.push({ position: step.position, message: "Choose who to assign them to." });
+    }
+    if (step.kind === "add_label" && !(step.config as { labelId?: unknown }).labelId) {
+      issues.push({ position: step.position, message: "Choose a label." });
     }
 
     if (step.kind !== "wait_for_reply") continue;
@@ -245,6 +396,32 @@ export function describeStep(step: FlowStep): string {
       const answers = config.branches.map((branch) => branch.match).join(", ");
       return `Wait ${describeHours(config.hours)} for a reply${answers ? ` — ${answers}` : ""}`;
     }
+    case "send_text": {
+      const text = String((step.config as { text?: unknown }).text ?? "").trim();
+      return `Send "${text.length > 40 ? `${text.slice(0, 40)}…` : text || "(no message)"}"`;
+    }
+    case "send_buttons": {
+      const config = step.config as Partial<SendButtonsConfig>;
+      return `Send a message with buttons: ${(config.buttons ?? []).filter(Boolean).join(" / ") || "(none yet)"}`;
+    }
+    case "send_media": {
+      const config = step.config as Partial<SendMediaConfig>;
+      return `Send ${config.kind === "document" ? "a document" : config.kind === "video" ? "a video" : "an image"}${config.filename ? `: ${config.filename}` : ""}`;
+    }
+    case "ask_question": {
+      const config = askConfig(step);
+      return `Ask for their ${ASK_FIELDS[config.field].label.toLowerCase()}`;
+    }
+    case "condition":
+      return "If … then … otherwise …";
+    case "assign_owner":
+      return "Give them to a counsellor";
+    case "schedule_followup": {
+      const hours = Number((step.config as { hours?: unknown }).hours ?? 24);
+      return `Remind the counsellor to follow up in ${describeHours(hours)}`;
+    }
+    case "add_label":
+      return "Put a label on the conversation";
     case "set_temperature":
       return "Change their temperature";
     case "notify_owner":

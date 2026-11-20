@@ -9028,3 +9028,15 @@ New **HR** department in the sidebar: **My HR** (everyone), **Employees** and **
 - **Saved replies** (WhatsApp → Saved replies & labels, `whatsapp.campaign` to manage): type `/` in a conversation to pick one, `/fees` to jump to it; `{{name}}` becomes their first name. **Labels** on conversations (Interested, Fee query, Demo class, Follow up, Wrong number to start; add your own), filterable in the inbox. **Private notes** sit between the messages, never sent. **Mark resolved** clears a chat from the open list; it reopens itself when they write again.
 - A **reply-window countdown** ("Reply window open · 5h 12m left") on every conversation, and a **template picker** replacing the typed template name: approved templates only, with the blanks to fill and a preview of exactly what they will receive. Templates with a file header are listed but sent from Broadcasts. Template sends still belong to `whatsapp.campaign`.
 - Notes, labels and status belong to a phone number and are checked against what the caller can already see in the inbox (row-level security on the messages).
+
+## WhatsApp: richer automation steps (Phase 1B)
+
+Shipped: nine new automation step kinds, no migration (step `kind` is plain text, config is JSONB).
+- **Send a typed message / message with buttons / picture, PDF or video** — free-form, so only sent to a lead who wrote to the API number in the last 24 hours; outside the window the step is logged as skipped and the flow carries on (template steps later still go out). Media goes by public https link.
+- **Ask a question and save the answer** — parks the run like a wait-for-reply; the answer is validated (`validateAnswer`) and written to a whitelisted lead column (email, city, district, state, exam year, school/college, board, parents' names, class). A bad answer is asked again twice, then the flow moves on. Timeout branch supported.
+- **Check something about them** — condition step reusing `evaluateConditions`, with yes/no jump targets (editor offers one condition; the stored shape is the full `{all:[...]}`).
+- **Give them to a counsellor / set a follow-up reminder / put a label on the chat** — lead actions; assignment notifies the new owner.
+- Client gained `sendReplyButtons`, `sendListMessage`, `sendMediaByLink`; `src/lib/whatsapp/interactive.ts` holds Meta's limits and checkers (also used by the Phase 1C inbox composer).
+- Contact (database) flows don't offer any of the lead-only steps.
+
+Stubbed: list messages are in the client but no flow step uses them yet. Tests: `tests/whatsapp-flow-rich-steps.spec.ts` + new cases in `flow-engine.spec.ts`.

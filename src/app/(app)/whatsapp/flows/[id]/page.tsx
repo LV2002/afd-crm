@@ -17,9 +17,11 @@ import {
   centers,
   contacts,
   leads,
+  profiles,
   whatsappFlowRuns,
   whatsappFlowSteps,
   whatsappFlows,
+  whatsappLabels,
 } from "@/lib/db/schema";
 import type { RuleConditions } from "@/lib/assignment/evaluate-conditions";
 import { formatDateIST } from "@/lib/format/date";
@@ -64,7 +66,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
   if (!flow) notFound();
 
   const supabase = await createClient();
-  const [stepRows, temperatureOptions, centerRows, templateResult, runRows, ruleOptions] =
+  const [stepRows, temperatureOptions, centerRows, templateResult, runRows, ruleOptions, people, labelRows] =
     await Promise.all([
       db
         .select()
@@ -95,6 +97,15 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
         .orderBy(desc(whatsappFlowRuns.startedAt))
         .limit(25),
       loadRuleOptions(supabase),
+      db
+        .select({ id: profiles.id, name: profiles.fullName })
+        .from(profiles)
+        .where(eq(profiles.isActive, true))
+        .orderBy(asc(profiles.fullName)),
+      db
+        .select({ id: whatsappLabels.id, name: whatsappLabels.name })
+        .from(whatsappLabels)
+        .orderBy(asc(whatsappLabels.name)),
     ]);
 
   const forDatabase = flow.audience === "contact";
@@ -143,6 +154,8 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
       .map((option) => ({ value: option.value, label: option.label })),
     positions: steps.map((step) => step.position),
     audience: flow.audience,
+    counsellors: people.map((p) => ({ value: p.id, label: p.name })),
+    labels: labelRows.map((l) => ({ value: l.id, label: l.name })),
   };
 
   const liveRuns = runRows.filter((run) => run.status === "running" || run.status === "waiting");

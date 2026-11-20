@@ -13,6 +13,7 @@ import {
   contacts,
   leads,
   whatsappFlowRunEvents,
+  whatsappConversationLabels,
   whatsappFlowRuns,
   whatsappFlowSteps,
   whatsappFlows,
@@ -20,12 +21,26 @@ import {
 } from "@/lib/db/schema";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
-import { sendTemplateMessage } from "@/lib/integrations/whatsapp/client";
+import {
+  sendMediaByLink,
+  sendReplyButtons,
+  sendTemplateMessage,
+  sendTextMessage,
+} from "@/lib/integrations/whatsapp/client";
 import { notify } from "@/lib/notifications/notify";
 
+import { describeInteractive } from "./interactive";
 import {
+  ASK_FIELDS,
   MAX_STEPS_PER_ADVANCE,
+  askConfig,
   describeStep,
+  validateAnswer,
+  type AskField,
+  type ConditionConfig,
+  type SendButtonsConfig,
+  type SendMediaConfig,
+  type SendTextConfig,
   firstStep,
   matchBranch,
   nextStep,
@@ -395,6 +410,179 @@ async function sendStepToContact(
   return { ok: true, waMessageId };
 }
 
+type FreeFormOutcome =
+  | { ok: true }
+  | { ok: false; reason: string; fatal: boolean };
+
+/** Lead column each question writes to. Fixed: the answer goes nowhere else. */
+const ASK_COLUMNS: Record<AskField, keyof typeof leads.$inferInsert> = {
+  email: "email",
+  city: "city",
+  district: "district",
+  state: "state",
+  exam_year: "examYear",
+  school_college: "schoolCollege",
+  board: "board",
+  father_name: "fatherName",
+  mother_name: "motherName",
+  education_status: "educationStatus",
+};
+
+/**
+ * Sends one free-form message (text, buttons, picture, question) to a lead.
+ *
+ * Free-form messages only reach somebody who wrote to the API number in the
+ * last 24 hours. Outside that window WhatsApp refuses them, so the step is
+ * skipped with a reason rather than failing the run: the template steps
+ * after it can still go out.
+ */
+async function sendFreeForm(
+  leadId: string | null,
+  contactId: string | null,
+  deliver: (ctx: { phoneNumberId: string; accessToken: string; phone: string }) => Promise<{ waId: string; body: string; media?: string }>,
+): Promise<FreeFormOutcome & { skipped?: boolean }> {
+  if (contactId || !leadId) {
+    return { ok: false, reason: "Free-form messages only go to leads who have written to us.", fatal: false, skipped: true };
+  }
+  const [lead] = await db
+    .select({
+      id: leads.id,
+      primaryPhone: leads.primaryPhone,
+      doNotContact: leads.doNotContact,
+      assignedTo: leads.assignedTo,
+    })
+    .from(leads)
+    .where(and(eq(leads.id, leadId), isNull(leads.deletedAt)));
+  if (!lead) return { ok: false, reason: "The lead no longer exists.", fatal: true };
+  const phone = lead.primaryPhone ? normalizePhone(lead.primaryPhone) : null;
+  if (!phone) return { ok: false, reason: "No phone number on the record.", fatal: true };
+  if (lead.doNotContact) return { ok: false, reason: "Marked do not contact.", fatal: true };
+  const suppressed = await suppressedAmong(db, [phone]);
+  if (suppressed.has(phone)) return { ok: false, reason: "Opted out of WhatsApp messages.", fatal: true };
+
+  const [lastIn] = await db
+    .select({ at: whatsappMessages.occurredAt })
+    .from(whatsappMessages)
+    .where(
+      and(
+        eq(whatsappMessages.leadId, lead.id),
+        eq(whatsappMessages.direction, "inbound"),
+        isNull(whatsappMessages.numberId),
+      ),
+    )
+    .orderBy(sql`${whatsappMessages.occurredAt} desc`)
+    .limit(1);
+  if (!lastIn || Date.now() - new Date(lastIn.at).getTime() > 24 * 3_600_000) {
+    return {
+      ok: false,
+      reason: "They haven't written in the last 24 hours, so WhatsApp only allows a template message.",
+      fatal: false,
+      skipped: true,
+    };
+  }
+
+  const { access_token: accessToken, phone_number_id: phoneNumberId } =
+    await getIntegrationCredentials("whatsapp", ["access_token", "phone_number_id"]);
+  if (!accessToken || !phoneNumberId) return { ok: false, reason: "WhatsApp isn't connected.", fatal: false };
+
+  const sent = await deliver({ phoneNumberId, accessToken, phone });
+  await db.insert(whatsappMessages).values({
+    leadId: lead.id,
+    counsellorId: lead.assignedTo,
+    direction: "outbound",
+    waMessageId: sent.waId,
+    fromPhone: phoneNumberId,
+    toPhone: phone,
+    messageType: sent.media ? "media" : "text",
+    mediaMimeType: sent.media ?? null,
+    body: sent.body,
+    status: "sent",
+  });
+  return { ok: true };
+}
+
+async function runFreeFormStep(run: RunRow, step: FlowStep): Promise<FreeFormOutcome & { skipped?: boolean }> {
+  return sendFreeForm(run.leadId, run.contactId, async ({ phoneNumberId, accessToken, phone }) => {
+    if (step.kind === "send_text") {
+      const { text } = step.config as Partial<SendTextConfig>;
+      const body = String(text ?? "").trim();
+      return { waId: await sendTextMessage(phoneNumberId, accessToken, phone, body), body };
+    }
+    if (step.kind === "send_buttons") {
+      const config = step.config as Partial<SendButtonsConfig>;
+      const body = String(config.text ?? "").trim();
+      const buttons = (config.buttons ?? []).map(String);
+      return {
+        waId: await sendReplyButtons(phoneNumberId, accessToken, phone, { body, buttons }),
+        body: describeInteractive("buttons", body, buttons),
+      };
+    }
+    if (step.kind === "send_media") {
+      const config = step.config as Partial<SendMediaConfig>;
+      const kind = config.kind ?? "image";
+      const waId = await sendMediaByLink(phoneNumberId, accessToken, phone, {
+        kind,
+        link: String(config.url ?? ""),
+        caption: config.caption || undefined,
+        fileName: config.filename || undefined,
+      });
+      const mime = kind === "image" ? "image/jpeg" : kind === "video" ? "video/mp4" : "application/pdf";
+      return { waId, body: config.caption ?? "", media: mime };
+    }
+    const ask = askConfig(step);
+    return { waId: await sendTextMessage(phoneNumberId, accessToken, phone, ask.question), body: ask.question };
+  });
+}
+
+/** Where a parked step sends somebody who never answers. */
+function timeoutGoto(step: FlowStep) {
+  return step.kind === "ask_question" ? (askConfig(step).onTimeout ?? "next") : (waitConfig(step).onTimeout ?? "next");
+}
+
+async function runLeadAction(run: RunRow, step: FlowStep): Promise<void> {
+  const leadId = run.leadId;
+  if (!leadId) return;
+  if (step.kind === "assign_owner") {
+    const userId = String((step.config as { userId?: unknown }).userId ?? "");
+    if (!userId) return;
+    const [lead] = await db
+      .select({ studentName: leads.studentName, leadNumber: leads.leadNumber, centerId: leads.centerId })
+      .from(leads)
+      .where(eq(leads.id, leadId));
+    await db.update(leads).set({ assignedTo: userId, updatedAt: new Date() }).where(eq(leads.id, leadId));
+    await logEvent(run.id, step.id, "assigned", describeStep(step));
+    if (lead) {
+      await notify({
+        eventKey: "flow.step_reached",
+        context: {
+          lead_name: lead.studentName,
+          lead_number: lead.leadNumber ?? "",
+          message: "This lead was assigned to you by an automation.",
+        },
+        href: `/leads/${leadId}`,
+        entityType: "leads",
+        entityId: leadId,
+        centerId: lead.centerId,
+        ownerId: userId,
+      });
+    }
+    return;
+  }
+  if (step.kind === "schedule_followup") {
+    const days = Number((step.config as { days?: unknown }).days ?? 1);
+    const when = new Date(Date.now() + Math.max(0, Math.min(days, 365)) * 86_400_000);
+    await db.update(leads).set({ nextFollowupAt: when, updatedAt: new Date() }).where(eq(leads.id, leadId));
+    await logEvent(run.id, step.id, "staged", describeStep(step));
+    return;
+  }
+  const labelId = String((step.config as { labelId?: unknown }).labelId ?? "");
+  const [lead] = await db.select({ phone: leads.primaryPhone }).from(leads).where(eq(leads.id, leadId));
+  const phone = lead?.phone ? normalizePhone(lead.phone) : null;
+  if (!labelId || !phone) return;
+  await db.insert(whatsappConversationLabels).values({ phone, labelId }).onConflictDoNothing();
+  await logEvent(run.id, step.id, "staged", describeStep(step));
+}
+
 async function runNotifyOwner(run: RunRow, leadId: string, current: FlowStep): Promise<void> {
   const [lead] = await db
     .select({
@@ -581,6 +769,91 @@ async function runOne(run: RunRow, steps: FlowStep[]): Promise<void> {
         break;
       }
 
+      case "send_text":
+      case "send_buttons":
+      case "send_media":
+      case "ask_question": {
+        let outcome;
+        try {
+          outcome = await runFreeFormStep(run, current);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          await logEvent(run.id, current.id, "failed", message);
+          await endRun(run.id, "failed", message);
+          return;
+        }
+        if (!outcome.ok) {
+          if (outcome.skipped) {
+            await logEvent(run.id, current.id, "skipped", outcome.reason);
+            current = nextStep(steps, current.position);
+            break;
+          }
+          await logEvent(run.id, current.id, outcome.fatal ? "stopped" : "waited", outcome.reason);
+          if (outcome.fatal) {
+            await endRun(run.id, "stopped", outcome.reason);
+          } else {
+            await db
+              .update(whatsappFlowRuns)
+              .set({ currentStepId: current.id, wakeAt: new Date(Date.now() + 86_400_000), updatedAt: new Date() })
+              .where(eq(whatsappFlowRuns.id, run.id));
+          }
+          return;
+        }
+        await logEvent(run.id, current.id, "sent", describeStep(current));
+        if (current.kind === "ask_question") {
+          // Parked until they answer; resolveWaiting takes it from here.
+          await db
+            .update(whatsappFlowRuns)
+            .set({
+              status: "waiting",
+              currentStepId: current.id,
+              awaitingStepId: current.id,
+              wakeAt: new Date(Date.now() + askConfig(current).hours * 3_600_000),
+              updatedAt: new Date(),
+            })
+            .where(eq(whatsappFlowRuns.id, run.id));
+          return;
+        }
+        current = nextStep(steps, current.position);
+        break;
+      }
+
+      case "condition": {
+        if (!run.leadId) {
+          await logEvent(run.id, current.id, "skipped", "Only applies to leads, so it did nothing here.");
+          current = nextStep(steps, current.position);
+          break;
+        }
+        const config = current.config as Partial<ConditionConfig>;
+        const [lead] = await db.select().from(leads).where(eq(leads.id, run.leadId));
+        const matched = lead ? evaluateConditions((config.conditions ?? {}) as RuleConditions, lead) : false;
+        const goto = (matched ? config.thenGoto : config.elseGoto) ?? "next";
+        await logEvent(run.id, current.id, "branched", matched ? "Matched" : "Did not match");
+        if (goto === "stop") {
+          await endRun(run.id, "completed", "Condition ended the flow.");
+          return;
+        }
+        current = resolveGoto(steps, current.position, goto);
+        break;
+      }
+
+      case "assign_owner":
+      case "schedule_followup":
+      case "add_label": {
+        if (!run.leadId) {
+          await logEvent(run.id, current.id, "skipped", "Only applies to leads, so it did nothing here.");
+          current = nextStep(steps, current.position);
+          break;
+        }
+        try {
+          await runLeadAction(run, current);
+        } catch (error) {
+          await logEvent(run.id, current.id, "failed", error instanceof Error ? error.message : "Could not do this step");
+        }
+        current = nextStep(steps, current.position);
+        break;
+      }
+
       case "stop": {
         await logEvent(run.id, current.id, "stopped", "Reached a stop step.");
         await endRun(run.id, "completed", "Reached a stop step.");
@@ -639,7 +912,7 @@ export async function advanceRuns(): Promise<{ advanced: number }> {
         await endRun(run.id, "completed", "Its step was removed.");
         continue;
       }
-      const target = resolveGoto(steps, parked.position, waitConfig(parked).onTimeout ?? "next");
+      const target = resolveGoto(steps, parked.position, timeoutGoto(parked));
       await logEvent(run.id, parked.id, "timed_out", "No reply in time.");
       await db
         .update(whatsappFlowRuns)
@@ -749,6 +1022,53 @@ export async function startFlowForContacts(
   return { started, skipped: ids.length - started };
 }
 
+/**
+ * They answered a question. Valid answers are written to the lead and the
+ * flow moves on; an invalid one is asked again, twice at most, after which
+ * the flow carries on without it rather than nagging.
+ */
+async function resolveAnswer(
+  run: { id: string; flowId: string; leadId: string | null; contactId: string | null },
+  steps: FlowStep[],
+  parked: FlowStep,
+  text: string | null,
+): Promise<boolean> {
+  const config = askConfig(parked);
+  const checked = validateAnswer(config.field, text ?? "");
+  if (!checked.ok) {
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(whatsappFlowRunEvents)
+      .where(and(eq(whatsappFlowRunEvents.runId, run.id), eq(whatsappFlowRunEvents.stepId, parked.id), eq(whatsappFlowRunEvents.kind, "reasked")));
+    if (count < 2) {
+      await logEvent(run.id, parked.id, "reasked", checked.message);
+      await sendFreeForm(run.leadId, run.contactId, async ({ phoneNumberId, accessToken, phone }) => ({
+        waId: await sendTextMessage(phoneNumberId, accessToken, phone, checked.message),
+        body: checked.message,
+      })).catch(() => undefined);
+      return false;
+    }
+    await logEvent(run.id, parked.id, "skipped", "No usable answer after three tries.");
+  } else if (run.leadId) {
+    await db
+      .update(leads)
+      .set({ [ASK_COLUMNS[config.field]]: checked.value, updatedAt: new Date() })
+      .where(eq(leads.id, run.leadId));
+    await logEvent(run.id, parked.id, "replied", `${ASK_FIELDS[config.field].label}: ${checked.value}`);
+  }
+  const target = nextStep(steps, parked.position);
+  if (!target) {
+    await endRun(run.id, "completed", "Answered, and nothing after it.");
+    return true;
+  }
+  await db
+    .update(whatsappFlowRuns)
+    .set({ status: "running", awaitingStepId: null, currentStepId: target.id, wakeAt: new Date(), updatedAt: new Date() })
+    .where(eq(whatsappFlowRuns.id, run.id));
+  await runOne({ id: run.id, flowId: run.flowId, leadId: run.leadId, contactId: run.contactId, currentStepId: target.id }, steps);
+  return true;
+}
+
 async function resolveWaiting(subject: ReturnType<typeof eq>, text: string | null): Promise<number> {
   try {
     const waiting = await db
@@ -775,6 +1095,11 @@ async function resolveWaiting(subject: ReturnType<typeof eq>, text: string | nul
         ? stepAt(steps, steps.find((s) => s.id === run.awaitingStepId)?.position ?? -1)
         : null;
       if (!parked) continue;
+
+      if (parked.kind === "ask_question") {
+        if (await resolveAnswer(run, steps, parked, text)) moved += 1;
+        continue;
+      }
 
       const config = waitConfig(parked);
       const branch = matchBranch(text, config.branches);
