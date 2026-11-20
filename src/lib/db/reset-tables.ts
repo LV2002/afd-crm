@@ -48,6 +48,7 @@ export const CONFIG_TABLES = [
   // Saved replies and the label list: what staff set up for the inbox.
   "whatsapp_saved_replies",
   "whatsapp_auto_replies",
+  "whatsapp_links",
   "whatsapp_labels",
   // The marks worth a warning (₹20 lakh, ₹1 crore) — an admin's list.
   "finance_alert_rules",

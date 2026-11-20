@@ -9053,3 +9053,11 @@ Stubbed: list messages are in the client but no flow step uses them yet. Tests: 
 ## WhatsApp: greeting and away auto-replies (Phase 2a, migration 0135)
 
 `whatsapp_auto_replies` (one row each for greeting / away: on-off, message, open days, hours in IST) and `whatsapp_auto_reply_log`. `decideAutoReply` (pure, tested) picks at most one: away beats greeting; away once per 12h per person; greeting only after 24h of silence. `maybeAutoReply` is called from the inbound webhook for the API number only (never a counsellor's own handset, never after an opt-out) and records the reply on the thread. Admin page: WhatsApp → Auto replies. Both ship switched off. Keyword "bots" already exist as automations with the inbound-keyword trigger.
+
+## WhatsApp: template buttons, starter automations, tracked links (Phase 2b, migration 0136)
+
+- Template builder: web-page (fixed https address) and call buttons, plus a live phone preview. **Not done:** templates with an image/video/PDF header (needs Meta's resumable-upload sample handle and a header parameter at send time); the inbox picker still disables media-header templates.
+- Automations page: "Start from an example" — Welcome and collect details, Course finder. Copied in switched off. `validateFlow` now takes the trigger: keyword-started flows don't get the 24-hour-window warning.
+- Tracked links: `/l/<code>` (public) counts the tap then redirects; WhatsApp → Tracked links to create and read counts. Counts per link, not per person.
+- Middleware public-path match now requires a whole path segment: before, `"/f"` also matched `/finance`, `/follow-ups` (pages still enforced their own auth, but the middleware gate was open for them).
+- Not built from the Phase 2 list: a drag-and-drop visual flow canvas (the numbered list editor stays; starters cover the "blank page" problem), chat-reply SLA alerts, and a separate chat round-robin (new leads already go through assignment rules).

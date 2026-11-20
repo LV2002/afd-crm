@@ -7,7 +7,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * per-lead token is its own authorisation, and it grants only the right to
  * submit that one lead's profile.
  */
-const PUBLIC_PATHS = ["/login", "/auth", "/f"];
+const PUBLIC_PATHS = ["/login", "/auth", "/f", "/l"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -37,8 +37,10 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isPublicPath = PUBLIC_PATHS.some((path) =>
-    request.nextUrl.pathname.startsWith(path),
+  // Whole path segments only: a bare startsWith("/l") would also match
+  // /leads, and "/f" would match /finance.
+  const isPublicPath = PUBLIC_PATHS.some(
+    (path) => request.nextUrl.pathname === path || request.nextUrl.pathname.startsWith(`${path}/`),
   );
 
   if (!user && !isPublicPath) {

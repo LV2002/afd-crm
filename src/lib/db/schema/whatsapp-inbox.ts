@@ -94,3 +94,20 @@ export const whatsappAutoReplyLog = pgTable(
   },
   (t) => [index("whatsapp_auto_reply_log_phone_kind_idx").on(t.phone, t.kind, t.sentAt)],
 );
+
+/** A tracked short link: /l/<code> counts the click and redirects to `url`. */
+export const whatsappLinks = pgTable(
+  "whatsapp_links",
+  {
+    id: idColumn(),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    url: text("url").notNull(),
+    clicks: integer("clicks").notNull().default(0),
+    lastClickedAt: timestamp("last_clicked_at", { withTimezone: true }),
+    createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("whatsapp_links_code_uq").on(t.code)],
+);
