@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { webhookEvents, whatsappNumbers } from "@/lib/db/schema";
+import { webhookEvents, whatsappMessages, whatsappNumbers } from "@/lib/db/schema";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
 import {
@@ -54,7 +54,21 @@ async function deliveryActivity(): Promise<DeliveryActivity> {
     .where(and(eq(webhookEvents.source, "whatsapp"), sql`${webhookEvents.externalId} like 'unregistered:%'`, gt(webhookEvents.receivedAt, since)))
     .orderBy(desc(webhookEvents.receivedAt))
     .limit(3);
+  const perNumberRows = await db
+    .select({
+      label: whatsappNumbers.label,
+      count: sql<number>`count(${whatsappMessages.id})::int`,
+      last: sql<string>`max(${whatsappMessages.occurredAt})`,
+    })
+    .from(whatsappNumbers)
+    .leftJoin(
+      whatsappMessages,
+      and(eq(whatsappMessages.numberId, whatsappNumbers.id), eq(whatsappMessages.direction, "inbound"), gt(whatsappMessages.occurredAt, since), isNull(whatsappMessages.deletedAt)),
+    )
+    .where(and(eq(whatsappNumbers.mode, "coexistence"), isNull(whatsappNumbers.deletedAt)))
+    .groupBy(whatsappNumbers.id, whatsappNumbers.label);
   return {
+    perNumber: perNumberRows.map((r) => ({ label: r.label, inbound: { count: r.count, last: r.last ? new Date(r.last) : null } })),
     messages: kind("msg"),
     echoes: kind("echo"),
     history: kind("history"),

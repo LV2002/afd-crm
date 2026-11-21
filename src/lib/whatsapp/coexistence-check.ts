@@ -41,6 +41,8 @@ export interface DeliveryActivity {
   statuses: KindActivity;
   /** Deliveries for a phone number id the CRM does not know, with Meta's own words about it. */
   unregistered: Array<{ detail: string; at: Date }>;
+  /** Student messages filed on each registered Coexistence number, so the totals above cannot hide which number they came to. */
+  perNumber: Array<{ label: string; inbound: KindActivity }>;
 }
 
 export type CheckStatus = "ok" | "problem" | "unknown";
@@ -143,6 +145,21 @@ export function evaluateCoexistenceCheck(input: CheckInput, now = new Date()): C
   );
 
   if (input.coexistenceNumbers > 0) {
+    for (const n of a2.perNumber) {
+      lines.push(
+        n.inbound.count > 0
+          ? { id: `num:${n.label}`, label: `Student messages on ${n.label} (30 days)`, status: "ok", detail: `${n.inbound.count}, the latest ${ago(n.inbound.last)}.` }
+          : {
+              id: `num:${n.label}`,
+              label: `Student messages on ${n.label} (30 days)`,
+              status: "problem",
+              detail:
+                a2.messages.count > 0
+                  ? "None filed on this number. The messages counted above arrived on another number (probably the institute's API number), so this number is not delivering to the CRM yet."
+                  : "None filed on this number.",
+            },
+      );
+    }
     lines.push(
       a2.echoes.count > 0
         ? { id: "echoes", label: "Messages sent from the counsellor's phone (30 days)", status: "ok", detail: `${a2.echoes.count}, the latest ${ago(a2.echoes.last)}.` }
