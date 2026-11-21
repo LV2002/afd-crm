@@ -13,11 +13,15 @@ export function ChatRulesForm({
   alertMinutes,
   escalateMinutes,
   autoAssignUnowned,
+  aiSuggestEnabled,
+  aiConfigured,
 }: {
   alertEnabled: boolean;
   alertMinutes: number;
   escalateMinutes: number;
   autoAssignUnowned: boolean;
+  aiSuggestEnabled: boolean;
+  aiConfigured: boolean;
 }) {
   const [state, action, pending] = useActionState(saveChatRules, {} as AutoReplyState);
   return (
@@ -43,6 +47,14 @@ export function ChatRulesForm({
         <input type="checkbox" name="autoAssignUnowned" defaultChecked={autoAssignUnowned} />
         Give a waiting chat on a lead nobody owns to the assignment rules
       </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="aiSuggestEnabled" defaultChecked={aiSuggestEnabled} />
+        Let staff ask the AI to draft a reply
+      </label>
+      <p className="-mt-2 pl-6 text-xs text-muted-foreground">
+        Adds a Suggest button next to Send. It sends that conversation&rsquo;s recent messages (not the phone number) to Google&rsquo;s Gemini service;
+        a person always reads and sends the reply.{aiConfigured ? "" : " Needs GEMINI_API_KEY to be set before it works."}
+      </p>
       <div className="flex items-center gap-2">
         <Button type="submit" size="sm" disabled={pending}>Save</Button>
         <FormMessage error={state.error} success={state.success} />

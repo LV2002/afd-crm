@@ -1,6 +1,6 @@
 "use client";
 
-import { StickyNote } from "lucide-react";
+import { Sparkles, StickyNote } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import type { WhatsAppThreadMessage } from "@/lib/whatsapp/get-thread";
 import type { InboxLabel, InboxNote, SavedReply } from "@/lib/whatsapp/inbox-tools";
 import { matchSavedReplies, type SendableTemplate } from "@/lib/whatsapp/template-preview";
 
+import { suggestWhatsAppReply } from "@/app/(app)/whatsapp/ai-actions";
 import { addConversationNote } from "@/app/(app)/whatsapp/inbox-actions";
 import { ConversationBar } from "@/components/whatsapp/conversation-bar";
 import { MessageContent } from "@/components/whatsapp/message-content";
@@ -89,6 +90,7 @@ export function WhatsAppPanel({
   labelIds = [],
   resolved = false,
   notes = [],
+  aiEnabled = false,
 }: {
   leadId: string;
   leadName?: string;
@@ -106,6 +108,8 @@ export function WhatsAppPanel({
   labelIds?: string[];
   resolved?: boolean;
   notes?: InboxNote[];
+  /** AI-drafted replies are on (admin switch + API key). */
+  aiEnabled?: boolean;
 }) {
   const [mode, setMode] = useState<"reply" | "buttons" | "note">("reply");
   const [body, setBody] = useState("");
@@ -225,6 +229,23 @@ export function WhatsAppPanel({
                   rows={2}
                 />
                 <div className="flex flex-col gap-1 self-end">
+                  {aiEnabled && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isPending}
+                      onClick={() =>
+                        startTransition(async () => {
+                          const result = await suggestWhatsAppReply(leadId || null, toPhone, firstName);
+                          if (result.text) { setBody(result.text); setState({}); }
+                          else setState({ error: result.error });
+                        })
+                      }
+                    >
+                      <Sparkles className="size-4" /> Suggest
+                    </Button>
+                  )}
                   <MediaPicker file={file} onChange={setFile} onError={(message) => setState(message ? { error: message } : {})} disabled={isPending} />
                   <Button type="submit" disabled={isPending || (!body.trim() && !file) || suggestions.length > 0}>
                     Send

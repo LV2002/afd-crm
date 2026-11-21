@@ -171,3 +171,25 @@ export async function deleteLabel(id: string): Promise<InboxToolState> {
   revalidatePath("/whatsapp");
   return {};
 }
+
+/**
+ * The school's active courses, for a "pick a course" list message. Read
+ * from the same admin-editable course list everything else uses, so adding
+ * a course there adds it here.
+ */
+export async function listCourseChoices(): Promise<{ titles: string[]; error?: string }> {
+  const user = await sender();
+  if (!user) return { titles: [], error: "You don't have permission to do that." };
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("dropdown_options")
+    .select("label")
+    .eq("category", "course")
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .order("sort_order")
+    .returns<Array<{ label: string }>>();
+  // A list row's title is capped at 24 characters and a list at 10 rows.
+  const titles = (data ?? []).map((c) => (c.label.length > 24 ? `${c.label.slice(0, 23)}…` : c.label)).slice(0, 10);
+  return titles.length ? { titles } : { titles: [], error: "No courses are set up yet." };
+}

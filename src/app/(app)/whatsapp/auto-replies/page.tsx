@@ -48,6 +48,8 @@ export default async function AutoRepliesPage() {
         alertMinutes={rules?.alertMinutes ?? 30}
         escalateMinutes={rules?.escalateMinutes ?? 120}
         autoAssignUnowned={rules?.autoAssignUnowned ?? false}
+        aiSuggestEnabled={rules?.aiSuggestEnabled ?? false}
+        aiConfigured={Boolean(process.env.GEMINI_API_KEY)}
       />
     </div>
   );

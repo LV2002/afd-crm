@@ -63,6 +63,7 @@ export async function saveChatRules(_prev: AutoReplyState, formData: FormData): 
 
   const alertEnabled = formData.get("alertEnabled") === "on";
   const autoAssignUnowned = formData.get("autoAssignUnowned") === "on";
+  const aiSuggestEnabled = formData.get("aiSuggestEnabled") === "on";
   const alertMinutes = Number(formData.get("alertMinutes"));
   const escalateMinutes = Number(formData.get("escalateMinutes"));
   if (!Number.isInteger(alertMinutes) || alertMinutes < 1 || alertMinutes > 1440) return { error: "Use a whole number of minutes, 1 to 1440." };
@@ -72,7 +73,7 @@ export async function saveChatRules(_prev: AutoReplyState, formData: FormData): 
 
   await db
     .update(whatsappChatRules)
-    .set({ alertEnabled, autoAssignUnowned, alertMinutes, escalateMinutes, updatedAt: new Date(), updatedBy: user.id })
+    .set({ alertEnabled, autoAssignUnowned, aiSuggestEnabled, alertMinutes, escalateMinutes, updatedAt: new Date(), updatedBy: user.id })
     .where(eq(whatsappChatRules.id, "default"));
 
   const supabase = await createClient();
@@ -81,7 +82,7 @@ export async function saveChatRules(_prev: AutoReplyState, formData: FormData): 
     action: "whatsapp.chat_rules_update",
     entityType: "whatsapp_chat_rules",
     entityId: null,
-    after: { alertEnabled, alertMinutes, escalateMinutes, autoAssignUnowned },
+    after: { alertEnabled, alertMinutes, escalateMinutes, autoAssignUnowned, aiSuggestEnabled },
   });
   revalidatePath("/whatsapp/auto-replies");
   return { success: "Saved." };

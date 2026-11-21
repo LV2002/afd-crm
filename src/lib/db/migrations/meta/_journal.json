@@ -967,6 +967,13 @@
       "when": 1796133608000,
       "tag": "0137_whatsapp_chat_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1796220008000,
+      "tag": "0138_whatsapp_ai_suggest",
+      "breakpoints": true
     }
   ]
 }

@@ -119,6 +119,8 @@ export const whatsappChatRules = pgTable("whatsapp_chat_rules", {
   alertMinutes: integer("alert_minutes").notNull().default(30),
   escalateMinutes: integer("escalate_minutes").notNull().default(120),
   autoAssignUnowned: boolean("auto_assign_unowned").notNull().default(false),
+  /** Lets staff ask Gemini for a draft reply. Off by default: it sends a conversation's recent messages to Google. */
+  aiSuggestEnabled: boolean("ai_suggest_enabled").notNull().default(false),
   updatedAt: timestamp("updated_at", { withTimezone: true }),
   updatedBy: uuid("updated_by").references(() => profiles.id, { onDelete: "set null" }),
 });

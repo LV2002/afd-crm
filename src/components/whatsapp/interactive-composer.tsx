@@ -7,6 +7,7 @@ import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { listCourseChoices } from "@/app/(app)/whatsapp/inbox-actions";
 import { LIMITS } from "@/lib/whatsapp/interactive";
 import {
   sendWhatsAppInteractive,
@@ -75,6 +76,26 @@ export function InteractiveComposer({
           </button>
         ))}
       </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-fit"
+        disabled={pending}
+        onClick={() =>
+          startTransition(async () => {
+            const result = await listCourseChoices();
+            if (result.error) return setState({ error: result.error });
+            setKind("list");
+            setButtonText("Our courses");
+            setBody((b) => b.trim() || "Which course would you like to know about?");
+            setOptions(result.titles);
+            setState({});
+          })
+        }
+      >
+        Fill with our courses
+      </Button>
       <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} maxLength={LIMITS.bodyChars} placeholder="Which course are you interested in?" />
       {kind === "list" && (
         <Input value={buttonText} maxLength={LIMITS.listButtonChars} onChange={(e) => setButtonText(e.target.value)} className="h-9 w-48" aria-label="Text on the button that opens the list" />

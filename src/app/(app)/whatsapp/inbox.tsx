@@ -162,6 +162,12 @@ export async function WhatsAppInbox({
     : [[], false];
 
   const extras = selected ? await loadConversationExtras(supabase, selected.phone) : null;
+  const { data: chatRules } = await supabase
+    .from("whatsapp_chat_rules")
+    .select("ai_suggest_enabled")
+    .eq("id", "default")
+    .maybeSingle<{ ai_suggest_enabled: boolean }>();
+  const aiEnabled = Boolean(chatRules?.ai_suggest_enabled && process.env.GEMINI_API_KEY);
   const [savedReplies, templates] = selected && selected.leadId ? await Promise.all([loadSavedReplies(supabase), loadSendableTemplates()]) : [[], []];
   const windowClosesAt = withinWindow && selected?.lastInboundAt ? new Date(new Date(selected.lastInboundAt).getTime() + 24 * 3_600_000).toISOString() : null;
 
@@ -362,6 +368,7 @@ export async function WhatsAppInbox({
                   canSend={canReply}
                   withinWindow={withinWindow}
                   channel={channel}
+                  aiEnabled={aiEnabled}
                 />
               ) : (
                 <UnmatchedThread
