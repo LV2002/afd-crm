@@ -15,6 +15,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { formatDateIST } from "@/lib/format/date";
 import { describeSchedule } from "@/lib/whatsapp/schedule";
 import { createClient } from "@/lib/supabase/server";
+import { broadcastFunnels, pct } from "@/lib/whatsapp/broadcast-funnel";
 import { broadcastFailureReasons } from "@/lib/whatsapp/broadcast-failures";
 
 import { CancelBroadcastButton } from "./cancel-button";
@@ -23,6 +24,7 @@ interface BroadcastRow {
   id: string;
   name: string;
   template_name: string;
+  template_name_b: string | null;
   status: "draft" | "scheduled" | "sending" | "completed" | "failed" | "cancelled";
   audience_entity: "lead" | "student" | "contact";
   total_recipients: number;
@@ -52,7 +54,7 @@ export default async function WhatsAppBroadcastsPage() {
   const { data: broadcasts } = await supabase
     .from("whatsapp_broadcasts")
     .select(
-      "id, name, template_name, status, audience_entity, total_recipients, sent_count, failed_count, started_at, scheduled_for",
+      "id, name, template_name, template_name_b, status, audience_entity, total_recipients, sent_count, failed_count, started_at, scheduled_for",
     )
     .order("created_at", { ascending: false })
     .returns<BroadcastRow[]>();
@@ -65,6 +67,14 @@ export default async function WhatsAppBroadcastsPage() {
     supabase,
     (broadcasts ?? []).filter((b) => b.failed_count > 0).map((b) => b.id),
   );
+
+  const funnels = await broadcastFunnels(
+    supabase,
+    (broadcasts ?? []).filter((b) => b.sent_count > 0).slice(0, 25).map((b) => b.id),
+  );
+
+  const abIds = (broadcasts ?? []).filter((b) => b.template_name_b && b.sent_count > 0).slice(0, 25).map((b) => b.id);
+  const [funnelA, funnelB] = await Promise.all([broadcastFunnels(supabase, abIds, "a"), broadcastFunnels(supabase, abIds, "b")]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -97,12 +107,34 @@ export default async function WhatsAppBroadcastsPage() {
             {broadcasts.map((b) => (
               <TableRow key={b.id}>
                 <TableCell className="font-medium">{b.name}</TableCell>
-                <TableCell>{b.template_name}</TableCell>
+                <TableCell>
+                  {b.template_name}
+                  {b.template_name_b && <p className="text-xs text-muted-foreground">A/B test with {b.template_name_b}</p>}
+                </TableCell>
                 <TableCell>
                   <Badge variant={STATUS_VARIANT[b.status]}>{b.status}</Badge>
                 </TableCell>
                 <TableCell>
                   {b.sent_count + b.failed_count} / {b.total_recipients}
+                  {b.template_name_b && funnelA.get(b.id) && funnelB.get(b.id) && (
+                    <div className="mt-1 text-xs font-normal text-muted-foreground">
+                      {(["A", "B"] as const).map((label) => {
+                        const f = (label === "A" ? funnelA : funnelB).get(b.id)!;
+                        return (
+                          <p key={label}>
+                            Version {label}: sent {f.sent} · read {pct(f.read, f.sent)}% · replied {pct(f.replied, f.sent)}%
+                          </p>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {!b.template_name_b && funnels.get(b.id) && (
+                    <p className="mt-1 text-xs font-normal text-muted-foreground">
+                      Delivered {funnels.get(b.id)!.delivered} ({pct(funnels.get(b.id)!.delivered, funnels.get(b.id)!.sent)}%) ·
+                      Read {funnels.get(b.id)!.read} ({pct(funnels.get(b.id)!.read, funnels.get(b.id)!.sent)}%) ·
+                      Replied {funnels.get(b.id)!.replied} ({pct(funnels.get(b.id)!.replied, funnels.get(b.id)!.sent)}%)
+                    </p>
+                  )}
                   {b.failed_count > 0 && (
                     <span className="text-destructive"> ({b.failed_count} failed)</span>
                   )}

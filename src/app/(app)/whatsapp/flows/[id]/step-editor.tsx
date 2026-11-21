@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FLOW_STEP_KINDS, type FlowGoto, type FlowStepKind } from "@/lib/whatsapp/flow-engine";
+import { ASK_FIELDS, FLOW_STEP_KINDS, type FlowGoto, type FlowStepKind } from "@/lib/whatsapp/flow-engine";
 import { mergeVariablesFor } from "@/lib/whatsapp/merge-variables";
 import type { ParamSource } from "@/lib/whatsapp/personalise";
 
@@ -25,7 +25,15 @@ const initialState: FlowFormState = {};
 const FIXED_TEXT = "__text__";
 
 export const STEP_LABELS: Record<FlowStepKind, string> = {
-  send_template: "Send a WhatsApp message",
+  send_template: "Send a template message",
+  send_text: "Send a typed message",
+  send_buttons: "Send a message with buttons",
+  send_media: "Send a picture, PDF or video",
+  ask_question: "Ask a question and save the answer",
+  condition: "Check something about them",
+  assign_owner: "Give them to a counsellor",
+  schedule_followup: "Set a follow-up reminder",
+  add_label: "Put a label on the chat",
   wait: "Wait",
   wait_for_reply: "Wait for their reply",
   set_temperature: "Change their temperature",
@@ -48,6 +56,64 @@ export interface StepEditorLists {
   positions: number[];
   /** A flow for the database has no temperature or counsellor, so those steps aren't offered. */
   audience: "lead" | "contact";
+  /** Active counsellors, for the "give them to" step. */
+  counsellors: Array<{ value: string; label: string }>;
+  /** Chat labels, for the "put a label" step. */
+  labels: Array<{ value: string; label: string }>;
+}
+
+/** Steps that read or change a lead, or message one by free text — none make sense for a database contact. */
+const LEAD_ONLY_KINDS: readonly string[] = [
+  "set_temperature",
+  "notify_owner",
+  "send_text",
+  "send_buttons",
+  "send_media",
+  "ask_question",
+  "condition",
+  "assign_owner",
+  "schedule_followup",
+  "add_label",
+];
+
+const CONDITION_FIELD_CHOICES = [
+  { value: "temperature", label: "Temperature" },
+  { value: "source", label: "Lead source" },
+  { value: "city", label: "City" },
+  { value: "district", label: "District" },
+  { value: "state", label: "State" },
+  { value: "exam_year", label: "Exam year" },
+  { value: "education_status", label: "Class or qualification" },
+  { value: "courses_interested", label: "Courses interested in" },
+];
+const CONDITION_OP_CHOICES = [
+  { value: "equals", label: "is" },
+  { value: "not_equals", label: "is not" },
+  { value: "contains", label: "includes" },
+  { value: "is_empty", label: "is blank" },
+  { value: "is_not_empty", label: "is filled in" },
+];
+
+const ASK_FIELD_CHOICES = Object.entries(ASK_FIELDS).map(([value, meta]) => ({ value, label: meta.label }));
+
+/** "Where next?" with a plain label, shared by the new steps. */
+function GotoField({
+  label,
+  value,
+  positions,
+  onChange,
+}: {
+  label: string;
+  value: FlowGoto | undefined;
+  positions: number[];
+  onChange: (next: FlowGoto) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <GotoSelect value={value} positions={positions} onChange={onChange} />
+    </div>
+  );
 }
 
 interface Branch {
@@ -113,6 +179,267 @@ function StepConfig({
   lists: StepEditorLists;
 }) {
   const variables = mergeVariablesFor(lists.audience);
+
+  if (kind === "send_text") {
+    return (
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs text-muted-foreground">What to say</Label>
+        <textarea
+          className="min-h-24 w-full rounded-md border bg-background p-2 text-sm"
+          value={String(config.text ?? "")}
+          maxLength={1024}
+          placeholder="Thanks! Our counsellor will call you shortly."
+          onChange={(event) => setConfig({ ...config, text: event.target.value })}
+        />
+        <p className="text-xs text-muted-foreground">
+          Only goes to people who wrote to you in the last 24 hours — otherwise this step is skipped
+          and the automation carries on.
+        </p>
+      </div>
+    );
+  }
+
+  if (kind === "send_buttons") {
+    const buttons = Array.isArray(config.buttons) ? (config.buttons as string[]) : ["", ""];
+    return (
+      <div className="flex flex-col gap-2">
+        <Label className="text-xs text-muted-foreground">Message</Label>
+        <textarea
+          className="min-h-20 w-full rounded-md border bg-background p-2 text-sm"
+          value={String(config.text ?? "")}
+          maxLength={1024}
+          placeholder="Would you like a call from a counsellor?"
+          onChange={(event) => setConfig({ ...config, text: event.target.value })}
+        />
+        <Label className="text-xs text-muted-foreground">Buttons (up to 3, 20 letters each)</Label>
+        {buttons.map((button, index) => (
+          <Input
+            key={index}
+            className="h-9 w-64"
+            maxLength={20}
+            value={button}
+            placeholder={`Button ${index + 1}`}
+            onChange={(event) => {
+              const copy = [...buttons];
+              copy[index] = event.target.value;
+              setConfig({ ...config, buttons: copy });
+            }}
+          />
+        ))}
+        {buttons.length < 3 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-fit"
+            onClick={() => setConfig({ ...config, buttons: [...buttons, ""] })}
+          >
+            <Plus className="size-4" /> Add a button
+          </Button>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Follow this with &ldquo;Wait for their reply&rdquo; and use the button words as the answers
+          to branch on.
+        </p>
+      </div>
+    );
+  }
+
+  if (kind === "send_media") {
+    return (
+      <div className="flex flex-col gap-2">
+        <Select
+          value={String(config.kind ?? "image")}
+          onValueChange={(value) => setConfig({ ...config, kind: value })}
+        >
+          <SelectTrigger className="h-9 w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="image">Picture</SelectItem>
+            <SelectItem value="document">PDF or document</SelectItem>
+            <SelectItem value="video">Video</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          className="h-9 w-full"
+          value={String(config.url ?? "")}
+          placeholder="https://…  (a public link to the file)"
+          onChange={(event) => setConfig({ ...config, url: event.target.value })}
+        />
+        <Input
+          className="h-9 w-full"
+          value={String(config.caption ?? "")}
+          placeholder="Caption (optional)"
+          onChange={(event) => setConfig({ ...config, caption: event.target.value })}
+        />
+        {config.kind === "document" && (
+          <Input
+            className="h-9 w-64"
+            value={String(config.filename ?? "")}
+            placeholder="File name shown, e.g. Brochure.pdf"
+            onChange={(event) => setConfig({ ...config, filename: event.target.value })}
+          />
+        )}
+      </div>
+    );
+  }
+
+  if (kind === "ask_question") {
+    return (
+      <div className="flex flex-col gap-2">
+        <Label className="text-xs text-muted-foreground">The question</Label>
+        <Input
+          className="h-9 w-full"
+          value={String(config.question ?? "")}
+          placeholder="Which city are you in?"
+          onChange={(event) => setConfig({ ...config, question: event.target.value })}
+        />
+        <Label className="text-xs text-muted-foreground">Save their answer as</Label>
+        <Combobox
+          className="w-64"
+          value={String(config.field ?? "city")}
+          onChange={(value) => setConfig({ ...config, field: value })}
+          options={ASK_FIELD_CHOICES}
+          placeholder="Pick a field"
+          searchPlaceholder="Type to search…"
+        />
+        <Label className="text-xs text-muted-foreground">Hours to wait for an answer</Label>
+        <Input
+          type="number"
+          min={1}
+          className="h-9 w-28"
+          value={Number(config.hours ?? 48)}
+          onChange={(event) => setConfig({ ...config, hours: Number(event.target.value) })}
+        />
+        <GotoField
+          label="If they never answer"
+          value={config.onTimeout as FlowGoto | undefined}
+          positions={lists.positions}
+          onChange={(next) => setConfig({ ...config, onTimeout: next })}
+        />
+        <p className="text-xs text-muted-foreground">
+          A wrong-looking answer (say, an email with no @) is asked again, up to twice.
+        </p>
+      </div>
+    );
+  }
+
+  if (kind === "condition") {
+    const first = ((config.conditions as { all?: Array<{ field: string; op: string; value?: unknown }> } | undefined)?.all ?? [])[0] ?? {
+      field: "temperature",
+      op: "equals",
+      value: "",
+    };
+    const setFirst = (next: { field: string; op: string; value?: unknown }) =>
+      setConfig({ ...config, conditions: { all: [next] } });
+    const valueless = first.op === "is_empty" || first.op === "is_not_empty";
+    return (
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-end gap-2">
+          <Combobox
+            className="w-52"
+            value={first.field}
+            onChange={(value) => setFirst({ field: value, op: "equals", value: "" })}
+            options={CONDITION_FIELD_CHOICES}
+            placeholder="Field"
+            searchPlaceholder="Type to search…"
+          />
+          <Select value={first.op} onValueChange={(value) => setFirst({ ...first, op: value })}>
+            <SelectTrigger className="h-9 w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CONDITION_OP_CHOICES.map((op) => (
+                <SelectItem key={op.value} value={op.value}>
+                  {op.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {!valueless &&
+            (first.field === "temperature" ? (
+              <Combobox
+                className="w-52"
+                value={String(first.value ?? "")}
+                onChange={(value) => setFirst({ ...first, value })}
+                options={lists.statuses}
+                placeholder="Pick one"
+                searchPlaceholder="Type to search…"
+              />
+            ) : (
+              <Input
+                className="h-9 w-52"
+                value={String(first.value ?? "")}
+                placeholder="Value"
+                onChange={(event) => setFirst({ ...first, value: event.target.value })}
+              />
+            ))}
+        </div>
+        <GotoField
+          label="If yes, go to"
+          value={config.thenGoto as FlowGoto | undefined}
+          positions={lists.positions}
+          onChange={(next) => setConfig({ ...config, thenGoto: next })}
+        />
+        <GotoField
+          label="If not, go to"
+          value={config.elseGoto as FlowGoto | undefined}
+          positions={lists.positions}
+          onChange={(next) => setConfig({ ...config, elseGoto: next })}
+        />
+      </div>
+    );
+  }
+
+  if (kind === "assign_owner") {
+    return (
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs text-muted-foreground">Counsellor</Label>
+        <Combobox
+          className="w-64"
+          value={String(config.userId ?? "")}
+          onChange={(value) => setConfig({ ...config, userId: value })}
+          options={lists.counsellors}
+          placeholder="Pick a person"
+          searchPlaceholder="Type a name…"
+        />
+        <p className="text-xs text-muted-foreground">They are told straight away.</p>
+      </div>
+    );
+  }
+
+  if (kind === "schedule_followup") {
+    return (
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs text-muted-foreground">Remind the counsellor in (days)</Label>
+        <Input
+          type="number"
+          min={0}
+          max={365}
+          className="h-9 w-28"
+          value={Number(config.days ?? 1)}
+          onChange={(event) => setConfig({ ...config, days: Number(event.target.value) })}
+        />
+      </div>
+    );
+  }
+
+  if (kind === "add_label") {
+    return (
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs text-muted-foreground">Label</Label>
+        <Combobox
+          className="w-64"
+          value={String(config.labelId ?? "")}
+          onChange={(value) => setConfig({ ...config, labelId: value })}
+          options={lists.labels}
+          placeholder="Pick a label"
+          searchPlaceholder="Type to search…"
+        />
+      </div>
+    );
+  }
 
   if (kind === "stop") {
     return <p className="text-xs text-muted-foreground">Nothing to set — the run ends here.</p>;
@@ -444,7 +771,7 @@ export function AddStep({ flowId, lists }: { flowId: string; lists: StepEditorLi
           </SelectTrigger>
           <SelectContent>
             {FLOW_STEP_KINDS.filter(
-              (value) => lists.audience === "lead" || (value !== "set_temperature" && value !== "notify_owner"),
+              (value) => lists.audience === "lead" || !LEAD_ONLY_KINDS.includes(value),
             ).map((value) => (
               <SelectItem key={value} value={value}>
                 {STEP_LABELS[value]}

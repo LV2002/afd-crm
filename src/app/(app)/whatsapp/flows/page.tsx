@@ -18,6 +18,9 @@ import { db } from "@/lib/db/client";
 import { whatsappFlowRuns, whatsappFlowSteps, whatsappFlows } from "@/lib/db/schema";
 import { describeConditions } from "@/lib/rules/describe-rule";
 import { createClient } from "@/lib/supabase/server";
+import { STARTER_FLOWS } from "@/lib/whatsapp/starter-flows";
+
+import { createStarterFlow } from "./actions";
 
 import { loadRuleOptions, ruleLabelLookup } from "@/app/(app)/settings/rules/load-options";
 
@@ -61,15 +64,30 @@ export default async function WhatsAppFlowsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
         <p className="max-w-2xl text-sm text-muted-foreground">
-          A numbered list of steps a lead walks down: send a template, wait, send another — and wait
-          for their reply to decide where they go next. Everything an automation sends is an
-          approved template, and nobody who has opted out or is marked do-not-contact is ever
-          messaged by one.
+          A numbered list of steps a lead walks down: send a message, ask a question, wait for their
+          reply and go somewhere different depending on what they say. Messages you type yourself
+          only reach people who wrote to you in the last 24 hours; later in a sequence, use an
+          approved template. Nobody who has opted out or is marked do-not-contact is ever messaged.
         </p>
         <Button asChild>
           <Link href="/whatsapp/flows/new">New automation</Link>
         </Button>
       </div>
+
+      <section className="flex flex-col gap-2 rounded-lg border border-dashed p-4">
+        <h3 className="text-sm font-semibold">Start from an example</h3>
+        <div className="flex flex-wrap gap-3">
+          {STARTER_FLOWS.map((starter) => (
+            <form key={starter.key} action={createStarterFlow} className="flex max-w-sm flex-col gap-1">
+              <input type="hidden" name="key" value={starter.key} />
+              <p className="text-sm font-medium">{starter.name}</p>
+              <p className="text-xs text-muted-foreground">{starter.description}</p>
+              <Button type="submit" size="sm" variant="outline" className="w-fit">Use this</Button>
+            </form>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">Copied in as a switched-off automation you can edit before turning on.</p>
+      </section>
 
       {flows.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing set up yet.</p>

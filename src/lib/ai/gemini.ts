@@ -270,16 +270,21 @@ async function callModel(
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: options.systemInstruction }] },
         contents: options.contents,
-        tools: [
-          {
-            functionDeclarations: options.tools.map((tool) => ({
-              name: tool.name,
-              description: tool.description,
-              parameters: toGeminiSchema(tool.parameters),
-            })),
-          },
-        ],
-        generationConfig: { temperature: 0, maxOutputTokens: 2048 },
+        // A plain-text request passes no tools; an empty declaration list is rejected.
+        ...(options.tools.length > 0
+          ? {
+              tools: [
+                {
+                  functionDeclarations: options.tools.map((tool) => ({
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: toGeminiSchema(tool.parameters),
+                  })),
+                },
+              ],
+            }
+          : {}),
+        generationConfig: { temperature: options.tools.length > 0 ? 0 : 0.3, maxOutputTokens: 2048 },
       }),
       signal: options.signal,
     },

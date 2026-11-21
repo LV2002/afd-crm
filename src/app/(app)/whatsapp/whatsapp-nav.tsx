@@ -33,18 +33,23 @@ interface Tab {
   templates, automations. It is administrative, so it sits last.
 */
 const CHANNELS: Tab[] = [
+  { href: "/whatsapp", label: "All chats" },
   { href: "/whatsapp/personal", label: "WhatsApp Business Chat" },
   // Only for people granted the WhatsApp API (the `whatsapp.campaign`
   // permission, held through a role): the institute's broadcast number,
   // its templates, broadcasts and automations.
-  { href: "/whatsapp", label: "WhatsApp API", needs: "campaign" },
+  { href: "/whatsapp/api", label: "WhatsApp API", needs: "campaign" },
 ];
 
 const BUSINESS_TABS: Tab[] = [
-  { href: "/whatsapp", label: "Inbox" },
+  { href: "/whatsapp/overview", label: "Overview", needs: "campaign" },
+  { href: "/whatsapp/api", label: "Inbox" },
   { href: "/whatsapp/templates", label: "Templates", needs: "campaign" },
   { href: "/whatsapp/broadcasts", label: "Broadcasts", needs: "campaign" },
   { href: "/whatsapp/flows", label: "Automations", needs: "campaign" },
+  { href: "/whatsapp/replies", label: "Saved replies & labels", needs: "campaign" },
+  { href: "/whatsapp/auto-replies", label: "Auto replies & rules", needs: "campaign" },
+  { href: "/whatsapp/links", label: "Tracked links", needs: "campaign" },
   { href: "/whatsapp/suppressions", label: "Opted out", needs: "campaign" },
 ];
 
@@ -69,7 +74,10 @@ function TabLink({ tab, isActive }: { tab: Tab; isActive: boolean }) {
 export function WhatsAppNav({ canCampaign }: { canCampaign: boolean }) {
   const pathname = usePathname();
 
-  const onOtherChannel = OTHER_CHANNEL_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  const onHub = pathname === "/whatsapp";
+  const onPersonal = OTHER_CHANNEL_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  // Everything else under /whatsapp — the API inbox and its tools.
+  const onApiSection = !onHub && !onPersonal;
   const visibleBusinessTabs = BUSINESS_TABS.filter((tab) =>
     tab.needs === "campaign" ? canCampaign : true,
   );
@@ -80,20 +88,18 @@ export function WhatsAppNav({ canCampaign }: { canCampaign: boolean }) {
         {CHANNELS.filter((channel) => (channel.needs === "campaign" ? canCampaign : true)).map((channel) => {
           const isActive =
             channel.href === "/whatsapp"
-              ? !onOtherChannel
-              : pathname === channel.href || pathname.startsWith(`${channel.href}/`);
+              ? onHub
+              : channel.href === "/whatsapp/personal"
+                ? onPersonal
+                : onApiSection;
           return <TabLink key={channel.href} tab={channel} isActive={isActive} />;
         })}
       </nav>
 
-      {!onOtherChannel && visibleBusinessTabs.length > 1 && (
+      {onApiSection && visibleBusinessTabs.length > 1 && (
         <nav className="flex flex-wrap gap-1 pl-1">
           {visibleBusinessTabs.map((tab) => {
-            // Exact match only for the inbox, or it lights up on every
-            // page in the section.
-            const isActive =
-              pathname === tab.href ||
-              (tab.href !== "/whatsapp" && pathname.startsWith(`${tab.href}/`));
+            const isActive = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
             return (
               <Link
                 key={tab.href}

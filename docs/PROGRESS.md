@@ -9022,3 +9022,63 @@ New **HR** department in the sidebar: **My HR** (everyone), **Employees** and **
 - Students with no batch yet are still placed by the year they joined and their course's programme length (`lib/students/year-filter.ts`).
 
 - **Search in Admissions** (Accounts → Admissions): a search box above the tabs finds an admission by student name, phone number (any format, three digits or more), course, centre or academic year; several words must all match. It looks through every tab, not just the open one. Phones stay masked in the list.
+
+## WhatsApp: inbox tools (migration 0133)
+
+- **Saved replies** (WhatsApp → Saved replies & labels, `whatsapp.campaign` to manage): type `/` in a conversation to pick one, `/fees` to jump to it; `{{name}}` becomes their first name. **Labels** on conversations (Interested, Fee query, Demo class, Follow up, Wrong number to start; add your own), filterable in the inbox. **Private notes** sit between the messages, never sent. **Mark resolved** clears a chat from the open list; it reopens itself when they write again.
+- A **reply-window countdown** ("Reply window open · 5h 12m left") on every conversation, and a **template picker** replacing the typed template name: approved templates only, with the blanks to fill and a preview of exactly what they will receive. Templates with a file header are listed but sent from Broadcasts. Template sends still belong to `whatsapp.campaign`.
+- Notes, labels and status belong to a phone number and are checked against what the caller can already see in the inbox (row-level security on the messages).
+
+## WhatsApp: richer automation steps (Phase 1B)
+
+Shipped: nine new automation step kinds, no migration (step `kind` is plain text, config is JSONB).
+- **Send a typed message / message with buttons / picture, PDF or video** — free-form, so only sent to a lead who wrote to the API number in the last 24 hours; outside the window the step is logged as skipped and the flow carries on (template steps later still go out). Media goes by public https link.
+- **Ask a question and save the answer** — parks the run like a wait-for-reply; the answer is validated (`validateAnswer`) and written to a whitelisted lead column (email, city, district, state, exam year, school/college, board, parents' names, class). A bad answer is asked again twice, then the flow moves on. Timeout branch supported.
+- **Check something about them** — condition step reusing `evaluateConditions`, with yes/no jump targets (editor offers one condition; the stored shape is the full `{all:[...]}`).
+- **Give them to a counsellor / set a follow-up reminder / put a label on the chat** — lead actions; assignment notifies the new owner.
+- Client gained `sendReplyButtons`, `sendListMessage`, `sendMediaByLink`; `src/lib/whatsapp/interactive.ts` holds Meta's limits and checkers (also used by the Phase 1C inbox composer).
+- Contact (database) flows don't offer any of the lead-only steps.
+
+Stubbed: list messages are in the client but no flow step uses them yet. Tests: `tests/whatsapp-flow-rich-steps.spec.ts` + new cases in `flow-engine.spec.ts`.
+
+## WhatsApp: buttons & lists from the inbox (Phase 1C)
+
+`sendWhatsAppInteractive` (send-actions) + `InteractiveComposer`: a "Buttons & lists" tab beside Reply / Private note, visible only while the 24-hour window is open. Same route, permission and window rules as typed text; Meta's limits checked client-side and again on the server (`interactive.ts`). Stored on the thread as text with the options appended. A tap arrives as a normal inbound message (already mapped), so automations branch on it.
+
+## WhatsApp: results funnel, number health, overview (Phase 1D, migration 0134)
+
+- Broadcast recipients gained `delivered_at`, `read_at`, `replied_at`; the status webhook fills delivered/read (`applyBroadcastStatus`), the inbound handler fills replied within 7 days of the send (`markBroadcastReply`). Broadcasts list shows Delivered / Read / Replied with percentages. Broadcasts sent before this migration show no funnel numbers (Meta's status events weren't kept per recipient).
+- New **Overview** tab (`/whatsapp/overview`, campaign permission): setup checklist (connected, approved template, first reply, saved replies, active automation), number health from Meta (quality rating, daily limit tier; fails gracefully), and a click-to-chat (wa.me) link + QR builder. Added `qrcode` dependency (client-side QR).
+
+## WhatsApp: greeting and away auto-replies (Phase 2a, migration 0135)
+
+`whatsapp_auto_replies` (one row each for greeting / away: on-off, message, open days, hours in IST) and `whatsapp_auto_reply_log`. `decideAutoReply` (pure, tested) picks at most one: away beats greeting; away once per 12h per person; greeting only after 24h of silence. `maybeAutoReply` is called from the inbound webhook for the API number only (never a counsellor's own handset, never after an opt-out) and records the reply on the thread. Admin page: WhatsApp → Auto replies. Both ship switched off. Keyword "bots" already exist as automations with the inbound-keyword trigger.
+
+## WhatsApp: template buttons, starter automations, tracked links (Phase 2b, migration 0136)
+
+- Template builder: web-page (fixed https address) and call buttons, plus a live phone preview. **Not done:** templates with an image/video/PDF header (needs Meta's resumable-upload sample handle and a header parameter at send time); the inbox picker still disables media-header templates.
+- Automations page: "Start from an example" — Welcome and collect details, Course finder. Copied in switched off. `validateFlow` now takes the trigger: keyword-started flows don't get the 24-hour-window warning.
+- Tracked links: `/l/<code>` (public) counts the tap then redirects; WhatsApp → Tracked links to create and read counts. Counts per link, not per person.
+- Middleware public-path match now requires a whole path segment: before, `"/f"` also matched `/finance`, `/follow-ups` (pages still enforced their own auth, but the middleware gate was open for them).
+- Not built from the Phase 2 list: a drag-and-drop visual flow canvas (the numbered list editor stays; starters cover the "blank page" problem), chat-reply SLA alerts, and a separate chat round-robin (new leads already go through assignment rules).
+
+## Chats hub (sources listed under Chats)
+
+`/whatsapp` is now a hub: one row per chat source — the institute's WhatsApp API number and each counsellor's own number — with waiting-for-reply, open, not-in-CRM and last-message, sorted with the busiest first. Counts come from the same RLS-scoped read as the inboxes (`getWhatsAppThreads`, which now returns `numberId`), so a counsellor sees only their own sources and a centre head their centre's. `summariseSources` (pure, tested) decides which rows a person can reach. The API inbox moved to `/whatsapp/api` (old `/whatsapp?thread=…` links redirect); a counsellor row opens `/whatsapp/personal?number=<id>`. Nav: All chats · WhatsApp Business Chat · WhatsApp API.
+
+## WhatsApp: remaining Phase 2 (migration 0137)
+
+- **Chat reply-time alerts**: `whatsapp_chat_rules` (one row) + `whatsapp_reply_alerts`. Cron `whatsapp-reply-sweep` (10-minute tier) finds chats whose latest message is the student's and unanswered (not resolved), tells the owner after N minutes (`whatsapp.reply_overdue`) and the centre head after M (`whatsapp.reply_escalated`). Counted only while the office is open (hours from the "we're closed" settings). Each level is claimed in a unique-indexed table before sending, so overlapping runs never double-notify. Optional: hand a waiting chat on an unowned lead to `applyAssignment` (the existing rules/round-robin), instead of a separate chat assigner. Settings: WhatsApp → Auto replies & rules. Both off by default.
+- **Template media headers**: the template builder takes a picture / MP4 / PDF header (uploaded to Meta as the review sample via the resumable-upload API; needs the Meta App ID saved under Settings → Integrations → Meta; sample ≤ 4 MB, the host's request limit). From the inbox, a media-header template now asks for the file and sends it (`sendWhatsAppTemplateWithHeader`) instead of being greyed out.
+- **Flow map**: each automation page draws the flow as cards with arrows and labelled branches (`stepEdges`, tested). Not a drag-and-drop canvas.
+- Fixed: the flow step list described "follow-up reminder" in hours while the step stores days.
+
+## WhatsApp Phase 3a (migration 0138) and send-me-a-test
+
+- **Send me a test** on every automation: sends its messages (templates with sample values, typed text, buttons, pictures, questions) to a number you enter; waits, conditions and lead changes are skipped; touches no lead and starts no run; a per-step report says what was sent or why not (typed messages need the phone to have written to the institute's WhatsApp in the last 24h).
+- **Course list**: "Fill with our courses" in the Buttons & lists composer builds a list message from the admin-editable course dropdown (24-char titles, first 10). This is a list message, not a Meta Commerce product catalogue — that needs a catalogue set up in Meta Commerce Manager and a product feed, which has no sensible shape for courses with per-student fees.
+- **AI suggested reply**: a Suggest button next to Send drafts a reply with Gemini (`lib/whatsapp/ai-suggest.ts`, `ai-actions.ts`). The model sees the last 12 messages (text only, not the phone number), the course list and the team's saved replies; it is told never to state fees/dates/availability; a person reads, edits and sends. Off by default (`whatsapp_chat_rules.ai_suggest_enabled`) because it sends conversation text to Google; also needs `GEMINI_API_KEY`. It does NOT auto-reply: an unattended bot answering students about fees is a decision for later.
+
+## WhatsApp Phase 3b: A/B broadcasts (migration 0139)
+
+New broadcast form: "Test a second version" picks template B. At snapshot time the audience is shuffled and split in half (`assignVariants`, random, halves differ by ≤1); each recipient row stores `variant`; the sweep sends A's or B's template accordingly. Both are filled from the same values, so the form blocks a B with a different number of `{{n}}` blanks. Broadcasts list shows per-version sent / read % / replied %. Not statistical-significance aware: it shows rates, you decide.

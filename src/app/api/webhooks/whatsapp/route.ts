@@ -15,6 +15,8 @@ import {
   suppressPhone,
 } from "@/lib/whatsapp/opt-out";
 import { resolveContactReply, resolveReply, startFlows } from "@/lib/whatsapp/flow-runner";
+import { maybeAutoReply } from "@/lib/whatsapp/auto-reply-runner";
+import { applyBroadcastStatus, markBroadcastReply } from "@/lib/whatsapp/broadcast-tracking";
 import { downloadMessageMedia, worthFetchingInline } from "@/lib/whatsapp/inbound-media";
 import { activeDropdownValues } from "@/lib/config/dropdown-values";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
@@ -384,6 +386,16 @@ export async function POST(request: Request) {
           //
           // Only when they have not opted out. Somebody whose message was
           // "STOP" is not somebody to answer with an automation.
+          if (!optOut) await markBroadcastReply(message.from);
+          // Greeting / away message, on the API number only: a counsellor's
+          // own handset is theirs to answer.
+          if (!optOut && !number) {
+            await maybeAutoReply({
+              phone: message.from,
+              leadId: matched?.id ?? null,
+              counsellorId: matched?.assignedTo ?? null,
+            });
+          }
           if (matched && !optOut) {
             await resolveReply(matched.id, content.body);
             await startFlows("inbound_keyword", { leadId: matched.id, text: content.body });
@@ -443,6 +455,8 @@ export async function POST(request: Request) {
               errorMessage: status.errors?.[0]?.title ?? status.errors?.[0]?.message ?? null,
             })
             .where(eq(whatsappMessages.waMessageId, status.id));
+          // Broadcast funnel: how far did this recipient's message get.
+          await applyBroadcastStatus(status.id, status.status);
 
           await db
             .update(webhookEvents)

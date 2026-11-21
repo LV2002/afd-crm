@@ -104,6 +104,9 @@ async function run(request: Request) {
       contactId: whatsappBroadcastRecipients.contactId,
       templateName: whatsappBroadcasts.templateName,
       templateLanguage: whatsappBroadcasts.templateLanguage,
+      templateNameB: whatsappBroadcasts.templateNameB,
+      templateLanguageB: whatsappBroadcasts.templateLanguageB,
+      variant: whatsappBroadcastRecipients.variant,
       bodyParam: whatsappBroadcasts.bodyParam,
       params: whatsappBroadcastRecipients.params,
       headerMediaId: whatsappBroadcasts.headerMediaId,
@@ -196,8 +199,8 @@ async function run(request: Request) {
         phoneNumberId,
         accessToken,
         row.phone,
-        row.templateName,
-        row.templateLanguage,
+        row.variant === "b" && row.templateNameB ? row.templateNameB : row.templateName,
+        row.variant === "b" && row.templateNameB ? (row.templateLanguageB ?? "en_US") : row.templateLanguage,
         // This recipient's own values, worked out when the audience was
         // snapshotted. `bodyParam` is the pre-personalisation column and
         // is still read for broadcasts composed before per-recipient

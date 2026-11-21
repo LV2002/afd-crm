@@ -6,7 +6,9 @@ import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { getIntegrationCredential } from "@/lib/integrations/credentials";
 import {
+  sendListMessage,
   sendMediaMessage,
+  sendReplyButtons,
   sendTemplateMessage,
   sendTextMessage,
   uploadMedia,
@@ -18,6 +20,7 @@ import {
   isWithinCustomerServiceWindow,
   isWithinCustomerServiceWindowForPhone,
 } from "@/lib/whatsapp/get-thread";
+import { checkListMessage, checkReplyButtons, describeInteractive } from "@/lib/whatsapp/interactive";
 import { mediaKindFor, trimCaption, validateWhatsAppMedia } from "@/lib/whatsapp/media";
 
 export interface WhatsAppSendState {
@@ -261,6 +264,66 @@ export async function sendWhatsAppMessage(
   );
 }
 
+export type InteractiveInput =
+  | { kind: "buttons"; body: string; buttons: string[] }
+  | { kind: "list"; body: string; buttonText: string; rows: Array<{ title: string; description?: string }> };
+
+/**
+ * Tappable reply buttons or a pick-from list, sent into an open conversation.
+ *
+ * Same route, window and permission rules as typed text — Meta only accepts
+ * interactive messages inside the 24-hour window. The tap comes back as an
+ * ordinary inbound message carrying the option's words, which is what
+ * automations branch on.
+ */
+export async function sendWhatsAppInteractive(
+  leadId: string | null,
+  toPhone: string,
+  input: InteractiveInput,
+  channel: ReplyChannel = "own",
+): Promise<WhatsAppSendState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "You don't have permission to do that." };
+
+  const checked =
+    input.kind === "buttons"
+      ? checkReplyButtons({ body: input.body, buttons: input.buttons })
+      : checkListMessage({ body: input.body, buttonText: input.buttonText, rows: input.rows });
+  if (!checked.ok) return { error: checked.error };
+
+  const route = await replyRoute(channel, user.id, user);
+  if (!route.ok) return { error: route.error };
+
+  const supabase = await createClient();
+  const withinWindow = leadId
+    ? await isWithinCustomerServiceWindow(supabase, leadId, route.windowNumberId)
+    : await isWithinCustomerServiceWindowForPhone(supabase, toPhone, route.windowNumberId);
+  if (!withinWindow) {
+    return {
+      error: `${leadId ? "This lead hasn't" : "They haven't"} messaged ${route.label} in the last 24 hours, so WhatsApp won't accept buttons or lists. ${channel === "api" ? "Send an approved template to reopen the conversation." : "Message them from the WhatsApp Business app on your phone."}`,
+    };
+  }
+
+  if (input.kind === "buttons") {
+    const value = (checked as { ok: true; value: { body: string; buttons: string[] } }).value;
+    return recordAndSend(
+      leadId,
+      toPhone,
+      route.via,
+      { messageType: "text", body: describeInteractive("buttons", value.body, value.buttons), templateName: null },
+      (id, token) => sendReplyButtons(id, token, toPhone, value),
+    );
+  }
+  const value = (checked as { ok: true; value: { body: string; buttonText: string; rows: Array<{ title: string; description?: string }> } }).value;
+  return recordAndSend(
+    leadId,
+    toPhone,
+    route.via,
+    { messageType: "text", body: describeInteractive("list", value.body, value.rows.map((r) => r.title)), templateName: null },
+    (id, token) => sendListMessage(id, token, toPhone, value),
+  );
+}
+
 /**
  * A pre-approved WhatsApp template — the only message type Meta accepts
  * outside the 24-hour window.
@@ -272,12 +335,20 @@ export async function sendWhatsAppMessage(
  * number's quality rating, and one number now carries the whole
  * institute's reputation.
  */
+function templateValues(input: string | string[]): string[] | undefined {
+  const list = (Array.isArray(input) ? input : [input]).map((v) => v.trim());
+  // Meta numbers the values by position, so a blank in the middle cannot just be dropped.
+  const last = list.map((v, i) => (v ? i : -1)).reduce((a, b) => Math.max(a, b), -1);
+  return last < 0 ? undefined : list.slice(0, last + 1);
+}
+
 export async function sendWhatsAppTemplate(
   leadId: string,
   toPhone: string,
   templateName: string,
   languageCode: string,
-  bodyParam: string,
+  /** One value for {{1}}, or the values for {{1}}, {{2}}… in order. */
+  bodyParam: string | string[],
 ): Promise<WhatsAppSendState> {
   const sender = await getCurrentUser();
   if (!sender || !can(sender, "whatsapp.campaign")) {
@@ -291,7 +362,52 @@ export async function sendWhatsAppTemplate(
   // "api": a template is the institute speaking, is billed to the
   // institute, and is gated on whatsapp.campaign above.
   return recordAndSend(leadId, toPhone, "api", { messageType: "template", body: null, templateName: templateName.trim() }, (phoneNumberId, accessToken) =>
-    sendTemplateMessage(phoneNumberId, accessToken, toPhone, templateName.trim(), languageCode.trim() || "en_US", bodyParam.trim() ? [bodyParam.trim()] : undefined),
+    sendTemplateMessage(phoneNumberId, accessToken, toPhone, templateName.trim(), languageCode.trim() || "en_US", templateValues(bodyParam)),
+  );
+}
+
+/**
+ * A template whose header is a picture, video or PDF: the file is uploaded
+ * to Meta from the sending number and attached as the header. Same gate as
+ * any template send (`whatsapp.campaign`).
+ */
+export async function sendWhatsAppTemplateWithHeader(
+  leadId: string,
+  toPhone: string,
+  formData: FormData,
+): Promise<WhatsAppSendState> {
+  const sender = await getCurrentUser();
+  if (!sender || !can(sender, "whatsapp.campaign")) {
+    return { error: "Template messages are sent by whoever runs WhatsApp campaigns." };
+  }
+  const templateName = String(formData.get("templateName") ?? "").trim();
+  const language = String(formData.get("language") ?? "").trim() || "en_US";
+  if (!templateName) return { error: "Template name is required." };
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "Attach the picture, video or PDF this template shows at the top." };
+  const invalid = validateWhatsAppMedia(file);
+  if (invalid) return { error: invalid };
+  const kind = mediaKindFor(file.type);
+  if (kind !== "image" && kind !== "video" && kind !== "document") return { error: "A template header can be a picture, a video or a PDF." };
+
+  let values: string[] = [];
+  try {
+    const parsed = JSON.parse(String(formData.get("values") ?? "[]"));
+    if (Array.isArray(parsed)) values = parsed.map(String);
+  } catch {
+    return { error: "Could not read the values." };
+  }
+
+  return recordAndSend(
+    leadId,
+    toPhone,
+    "api",
+    { messageType: "template", body: null, templateName, mediaMimeType: file.type },
+    async (phoneNumberId, accessToken) => {
+      const mediaId = await uploadMedia(phoneNumberId, accessToken, file, file.name);
+      const waMessageId = await sendTemplateMessage(phoneNumberId, accessToken, toPhone, templateName, language, templateValues(values), { kind, mediaId });
+      return { waMessageId, mediaId };
+    },
   );
 }
 

@@ -23,6 +23,9 @@ if (!process.env.INTEGRATION_ENCRYPTION_KEY) throw new Error("INTEGRATION_ENCRYP
 
 vi.mock("../src/lib/integrations/whatsapp/client", () => ({
   sendTemplateMessage: vi.fn(),
+  sendTextMessage: vi.fn(),
+  sendReplyButtons: vi.fn(),
+  sendMediaByLink: vi.fn(),
 }));
 // The engine notifies a counsellor on a notify_owner step; that path has
 // its own tests and needs a whole notification-settings fixture here.

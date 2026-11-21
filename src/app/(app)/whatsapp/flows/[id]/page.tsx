@@ -17,9 +17,11 @@ import {
   centers,
   contacts,
   leads,
+  profiles,
   whatsappFlowRuns,
   whatsappFlowSteps,
   whatsappFlows,
+  whatsappLabels,
 } from "@/lib/db/schema";
 import type { RuleConditions } from "@/lib/assignment/evaluate-conditions";
 import { formatDateIST } from "@/lib/format/date";
@@ -38,6 +40,8 @@ import { loadRuleOptions } from "@/app/(app)/settings/rules/load-options";
 import { listTemplates } from "../../templates/actions";
 import { FlowForm } from "../flow-form";
 import { FlowControls } from "./flow-controls";
+import { FlowMap } from "./flow-map";
+import { TestSend } from "./test-send";
 import { StartForLists } from "./start-for-lists";
 import { AddStep, ExistingStep, type StepEditorLists } from "./step-editor";
 
@@ -64,7 +68,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
   if (!flow) notFound();
 
   const supabase = await createClient();
-  const [stepRows, temperatureOptions, centerRows, templateResult, runRows, ruleOptions] =
+  const [stepRows, temperatureOptions, centerRows, templateResult, runRows, ruleOptions, people, labelRows] =
     await Promise.all([
       db
         .select()
@@ -95,6 +99,16 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
         .orderBy(desc(whatsappFlowRuns.startedAt))
         .limit(25),
       loadRuleOptions(supabase),
+      db
+        .select({ id: profiles.id, name: profiles.fullName })
+        .from(profiles)
+        .where(eq(profiles.isActive, true))
+        .orderBy(asc(profiles.fullName)),
+      db
+        .select({ id: whatsappLabels.id, name: whatsappLabels.name })
+        .from(whatsappLabels)
+        .where(isNull(whatsappLabels.deletedAt))
+        .orderBy(asc(whatsappLabels.name)),
     ]);
 
   const forDatabase = flow.audience === "contact";
@@ -110,7 +124,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
     kind: row.kind,
     config: row.config ?? {},
   }));
-  const issues = validateFlow(steps);
+  const issues = validateFlow(steps, flow.triggerType);
 
   // Only approved templates, for the same reason the broadcast composer
   // only offers approved ones: anything else is a send that fails at
@@ -143,6 +157,8 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
       .map((option) => ({ value: option.value, label: option.label })),
     positions: steps.map((step) => step.position),
     audience: flow.audience,
+    counsellors: people.map((p) => ({ value: p.id, label: p.name })),
+    labels: labelRows.map((l) => ({ value: l.id, label: l.name })),
   };
 
   const liveRuns = runRows.filter((run) => run.status === "running" || run.status === "waiting");
@@ -186,6 +202,10 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
           </ul>
         </div>
       )}
+
+      <FlowMap steps={steps} />
+
+      {steps.length > 0 && <TestSend flowId={flow.id} />}
 
       <section className="flex flex-col gap-3">
         <h3 className="text-sm font-semibold">The steps</h3>

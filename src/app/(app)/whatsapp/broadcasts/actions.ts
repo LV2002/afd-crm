@@ -13,6 +13,7 @@ import { mediaKindFor, validateWhatsAppMedia } from "@/lib/whatsapp/media";
 import { resolveMergeValues, type MergeValues } from "@/lib/whatsapp/merge-values";
 import { isUsableVariable } from "@/lib/whatsapp/merge-variables";
 import { parseParamSources, resolveParams, type ParamSource } from "@/lib/whatsapp/personalise";
+import { assignVariants } from "@/lib/whatsapp/ab-split";
 import { parseScheduleAt } from "@/lib/whatsapp/schedule";
 import { db } from "@/lib/db/client";
 import { whatsappBroadcasts } from "@/lib/db/schema";
@@ -214,6 +215,12 @@ export async function createBroadcast(
     return { error: "Choose an approved template." };
   }
 
+  const templateNameB = String(formData.get("templateNameB") ?? "").trim();
+  const templateLanguageB = String(formData.get("templateLanguageB") ?? "").trim();
+  if (templateNameB && templateNameB === templateName.trim()) {
+    return { error: "Version B is the same template as version A. Pick a different one, or clear it." };
+  }
+
   const spec = specFrom(formData);
   if (!spec) return { error: "Pick who this is going to." };
 
@@ -303,9 +310,10 @@ export async function createBroadcast(
     }
   }
 
-  const recipients = audience.members.map((member) => {
+  const variants = templateNameB ? assignVariants(audience.members.length) : null;
+  const recipients = audience.members.map((member, index) => {
     const { params, missing } = resolveParams(sources, mergeValues.get(member.id) ?? {});
-    return { member, params, missing };
+    return { member, params, missing, variant: variants?.[index] ?? ("a" as const) };
   });
 
   // A placeholder that resolved to nothing AND has no fallback cannot be
@@ -334,6 +342,8 @@ export async function createBroadcast(
         typeof templateLanguage === "string" && templateLanguage.trim()
           ? templateLanguage.trim()
           : "en_US",
+      template_name_b: templateNameB || null,
+      template_language_b: templateNameB ? templateLanguageB || "en_US" : null,
       body_param: typeof bodyParam === "string" && bodyParam.trim() ? bodyParam.trim() : null,
       body_params: sources,
       header_media_id: headerMedia?.id ?? null,
@@ -360,8 +370,9 @@ export async function createBroadcast(
   }
 
   const { error: recipientsError } = await supabase.from("whatsapp_broadcast_recipients").insert(
-    recipients.map(({ member, params, missing }) => ({
+    recipients.map(({ member, params, missing, variant }) => ({
       broadcast_id: broadcast.id,
+      variant,
       lead_id: member.entity === "lead" ? member.id : null,
       student_id: member.entity === "student" ? member.id : null,
       contact_id: member.entity === "contact" ? member.id : null,
@@ -391,6 +402,7 @@ export async function createBroadcast(
       filters: spec.filters,
       lists: spec.listIds ?? null,
       templateName: templateName.trim(),
+      templateNameB: templateNameB || null,
       headerMedia: headerMedia?.fileName ?? null,
       recipients: audience.members.length,
       scheduledFor: scheduledFor?.toISOString() ?? null,

@@ -42,6 +42,65 @@ export async function sendTextMessage(phoneNumberId: string, accessToken: string
   });
 }
 
+/** Up to three tappable reply buttons. Only inside the 24-hour window. A tap arrives as an ordinary inbound message carrying the button's words. */
+export async function sendReplyButtons(
+  phoneNumberId: string,
+  accessToken: string,
+  toE164: string,
+  input: { body: string; buttons: string[] },
+): Promise<string> {
+  return postMessage(phoneNumberId, accessToken, {
+    to: toE164.replace(/\D/g, ""),
+    type: "interactive",
+    interactive: {
+      type: "button",
+      body: { text: input.body },
+      action: { buttons: input.buttons.map((title, i) => ({ type: "reply", reply: { id: `btn_${i + 1}`, title } })) },
+    },
+  });
+}
+
+/** A message with a button that opens a list of up to ten choices. Only inside the 24-hour window. */
+export async function sendListMessage(
+  phoneNumberId: string,
+  accessToken: string,
+  toE164: string,
+  input: { body: string; buttonText: string; rows: Array<{ title: string; description?: string }> },
+): Promise<string> {
+  return postMessage(phoneNumberId, accessToken, {
+    to: toE164.replace(/\D/g, ""),
+    type: "interactive",
+    interactive: {
+      type: "list",
+      body: { text: input.body },
+      action: {
+        button: input.buttonText,
+        sections: [{ title: "Options", rows: input.rows.map((r, i) => ({ id: `row_${i + 1}`, title: r.title, ...(r.description ? { description: r.description } : {}) })) }],
+      },
+    },
+  });
+}
+
+/**
+ * Sends a file Meta fetches from a public https address, instead of one we
+ * uploaded. Used by automations, which have no person to attach a file.
+ */
+export async function sendMediaByLink(
+  phoneNumberId: string,
+  accessToken: string,
+  toE164: string,
+  media: { kind: "image" | "document" | "video"; link: string; caption?: string; fileName?: string },
+): Promise<string> {
+  const payload: Record<string, unknown> = { link: media.link };
+  if (media.caption) payload.caption = media.caption;
+  if (media.kind === "document" && media.fileName) payload.filename = media.fileName;
+  return postMessage(phoneNumberId, accessToken, {
+    to: toE164.replace(/\D/g, ""),
+    type: media.kind,
+    [media.kind]: payload,
+  });
+}
+
 /**
  * Puts a file on Meta's servers and returns the media id to send it by.
  *
@@ -251,4 +310,32 @@ export async function subscribeAppToWaba(wabaId: string, accessToken: string): P
       body,
     );
   }
+}
+
+export interface PhoneNumberHealth {
+  displayPhoneNumber: string | null;
+  verifiedName: string | null;
+  /** GREEN, YELLOW, RED or UNKNOWN — Meta's own quality rating. */
+  qualityRating: string | null;
+  /** e.g. TIER_1K, TIER_10K: how many people we may start a conversation with per day. */
+  messagingLimitTier: string | null;
+  status: string | null;
+}
+
+/** Meta's view of the sending number: quality rating, daily limit tier, status. Throws MetaGraphApiError on refusal. */
+export async function fetchPhoneNumberHealth(phoneNumberId: string, accessToken: string): Promise<PhoneNumberHealth> {
+  const fields = "display_phone_number,verified_name,quality_rating,messaging_limit_tier,status";
+  const response = await fetch(`${GRAPH_BASE_URL}/${phoneNumberId}?fields=${fields}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  const body = (await response.json()) as Record<string, string | undefined>;
+  if (!response.ok) throw new MetaGraphApiError(`WhatsApp Cloud API returned ${response.status} reading the number`, response.status, body);
+  return {
+    displayPhoneNumber: body.display_phone_number ?? null,
+    verifiedName: body.verified_name ?? null,
+    qualityRating: body.quality_rating ?? null,
+    messagingLimitTier: body.messaging_limit_tier ?? null,
+    status: body.status ?? null,
+  };
 }

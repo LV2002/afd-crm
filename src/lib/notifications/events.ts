@@ -132,6 +132,30 @@ export const NOTIFICATION_EVENTS = [
     defaultNotifyRoleCodes: [],
   },
   {
+    key: "whatsapp.reply_overdue",
+    label: "WhatsApp chat waiting",
+    description:
+      "A student's WhatsApp message has gone unanswered past the limit set under Chats → Auto replies & rules. The lead's own counsellor is told.",
+    category: "Leads",
+    variables: ["lead_name", "lead_number", "minutes_waiting", "center_name"],
+    defaultTitle: "{{lead_name}} is waiting for a reply",
+    defaultBody: "Their WhatsApp message has been waiting {{minutes_waiting}} minutes.",
+    defaultNotifyOwner: true,
+    defaultNotifyRoleCodes: [],
+  },
+  {
+    key: "whatsapp.reply_escalated",
+    label: "WhatsApp chat still waiting",
+    description:
+      "A WhatsApp message is still unanswered after the second limit. Goes to the centre head by default.",
+    category: "Leads",
+    variables: ["lead_name", "lead_number", "minutes_waiting", "center_name"],
+    defaultTitle: "Still no reply to {{lead_name}}",
+    defaultBody: "Their WhatsApp message has been waiting {{minutes_waiting}} minutes.",
+    defaultNotifyOwner: false,
+    defaultNotifyRoleCodes: ["center_head"],
+  },
+  {
     key: "admission.confirmed",
     label: "Admission confirmed",
     description:

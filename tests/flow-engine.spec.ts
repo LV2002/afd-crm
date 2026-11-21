@@ -22,6 +22,7 @@ import {
   validateFlow,
   waitConfig,
   waitMs,
+  validateAnswer,
   type FlowStep,
 } from "../src/lib/whatsapp/flow-engine";
 
@@ -201,5 +202,67 @@ describe("the loop guard", () => {
     // wait-less steps would spin inside a single request.
     expect(MAX_STEPS_PER_ADVANCE).toBeGreaterThan(10);
     expect(MAX_STEPS_PER_ADVANCE).toBeLessThan(50);
+  });
+});
+
+describe("validateAnswer", () => {
+  it("lower-cases and checks an email", () => {
+    expect(validateAnswer("email", " A@B.com ")).toEqual({ ok: true, value: "a@b.com" });
+    expect(validateAnswer("email", "nope").ok).toBe(false);
+  });
+  it("pulls a year out of a sentence", () => {
+    expect(validateAnswer("exam_year", "I will write in 2027")).toEqual({ ok: true, value: "2027" });
+    expect(validateAnswer("exam_year", "next year").ok).toBe(false);
+  });
+  it("refuses empty and over-long text", () => {
+    expect(validateAnswer("city", "   ").ok).toBe(false);
+    expect(validateAnswer("city", "x".repeat(121)).ok).toBe(false);
+  });
+});
+
+describe("validateFlow with the new steps", () => {
+  it("rejects a button step with four buttons", () => {
+    const issues = validateFlow([step(1, "send_buttons", { text: "Hi", buttons: ["a", "b", "c", "d"] })]);
+    expect(issues.some((i) => /button/i.test(i.message))).toBe(true);
+  });
+  it("rejects media without an https link", () => {
+    const issues = validateFlow([step(1, "send_media", { kind: "image", url: "http://x.com/a.jpg" })]);
+    expect(issues.some((i) => /https|link|address/i.test(i.message))).toBe(true);
+  });
+});
+
+import { STARTER_FLOWS } from "../src/lib/whatsapp/starter-flows";
+
+describe("starter flows", () => {
+  for (const starter of STARTER_FLOWS) {
+    it(`${starter.name} passes validation`, () => {
+      const steps = starter.steps.map((s, i) => step(i + 1, s.kind, s.config));
+      expect(validateFlow(steps, starter.triggerType)).toEqual([]);
+    });
+  }
+});
+
+import { stepEdges } from "../src/lib/whatsapp/flow-engine";
+
+describe("stepEdges (the flow map)", () => {
+  const steps = [
+    step(1, "send_buttons", { text: "Hi", buttons: ["Yes", "No"] }),
+    step(2, "wait_for_reply", { hours: 24, branches: [{ match: "Yes", goto: 4 }, { match: "No", goto: "stop" }], onTimeout: 3 }),
+    step(3, "send_text", { text: "Still there?" }),
+    step(4, "stop"),
+  ];
+  it("lists each branch with where it goes", () => {
+    const edges = stepEdges(steps, steps[1]);
+    expect(edges).toEqual([
+      { label: '"Yes"', to: 4 },
+      { label: '"No"', to: "end" },
+      { label: "anything else", to: 3 },
+      { label: "no reply", to: 3 },
+    ]);
+  });
+  it("a plain step leads to the next, the last to the end, a stop to nothing", () => {
+    expect(stepEdges(steps, steps[0])).toEqual([{ label: null, to: 2 }]);
+    expect(stepEdges(steps, steps[2])).toEqual([{ label: null, to: 4 }]);
+    expect(stepEdges(steps, steps[3])).toEqual([]);
   });
 });

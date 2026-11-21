@@ -35,10 +35,15 @@ export default async function PersonalWhatsAppPage({
 }: {
   searchParams: Promise<InboxParams>;
 }) {
-  const ownNumbers = await db
-    .select({ id: whatsappNumbers.id })
+  const allOwn = await db
+    .select({ id: whatsappNumbers.id, label: whatsappNumbers.label })
     .from(whatsappNumbers)
     .where(and(eq(whatsappNumbers.mode, "coexistence"), isNull(whatsappNumbers.deletedAt)));
+  // `?number=<id>` narrows the inbox to one counsellor's number — what the
+  // Chats list links to. An id that is not one of ours is ignored.
+  const { number: numberParam } = await searchParams;
+  const chosen = allOwn.find((n) => n.id === numberParam) ?? null;
+  const ownNumbers = chosen ? [chosen] : allOwn;
 
   return (
     <WhatsAppInbox
@@ -47,8 +52,10 @@ export default async function PersonalWhatsAppPage({
       // message, and belongs to the other tab.
       scope={{ numberIds: ownNumbers.map((n) => n.id), includeUnassigned: false }}
       basePath="/whatsapp/personal"
+      keep={chosen ? { number: chosen.id } : undefined}
       intro={
         <>
+          {chosen ? <>Showing <strong>{chosen.label}</strong> only. <Link href="/whatsapp/personal" className="underline">All counsellor numbers</Link>. </> : null}
           Conversations on the counsellors&apos; own numbers. A message from somebody not yet in
           the CRM <strong>creates a lead</strong> here, assigned to whoever owns the phone —
           the opposite of the broadcast number, and deliberately so. Replies leave from the

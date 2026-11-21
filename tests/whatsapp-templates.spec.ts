@@ -115,3 +115,29 @@ describe("reading a template back", () => {
     expect(templatePlaceholderCount(template([{ type: "BODY", text: "No variables" }]))).toBe(0);
   });
 });
+
+import { buildTemplateComponents as buildWithLinks } from "../src/lib/integrations/whatsapp/templates";
+import { describe as d2, expect as e2, it as i2 } from "vitest";
+
+d2("template link and call buttons", () => {
+  i2("adds a web-page and a call button after the quick replies", () => {
+    const parts = buildWithLinks({
+      name: "x", language: "en", category: "UTILITY", body: "Hi",
+      quickReplies: ["Yes"],
+      urlButton: { text: "Fees", url: "https://afdindia.com/fees" },
+      callButton: { text: "Call us", phone: "+919847012345" },
+    });
+    const buttons = parts.find((c) => c.type === "BUTTONS")?.buttons;
+    e2(buttons?.map((b) => b.type)).toEqual(["QUICK_REPLY", "URL", "PHONE_NUMBER"]);
+  });
+});
+
+d2("template media header", () => {
+  i2("uses the uploaded sample handle as the header example", () => {
+    const parts = buildWithLinks({ name: "x", language: "en", category: "MARKETING", body: "Hi", header: "ignored", headerMedia: { format: "IMAGE", handle: "4::abc" } });
+    const header = parts.find((c) => c.type === "HEADER");
+    e2(header?.format).toBe("IMAGE");
+    e2(header?.example?.header_handle).toEqual(["4::abc"]);
+    e2(header?.text).toBeUndefined();
+  });
+});
