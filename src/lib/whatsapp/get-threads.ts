@@ -35,6 +35,8 @@ export interface WhatsAppThreadSummary {
   phone: string;
   assignedTo: string | null;
   counsellorName: string | null;
+  /** Which of our numbers the thread is on; null is the institute's API number (see migration 0093). */
+  numberId: string | null;
   lastMessageAt: string;
   lastDirection: "inbound" | "outbound";
   /** Already flattened for display: a media or template message has no body of its own. */
@@ -200,6 +202,7 @@ export async function getWhatsAppThreads(
         phone: lead?.primary_phone ?? message.from_phone,
         assignedTo: lead?.assigned_to ?? null,
         counsellorName: lead?.assigned_to ? (nameById.get(lead.assigned_to) ?? null) : null,
+        numberId: message.number_id,
         lastMessageAt: message.occurred_at,
         lastDirection: message.direction,
         lastMessagePreview: preview(message),

@@ -9061,3 +9061,7 @@ Stubbed: list messages are in the client but no flow step uses them yet. Tests: 
 - Tracked links: `/l/<code>` (public) counts the tap then redirects; WhatsApp → Tracked links to create and read counts. Counts per link, not per person.
 - Middleware public-path match now requires a whole path segment: before, `"/f"` also matched `/finance`, `/follow-ups` (pages still enforced their own auth, but the middleware gate was open for them).
 - Not built from the Phase 2 list: a drag-and-drop visual flow canvas (the numbered list editor stays; starters cover the "blank page" problem), chat-reply SLA alerts, and a separate chat round-robin (new leads already go through assignment rules).
+
+## Chats hub (sources listed under Chats)
+
+`/whatsapp` is now a hub: one row per chat source — the institute's WhatsApp API number and each counsellor's own number — with waiting-for-reply, open, not-in-CRM and last-message, sorted with the busiest first. Counts come from the same RLS-scoped read as the inboxes (`getWhatsAppThreads`, which now returns `numberId`), so a counsellor sees only their own sources and a centre head their centre's. `summariseSources` (pure, tested) decides which rows a person can reach. The API inbox moved to `/whatsapp/api` (old `/whatsapp?thread=…` links redirect); a counsellor row opens `/whatsapp/personal?number=<id>`. Nav: All chats · WhatsApp Business Chat · WhatsApp API.

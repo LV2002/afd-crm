@@ -49,6 +49,7 @@ export interface InboxParams {
   filter?: string;
   who?: string;
   label?: string;
+  number?: string;
 }
 
 export async function WhatsAppInbox({
@@ -57,6 +58,7 @@ export async function WhatsAppInbox({
   basePath,
   intro,
   emptyNotice,
+  keep,
 }: {
   searchParams: Promise<InboxParams>;
   /** Which numbers' threads this inbox shows. See `ThreadScope`. */
@@ -66,6 +68,8 @@ export async function WhatsAppInbox({
   intro: React.ReactNode;
   /** Shown instead of the list when the scope can hold nothing yet. */
   emptyNotice?: React.ReactNode;
+  /** Query params every link and the search form must carry, e.g. the chosen number. */
+  keep?: Record<string, string>;
 }) {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.read")) return <AccessDenied />;
@@ -173,6 +177,7 @@ export async function WhatsAppInbox({
     if (nextFilter) next.set("filter", nextFilter);
     if (nextWho) next.set("who", nextWho);
     if (nextLabel) next.set("label", nextLabel);
+    for (const [k, v] of Object.entries(keep ?? {})) next.set(k, v);
     const search = next.toString();
     return search ? `${basePath}?${search}` : basePath;
   }
@@ -190,6 +195,7 @@ export async function WhatsAppInbox({
             {filter && <input type="hidden" name="filter" value={filter} />}
             {labelFilter && <input type="hidden" name="label" value={labelFilter} />}
             {who && <input type="hidden" name="who" value={who} />}
+            {Object.entries(keep ?? {}).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
             <Input
               name="q"
               defaultValue={q ?? ""}

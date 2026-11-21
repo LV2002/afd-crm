@@ -51,7 +51,7 @@ export default async function WhatsAppOverviewPage() {
   const steps = [
     { done: connected, label: "Connect your WhatsApp number", href: "/settings/integrations", hint: "An admin does this once, in Settings → Integrations." },
     { done: approved > 0, label: "Have an approved message template", href: "/whatsapp/templates", hint: "Templates are the only messages you can start a chat with." },
-    { done: inbound > 0, label: "Receive a first reply", href: "/whatsapp", hint: "Send yourself a message to check replies arrive in the inbox." },
+    { done: inbound > 0, label: "Receive a first reply", href: "/whatsapp/api", hint: "Send yourself a message to check replies arrive in the inbox." },
     { done: replies > 0, label: "Save a few quick replies", href: "/whatsapp/replies", hint: "Fees, timings, address — one tap instead of retyping." },
     { done: activeFlows > 0, label: "Switch on an automation", href: "/whatsapp/flows", hint: "A welcome message and follow-ups that run themselves." },
   ];
