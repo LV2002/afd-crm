@@ -1,9 +1,10 @@
 import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { whatsappAutoReplies } from "@/lib/db/schema";
+import { whatsappAutoReplies, whatsappChatRules } from "@/lib/db/schema";
 
 import { AutoReplyForm } from "./auto-reply-form";
+import { ChatRulesForm } from "./chat-rules-form";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ export default async function AutoRepliesPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.campaign")) return <AccessDenied />;
   const rows = await db.select().from(whatsappAutoReplies);
+  const [rules] = await db.select().from(whatsappChatRules);
   const get = (kind: "greeting" | "away") => rows.find((r) => r.kind === kind);
   const greeting = get("greeting");
   const away = get("away");
@@ -40,6 +42,12 @@ export default async function AutoRepliesPage() {
         days={away?.days ?? [1, 2, 3, 4, 5, 6]}
         opensAt={away?.opensAt ?? "09:00"}
         closesAt={away?.closesAt ?? "18:00"}
+      />
+      <ChatRulesForm
+        alertEnabled={rules?.alertEnabled ?? false}
+        alertMinutes={rules?.alertMinutes ?? 30}
+        escalateMinutes={rules?.escalateMinutes ?? 120}
+        autoAssignUnowned={rules?.autoAssignUnowned ?? false}
       />
     </div>
   );

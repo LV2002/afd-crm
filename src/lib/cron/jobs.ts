@@ -16,6 +16,7 @@ import { GET as retargetingMeta } from "@/app/api/cron/retargeting-sync/meta/rou
 import { GET as slaSweep } from "@/app/api/cron/sla-sweep/route";
 import { GET as whatsappBroadcastSweep } from "@/app/api/cron/whatsapp-broadcast-sweep/route";
 import { GET as whatsappFlows } from "@/app/api/cron/whatsapp-flows/route";
+import { GET as whatsappReplySweep } from "@/app/api/cron/whatsapp-reply-sweep/route";
 
 /**
  * Every scheduled job, and which tier it belongs to.
@@ -90,6 +91,9 @@ export function frequentJobs(request: Request): NightlyJob[] {
     // rung firing twice, so running it every ten minutes notifies nobody
     // twice. A breach found tomorrow is a lead already lost.
     job("sla-sweep", "Response-time sweep", slaSweep, 4000, request),
+    // Chats waiting for a reply. Idempotent: each alert level is claimed
+    // in a table before it is sent.
+    job("whatsapp-reply-sweep", "WhatsApp reply-time alerts", whatsappReplySweep, 3000, request),
     // A queue being drained: a status change is waiting to be told to the
     // marketing sheet. Retried every run until the sheet accepts it.
     job("outcome-report", "Report outcomes to the website sheet", outcomeReport, 5000, request),

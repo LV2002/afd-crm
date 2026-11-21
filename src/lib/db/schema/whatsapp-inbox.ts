@@ -111,3 +111,27 @@ export const whatsappLinks = pgTable(
   },
   (t) => [uniqueIndex("whatsapp_links_code_uq").on(t.code)],
 );
+
+/** How long a chat may wait for a reply, and what happens to chats on leads nobody owns. One row. */
+export const whatsappChatRules = pgTable("whatsapp_chat_rules", {
+  id: text("id").primaryKey().default("default"),
+  alertEnabled: boolean("alert_enabled").notNull().default(false),
+  alertMinutes: integer("alert_minutes").notNull().default(30),
+  escalateMinutes: integer("escalate_minutes").notNull().default(120),
+  autoAssignUnowned: boolean("auto_assign_unowned").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true }),
+  updatedBy: uuid("updated_by").references(() => profiles.id, { onDelete: "set null" }),
+});
+
+/** Which overdue-reply alerts have gone out, so none is sent twice for the same unanswered message. */
+export const whatsappReplyAlerts = pgTable(
+  "whatsapp_reply_alerts",
+  {
+    id: idColumn(),
+    leadId: uuid("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
+    inboundAt: timestamp("inbound_at", { withTimezone: true }).notNull(),
+    level: integer("level").notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("whatsapp_reply_alerts_uq").on(t.leadId, t.inboundAt, t.level)],
+);

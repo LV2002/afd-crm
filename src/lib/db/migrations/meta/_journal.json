@@ -960,6 +960,13 @@
       "when": 1796047208000,
       "tag": "0136_whatsapp_links",
       "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1796133608000,
+      "tag": "0137_whatsapp_chat_rules",
+      "breakpoints": true
     }
   ]
 }

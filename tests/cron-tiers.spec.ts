@@ -48,6 +48,7 @@ describe("what belongs on which schedule", () => {
       "sla-sweep",
       "whatsapp-broadcast-sweep",
       "whatsapp-flows",
+      "whatsapp-reply-sweep",
     ]);
   });
 
