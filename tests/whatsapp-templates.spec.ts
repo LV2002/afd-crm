@@ -131,3 +131,13 @@ d2("template link and call buttons", () => {
     e2(buttons?.map((b) => b.type)).toEqual(["QUICK_REPLY", "URL", "PHONE_NUMBER"]);
   });
 });
+
+d2("template media header", () => {
+  i2("uses the uploaded sample handle as the header example", () => {
+    const parts = buildWithLinks({ name: "x", language: "en", category: "MARKETING", body: "Hi", header: "ignored", headerMedia: { format: "IMAGE", handle: "4::abc" } });
+    const header = parts.find((c) => c.type === "HEADER");
+    e2(header?.format).toBe("IMAGE");
+    e2(header?.example?.header_handle).toEqual(["4::abc"]);
+    e2(header?.text).toBeUndefined();
+  });
+});

@@ -5,7 +5,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { FormMessage } from "@/components/layout/form-message";
 import { Input } from "@/components/ui/input";
-import { sendWhatsAppTemplate, type WhatsAppSendState } from "@/lib/whatsapp/send-actions";
+import { sendWhatsAppTemplate, sendWhatsAppTemplateWithHeader, type WhatsAppSendState } from "@/lib/whatsapp/send-actions";
 import { renderTemplateBody, type SendableTemplate } from "@/lib/whatsapp/template-preview";
 
 /**
@@ -30,6 +30,7 @@ export function TemplateSender({
   const [values, setValues] = useState<string[]>([]);
   const [state, setState] = useState<WhatsAppSendState>({});
   const [pending, start] = useTransition();
+  const [file, setFile] = useState<File | null>(null);
   const template = useMemo(() => templates.find((t) => `${t.name}|${t.language}` === chosen), [templates, chosen]);
 
   if (!allowed) {
@@ -47,10 +48,21 @@ export function TemplateSender({
       onSubmit={(e) => {
         e.preventDefault();
         if (!template) return;
+        const needsFile = Boolean(template.headerKind && template.headerKind !== "TEXT");
         start(async () => {
-          const result = await sendWhatsAppTemplate(leadId, toPhone, template.name, template.language, values.slice(0, template.variableCount));
+          let result: WhatsAppSendState;
+          if (needsFile) {
+            const formData = new FormData();
+            formData.append("templateName", template.name);
+            formData.append("language", template.language);
+            formData.append("values", JSON.stringify(values.slice(0, template.variableCount)));
+            if (file) formData.append("file", file);
+            result = await sendWhatsAppTemplateWithHeader(leadId, toPhone, formData);
+          } else {
+            result = await sendWhatsAppTemplate(leadId, toPhone, template.name, template.language, values.slice(0, template.variableCount));
+          }
           setState(result);
-          if (!result.error) { setChosen(""); setValues([]); }
+          if (!result.error) { setChosen(""); setValues([]); setFile(null); }
         });
       }}
     >
@@ -68,8 +80,8 @@ export function TemplateSender({
         >
           <option value="">Choose a template…</option>
           {templates.map((t) => (
-            <option key={`${t.name}|${t.language}`} value={`${t.name}|${t.language}`} disabled={Boolean(t.headerKind && t.headerKind !== "TEXT")}>
-              {t.name.replace(/_/g, " ")} ({t.category.toLowerCase()}){t.headerKind && t.headerKind !== "TEXT" ? " — needs a file, send from Broadcasts" : ""}
+            <option key={`${t.name}|${t.language}`} value={`${t.name}|${t.language}`}>
+              {t.name.replace(/_/g, " ")} ({t.category.toLowerCase()}){t.headerKind && t.headerKind !== "TEXT" ? ` — with a ${t.headerKind.toLowerCase()}` : ""}
             </option>
           ))}
         </select>
@@ -95,6 +107,19 @@ export function TemplateSender({
               ))}
             </div>
           )}
+          {template.headerKind && template.headerKind !== "TEXT" && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-muted-foreground">
+                Attach the {template.headerKind === "IMAGE" ? "picture" : template.headerKind === "VIDEO" ? "video" : "PDF"} this template shows at the top
+              </label>
+              <input
+                type="file"
+                accept={template.headerKind === "IMAGE" ? ".jpg,.jpeg,.png" : template.headerKind === "VIDEO" ? ".mp4,.3gp" : ".pdf"}
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                className="text-sm"
+              />
+            </div>
+          )}
           <div className="max-w-sm self-start rounded-lg bg-background p-3 text-sm shadow-sm">
             {template.header && <p className="font-semibold">{template.header}</p>}
             <p className="whitespace-pre-wrap">{renderTemplateBody(template.body, values)}</p>
@@ -107,7 +132,7 @@ export function TemplateSender({
               </div>
             )}
           </div>
-          <Button type="submit" disabled={pending || (template.variableCount > 0 && values.slice(0, template.variableCount).some((v) => !v?.trim()))} className="w-fit">
+          <Button type="submit" disabled={pending || Boolean(template.headerKind && template.headerKind !== "TEXT" && !file) || (template.variableCount > 0 && values.slice(0, template.variableCount).some((v) => !v?.trim()))} className="w-fit">
             {pending ? "Sending…" : "Send template"}
           </Button>
         </>

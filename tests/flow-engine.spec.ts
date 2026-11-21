@@ -241,3 +241,28 @@ describe("starter flows", () => {
     });
   }
 });
+
+import { stepEdges } from "../src/lib/whatsapp/flow-engine";
+
+describe("stepEdges (the flow map)", () => {
+  const steps = [
+    step(1, "send_buttons", { text: "Hi", buttons: ["Yes", "No"] }),
+    step(2, "wait_for_reply", { hours: 24, branches: [{ match: "Yes", goto: 4 }, { match: "No", goto: "stop" }], onTimeout: 3 }),
+    step(3, "send_text", { text: "Still there?" }),
+    step(4, "stop"),
+  ];
+  it("lists each branch with where it goes", () => {
+    const edges = stepEdges(steps, steps[1]);
+    expect(edges).toEqual([
+      { label: '"Yes"', to: 4 },
+      { label: '"No"', to: "end" },
+      { label: "anything else", to: 3 },
+      { label: "no reply", to: 3 },
+    ]);
+  });
+  it("a plain step leads to the next, the last to the end, a stop to nothing", () => {
+    expect(stepEdges(steps, steps[0])).toEqual([{ label: null, to: 2 }]);
+    expect(stepEdges(steps, steps[2])).toEqual([{ label: null, to: 4 }]);
+    expect(stepEdges(steps, steps[3])).toEqual([]);
+  });
+});

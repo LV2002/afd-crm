@@ -103,6 +103,13 @@ export function TemplateForm() {
       <div className="flex flex-col gap-2">
         <Label htmlFor="template-header">Header (optional)</Label>
         <Input id="template-header" name="header" placeholder="AFD India" value={header} onChange={(e) => setHeader(e.target.value)} />
+        <Label htmlFor="template-header-file" className="text-xs font-normal text-muted-foreground">
+          …or a picture, video or PDF header instead (this replaces the text above)
+        </Label>
+        <input id="template-header-file" name="headerFile" type="file" accept=".jpg,.jpeg,.png,.mp4,.pdf" className="text-sm" />
+        <p className="text-xs text-muted-foreground">
+          Meta reviews the file you pick as the sample. When you send the template you attach the real picture each time.
+        </p>
       </div>
 
       <div className="flex flex-col gap-2">

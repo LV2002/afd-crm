@@ -48,6 +48,8 @@ export interface TemplateComponent {
   type: "HEADER" | "BODY" | "FOOTER" | "BUTTONS";
   format?: "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT";
   text?: string;
+  /** Required by Meta for a media header: a sample file it reviews. */
+  example?: { header_handle?: string[] };
   buttons?: TemplateButton[];
 }
 
@@ -99,6 +101,8 @@ export interface CreateTemplateInput {
   /** `{{1}}`, `{{2}}` … placeholders are filled in order at send time. */
   body: string;
   header?: string;
+  /** An image, video or PDF header. `handle` comes from `uploadTemplateSample`. Replaces a text header. */
+  headerMedia?: { format: "IMAGE" | "VIDEO" | "DOCUMENT"; handle: string };
   footer?: string;
   /** Quick replies show as tappable buttons and come back as an inbound message with that exact text. */
   quickReplies?: string[];
@@ -116,7 +120,9 @@ export interface CreateTemplateResult {
 
 export function buildTemplateComponents(input: CreateTemplateInput): TemplateComponent[] {
   const components: TemplateComponent[] = [];
-  if (input.header?.trim()) {
+  if (input.headerMedia) {
+    components.push({ type: "HEADER", format: input.headerMedia.format, example: { header_handle: [input.headerMedia.handle] } });
+  } else if (input.header?.trim()) {
     components.push({ type: "HEADER", format: "TEXT", text: input.header.trim() });
   }
   components.push({ type: "BODY", text: input.body.trim() });
@@ -235,4 +241,36 @@ export function templatePlaceholderCount(template: MessageTemplate): number {
  */
 export function isValidTemplateName(name: string): boolean {
   return /^[a-z0-9_]{1,512}$/.test(name);
+}
+
+/**
+ * Uploads the sample file Meta reviews for a media-header template and
+ * returns the handle the template refers to (Meta's resumable-upload API,
+ * keyed on the app id — not the WhatsApp number).
+ */
+export async function uploadTemplateSample(
+  appId: string,
+  accessToken: string,
+  file: Blob,
+  fileName: string,
+): Promise<string> {
+  const start = new URL(`${GRAPH_BASE_URL}/${appId}/uploads`);
+  start.searchParams.set("file_length", String(file.size));
+  start.searchParams.set("file_type", file.type);
+  start.searchParams.set("file_name", fileName);
+  const session = await fetch(start.toString(), { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } });
+  const sessionBody = (await session.json()) as { id?: string };
+  if (!session.ok || !sessionBody.id) {
+    throw new MetaGraphApiError(`WhatsApp returned ${session.status} starting the sample upload`, session.status, sessionBody);
+  }
+  const upload = await fetch(`${GRAPH_BASE_URL}/${sessionBody.id}`, {
+    method: "POST",
+    headers: { Authorization: `OAuth ${accessToken}`, file_offset: "0" },
+    body: file,
+  });
+  const uploadBody = (await upload.json()) as { h?: string };
+  if (!upload.ok || !uploadBody.h) {
+    throw new MetaGraphApiError(`WhatsApp returned ${upload.status} uploading the sample`, upload.status, uploadBody);
+  }
+  return uploadBody.h;
 }

@@ -40,6 +40,7 @@ import { loadRuleOptions } from "@/app/(app)/settings/rules/load-options";
 import { listTemplates } from "../../templates/actions";
 import { FlowForm } from "../flow-form";
 import { FlowControls } from "./flow-controls";
+import { FlowMap } from "./flow-map";
 import { StartForLists } from "./start-for-lists";
 import { AddStep, ExistingStep, type StepEditorLists } from "./step-editor";
 
@@ -200,6 +201,8 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
           </ul>
         </div>
       )}
+
+      <FlowMap steps={steps} />
 
       <section className="flex flex-col gap-3">
         <h3 className="text-sm font-semibold">The steps</h3>

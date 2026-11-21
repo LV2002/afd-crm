@@ -417,8 +417,8 @@ export function describeStep(step: FlowStep): string {
     case "assign_owner":
       return "Give them to a counsellor";
     case "schedule_followup": {
-      const hours = Number((step.config as { hours?: unknown }).hours ?? 24);
-      return `Remind the counsellor to follow up in ${describeHours(hours)}`;
+      const days = Number((step.config as { days?: unknown }).days ?? 1);
+      return `Remind the counsellor to follow up in ${days} day${days === 1 ? "" : "s"}`;
     }
     case "add_label":
       return "Put a label on the conversation";
@@ -437,4 +437,45 @@ export function describeHours(hours: number): string {
     return `${days} day${days === 1 ? "" : "s"}`;
   }
   return `${hours} hour${hours === 1 ? "" : "s"}`;
+}
+
+/** Where a step can lead: the arrows in the flow map. `to` is a step number, or "end". */
+export interface FlowEdge {
+  label: string | null;
+  to: number | "end";
+}
+
+export function stepEdges(steps: FlowStep[], step: FlowStep): FlowEdge[] {
+  const target = (goto: FlowGoto | undefined): number | "end" => {
+    const found = resolveGoto(steps, step.position, goto ?? "next");
+    return found ? found.position : "end";
+  };
+  switch (step.kind) {
+    case "stop":
+      return [];
+    case "wait_for_reply": {
+      const config = waitConfig(step);
+      return [
+        ...config.branches.map((branch): FlowEdge => ({ label: `"${branch.match}"`, to: target(branch.goto) })),
+        { label: "anything else", to: target(config.onOther) },
+        { label: "no reply", to: target(config.onTimeout) },
+      ];
+    }
+    case "ask_question": {
+      const config = askConfig(step);
+      return [
+        { label: "answered", to: target("next") },
+        { label: "no answer", to: target(config.onTimeout) },
+      ];
+    }
+    case "condition": {
+      const config = step.config as Partial<ConditionConfig>;
+      return [
+        { label: "yes", to: target(config.thenGoto) },
+        { label: "no", to: target(config.elseGoto) },
+      ];
+    }
+    default:
+      return [{ label: null, to: target("next") }];
+  }
 }

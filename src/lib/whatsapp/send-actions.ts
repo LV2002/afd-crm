@@ -367,6 +367,51 @@ export async function sendWhatsAppTemplate(
 }
 
 /**
+ * A template whose header is a picture, video or PDF: the file is uploaded
+ * to Meta from the sending number and attached as the header. Same gate as
+ * any template send (`whatsapp.campaign`).
+ */
+export async function sendWhatsAppTemplateWithHeader(
+  leadId: string,
+  toPhone: string,
+  formData: FormData,
+): Promise<WhatsAppSendState> {
+  const sender = await getCurrentUser();
+  if (!sender || !can(sender, "whatsapp.campaign")) {
+    return { error: "Template messages are sent by whoever runs WhatsApp campaigns." };
+  }
+  const templateName = String(formData.get("templateName") ?? "").trim();
+  const language = String(formData.get("language") ?? "").trim() || "en_US";
+  if (!templateName) return { error: "Template name is required." };
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "Attach the picture, video or PDF this template shows at the top." };
+  const invalid = validateWhatsAppMedia(file);
+  if (invalid) return { error: invalid };
+  const kind = mediaKindFor(file.type);
+  if (kind !== "image" && kind !== "video" && kind !== "document") return { error: "A template header can be a picture, a video or a PDF." };
+
+  let values: string[] = [];
+  try {
+    const parsed = JSON.parse(String(formData.get("values") ?? "[]"));
+    if (Array.isArray(parsed)) values = parsed.map(String);
+  } catch {
+    return { error: "Could not read the values." };
+  }
+
+  return recordAndSend(
+    leadId,
+    toPhone,
+    "api",
+    { messageType: "template", body: null, templateName, mediaMimeType: file.type },
+    async (phoneNumberId, accessToken) => {
+      const mediaId = await uploadMedia(phoneNumberId, accessToken, file, file.name);
+      const waMessageId = await sendTemplateMessage(phoneNumberId, accessToken, toPhone, templateName, language, templateValues(values), { kind, mediaId });
+      return { waMessageId, mediaId };
+    },
+  );
+}
+
+/**
  * An image, video, audio clip or document, sent into an open conversation.
  *
  * Follows the text path exactly, which it did not before: it checked the
