@@ -41,7 +41,7 @@ const FIELDS: Array<{ key: keyof WhatsAppConnectionStatus["configured"]; label: 
   {
     key: "phone_number_id",
     label: "Phone Number ID",
-    help: "The institute's WhatsApp Business API number, from Meta's WhatsApp Manager. One number for the whole CRM — this is NOT a counsellor's personal WhatsApp Business app number, and registering a number here ends its use in that app.",
+    help: "The institute's broadcast number, from Meta's WhatsApp Manager. This is NOT a counsellor's own phone — those are connected separately below. Registering a number here ends its use in the WhatsApp Business app.",
   },
   {
     key: "waba_id",
@@ -60,14 +60,32 @@ const FIELDS: Array<{ key: keyof WhatsAppConnectionStatus["configured"]; label: 
   },
 ];
 
-export function WhatsAppCredentialsForm({ status }: { status: WhatsAppConnectionStatus }) {
+type CredentialKey = keyof WhatsAppConnectionStatus["configured"];
+
+/**
+ * Credential fields, either the app-level ones (shared by every number) or
+ * the API number's own. The same save action serves both: a blank field
+ * always means "leave what is saved alone".
+ */
+export function WhatsAppCredentialsForm({
+  status,
+  keys,
+  withTest = false,
+  submitLabel = "Save",
+}: {
+  status: WhatsAppConnectionStatus;
+  keys: CredentialKey[];
+  /** Show "Test connection" (confirms the API number answers to the token). */
+  withTest?: boolean;
+  submitLabel?: string;
+}) {
   const [state, formAction, pending] = useActionState(saveWhatsAppCredentials, initialState);
   const [testing, startTest] = useTransition();
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   return (
     <form action={formAction} className="flex max-w-lg flex-col gap-4">
-      {FIELDS.map((field) => (
+      {FIELDS.filter((f) => keys.includes(f.key)).map((field) => (
         <div key={field.key} className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <Label htmlFor={field.key}>{field.label}</Label>
@@ -89,21 +107,18 @@ export function WhatsAppCredentialsForm({ status }: { status: WhatsAppConnection
       <FormMessage error={state.error} success={state.success} />
       <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" disabled={pending}>
-          {pending ? "Saving…" : "Save"}
+          {pending ? "Saving…" : submitLabel}
         </Button>
-        {/*
-          Confirms the number answers to the token, without sending
-          anybody a message — the one check that catches a wrong id or an
-          expired token before a counsellor finds out mid-conversation.
-        */}
-        <Button
-          type="button"
-          variant="outline"
-          disabled={testing}
-          onClick={() => startTest(async () => setTestResult(await testWhatsAppConnection()))}
-        >
-          {testing ? "Checking…" : "Test connection"}
-        </Button>
+        {withTest && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={testing}
+            onClick={() => startTest(async () => setTestResult(await testWhatsAppConnection()))}
+          >
+            {testing ? "Checking…" : "Test connection"}
+          </Button>
+        )}
       </div>
       {testResult && (
         <p className={testResult.ok ? "text-sm text-muted-foreground" : "text-sm text-destructive"}>

@@ -86,19 +86,10 @@ export default async function WhatsAppIntegrationPage() {
       <div>
         <h1 className="text-2xl font-semibold">WhatsApp</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          One WhatsApp Business API number for the whole institute, used for marketing and
-          broadcasts. Replies to it are matched to the lead they belong to and that lead&apos;s
-          counsellor is notified; a reply from a number nobody has entered shows up under
-          &quot;Not in the CRM&quot; on the WhatsApp screen rather than becoming a lead of its
-          own.
-        </p>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          A number used to be one thing or the other — registered to the API, or in use by the
-          WhatsApp Business app on somebody&apos;s phone, never both.{" "}
-          <strong>Coexistence changed that.</strong> A counsellor&apos;s own number can now run
-          the app and the API at the same time: they keep their phone and their chats, and
-          everything they send and receive mirrors into the CRM. Register each number below and
-          say which kind it is.
+          Connect the institute&apos;s WhatsApp API number (for campaigns and broadcasts) and each counsellor&apos;s
+          own number (Coexistence: they keep the WhatsApp Business app on their phone and everything they send
+          and receive also shows here). All of them use the same Meta app and the same webhook; each has its own
+          card below.
         </p>
       </div>
 
@@ -120,23 +111,23 @@ export default async function WhatsAppIntegrationPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">Credentials</h2>
-        <WhatsAppCredentialsForm status={status} />
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="font-medium">Is it working?</h2>
-        <CoexistenceCheck />
+        <h2 className="font-medium">Meta app</h2>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          One Meta app serves every number below, the institute&apos;s API number and each counsellor&apos;s own. These
+          settings are shared; each number&apos;s own details are on its card.
+        </p>
+        <WhatsAppCredentialsForm status={status} keys={["app_id", "app_secret", "verify_token", "embedded_signup_config_id"]} />
       </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">Numbers</h2>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Which numbers belong to this institute, and what each one is for. The rule that
-          differs most between them is whether a message from somebody new creates a lead —
-          right for a counsellor&apos;s own phone, wrong for the broadcast number.
+          Every number connected to this CRM, side by side: the institute&apos;s API number for campaigns and
+          broadcasts, and each counsellor&apos;s own phone. The rule that differs most between them is whether a
+          message from somebody new creates a lead — right for a counsellor&apos;s phone, wrong for the broadcast
+          number.
         </p>
-        <WhatsAppNumbers numbers={numbers} counsellors={counsellors} apiNumberId={apiNumberId} />
+        <WhatsAppNumbers numbers={numbers} counsellors={counsellors} apiNumberId={apiNumberId} status={status} />
 
         <EmbeddedSignupButton
           appId={embeddedSignup.appId}
@@ -186,6 +177,11 @@ export default async function WhatsAppIntegrationPage() {
         </div>
       </section>
 
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">Is it working?</h2>
+        <CoexistenceCheck />
+      </section>
+
 
       {/*
         The one question worth asking when leads are not arriving, and
@@ -203,7 +199,7 @@ export default async function WhatsAppIntegrationPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">Start over</h2>
+        <h2 className="font-medium">Disconnect</h2>
         <ClearMessagesPanel messageCount={messageCount} />
         <ResetIntegrationPanel />
       </section>

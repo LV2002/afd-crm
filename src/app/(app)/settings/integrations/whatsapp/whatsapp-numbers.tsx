@@ -11,6 +11,8 @@ import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+import { ApiNumberCard } from "./api-number-card";
+import type { WhatsAppConnectionStatus } from "./actions";
 import {
   deleteWhatsAppNumber,
   saveWhatsAppNumber,
@@ -155,37 +157,19 @@ export function WhatsAppNumbers({
   numbers,
   counsellors,
   apiNumberId,
+  status,
 }: {
   numbers: WhatsAppNumberView[];
   counsellors: CounsellorOption[];
-  /** The one Business API number, from Credentials — shown, not edited, here. */
+  /** The institute's API number: one card in this same list. */
   apiNumberId: string | null;
+  status: WhatsAppConnectionStatus;
 }) {
   const [open, setOpen] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col gap-4">
-      {/*
-        The single Business API number lives in Credentials above — never
-        here — so there is exactly one place to set it. Shown as a
-        read-only line so the list is the whole picture.
-      */}
-      <div className="flex flex-col gap-1 rounded-lg border bg-muted/30 p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="font-medium">Business API number</h3>
-          <Badge variant="outline">Campaigns &amp; broadcasts</Badge>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {apiNumberId ? (
-            <>
-              Phone number ID <span className="font-mono">{apiNumberId}</span>, set under Credentials
-              above. There is only one.
-            </>
-          ) : (
-            <>Not set yet — enter its Phone Number ID under Credentials above.</>
-          )}
-        </p>
-      </div>
+      <ApiNumberCard status={status} apiNumberId={apiNumberId} />
 
       {numbers.map((number) => (
         <div key={number.id} className="flex flex-col gap-3 rounded-lg border p-4">
@@ -256,7 +240,7 @@ export function WhatsAppNumbers({
 
       <div className="flex flex-col gap-3 rounded-lg border border-dashed p-4">
         <h3 className="font-medium">
-          {numbers.length === 0 ? "Add your first Coexistence number" : "Add another Coexistence number"}
+          {numbers.length === 0 ? "Add a counsellor's number (Coexistence)" : "Add another counsellor's number (Coexistence)"}
         </h3>
         <p className="text-sm text-muted-foreground">
           A counsellor&apos;s own phone, running the WhatsApp Business app and the API at once. The
