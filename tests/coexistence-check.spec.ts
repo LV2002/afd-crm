@@ -16,6 +16,7 @@ const healthy: CheckInput = {
     history: { count: 3, last: new Date("2026-11-10T09:00:00Z") },
     statuses: { count: 10, last: new Date("2026-11-21T11:00:00Z") },
     unregistered: [],
+    perNumber: [{ label: "Athira", inbound: { count: 4, last: new Date("2026-11-21T11:30:00Z") } }],
   },
 };
 const none = { count: 0, last: null };
@@ -82,5 +83,14 @@ describe("evaluateCoexistenceCheck", () => {
   it("does not ask about phone-sent messages when no Coexistence number exists", () => {
     const lines = evaluateCoexistenceCheck({ ...healthy, coexistenceNumbers: 0 }, NOW);
     expect(lines.find((l) => l.id === "echoes")).toBeUndefined();
+  });
+  it("says when the messages arriving are on a different number than the counsellor's", () => {
+    const lines = evaluateCoexistenceCheck({ ...healthy, activity: { ...healthy.activity, perNumber: [{ label: "Athira", inbound: none }] } }, NOW);
+    const line = lines.find((l) => l.id === "num:Athira")!;
+    expect(line.status).toBe("problem");
+    expect(line.detail).toMatch(/another number/i);
+  });
+  it("shows a healthy counsellor number as ok", () => {
+    expect(evaluateCoexistenceCheck(healthy, NOW).find((l) => l.id === "num:Athira")!.status).toBe("ok");
   });
 });
