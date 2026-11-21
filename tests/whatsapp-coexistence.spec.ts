@@ -14,6 +14,7 @@ import {
   describeContactSync,
   historyIsComplete,
   historyMessages,
+  historyErrors,
   normaliseMessage,
 } from "../src/lib/integrations/whatsapp/coexistence";
 
@@ -190,5 +191,30 @@ describe("describeContactSync", () => {
 
   it("handles a delivery with no contacts", () => {
     expect(describeContactSync({})).toContain("0 contacts");
+  });
+});
+
+describe("history in Meta's shape (no `to`; the thread names the customer)", () => {
+  const entries = [{ threads: [{ id: CUSTOMER, messages: [{ id: "a", from: CUSTOMER, timestamp: "1" }, { id: "b", from: BUSINESS, timestamp: "2" }] }] }];
+
+  it("works out direction and customer from the thread", () => {
+    const [a, b] = historyMessages(entries);
+    const inbound = normaliseMessage(a, BUSINESS);
+    const outbound = normaliseMessage(b, BUSINESS);
+    expect(inbound?.direction).toBe("inbound");
+    expect(inbound?.customerPhone).toBe(CUSTOMER);
+    expect(outbound?.direction).toBe("outbound");
+    expect(outbound?.customerPhone).toBe(CUSTOMER);
+  });
+
+  it("still refuses a message the business sent when nothing says who it went to", () => {
+    expect(normaliseMessage({ id: "x", from: BUSINESS, timestamp: "1" }, BUSINESS)).toBeNull();
+  });
+});
+
+describe("historyErrors", () => {
+  it("reports why Meta sent no history, once", () => {
+    expect(historyErrors([{ errors: [{ title: "History sharing is turned off" }] }, { errors: [{ title: "History sharing is turned off" }] }])).toBe("History sharing is turned off");
+    expect(historyErrors([{ metadata: { phase: 0 } }])).toBeNull();
   });
 });

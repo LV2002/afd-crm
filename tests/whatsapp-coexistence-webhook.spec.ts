@@ -382,6 +382,42 @@ describe("the 180-day history backfill", () => {
     expect(inbound?.occurredAt.toISOString()).toBe(new Date(1775000000 * 1000).toISOString());
   });
 
+  it("files history in Meta's own shape: no `to`, and the thread id is the customer's number", async () => {
+    const phone = "+919847600302";
+    const leadId = await makeLead("HistoryMetaShape", phone);
+    const inboundId = `wamid.${randomUUID()}`;
+    const outboundId = `wamid.${randomUUID()}`;
+
+    const response = await post(
+      envelope(
+        "history",
+        {
+          history: [
+            {
+              metadata: { phase: 0, chunk_order: 2, progress: 50 },
+              threads: [
+                {
+                  id: "919847600302",
+                  messages: [
+                    { id: inboundId, from: "919847600302", timestamp: "1775000200", type: "text", text: { body: "Hi" }, history_context: { status: "READ" } },
+                    { id: outboundId, from: BUSINESS_DISPLAY, timestamp: "1775000300", type: "text", text: { body: "Hello!" }, history_context: { status: "DELIVERED" } },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        COEX_PHONE_ID,
+      ),
+    );
+    expect(response.status).toBe(200);
+
+    const stored = await db.select().from(whatsappMessages).where(eq(whatsappMessages.leadId, leadId));
+    expect(stored).toHaveLength(2);
+    expect(stored.find((m) => m.waMessageId === inboundId)?.direction).toBe("inbound");
+    expect(stored.find((m) => m.waMessageId === outboundId)?.direction).toBe("outbound");
+  });
+
   it("counts what it brought in, and does not call itself finished early", async () => {
     const [number] = await db.select().from(whatsappNumbers).where(eq(whatsappNumbers.id, coexNumberId));
 
