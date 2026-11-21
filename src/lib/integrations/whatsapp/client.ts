@@ -339,3 +339,72 @@ export async function fetchPhoneNumberHealth(phoneNumberId: string, accessToken:
     status: body.status ?? null,
   };
 }
+
+export interface AppWebhookSubscription {
+  callbackUrl: string | null;
+  active: boolean;
+  /** The webhook fields the app is subscribed to, e.g. "messages", "smb_message_echoes". */
+  fields: string[];
+}
+
+/**
+ * What the Meta *app* is subscribed to for WhatsApp: the callback address and
+ * which webhook fields it delivers. Read with the app access token
+ * (`app_id|app_secret`), so it needs no user login on the developer dashboard.
+ * Null when the app has no WhatsApp webhook configured at all.
+ */
+export async function fetchAppWebhookSubscription(appId: string, appSecret: string): Promise<AppWebhookSubscription | null> {
+  const url = new URL(`${GRAPH_BASE_URL}/${appId}/subscriptions`);
+  url.searchParams.set("access_token", `${appId}|${appSecret}`);
+  const response = await fetch(url.toString(), { cache: "no-store" });
+  const body = (await response.json()) as {
+    data?: Array<{ object?: string; callback_url?: string; active?: boolean; fields?: Array<{ name?: string }> }>;
+  };
+  if (!response.ok) throw new MetaGraphApiError(`Meta returned ${response.status} reading the app's webhook settings`, response.status, body);
+  const sub = (body.data ?? []).find((s) => s.object === "whatsapp_business_account");
+  if (!sub) return null;
+  return {
+    callbackUrl: sub.callback_url ?? null,
+    active: sub.active !== false,
+    fields: (sub.fields ?? []).flatMap((f) => (f.name ? [f.name] : [])),
+  };
+}
+
+/**
+ * Sets the WhatsApp webhook fields the app delivers. Meta verifies the callback
+ * again with the verify token while doing this, so the CRM's own webhook
+ * route has to be reachable. Fields are replaced by the list given, so the
+ * caller passes the existing ones plus what is missing.
+ */
+export async function setAppWebhookFields(
+  appId: string,
+  appSecret: string,
+  input: { callbackUrl: string; verifyToken: string; fields: string[] },
+): Promise<void> {
+  const form = new URLSearchParams({
+    object: "whatsapp_business_account",
+    callback_url: input.callbackUrl,
+    verify_token: input.verifyToken,
+    fields: input.fields.join(","),
+    access_token: `${appId}|${appSecret}`,
+  });
+  const response = await fetch(`${GRAPH_BASE_URL}/${appId}/subscriptions`, { method: "POST", body: form });
+  const body = (await response.json()) as { success?: boolean };
+  if (!response.ok || body.success === false) {
+    throw new MetaGraphApiError(`Meta returned ${response.status} updating the webhook fields`, response.status, body);
+  }
+}
+
+/** Which apps are subscribed to this WhatsApp Business Account. */
+export async function fetchWabaSubscribedApps(wabaId: string, accessToken: string): Promise<string[]> {
+  const response = await fetch(`${GRAPH_BASE_URL}/${wabaId}/subscribed_apps`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  const body = (await response.json()) as { data?: Array<{ whatsapp_business_api_data?: { id?: string }; id?: string }> };
+  if (!response.ok) throw new MetaGraphApiError(`Meta returned ${response.status} reading the account's subscribed apps`, response.status, body);
+  return (body.data ?? []).flatMap((a) => {
+    const id = a.whatsapp_business_api_data?.id ?? a.id;
+    return id ? [id] : [];
+  });
+}
