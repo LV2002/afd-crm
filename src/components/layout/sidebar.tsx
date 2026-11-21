@@ -1,18 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import { CounsellorLinks, type CounsellorLink } from "@/components/layout/counsellor-links";
+import { NavSubLinks } from "@/components/layout/nav-sub-links";
 import { NavBadge } from "@/components/layout/nav-badge";
 import { NAV_ICONS } from "@/components/layout/nav-icons";
 import type { NavItem } from "@/lib/auth/nav";
 import { NAV_GROUP_LABELS } from "@/lib/auth/nav-groups";
+import { chatLinkActive, type ChatLink } from "@/lib/nav/chat-links";
 import type { NavBadgeCounts } from "@/lib/nav/badge-permissions";
 import { cn } from "@/lib/utils";
 
 /** The nav entry the counsellor list hangs from. */
 const DASHBOARD_HREF = "/dashboard";
+/** The entry the chat sources hang from. */
+const CHATS_HREF = "/whatsapp";
 
 /**
  * `badges` is optional and arrives late on purpose. The layout renders this
@@ -23,6 +27,7 @@ export function Sidebar({
   items,
   badges = {},
   counsellors = [],
+  chatLinks = [],
 }: {
   items: NavItem[];
   badges?: NavBadgeCounts;
@@ -32,8 +37,11 @@ export function Sidebar({
    * for the same reason: it must never hold up the navigation itself.
    */
   counsellors?: CounsellorLink[];
+  /** The API number and each counsellor's own number, nested under Chats. */
+  chatLinks?: ChatLink[];
 }) {
   const pathname = usePathname();
+  const search = useSearchParams().toString();
 
   return (
     <nav className="flex flex-col gap-0.5 px-3 py-3">
@@ -41,7 +49,8 @@ export function Sidebar({
         // A heading wherever the department changes, including back to "none".
         const heading =
           item.group && item.group !== items[index - 1]?.group ? NAV_GROUP_LABELS[item.group] : null;
-        const hasChildren = item.href === DASHBOARD_HREF && counsellors.length > 0;
+        const hasChats = item.href === CHATS_HREF && chatLinks.length > 0;
+        const hasChildren = (item.href === DASHBOARD_HREF && counsellors.length > 0) || hasChats;
         const isOpen = hasChildren && (pathname === item.href || pathname.startsWith(`${item.href}/`));
         // With people nested underneath, Dashboard itself is "here" only on
         // the overview. On a counsellor's page it is the PARENT of where you
@@ -92,7 +101,13 @@ export function Sidebar({
               />
             )}
           </Link>
-          {isOpen && <CounsellorLinks counsellors={counsellors} pathname={pathname} />}
+          {isOpen && !hasChats && <CounsellorLinks counsellors={counsellors} pathname={pathname} />}
+          {isOpen && hasChats && (
+            <NavSubLinks
+              label="Chats"
+              links={chatLinks.map((link) => ({ key: link.key, label: link.label, href: link.href, active: chatLinkActive(link, pathname, search) }))}
+            />
+          )}
           </div>
         );
       })}
