@@ -11,6 +11,7 @@ import { whatsappNumbers } from "@/lib/db/schema";
 import { reportActionFailure } from "@/lib/errors/action-failure";
 import {
   getIntegrationCredential,
+  getIntegrationCredentials,
   setIntegrationCredential,
 } from "@/lib/integrations/credentials";
 import { MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
@@ -20,6 +21,7 @@ import {
   subscribeAppToWaba,
 } from "@/lib/integrations/whatsapp/client";
 import { createClient } from "@/lib/supabase/server";
+import { credentialsToSave } from "@/lib/whatsapp/signup-credentials";
 import { insertOrReviveNumber } from "@/lib/whatsapp/register-number";
 
 /**
@@ -130,10 +132,19 @@ async function run(input: z.input<typeof schema>): Promise<EmbeddedSignupState> 
     throw error;
   }
 
-  await setIntegrationCredential("whatsapp", "access_token", accessToken);
-  await setIntegrationCredential("whatsapp", "waba_id", wabaId);
-  await setIntegrationCredential("whatsapp", "phone_number_id", phoneNumberId);
-
+  // Leave the institute's saved credentials alone: they belong to the API
+  // number every broadcast sends from. Only a missing value is filled in.
+  const existing = await getIntegrationCredentials("whatsapp", ["access_token", "waba_id", "phone_number_id"]);
+  const { toSave, keptExisting } = credentialsToSave(existing, {
+    access_token: accessToken,
+    waba_id: wabaId,
+    phone_number_id: phoneNumberId,
+  });
+  for (const [key, value] of Object.entries(toSave)) {
+    await setIntegrationCredential("whatsapp", key, value);
+  }
+  // Subscribe with the token Meta just issued for this signup, which is
+  // certain to be allowed on this account, whichever token is saved.
   let subscriptionNote = "";
   try {
     await subscribeAppToWaba(wabaId, accessToken);
@@ -182,6 +193,9 @@ async function run(input: z.input<typeof schema>): Promise<EmbeddedSignupState> 
 
   revalidatePath("/settings/integrations/whatsapp");
   return {
-    success: `${label} is connected.${subscriptionNote || " Up to 180 days of one-to-one chats will arrive over the next few minutes."}`,
+    success:
+      `${label} is connected.` +
+      (keptExisting.length > 0 ? " The institute's saved WhatsApp credentials were left as they were, so broadcasts still go from the API number." : "") +
+      (subscriptionNote || " Up to 180 days of one-to-one chats will arrive over the next few minutes."),
   };
 }
