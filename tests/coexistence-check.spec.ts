@@ -10,8 +10,15 @@ const healthy: CheckInput = {
   expectedCallback: "https://crm.example/api/webhooks/whatsapp",
   wabaSubscribed: true,
   coexistenceNumbers: 1,
-  lastDeliveryAt: new Date("2026-11-21T11:30:00Z"),
+  activity: {
+    messages: { count: 4, last: new Date("2026-11-21T11:30:00Z") },
+    echoes: { count: 2, last: new Date("2026-11-21T09:00:00Z") },
+    history: { count: 3, last: new Date("2026-11-10T09:00:00Z") },
+    statuses: { count: 10, last: new Date("2026-11-21T11:00:00Z") },
+    unregistered: [],
+  },
 };
+const none = { count: 0, last: null };
 const status = (lines: ReturnType<typeof evaluateCoexistenceCheck>, id: string) => lines.find((l) => l.id === id)?.status;
 
 describe("missingFields", () => {
@@ -51,9 +58,29 @@ describe("evaluateCoexistenceCheck", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0].status).toBe("problem");
   });
-  it("says so when nothing has ever arrived, and when the account is not subscribed", () => {
-    const lines = evaluateCoexistenceCheck({ ...healthy, lastDeliveryAt: null, wabaSubscribed: false }, NOW);
-    expect(status(lines, "delivery")).toBe("problem");
-    expect(status(lines, "waba")).toBe("problem");
+  it("says the account is not subscribed", () => {
+    expect(status(evaluateCoexistenceCheck({ ...healthy, wabaSubscribed: false }, NOW), "waba")).toBe("problem");
+  });
+  it("separates 'Meta sends nothing' from 'receipts arrive but no messages'", () => {
+    const receiptsOnly = evaluateCoexistenceCheck({ ...healthy, activity: { ...healthy.activity, messages: none, echoes: none } }, NOW);
+    expect(status(receiptsOnly, "msgs")).toBe("problem");
+    expect(receiptsOnly.find((l) => l.id === "msgs")!.detail).toMatch(/receipts do arrive/i);
+    const silent = evaluateCoexistenceCheck({ ...healthy, activity: { ...healthy.activity, messages: none, echoes: none, statuses: none } }, NOW);
+    expect(silent.find((l) => l.id === "msgs")!.detail).toMatch(/sending nothing/i);
+  });
+  it("flags a Coexistence number whose phone sends never arrive, and treats missing history as unknown", () => {
+    const lines = evaluateCoexistenceCheck({ ...healthy, activity: { ...healthy.activity, echoes: none, history: none } }, NOW);
+    expect(status(lines, "echoes")).toBe("problem");
+    expect(status(lines, "history")).toBe("unknown");
+  });
+  it("shows deliveries Meta sent for a number the CRM does not know", () => {
+    const lines = evaluateCoexistenceCheck({ ...healthy, activity: { ...healthy.activity, unregistered: [{ detail: "messages arrived for phone number id 999, which is not registered.", at: NOW }] } }, NOW);
+    const line = lines.find((l) => l.id === "unregistered")!;
+    expect(line.status).toBe("problem");
+    expect(line.detail).toMatch(/999/);
+  });
+  it("does not ask about phone-sent messages when no Coexistence number exists", () => {
+    const lines = evaluateCoexistenceCheck({ ...healthy, coexistenceNumbers: 0 }, NOW);
+    expect(lines.find((l) => l.id === "echoes")).toBeUndefined();
   });
 });

@@ -1,6 +1,6 @@
 "use server";
 
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
@@ -17,7 +17,7 @@ import {
   type AppWebhookSubscription,
 } from "@/lib/integrations/whatsapp/client";
 import { createClient } from "@/lib/supabase/server";
-import { evaluateCoexistenceCheck, missingFields, type CheckLine } from "@/lib/whatsapp/coexistence-check";
+import { evaluateCoexistenceCheck, missingFields, type CheckLine, type DeliveryActivity } from "@/lib/whatsapp/coexistence-check";
 
 export interface CoexistenceCheckState {
   error?: string;
@@ -28,6 +28,39 @@ export interface CoexistenceCheckState {
 async function expectedCallback(): Promise<string | null> {
   const host = (await headers()).get("host");
   return host ? `https://${host}/api/webhooks/whatsapp` : null;
+}
+
+const THIRTY_DAYS = 30 * 86_400_000;
+
+/** What Meta has actually delivered, by kind. The webhook names each kind in the event's external id. */
+async function deliveryActivity(): Promise<DeliveryActivity> {
+  const since = new Date(Date.now() - THIRTY_DAYS);
+  const rows = await db
+    .select({
+      kind: sql<string>`split_part(${webhookEvents.externalId}, ':', 1)`,
+      count: sql<number>`count(*)::int`,
+      last: sql<string>`max(${webhookEvents.receivedAt})`,
+    })
+    .from(webhookEvents)
+    .where(and(eq(webhookEvents.source, "whatsapp"), eq(webhookEvents.signatureOk, true), gt(webhookEvents.receivedAt, since)))
+    .groupBy(sql`split_part(${webhookEvents.externalId}, ':', 1)`);
+  const kind = (name: string) => {
+    const row = rows.find((r) => r.kind === name);
+    return { count: row?.count ?? 0, last: row?.last ? new Date(row.last) : null };
+  };
+  const unregistered = await db
+    .select({ detail: webhookEvents.lastError, at: webhookEvents.receivedAt })
+    .from(webhookEvents)
+    .where(and(eq(webhookEvents.source, "whatsapp"), sql`${webhookEvents.externalId} like 'unregistered:%'`, gt(webhookEvents.receivedAt, since)))
+    .orderBy(desc(webhookEvents.receivedAt))
+    .limit(3);
+  return {
+    messages: kind("msg"),
+    echoes: kind("echo"),
+    history: kind("history"),
+    statuses: kind("status"),
+    unregistered: unregistered.map((u) => ({ detail: u.detail ?? "", at: u.at })),
+  };
 }
 
 async function gather() {
@@ -59,12 +92,7 @@ async function gather() {
     .select({ id: whatsappNumbers.id })
     .from(whatsappNumbers)
     .where(and(eq(whatsappNumbers.mode, "coexistence"), isNull(whatsappNumbers.deletedAt)));
-  const [last] = await db
-    .select({ at: webhookEvents.receivedAt })
-    .from(webhookEvents)
-    .where(and(eq(webhookEvents.source, "whatsapp"), eq(webhookEvents.signatureOk, true)))
-    .orderBy(desc(webhookEvents.receivedAt))
-    .limit(1);
+  const activity = await deliveryActivity();
 
   return {
     creds,
@@ -72,7 +100,7 @@ async function gather() {
     subscriptionError,
     wabaSubscribed,
     coexistenceNumbers: numbers.length,
-    lastDeliveryAt: last?.at ?? null,
+    activity,
   };
 }
 
@@ -90,7 +118,7 @@ export async function runCoexistenceCheck(): Promise<CoexistenceCheckState> {
     expectedCallback: await expectedCallback(),
     wabaSubscribed: g.wabaSubscribed,
     coexistenceNumbers: g.coexistenceNumbers,
-    lastDeliveryAt: g.lastDeliveryAt,
+    activity: g.activity,
   });
   return { lines };
 }

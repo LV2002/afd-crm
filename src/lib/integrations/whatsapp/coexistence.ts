@@ -28,7 +28,11 @@
 export interface EchoMessage {
   id: string;
   from: string;
-  to: string;
+  /**
+   * Who it went to. Present on a live echo. A history message may carry only
+   * `from`: Meta names the customer once, as the thread's id.
+   */
+  to?: string;
   timestamp: string;
   type?: string;
   [content: string]: unknown;
@@ -36,6 +40,8 @@ export interface EchoMessage {
 
 export interface HistoryMessage extends EchoMessage {
   history_context?: { status?: string };
+  /** Set by `historyMessages`: the customer's number, taken from the thread the message sat in. */
+  _thread?: string;
 }
 
 export interface HistoryMetadata {
@@ -46,6 +52,8 @@ export interface HistoryMetadata {
 }
 
 export interface HistoryEntry {
+  /** Present instead of threads when Meta could not or would not send history, e.g. the counsellor declined to share it. */
+  errors?: Array<{ code?: number; title?: string; message?: string }>;
   metadata?: HistoryMetadata;
   threads?: Array<{ id?: string; messages?: HistoryMessage[] }>;
 }
@@ -84,18 +92,21 @@ export function normaliseMessage(
   message: EchoMessage,
   businessDisplayPhone: string | null | undefined,
 ): NormalisedMessage | null {
-  if (!message?.id || !message.from || !message.to) return null;
+  if (!message?.id || !message.from) return null;
 
   const business = digits(businessDisplayPhone);
   const from = digits(message.from);
-  const to = digits(message.to);
+  // A history message may have no `to`: the customer is then the thread it
+  // sat in, and the other side of it is the business.
+  const thread = digits((message as HistoryMessage)._thread);
+  const explicitTo = digits(message.to);
+  const to = explicitTo || (from === business ? thread : business);
 
   // When Meta has not told us the business number — which happens on a
-  // history chunk with no metadata — fall back to `history_context`
-  // being absent on neither side and treat `from === to` as unusable
-  // rather than guessing a direction.
+  // history chunk with no metadata — treat the message as unusable rather
+  // than guessing a direction.
   if (!business) return null;
-  if (from === to) return null;
+  if (!to || from === to) return null;
 
   const direction: MessageDirection = from === business ? "outbound" : "inbound";
 
@@ -103,8 +114,8 @@ export function normaliseMessage(
   return {
     waMessageId: message.id,
     direction,
-    customerPhone: direction === "outbound" ? message.to : message.from,
-    businessPhone: direction === "outbound" ? message.from : message.to,
+    customerPhone: direction === "outbound" ? (message.to ?? thread) : message.from,
+    businessPhone: direction === "outbound" ? message.from : (message.to ?? (businessDisplayPhone as string)),
     // A timestamp Meta sends in seconds. A history chunk from six months
     // ago must keep its own date, not arrive as "today" — the whole
     // point of the backfill is that the conversation reads in order.
@@ -129,7 +140,7 @@ export function historyMessages(entries: HistoryEntry[] | undefined): HistoryMes
   const out: HistoryMessage[] = [];
   for (const entry of entries ?? []) {
     for (const thread of entry.threads ?? []) {
-      for (const message of thread.messages ?? []) out.push(message);
+      for (const message of thread.messages ?? []) out.push({ ...message, _thread: thread.id });
     }
   }
   return out;
@@ -173,4 +184,10 @@ export function historyIsComplete(entries: HistoryEntry[] | undefined): boolean 
 export function describeContactSync(value: CoexistenceValue): string {
   const count = value.contacts?.length ?? 0;
   return `${count} contact${count === 1 ? "" : "s"} from the phone's address book, recorded and not imported as leads.`;
+}
+
+/** Why Meta sent no history, in its own words — or null when it sent some. */
+export function historyErrors(entries: HistoryEntry[] | undefined): string | null {
+  const reasons = (entries ?? []).flatMap((e) => (e.errors ?? []).map((x) => x.title ?? x.message ?? `error ${x.code ?? ""}`.trim()));
+  return reasons.length > 0 ? [...new Set(reasons)].join("; ") : null;
 }

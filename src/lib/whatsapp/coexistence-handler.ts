@@ -10,6 +10,7 @@ import {
   type WhatsAppInboundMessage,
 } from "@/lib/integrations/whatsapp/map-inbound";
 import {
+  historyErrors,
   historyIsComplete,
   historyMessages,
   normaliseMessage,
@@ -213,6 +214,7 @@ export async function handleHistory(
   value: CoexistenceValue,
   number: CoexistenceNumber,
 ): Promise<string> {
+  const declined = historyErrors(value.history);
   const messages = historyMessages(value.history);
   const result = await recordKnownMessages(messages, number, value.metadata?.display_phone_number);
 
@@ -224,6 +226,10 @@ export async function handleHistory(
       updatedAt: new Date(),
     })
     .where(eq(whatsappNumbers.id, number.id));
+
+  if (declined && messages.length === 0) {
+    return `No history was sent: Meta said "${declined}". If the counsellor chose not to share chat history when connecting, the number has to be disconnected and connected again to get it.`;
+  }
 
   return (
     `History chunk: ${result.stored} message${result.stored === 1 ? "" : "s"} attached to existing leads, ` +

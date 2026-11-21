@@ -21,7 +21,26 @@ export interface CheckInput {
   /** Is the app subscribed to the WhatsApp Business Account? Undefined when it could not be checked. */
   wabaSubscribed: boolean | undefined;
   coexistenceNumbers: number;
-  lastDeliveryAt: Date | null;
+  /** What Meta has actually delivered, by kind, over the last 30 days. */
+  activity: DeliveryActivity;
+}
+
+export interface KindActivity {
+  count: number;
+  last: Date | null;
+}
+
+export interface DeliveryActivity {
+  /** A student's message arrived. */
+  messages: KindActivity;
+  /** Something the counsellor sent from their own phone. */
+  echoes: KindActivity;
+  /** The backfill of past chats. */
+  history: KindActivity;
+  /** Delivery receipts (sent / delivered / read) — proof the pipe is open, but not a message. */
+  statuses: KindActivity;
+  /** Deliveries for a phone number id the CRM does not know, with Meta's own words about it. */
+  unregistered: Array<{ detail: string; at: Date }>;
 }
 
 export type CheckStatus = "ok" | "problem" | "unknown";
@@ -100,11 +119,52 @@ export function evaluateCoexistenceCheck(input: CheckInput, now = new Date()): C
     detail: input.coexistenceNumbers > 0 ? `${input.coexistenceNumbers} registered.` : "None. A counsellor's number must be added below (Connect with Meta) before its chats can be filed.",
   });
 
-  if (!input.lastDeliveryAt) {
-    lines.push({ id: "delivery", label: "Last message received from Meta", status: "problem", detail: "Nothing has ever arrived. Send a message to the number from another phone, then run this check again." });
-  } else {
-    const hours = Math.floor((now.getTime() - input.lastDeliveryAt.getTime()) / 3_600_000);
-    lines.push({ id: "delivery", label: "Last message received from Meta", status: "ok", detail: hours < 1 ? "Within the last hour." : `${hours} hour${hours === 1 ? "" : "s"} ago.` });
+  const ago = (d: Date | null) => {
+    if (!d) return "never";
+    const hours = Math.floor((now.getTime() - d.getTime()) / 3_600_000);
+    return hours < 1 ? "within the last hour" : hours < 48 ? `${hours} hour${hours === 1 ? "" : "s"} ago` : `${Math.floor(hours / 24)} days ago`;
+  };
+  const a2 = input.activity;
+
+  // The line that finally separates "Meta isn't sending" from "the CRM isn't
+  // filing it": receipts alone prove only that the pipe is open.
+  lines.push(
+    a2.messages.count > 0
+      ? { id: "msgs", label: "Messages from students received (30 days)", status: "ok", detail: `${a2.messages.count}, the latest ${ago(a2.messages.last)}.` }
+      : {
+          id: "msgs",
+          label: "Messages from students received (30 days)",
+          status: "problem",
+          detail:
+            a2.statuses.count > 0
+              ? `None. Delivery receipts do arrive (${ago(a2.statuses.last)}) so the connection works, but no student message has reached the CRM. Send a message to the counsellor's number from another phone and run the check again.`
+              : "None, and no delivery receipts either: Meta is sending nothing to this CRM. Send a message to the number from another phone and run the check again.",
+        },
+  );
+
+  if (input.coexistenceNumbers > 0) {
+    lines.push(
+      a2.echoes.count > 0
+        ? { id: "echoes", label: "Messages sent from the counsellor's phone (30 days)", status: "ok", detail: `${a2.echoes.count}, the latest ${ago(a2.echoes.last)}.` }
+        : {
+            id: "echoes",
+            label: "Messages sent from the counsellor's phone (30 days)",
+            status: "problem",
+            detail: "None. Ask the counsellor to send a message to a student from the WhatsApp Business app on their phone, then run the check again. If it still never arrives, the number is probably not actually in Coexistence mode (the Business app on the phone must stay logged in to it).",
+          },
+      a2.history.count > 0
+        ? { id: "history", label: "Old chat history", status: "ok", detail: `${a2.history.count} batch${a2.history.count === 1 ? "" : "es"} received, the latest ${ago(a2.history.last)}.` }
+        : { id: "history", label: "Old chat history", status: "unknown", detail: "No history has arrived. It is only sent if the counsellor chose to share it when connecting, and only once. If they declined, the number must be disconnected and connected again." },
+    );
+  }
+
+  if (a2.unregistered.length > 0) {
+    lines.push({
+      id: "unregistered",
+      label: "Deliveries for a number the CRM does not know",
+      status: "problem",
+      detail: `${a2.unregistered.map((u) => u.detail).slice(0, 2).join(" ")} The Phone Number ID registered here does not match the one Meta is sending for.`,
+    });
   }
   return lines;
 }
