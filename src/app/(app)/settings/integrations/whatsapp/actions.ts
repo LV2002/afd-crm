@@ -233,7 +233,11 @@ export async function resetWhatsAppIntegration(
     .set({ deletedAt: new Date(), isActive: false, updatedAt: new Date() })
     .where(isNull(whatsappNumbers.deletedAt))
     .returning({ id: whatsappNumbers.id });
-  const hidden = await clearAllWhatsAppMessages();
+  // Chats are kept unless the box was ticked: disconnecting is about the
+  // connection, not about erasing what students said. Hiding messages has no
+  // undo on this screen.
+  const hideMessages = formData.get("hideMessages") === "on";
+  const hidden = hideMessages ? await clearAllWhatsAppMessages() : 0;
 
   const supabase = await createClient();
   await writeAuditLog(supabase, {
@@ -246,6 +250,36 @@ export async function resetWhatsAppIntegration(
   revalidatePath("/settings/integrations/whatsapp");
   revalidatePath("/whatsapp");
   return {
-    success: `Reset. Removed the saved credentials, unregistered ${unregistered.length} ${unregistered.length === 1 ? "number" : "numbers"} and hid ${hidden} ${hidden === 1 ? "message" : "messages"}. Start again from step 1 of the setup guide.`,
+    success:
+      `Disconnected. Removed the saved credentials and unregistered ${unregistered.length} ${unregistered.length === 1 ? "number" : "numbers"}.` +
+      (hideMessages ? ` Hid ${hidden} ${hidden === 1 ? "message" : "messages"}.` : " Chats and leads were kept.") +
+      " Connect again from the top of this page.",
   };
+}
+
+/**
+ * Disconnects the institute's API number only: removes its access token,
+ * Phone Number ID and account ID. The app's own settings, every counsellor's
+ * number, and all chats and leads are left exactly as they are.
+ */
+export async function disconnectApiNumber(_prev: WhatsAppFormState, _formData: FormData): Promise<WhatsAppFormState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "settings.manage")) {
+    return { error: "You don't have permission to do that." };
+  }
+
+  for (const key of ["access_token", "phone_number_id", "waba_id"] as const) {
+    await deleteIntegrationCredential("whatsapp", key);
+  }
+
+  const supabase = await createClient();
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "whatsapp.api_number_disconnect",
+    entityType: "integration_credentials",
+    after: { provider: "whatsapp", keys: ["access_token", "phone_number_id", "waba_id"] },
+  });
+
+  revalidatePath("/settings/integrations/whatsapp");
+  return { success: "Disconnected. Connect it again whenever you are ready." };
 }
