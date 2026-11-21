@@ -26,8 +26,6 @@ export interface WhatsAppInboundMessage {
     type?: string;
     button_reply?: { id?: string; title?: string };
     list_reply?: { id?: string; title?: string; description?: string };
-    /** Somebody submitted a native WhatsApp form. `response_json` is the answers, as a JSON string. */
-    nfm_reply?: { name?: string; body?: string; response_json?: string };
   };
   /**
    * Present on the first message of a conversation that began with a tap on a
@@ -130,9 +128,6 @@ export function mapMessageContent(message: WhatsAppInboundMessage): MappedMessag
   // they said — and an automation branch matches on exactly that text.
   // Before this these arrived with a null body, so a tap looked like an
   // empty message and nothing could act on it.
-  if (message.interactive?.nfm_reply) {
-    return { messageType: "text", body: "📝 Submitted the form", mediaId: null, mediaMimeType: null };
-  }
   const button = buttonText(message);
   if (button !== null) {
     return { messageType: "text", body: button, mediaId: null, mediaMimeType: null };
@@ -204,16 +199,4 @@ export function buttonText(message: WhatsAppInboundMessage): string | null {
   const reply = message.interactive?.button_reply ?? message.interactive?.list_reply;
   if (reply) return (reply.title ?? reply.id ?? "").trim() || null;
   return null;
-}
-
-/** The answers from a submitted WhatsApp form, or null if this message is not one (or the JSON is unreadable). */
-export function formAnswersOf(message: WhatsAppInboundMessage): Record<string, unknown> | null {
-  const raw = message.interactive?.nfm_reply?.response_json;
-  if (!raw) return null;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
 }

@@ -981,13 +981,6 @@
       "when": 1796306408000,
       "tag": "0139_broadcast_ab",
       "breakpoints": true
-    },
-    {
-      "idx": 140,
-      "version": "7",
-      "when": 1796392808000,
-      "tag": "0140_whatsapp_forms",
-      "breakpoints": true
     }
   ]
 }

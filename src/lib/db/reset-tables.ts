@@ -48,7 +48,6 @@ export const CONFIG_TABLES = [
   // Saved replies and the label list: what staff set up for the inbox.
   "whatsapp_saved_replies",
   "whatsapp_auto_replies",
-  "whatsapp_forms",
   "whatsapp_chat_rules",
   "whatsapp_links",
   "whatsapp_labels",

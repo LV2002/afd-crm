@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { idColumn } from "./_helpers";
 import { profiles } from "./auth";
@@ -136,25 +136,4 @@ export const whatsappReplyAlerts = pgTable(
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("whatsapp_reply_alerts_uq").on(t.leadId, t.inboundAt, t.level)],
-);
-
-/** A native WhatsApp form (Meta "Flow"): the fields to ask, and the id Meta gave it once published. */
-export const whatsappForms = pgTable(
-  "whatsapp_forms",
-  {
-    id: idColumn(),
-    name: text("name").notNull(),
-    introText: text("intro_text").notNull(),
-    buttonLabel: text("button_label").notNull().default("Fill the form"),
-    /** Keys from the fixed list of lead fields a question may fill (`ASK_FIELDS`). */
-    fields: text("fields").array().notNull(),
-    metaFlowId: text("meta_flow_id"),
-    status: text("status").$type<"draft" | "published" | "error">().notNull().default("draft"),
-    lastError: text("last_error"),
-    createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }),
-    deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  },
-  (t) => [check("whatsapp_forms_status_check", sql`status in ('draft','published','error')`)],
 );

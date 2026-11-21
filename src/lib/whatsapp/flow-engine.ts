@@ -35,8 +35,6 @@ export const FLOW_STEP_KINDS = [
   "send_text",
   "send_buttons",
   "send_media",
-  // A native WhatsApp form; answers are filed on the lead when it is submitted.
-  "send_form",
   "ask_question",
   "wait",
   "wait_for_reply",
@@ -295,7 +293,7 @@ export function validateFlow(steps: FlowStep[], trigger?: FlowTrigger): FlowVali
   if (steps.length === 0) {
     return [{ position: null, message: "This flow has no steps yet." }];
   }
-  const SENDERS: readonly FlowStepKind[] = ["send_template", "send_text", "send_buttons", "send_media", "send_form", "ask_question"];
+  const SENDERS: readonly FlowStepKind[] = ["send_template", "send_text", "send_buttons", "send_media", "ask_question"];
   if (!steps.some((step) => SENDERS.includes(step.kind))) {
     issues.push({ position: null, message: "This flow never sends anything." });
   }
@@ -303,7 +301,7 @@ export function validateFlow(steps: FlowStep[], trigger?: FlowTrigger): FlowVali
   // 24 hours. Said once, at the first one, so the editor can warn before
   // it quietly does nothing.
   const sorted = [...steps].sort((a, b) => a.position - b.position);
-  const firstFreeForm = sorted.find((step) => (["send_text", "send_buttons", "send_media", "send_form", "ask_question"] as FlowStepKind[]).includes(step.kind));
+  const firstFreeForm = sorted.find((step) => (["send_text", "send_buttons", "send_media", "ask_question"] as FlowStepKind[]).includes(step.kind));
   const firstTemplate = sorted.find((step) => step.kind === "send_template");
   const firstWait = sorted.find((step) => step.kind === "wait_for_reply");
   if (trigger !== "inbound_keyword" && firstFreeForm && (!firstWait || firstWait.position > firstFreeForm.position) && (!firstTemplate || firstTemplate.position > firstFreeForm.position)) {
@@ -334,9 +332,6 @@ export function validateFlow(steps: FlowStep[], trigger?: FlowTrigger): FlowVali
       if (buttons.length === 0) issues.push({ position: step.position, message: "Add at least one button." });
       if (buttons.length > 3) issues.push({ position: step.position, message: "WhatsApp allows at most three buttons." });
       if (buttons.some((b) => b.trim().length > 20)) issues.push({ position: step.position, message: "A button's words can be at most 20 characters." });
-    }
-    if (step.kind === "send_form" && !String((step.config as { formId?: unknown }).formId ?? "").trim()) {
-      issues.push({ position: step.position, message: "Choose the form to send." });
     }
     if (step.kind === "send_media") {
       const config = step.config as Partial<SendMediaConfig>;
@@ -409,8 +404,6 @@ export function describeStep(step: FlowStep): string {
       const config = step.config as Partial<SendButtonsConfig>;
       return `Send a message with buttons: ${(config.buttons ?? []).filter(Boolean).join(" / ") || "(none yet)"}`;
     }
-    case "send_form":
-      return "Send a form to fill in";
     case "send_media": {
       const config = step.config as Partial<SendMediaConfig>;
       return `Send ${config.kind === "document" ? "a document" : config.kind === "video" ? "a video" : "an image"}${config.filename ? `: ${config.filename}` : ""}`;
