@@ -4939,3 +4939,7 @@ Leon wants to send a WhatsApp broadcast "only to the database, not the people in
 **Biometrics suggest; they never decide.** A missing punch is as likely a flat battery as an absence. The suggestions pre-fill a form a person confirms, and the slip page flags no-punch days the slip leaves untreated, so the check is by someone other than the person who made it.
 
 **Salary payment = an expense entry plus a link.** It reuses the ledger and the bank reconciliation instead of a second record of money, so "paid" means the same thing everywhere and a payslip's payment is proved by the same statement line as every other entry.
+
+## 2026-11-21 — No WhatsApp forms (Flows) and no Razorpay payment links
+
+Both were built (WhatsApp Phase 3c/3d) and then removed at Leon's request before merge: "I don't want the forms and Razorpay integration." Reverted in full, including their migrations (0140, 0141 never reached a database outside a test one), so nothing needs undoing in production. The course list, AI suggested replies, A/B broadcasts and "send me a test" stay. If payment links come back later, the design to keep is: a link only requests money; the webhook marks it and tells accounts; payments and receipts are still recorded by hand, because the ledger is append-only.
