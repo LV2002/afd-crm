@@ -109,6 +109,7 @@ export const CONFIG_TABLES = [
 export const DATA_TABLES = [
   // Conversation status, labels on conversations, and private notes.
   "whatsapp_conversations",
+  "whatsapp_payment_links",
   "whatsapp_auto_reply_log",
   "whatsapp_reply_alerts",
   "whatsapp_conversation_labels",
