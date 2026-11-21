@@ -4,6 +4,7 @@ import type { NavItem } from "@/lib/auth/nav";
 import type { SessionUser } from "@/lib/auth/session";
 import { canSeeTeam } from "@/lib/dashboard/can-see-team";
 import { getCounsellors } from "@/lib/dashboard/get-counsellors";
+import { getChatLinks } from "@/lib/nav/chat-sources";
 import { getNavBadgeCounts } from "@/lib/nav/badge-counts";
 import { createClient } from "@/lib/supabase/server";
 
@@ -47,8 +48,8 @@ export async function SidebarWithBadges({
   items: NavItem[];
   user: SessionUser;
 }) {
-  const [badges, counsellors] = await Promise.all([getNavBadgeCounts(user), counsellorsFor(user)]);
-  return <Sidebar items={items} badges={badges} counsellors={counsellors} />;
+  const [badges, counsellors, chatLinks] = await Promise.all([getNavBadgeCounts(user), counsellorsFor(user), getChatLinks(user)]);
+  return <Sidebar items={items} badges={badges} counsellors={counsellors} chatLinks={chatLinks} />;
 }
 
 export async function MobileNavWithBadges({
@@ -60,6 +61,6 @@ export async function MobileNavWithBadges({
   user: SessionUser;
   userName: string;
 }) {
-  const [badges, counsellors] = await Promise.all([getNavBadgeCounts(user), counsellorsFor(user)]);
-  return <MobileNav items={items} userName={userName} badges={badges} counsellors={counsellors} />;
+  const [badges, counsellors, chatLinks] = await Promise.all([getNavBadgeCounts(user), counsellorsFor(user), getChatLinks(user)]);
+  return <MobileNav items={items} userName={userName} badges={badges} counsellors={counsellors} chatLinks={chatLinks} />;
 }

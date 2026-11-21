@@ -9082,3 +9082,7 @@ Stubbed: list messages are in the client but no flow step uses them yet. Tests: 
 ## WhatsApp Phase 3b: A/B broadcasts (migration 0139)
 
 New broadcast form: "Test a second version" picks template B. At snapshot time the audience is shuffled and split in half (`assignVariants`, random, halves differ by ≤1); each recipient row stores `variant`; the sweep sends A's or B's template accordingly. Both are filled from the same values, so the form blocks a B with a different number of `{{n}}` blanks. Broadcasts list shows per-version sent / read % / replied %. Not statistical-significance aware: it shows rates, you decide.
+
+## Chat sources in the main navigation
+
+The sources now open **under Chats in the left menu**, like the counsellors under Dashboard: WhatsApp API (for people who run campaigns) and each counsellor's own number (their name). Selecting one opens its inbox; the entry for the open source is highlighted, and the list shows only while you are in Chats. Same on the phone drawer. Who is listed: campaigners see everything; others see their own number, and anybody whose chat access reaches beyond their own sees every counsellor's number (`getChatLinks` reads only labels and names, never messages, so it is cheap beside the badge counts; each inbox is still scoped by RLS). The in-page channel tabs were removed; the API tools row (Overview, Inbox, Templates…) remains inside the API section. The Chats page itself stays as the overview with waiting counts.

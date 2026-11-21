@@ -2,16 +2,18 @@
 
 import { Menu, X } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { createPortal } from "react-dom";
 
 import { CounsellorLinks, type CounsellorLink } from "@/components/layout/counsellor-links";
+import { NavSubLinks } from "@/components/layout/nav-sub-links";
 import { NavBadge } from "@/components/layout/nav-badge";
 import { NAV_ICONS } from "@/components/layout/nav-icons";
 import { Button } from "@/components/ui/button";
 import type { NavItem } from "@/lib/auth/nav";
 import { NAV_GROUP_LABELS } from "@/lib/auth/nav-groups";
+import { chatLinkActive, type ChatLink } from "@/lib/nav/chat-links";
 import type { NavBadgeCounts } from "@/lib/nav/badge-permissions";
 import { cn } from "@/lib/utils";
 
@@ -59,15 +61,19 @@ export function MobileNav({
   userName,
   badges = {},
   counsellors = [],
+  chatLinks = [],
 }: {
   items: NavItem[];
   userName: string;
   badges?: NavBadgeCounts;
   /** Same list, same place as the desktop sidebar: under Dashboard, while it is open. */
   counsellors?: CounsellorLink[];
+  /** The API number and each counsellor's own number, nested under Chats. */
+  chatLinks?: ChatLink[];
 }) {
   const [open, setOpen] = React.useState(false);
   const pathname = usePathname();
+  const search = useSearchParams().toString();
 
   // `document` does not exist while this renders on the server, so the
   // portal can only be created after mount.
@@ -146,7 +152,8 @@ export function MobileNav({
                 {items.map((item, index) => {
                   const heading =
                     item.group && item.group !== items[index - 1]?.group ? NAV_GROUP_LABELS[item.group] : null;
-                  const hasChildren = item.href === "/dashboard" && counsellors.length > 0;
+                  const hasChats = item.href === "/whatsapp" && chatLinks.length > 0;
+                  const hasChildren = (item.href === "/dashboard" && counsellors.length > 0) || hasChats;
                   const isOpen =
                     hasChildren && (pathname === item.href || pathname.startsWith(`${item.href}/`));
                   const isActive = hasChildren
@@ -186,7 +193,14 @@ export function MobileNav({
                         />
                       )}
                     </Link>
-                    {isOpen && <CounsellorLinks counsellors={counsellors} pathname={pathname} touch />}
+                    {isOpen && !hasChats && <CounsellorLinks counsellors={counsellors} pathname={pathname} touch />}
+                    {isOpen && hasChats && (
+                      <NavSubLinks
+                        label="Chats"
+                        touch
+                        links={chatLinks.map((link) => ({ key: link.key, label: link.label, href: link.href, active: chatLinkActive(link, pathname, search) }))}
+                      />
+                    )}
                     </div>
                   );
                 })}
