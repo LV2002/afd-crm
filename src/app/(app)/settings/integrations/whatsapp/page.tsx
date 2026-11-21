@@ -7,6 +7,7 @@ import { countLiveWhatsAppMessages } from "@/lib/whatsapp/clear-messages";
 import { createClient } from "@/lib/supabase/server";
 
 import { getEmbeddedSignupSettings, getWhatsAppConnectionStatus } from "./actions";
+import { CoexistenceCheck } from "./coexistence-check";
 import { ClearMessagesPanel } from "./clear-messages-panel";
 import { ResetIntegrationPanel } from "./reset-integration-panel";
 import { EmbeddedSignupButton } from "./embedded-signup-button";
@@ -121,6 +122,11 @@ export default async function WhatsAppIntegrationPage() {
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">Credentials</h2>
         <WhatsAppCredentialsForm status={status} />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">Is it working?</h2>
+        <CoexistenceCheck />
       </section>
 
       <section className="flex flex-col gap-3">
