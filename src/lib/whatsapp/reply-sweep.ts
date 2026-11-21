@@ -85,15 +85,16 @@ export async function sweepReplyAlerts(now = new Date()): Promise<{ alerted: num
         .onConflictDoNothing()
         .returning({ id: whatsappReplyAlerts.id });
       if (claimed.length === 0) continue;
-      await notify({
-        eventKey: alert.level === 1 ? "whatsapp.reply_overdue" : "whatsapp.reply_escalated",
+      const common = {
         context: { lead_name: lead.name, lead_number: lead.number ?? "", minutes_waiting: String(alert.minutesWaiting) },
         href: `/whatsapp/personal?thread=${encodeURIComponent(`lead:${alert.leadId}`)}`,
         entityType: "leads",
         entityId: alert.leadId,
         centerId: lead.centerId,
         ownerId: lead.owner,
-      });
+      };
+      if (alert.level === 1) await notify({ eventKey: "whatsapp.reply_overdue", ...common });
+      else await notify({ eventKey: "whatsapp.reply_escalated", ...common });
       alerted += 1;
     }
   }
