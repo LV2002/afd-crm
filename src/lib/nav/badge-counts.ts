@@ -171,8 +171,32 @@ async function countThreadsAwaitingReply(supabase: Client): Promise<number> {
   const { count } = await supabase
     .from("whatsapp_thread_latest")
     .select("thread_key", { count: "exact", head: true })
-    .eq("last_direction", "inbound");
+    .eq("last_direction", "inbound")
+    // A conversation somebody marked resolved is not waiting — the inbox
+    // agrees, and reopens it the moment they write again.
+    .eq("resolved", false);
   return count ?? 0;
+}
+
+/**
+ * How many conversations are waiting for a reply on each of our numbers,
+ * keyed by number id; `null` is the institute's API number (messages that
+ * name no number are its by definition — migration 0093).
+ *
+ * Reads only the number column of the threads that are waiting — a short
+ * list, since a healthy inbox has few — rather than every message.
+ */
+export async function countAwaitingByNumber(supabase: Client): Promise<Map<string | null, number>> {
+  const { data } = await supabase
+    .from("whatsapp_thread_latest")
+    .select("number_id")
+    .eq("last_direction", "inbound")
+    .eq("resolved", false)
+    .limit(5000)
+    .returns<Array<{ number_id: string | null }>>();
+  const counts = new Map<string | null, number>();
+  for (const row of data ?? []) counts.set(row.number_id, (counts.get(row.number_id) ?? 0) + 1);
+  return counts;
 }
 
 /** Students accounts has handed over that academics has not accepted. */

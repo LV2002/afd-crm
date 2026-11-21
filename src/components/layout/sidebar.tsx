@@ -51,7 +51,11 @@ export function Sidebar({
           item.group && item.group !== items[index - 1]?.group ? NAV_GROUP_LABELS[item.group] : null;
         const hasChats = item.href === CHATS_HREF && chatLinks.length > 0;
         const hasChildren = (item.href === DASHBOARD_HREF && counsellors.length > 0) || hasChats;
-        const isOpen = hasChildren && (pathname === item.href || pathname.startsWith(`${item.href}/`));
+        // The chat sources stay listed wherever you are: each carries its own
+        // red count, and a count you can only see after opening Chats would
+        // defeat the point of a badge. Dashboard's people open only in place.
+        const underItem = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const isOpen = hasChats || (hasChildren && (pathname === item.href || pathname.startsWith(`${item.href}/`)));
         // With people nested underneath, Dashboard itself is "here" only on
         // the overview. On a counsellor's page it is the PARENT of where you
         // are, and the person gets the filled chip instead — two solid chips
@@ -81,7 +85,7 @@ export function Sidebar({
               // unmistakable at a glance and from across a desk.
               isActive
                 ? "bg-primary-subtle font-semibold text-primary-ink"
-                : isOpen
+                : isOpen && underItem
                   ? "bg-primary-subtle/60 text-primary-ink"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
@@ -105,7 +109,7 @@ export function Sidebar({
           {isOpen && hasChats && (
             <NavSubLinks
               label="Chats"
-              links={chatLinks.map((link) => ({ key: link.key, label: link.label, href: link.href, active: chatLinkActive(link, pathname, search) }))}
+              links={chatLinks.map((link) => ({ key: link.key, label: link.label, href: link.href, active: chatLinkActive(link, pathname, search), count: link.waiting, countWhat: "conversations waiting for a reply" }))}
             />
           )}
           </div>

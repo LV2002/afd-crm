@@ -19,7 +19,7 @@ loadEnv({ path: ".env.local", override: true });
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set — see the file header.");
 
 const { db } = await import("../src/lib/db/client");
-const { centers, leads, students, whatsappMessages } = await import("../src/lib/db/schema");
+const { centers, leads, students, whatsappConversations, whatsappMessages } = await import("../src/lib/db/schema");
 
 const MARKER = "QueueSpec";
 const OUR_NUMBER = "+919000000000";
@@ -146,6 +146,32 @@ describe("whatsapp_thread_latest", () => {
 
     // The inbound one is gone, so the outbound one is now the latest.
     expect(await threadsAwaitingReply()).toBe(0);
+  });
+});
+
+describe("whatsapp_thread_latest: number and resolved", () => {
+  async function row(leadId: string) {
+    const rows = await db.execute<{ number_id: string | null; resolved: boolean }>(sql`
+      select number_id, resolved from whatsapp_thread_latest where lead_id = ${leadId}
+    `);
+    return rows[0];
+  }
+
+  it("carries the number the latest message arrived on (null = the API number)", async () => {
+    const lead = await makeLead();
+    await message({ leadId: lead.id, direction: "inbound", from: lead.phone, at: "2026-09-07T10:00:00Z" });
+    expect((await row(lead.id)).number_id).toBeNull();
+  });
+
+  it("is resolved only until they write again", async () => {
+    const lead = await makeLead();
+    await message({ leadId: lead.id, direction: "inbound", from: lead.phone, at: "2026-09-08T10:00:00Z" });
+    await db.insert(whatsappConversations).values({ phone: lead.phone, status: "resolved", resolvedAt: new Date("2026-09-08T12:00:00Z") });
+    expect((await row(lead.id)).resolved).toBe(true);
+
+    await message({ leadId: lead.id, direction: "inbound", from: lead.phone, at: "2026-09-08T13:00:00Z" });
+    expect((await row(lead.id)).resolved).toBe(false);
+    await db.delete(whatsappConversations).where(eq(whatsappConversations.phone, lead.phone));
   });
 });
 

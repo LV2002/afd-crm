@@ -9086,3 +9086,7 @@ New broadcast form: "Test a second version" picks template B. At snapshot time t
 ## Chat sources in the main navigation
 
 The sources now open **under Chats in the left menu**, like the counsellors under Dashboard: WhatsApp API (for people who run campaigns) and each counsellor's own number (their name). Selecting one opens its inbox; the entry for the open source is highlighted, and the list shows only while you are in Chats. Same on the phone drawer. Who is listed: campaigners see everything; others see their own number, and anybody whose chat access reaches beyond their own sees every counsellor's number (`getChatLinks` reads only labels and names, never messages, so it is cheap beside the badge counts; each inbox is still scoped by RLS). The in-page channel tabs were removed; the API tools row (Overview, Inbox, Templates…) remains inside the API section. The Chats page itself stays as the overview with waiting counts.
+
+## Per-source red counts under Chats (migration 0140)
+
+Each entry under Chats (WhatsApp API, and every counsellor's number) carries its own red count of conversations waiting for a reply, and the list is now always shown so the counts are visible from any screen (Dashboard's counsellors still open only in place). `whatsapp_thread_latest` gained `number_id` and `resolved` (appended columns, so existing readers keep working); `countAwaitingByNumber` groups the waiting threads by number (null = the API number). The parent Chats badge now also excludes resolved conversations, so it agrees with the inbox's "Needs a reply".

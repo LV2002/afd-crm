@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { NavBadge } from "@/components/layout/nav-badge";
 import { cn } from "@/lib/utils";
 
 export interface SubLink {
@@ -9,6 +10,10 @@ export interface SubLink {
   label: string;
   href: string;
   active: boolean;
+  /** A red count beside the entry. Zero or absent shows nothing. */
+  count?: number;
+  /** What the count counts, for screen readers. */
+  countWhat?: string;
 }
 
 /**
@@ -44,6 +49,7 @@ export function NavSubLinks({
             )}
           >
             <span className="min-w-0 truncate">{link.label}</span>
+            <NavBadge count={link.count} what={link.countWhat ?? "waiting"} />
           </Link>
         </li>
       ))}

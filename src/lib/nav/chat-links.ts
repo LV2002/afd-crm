@@ -10,6 +10,8 @@ export interface ChatLink {
   label: string;
   href: string;
   kind: "api" | "own";
+  /** Conversations on this source waiting for a reply. Zero shows no badge. */
+  waiting: number;
 }
 
 /** Anything under /whatsapp that is neither the overview nor a counsellor's own inbox: the API inbox and its tools. */

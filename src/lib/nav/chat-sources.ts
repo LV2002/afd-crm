@@ -6,7 +6,10 @@ import { can, scopeFor, type SessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { profiles, whatsappNumbers } from "@/lib/db/schema";
 
+import { createClient } from "@/lib/supabase/server";
+
 import type { ChatLink } from "./chat-links";
+import { countAwaitingByNumber } from "./badge-counts";
 
 /**
  * Who is listed under Chats in the navigation.
@@ -30,8 +33,14 @@ export async function getChatLinks(user: SessionUser): Promise<ChatLink[]> {
   const owners = await db.select({ id: profiles.id, name: profiles.fullName }).from(profiles);
   const nameOf = new Map(owners.map((o) => [o.id, o.name]));
 
+  // One RLS-scoped read of the waiting threads, grouped by number, so each
+  // source's red count is what its own inbox shows under "Needs a reply".
+  const byNumber = await countAwaitingByNumber(await createClient());
+  const apiIds = numbers.filter((x) => x.mode === "api").map((x) => x.id);
+  const apiWaiting = (byNumber.get(null) ?? 0) + apiIds.reduce((sum, id) => sum + (byNumber.get(id) ?? 0), 0);
+
   const links: ChatLink[] = [];
-  if (isCampaigner) links.push({ key: "api", label: "WhatsApp API", href: "/whatsapp/api", kind: "api" });
+  if (isCampaigner) links.push({ key: "api", label: "WhatsApp API", href: "/whatsapp/api", kind: "api", waiting: apiWaiting });
   for (const n of numbers.filter((x) => x.mode === "coexistence")) {
     if (!seesOthers && n.counsellorId !== user.id) continue;
     links.push({
@@ -39,6 +48,7 @@ export async function getChatLinks(user: SessionUser): Promise<ChatLink[]> {
       label: n.counsellorId ? (nameOf.get(n.counsellorId) ?? n.label) : n.label,
       href: `/whatsapp/personal?number=${n.id}`,
       kind: "own",
+      waiting: byNumber.get(n.id) ?? 0,
     });
   }
   return links.sort((a, b) => (a.kind === b.kind ? a.label.localeCompare(b.label) : a.kind === "api" ? -1 : 1));

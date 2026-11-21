@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { chatLinkActive, isApiSection, type ChatLink } from "../src/lib/nav/chat-links";
 
-const api: ChatLink = { key: "api", label: "WhatsApp API", href: "/whatsapp/api", kind: "api" };
-const athira: ChatLink = { key: "n1", label: "Athira", href: "/whatsapp/personal?number=n1", kind: "own" };
-const rahul: ChatLink = { key: "n2", label: "Rahul", href: "/whatsapp/personal?number=n2", kind: "own" };
+const api: ChatLink = { key: "api", label: "WhatsApp API", href: "/whatsapp/api", kind: "api", waiting: 0 };
+const athira: ChatLink = { key: "n1", label: "Athira", href: "/whatsapp/personal?number=n1", kind: "own", waiting: 0 };
+const rahul: ChatLink = { key: "n2", label: "Rahul", href: "/whatsapp/personal?number=n2", kind: "own", waiting: 0 };
 
 describe("isApiSection", () => {
   it("is the API inbox and its tools, not the overview or a counsellor inbox", () => {

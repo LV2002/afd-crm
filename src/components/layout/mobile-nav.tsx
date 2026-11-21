@@ -154,8 +154,10 @@ export function MobileNav({
                     item.group && item.group !== items[index - 1]?.group ? NAV_GROUP_LABELS[item.group] : null;
                   const hasChats = item.href === "/whatsapp" && chatLinks.length > 0;
                   const hasChildren = (item.href === "/dashboard" && counsellors.length > 0) || hasChats;
+                  const underItem = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  // Chat sources stay listed so each shows its own red count.
                   const isOpen =
-                    hasChildren && (pathname === item.href || pathname.startsWith(`${item.href}/`));
+                    hasChats || (hasChildren && (pathname === item.href || pathname.startsWith(`${item.href}/`)));
                   const isActive = hasChildren
                     ? pathname === item.href
                     : pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -178,7 +180,7 @@ export function MobileNav({
                         // looks identical on a phone and on a laptop.
                         isActive
                           ? "bg-primary-subtle font-semibold text-primary-ink"
-                          : isOpen
+                          : isOpen && underItem
                             ? "bg-primary-subtle/60 text-primary-ink"
                             : "text-foreground hover:bg-accent",
                       )}
@@ -198,7 +200,7 @@ export function MobileNav({
                       <NavSubLinks
                         label="Chats"
                         touch
-                        links={chatLinks.map((link) => ({ key: link.key, label: link.label, href: link.href, active: chatLinkActive(link, pathname, search) }))}
+                        links={chatLinks.map((link) => ({ key: link.key, label: link.label, href: link.href, active: chatLinkActive(link, pathname, search), count: link.waiting, countWhat: "conversations waiting for a reply" }))}
                       />
                     )}
                     </div>
