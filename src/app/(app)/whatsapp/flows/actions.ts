@@ -13,11 +13,21 @@ import { createClient } from "@/lib/supabase/server";
 import {
   FLOW_STEP_KINDS,
   FLOW_TRIGGERS,
+  askConfig,
+  describeStep,
   validateFlow,
+  type SendButtonsConfig,
+  type SendMediaConfig,
+  type SendTemplateConfig,
   type FlowStep,
   type FlowStepKind,
   type FlowTrigger,
 } from "@/lib/whatsapp/flow-engine";
+import { normalizePhone } from "@/lib/identity/normalize-phone";
+import { getIntegrationCredentials } from "@/lib/integrations/credentials";
+import { MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
+import { sendMediaByLink, sendReplyButtons, sendTemplateMessage, sendTextMessage } from "@/lib/integrations/whatsapp/client";
+import { planFlowTest, sampleParams } from "@/lib/whatsapp/flow-test";
 import { STARTER_FLOWS } from "@/lib/whatsapp/starter-flows";
 import { startFlowForContacts, startFlows } from "@/lib/whatsapp/flow-runner";
 
@@ -457,4 +467,87 @@ export async function createStarterFlow(formData: FormData): Promise<void> {
   });
   revalidatePath("/whatsapp/flows");
   redirect(`/whatsapp/flows/${flow.id}`);
+}
+
+export interface FlowTestState {
+  error?: string;
+  success?: string;
+  /** One line per step: what was sent, or why it was skipped or refused. */
+  report?: string[];
+}
+
+/**
+ * Sends the flow's messages to one number so the author can see them on a
+ * phone. Touches no lead and starts no run. A typed message only reaches
+ * somebody who wrote to the institute's number in the last 24 hours, so the
+ * report says when WhatsApp refused one for that reason.
+ */
+export async function sendFlowTest(_prev: FlowTestState, formData: FormData): Promise<FlowTestState> {
+  const user = await requireCampaigner();
+  if (!user) return { error: "You don't have permission to do that." };
+
+  const flowId = String(formData.get("flowId") ?? "").trim();
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
+  if (!flowId) return { error: "Which automation?" };
+  if (!phone) return { error: "Enter your own WhatsApp number, with the country code." };
+
+  const rows = await db
+    .select()
+    .from(whatsappFlowSteps)
+    .where(eq(whatsappFlowSteps.flowId, flowId))
+    .orderBy(asc(whatsappFlowSteps.position));
+  if (rows.length === 0) return { error: "This automation has no steps yet." };
+
+  const { access_token: accessToken, phone_number_id: phoneNumberId } = await getIntegrationCredentials("whatsapp", [
+    "access_token",
+    "phone_number_id",
+  ]);
+  if (!accessToken || !phoneNumberId) return { error: "WhatsApp isn't connected." };
+
+  const plan = planFlowTest(rows.map((row): FlowStep => ({ id: row.id, position: row.position, kind: row.kind, config: row.config ?? {} })));
+  const report: string[] = [];
+  let sent = 0;
+  for (const item of plan) {
+    if (item.action === "skip") {
+      report.push(`Step ${item.position}: skipped — ${item.reason}`);
+      continue;
+    }
+    const { step } = item;
+    try {
+      if (step.kind === "send_template") {
+        const config = step.config as Partial<SendTemplateConfig>;
+        if (!config.templateName) throw new Error("No template chosen.");
+        const params = sampleParams(config);
+        await sendTemplateMessage(phoneNumberId, accessToken, phone, config.templateName, config.templateLanguage ?? "en_US", params.length > 0 ? params : undefined);
+      } else if (step.kind === "send_text") {
+        await sendTextMessage(phoneNumberId, accessToken, phone, String((step.config as { text?: unknown }).text ?? ""));
+      } else if (step.kind === "send_buttons") {
+        const config = step.config as Partial<SendButtonsConfig>;
+        await sendReplyButtons(phoneNumberId, accessToken, phone, { body: String(config.text ?? ""), buttons: (config.buttons ?? []).map(String) });
+      } else if (step.kind === "send_media") {
+        const config = step.config as Partial<SendMediaConfig>;
+        await sendMediaByLink(phoneNumberId, accessToken, phone, {
+          kind: config.kind ?? "image",
+          link: String(config.url ?? ""),
+          caption: config.caption || undefined,
+          fileName: config.filename || undefined,
+        });
+      } else {
+        await sendTextMessage(phoneNumberId, accessToken, phone, askConfig(step).question);
+      }
+      sent += 1;
+      report.push(`Step ${item.position}: sent — ${describeStep(step)}`);
+    } catch (error) {
+      const message = error instanceof MetaGraphApiError ? error.message : "Could not reach WhatsApp.";
+      report.push(`Step ${item.position}: not sent — ${message}`);
+    }
+  }
+
+  const supabase = await createClient();
+  await writeAuditLog(supabase, { actorId: user.id, action: "whatsapp.flow_test", entityType: "whatsapp_flows", entityId: flowId, after: { sent } });
+  const note =
+    sent < plan.filter((p) => p.action === "send").length
+      ? " Typed messages and buttons only reach a number that has written to the institute's WhatsApp in the last 24 hours — send it a message first, then test again."
+      : "";
+  return { success: `Sent ${sent} message${sent === 1 ? "" : "s"} to ${phone}.${note}`, report };
 }

@@ -41,6 +41,7 @@ import { listTemplates } from "../../templates/actions";
 import { FlowForm } from "../flow-form";
 import { FlowControls } from "./flow-controls";
 import { FlowMap } from "./flow-map";
+import { TestSend } from "./test-send";
 import { StartForLists } from "./start-for-lists";
 import { AddStep, ExistingStep, type StepEditorLists } from "./step-editor";
 
@@ -203,6 +204,8 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
       )}
 
       <FlowMap steps={steps} />
+
+      {steps.length > 0 && <TestSend flowId={flow.id} />}
 
       <section className="flex flex-col gap-3">
         <h3 className="text-sm font-semibold">The steps</h3>
