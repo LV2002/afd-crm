@@ -22,16 +22,20 @@ export function pct(part: number, whole: number): number {
 export async function broadcastFunnels(
   supabase: SupabaseClient,
   broadcastIds: string[],
+  /** For an A/B test: count only one version's recipients. */
+  variant?: "a" | "b",
 ): Promise<Map<string, BroadcastFunnel>> {
   const out = new Map<string, BroadcastFunnel>();
   await Promise.all(
     broadcastIds.map(async (id) => {
       const count = async (column: string) => {
-        const { count: n } = await supabase
+        let query = supabase
           .from("whatsapp_broadcast_recipients")
           .select("id", { count: "exact", head: true })
           .eq("broadcast_id", id)
           .not(column, "is", null);
+        if (variant) query = query.eq("variant", variant);
+        const { count: n } = await query;
         return n ?? 0;
       };
       const [sent, delivered, read, replied] = await Promise.all([

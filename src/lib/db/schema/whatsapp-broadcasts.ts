@@ -74,6 +74,9 @@ export const whatsappBroadcasts = pgTable("whatsapp_broadcasts", {
   tagId: uuid("tag_id").references(() => tags.id, { onDelete: "restrict" }),
   templateName: text("template_name").notNull(),
   templateLanguage: text("template_language").notNull().default("en_US"),
+  /** A/B test: a second template. Half the audience (chosen at random when it was snapshotted) gets this one. */
+  templateNameB: text("template_name_b"),
+  templateLanguageB: text("template_language_b"),
   /**
    * The old single value for `{{1}}`, used for the whole audience. Kept
    * for the rows that predate `bodyParams` and still read by the sweep as
@@ -157,6 +160,8 @@ export const whatsappBroadcastRecipients = pgTable(
      */
     params: jsonb("params").$type<string[]>(),
     status: whatsappBroadcastRecipientStatusEnum("status").notNull().default("queued"),
+    /** Which version of an A/B broadcast this person was given. Always 'a' when there is no B. */
+    variant: text("variant").$type<"a" | "b">().notNull().default("a"),
     waMessageId: text("wa_message_id"),
     errorMessage: text("error_message"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
@@ -183,6 +188,7 @@ export const whatsappBroadcastRecipients = pgTable(
     uniqueIndex("whatsapp_broadcast_recipients_broadcast_id_contact_id_uq")
       .on(t.broadcastId, t.contactId)
       .where(sql`contact_id is not null`),
+    check("whatsapp_broadcast_recipients_variant_check", sql`variant in ('a','b')`),
     check(
       "whatsapp_broadcast_recipients_one_subject",
       sql`num_nonnulls(lead_id, student_id, contact_id) = 1`,

@@ -4,6 +4,7 @@ import { useActionState, useState, useTransition } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
+import { blankCount } from "@/lib/whatsapp/ab-split";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -88,6 +89,7 @@ export function NewBroadcastForm({
   const [entity, setEntity] = useState<AudienceEntity>("lead");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [templateName, setTemplateName] = useState(templates[0]?.name ?? "");
+  const [templateNameB, setTemplateNameB] = useState("");
   const [preview, setPreview] = useState<AudiencePreview | null>(null);
   const [previewing, startPreview] = useTransition();
   const [sources, setSources] = useState<ParamSource[]>([]);
@@ -98,6 +100,7 @@ export function NewBroadcastForm({
   const fields = entity === "student" ? studentFields : leadFields;
   const [listIds, setListIds] = useState<string[]>([]);
   const template = templates.find((t) => t.name === templateName) ?? null;
+  const templateB = templateNameB ? (templates.find((t) => t.name === templateNameB) ?? null) : null;
   const serialisedFilters = JSON.stringify(filters);
   const variables = mergeVariablesFor(entity);
 
@@ -364,6 +367,33 @@ export function NewBroadcastForm({
 
         <input type="hidden" name="templateLanguage" value={template?.language ?? "en_US"} />
 
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="broadcast-template-b">Test a second version (optional)</Label>
+          <Combobox
+            id="broadcast-template-b"
+            name="templateNameB"
+            value={templateNameB}
+            onChange={setTemplateNameB}
+            options={[{ value: "", label: "No — everybody gets the template above" }, ...templates.filter((c) => c.name !== templateName).map((choice) => ({ value: choice.name, label: choice.name, hint: choice.language }))]}
+            placeholder="Choose version B"
+            searchPlaceholder="Type a template name…"
+          />
+          <input type="hidden" name="templateLanguageB" value={templateB?.language ?? "en_US"} />
+          {templateB && (
+            <p className="whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">{templateB.body}</p>
+          )}
+          {templateB && template && blankCount(templateB.body) !== blankCount(template.body) && (
+            <p className="text-sm text-destructive">
+              Version A has {blankCount(template.body)} blank{blankCount(template.body) === 1 ? "" : "s"} to fill and version B has {blankCount(templateB.body)}. Both are filled from the same values, so they must match.
+            </p>
+          )}
+          {templateB && (
+            <p className="text-xs text-muted-foreground">
+              Half the audience, picked at random, gets each version. The Broadcasts list then compares how many read and replied to each.
+            </p>
+          )}
+        </div>
+
         {template?.headerMediaKind && (
           <div className="flex flex-col gap-2">
             <Label htmlFor="broadcast-header-media">
@@ -537,7 +567,7 @@ export function NewBroadcastForm({
       </section>
 
       <FormMessage error={state.error} />
-      <Button type="submit" disabled={pending || !templateName} className="w-fit">
+      <Button type="submit" disabled={pending || !templateName || Boolean(templateB && template && blankCount(templateB.body) !== blankCount(template.body))} className="w-fit">
         {pending
           ? "Queuing…"
           : sendMode === "schedule"
