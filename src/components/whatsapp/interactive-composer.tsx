@@ -11,7 +11,6 @@ import { listCourseChoices } from "@/app/(app)/whatsapp/inbox-actions";
 import { LIMITS } from "@/lib/whatsapp/interactive";
 import {
   sendWhatsAppForm,
-  sendWhatsAppPaymentLink,
   sendWhatsAppInteractive,
   type ReplyChannel,
   type WhatsAppSendState,
@@ -26,15 +25,12 @@ export function InteractiveComposer({
   toPhone,
   channel,
   forms = [],
-  canTakePayments = false,
 }: {
   leadId: string | null;
   toPhone: string;
   channel: ReplyChannel;
   /** Published native forms that can be sent. */
   forms?: Array<{ id: string; name: string }>;
-  /** May send a Razorpay payment link (payment.record, and Razorpay connected). */
-  canTakePayments?: boolean;
 }) {
   const [kind, setKind] = useState<"buttons" | "list">("buttons");
   const [body, setBody] = useState("");
@@ -43,8 +39,6 @@ export function InteractiveComposer({
   const [state, setState] = useState<WhatsAppSendState>({});
   const [pending, startTransition] = useTransition();
   const [formId, setFormId] = useState("");
-  const [amount, setAmount] = useState("");
-  const [what, setWhat] = useState("");
 
   const max = kind === "buttons" ? LIMITS.maxButtons : LIMITS.maxListRows;
   const titleMax = kind === "buttons" ? LIMITS.buttonTitleChars : LIMITS.rowTitleChars;
@@ -151,25 +145,6 @@ export function InteractiveComposer({
             onClick={() => startTransition(async () => { setState(await sendWhatsAppForm(leadId, toPhone, formId, channel)); setFormId(""); })}
           >
             Send form
-          </Button>
-        </div>
-      )}
-      {canTakePayments && leadId && (
-        <div className="flex flex-wrap items-center gap-2 border-t pt-2">
-          <Input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="₹ amount" inputMode="decimal" className="h-9 w-28" aria-label="Amount in rupees" />
-          <Input value={what} onChange={(e) => setWhat(e.target.value)} placeholder="What it's for, e.g. NIFT Foundation — 1st instalment" maxLength={200} className="h-9 w-80" aria-label="What the payment is for" />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={pending || !amount.trim() || !what.trim()}
-            onClick={() => startTransition(async () => {
-              const result = await sendWhatsAppPaymentLink(leadId, toPhone, amount, what, channel);
-              setState(result);
-              if (!result.error) { setAmount(""); setWhat(""); }
-            })}
-          >
-            Send payment link
           </Button>
         </div>
       )}

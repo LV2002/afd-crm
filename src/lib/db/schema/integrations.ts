@@ -35,8 +35,6 @@ export const integrationProviderEnum = pgEnum("integration_provider", [
   "telephony",
   /** The institute's own website forms — see api/webhooks/website. */
   "website",
-  /** Payment links sent from WhatsApp chats. */
-  "razorpay",
 ]);
 
 export const integrationCredentials = pgTable(

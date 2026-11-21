@@ -30,7 +30,6 @@ export const webhookSourceEnum = pgEnum("webhook_source", [
   "website",
   "knorish",
   "instagram",
-  "razorpay",
   /**
    * One handler, many endpoints: a row in `custom_webhooks` says which.
    *

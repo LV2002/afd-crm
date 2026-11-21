@@ -156,18 +156,6 @@ export const NOTIFICATION_EVENTS = [
     defaultNotifyRoleCodes: ["center_head"],
   },
   {
-    key: "payment.link_paid",
-    label: "Payment link paid",
-    description:
-      "A student paid a Razorpay link sent from WhatsApp. The money is not in the ledger yet — accounts records it against the right enrolment and account.",
-    category: "Money",
-    variables: ["lead_name", "lead_number", "amount", "description"],
-    defaultTitle: "{{lead_name}} paid {{amount}} by link",
-    defaultBody: "{{description}}. Record the payment in Admissions.",
-    defaultNotifyOwner: true,
-    defaultNotifyRoleCodes: ["accounts"],
-  },
-  {
     key: "admission.confirmed",
     label: "Admission confirmed",
     description:

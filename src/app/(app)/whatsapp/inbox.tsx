@@ -14,7 +14,6 @@ import {
   isWithinCustomerServiceWindowForPhone,
 } from "@/lib/whatsapp/get-thread";
 import { getWhatsAppThreads, type ThreadScope } from "@/lib/whatsapp/get-threads";
-import { hasIntegrationCredential } from "@/lib/integrations/credentials";
 import { createClient } from "@/lib/supabase/server";
 import { chipClass } from "@/components/whatsapp/label-colours";
 import { loadConversationExtras, loadLabels, loadSavedReplies, loadSendableTemplates } from "@/lib/whatsapp/inbox-tools";
@@ -175,7 +174,6 @@ export async function WhatsAppInbox({
     .is("deleted_at", null)
     .order("name")
     .returns<Array<{ id: string; name: string }>>();
-  const canTakePayments = can(user, "payment.record") && (await hasIntegrationCredential("razorpay", "key_secret"));
   const aiEnabled = Boolean(chatRules?.ai_suggest_enabled && process.env.GEMINI_API_KEY);
   const [savedReplies, templates] = selected && selected.leadId ? await Promise.all([loadSavedReplies(supabase), loadSendableTemplates()]) : [[], []];
   const windowClosesAt = withinWindow && selected?.lastInboundAt ? new Date(new Date(selected.lastInboundAt).getTime() + 24 * 3_600_000).toISOString() : null;
@@ -379,7 +377,6 @@ export async function WhatsAppInbox({
                   channel={channel}
                   aiEnabled={aiEnabled}
                   forms={formRows ?? []}
-                  canTakePayments={canTakePayments}
                 />
               ) : (
                 <UnmatchedThread

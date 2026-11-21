@@ -27,7 +27,6 @@ export default async function IntegrationsPage() {
   const metaConnected = await hasIntegrationCredential("meta", "page_access_token");
   const googleConnected = await hasIntegrationCredential("google", "refresh_token");
   const whatsappConnected = await hasIntegrationCredential("whatsapp", "access_token");
-  const razorpayConnected = await hasIntegrationCredential("razorpay", "key_secret");
   const websiteConnected = await hasIntegrationCredential("website", "signing_secret");
 
   const supabase = await createClient();
@@ -66,12 +65,6 @@ export default async function IntegrationsPage() {
       name: "WhatsApp",
       description: "Per-counsellor chat on the lead profile, sent and received from the CRM.",
       connected: whatsappConnected,
-    },
-    {
-      href: "/settings/integrations/razorpay",
-      name: "Razorpay",
-      description: "Payment links sent from WhatsApp chats. Paid links tell accounts; the ledger is recorded by hand.",
-      connected: razorpayConnected,
     },
     {
       href: "/settings/integrations/website",

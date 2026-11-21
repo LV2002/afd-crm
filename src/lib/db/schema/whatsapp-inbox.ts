@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, check, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { idColumn } from "./_helpers";
 import { profiles } from "./auth";
@@ -157,34 +157,4 @@ export const whatsappForms = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (t) => [check("whatsapp_forms_status_check", sql`status in ('draft','published','error')`)],
-);
-
-/**
- * A payment link sent over WhatsApp. A request for money, not a payment:
- * nothing here touches the ledger (payments and receipts are append-only
- * and recorded by accounts). When Razorpay reports it paid, the row is marked
- * and accounts is told to record it.
- */
-export const whatsappPaymentLinks = pgTable(
-  "whatsapp_payment_links",
-  {
-    id: idColumn(),
-    leadId: uuid("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
-    amountPaise: bigint("amount_paise", { mode: "number" }).notNull(),
-    description: text("description").notNull(),
-    razorpayLinkId: text("razorpay_link_id"),
-    shortUrl: text("short_url"),
-    status: text("status").$type<"created" | "paid" | "expired" | "cancelled" | "failed">().notNull().default("created"),
-    razorpayPaymentId: text("razorpay_payment_id"),
-    paidAt: timestamp("paid_at", { withTimezone: true }),
-    createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }),
-  },
-  (t) => [
-    check("whatsapp_payment_links_status_check", sql`status in ('created','paid','expired','cancelled','failed')`),
-    check("whatsapp_payment_links_amount_check", sql`amount_paise > 0`),
-    uniqueIndex("whatsapp_payment_links_razorpay_link_id_uq").on(t.razorpayLinkId).where(sql`razorpay_link_id is not null`),
-    index("whatsapp_payment_links_lead_id_idx").on(t.leadId),
-  ],
 );

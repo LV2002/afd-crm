@@ -1,16 +1,10 @@
 "use server";
 
-import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db/client";
-import { whatsappPaymentLinks } from "@/lib/db/schema";
-import { RazorpayError, createPaymentLink } from "@/lib/integrations/razorpay/client";
-import { rupeesToPaise } from "@/lib/enrolment/instalment-plan";
-import { formatINR } from "@/lib/format/currency";
-import { getIntegrationCredentials, getIntegrationCredential } from "@/lib/integrations/credentials";
+import { getIntegrationCredential } from "@/lib/integrations/credentials";
 import {
   sendFlowMessage,
   sendListMessage,
@@ -379,70 +373,6 @@ export async function sendWhatsAppForm(
         flowToken: `form:${form.id}`,
       }),
   );
-}
-
-/**
- * Creates a Razorpay payment link for a lead and sends it in the chat.
- *
- * Needs `payment.record` (the people who handle money) as well as
- * `whatsapp.send`, and an open 24-hour window — the link goes as an
- * ordinary message. This only REQUESTS money: nothing is written to the
- * ledger. When Razorpay reports it paid, accounts is told and records the
- * payment against the right enrolment and account.
- */
-export async function sendWhatsAppPaymentLink(
-  leadId: string,
-  toPhone: string,
-  amountRupees: string,
-  description: string,
-  channel: ReplyChannel = "own",
-): Promise<WhatsAppSendState> {
-  const user = await getCurrentUser();
-  if (!user || !can(user, "payment.record")) return { error: "Payment links are sent by whoever records payments." };
-
-  const amountPaise = rupeesToPaise(amountRupees);
-  if (!amountPaise || amountPaise <= 0) return { error: "Enter the amount in rupees, like 25000." };
-  if (amountPaise > 10_000_000 * 100) return { error: "That amount is above Razorpay's limit for one link." };
-  const what = description.trim();
-  if (!what) return { error: "Say what the payment is for." };
-  if (what.length > 200) return { error: "Keep the description under 200 characters." };
-
-  const { key_id: keyId, key_secret: keySecret } = await getIntegrationCredentials("razorpay", ["key_id", "key_secret"]);
-  if (!keyId || !keySecret) return { error: "Razorpay isn't connected — an admin adds the keys in Settings → Integrations → Razorpay." };
-
-  const route = await replyRoute(channel, user.id, user);
-  if (!route.ok) return { error: route.error };
-  const supabase = await createClient();
-  const { data: lead } = await supabase.from("leads").select("id, student_name").eq("id", leadId).is("deleted_at", null).maybeSingle<{ id: string; student_name: string }>();
-  if (!lead) return { error: "You don't have access to this lead." };
-  if (!(await isWithinCustomerServiceWindow(supabase, leadId, route.windowNumberId))) {
-    return { error: `This lead hasn't messaged ${route.label} in the last 24 hours, so WhatsApp won't accept a message from here.` };
-  }
-
-  const [row] = await db
-    .insert(whatsappPaymentLinks)
-    .values({ leadId, amountPaise, description: what, createdBy: user.id })
-    .returning({ id: whatsappPaymentLinks.id });
-
-  let shortUrl: string;
-  try {
-    const created = await createPaymentLink(
-      { keyId, keySecret },
-      { amountPaise, description: what, referenceId: row.id, customerName: lead.student_name, customerPhone: toPhone },
-    );
-    shortUrl = created.shortUrl;
-    await db.update(whatsappPaymentLinks).set({ razorpayLinkId: created.id, shortUrl, updatedAt: new Date() }).where(eq(whatsappPaymentLinks.id, row.id));
-  } catch (err) {
-    await db.update(whatsappPaymentLinks).set({ status: "failed", updatedAt: new Date() }).where(eq(whatsappPaymentLinks.id, row.id));
-    return { error: err instanceof RazorpayError ? `Razorpay wouldn't create the link: ${err.message}` : "Could not reach Razorpay." };
-  }
-
-  const text = `${what}\nAmount: ${formatINR(amountPaise)}\nPay securely here: ${shortUrl}`;
-  const sent = await recordAndSend(leadId, toPhone, route.via, { messageType: "text", body: text, templateName: null }, (id, token) => sendTextMessage(id, token, toPhone, text));
-  if (!sent.error) {
-    await writeAuditLog(supabase, { actorId: user.id, action: "whatsapp.payment_link_send", entityType: "leads", entityId: leadId, after: { amountPaise, linkId: row.id } });
-  }
-  return sent;
 }
 
 /**
