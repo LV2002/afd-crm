@@ -17,11 +17,13 @@ import {
   whatsappFlowRuns,
   whatsappFlowSteps,
   whatsappFlows,
+  whatsappForms,
   whatsappMessages,
 } from "@/lib/db/schema";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import {
+  sendFlowMessage,
   sendMediaByLink,
   sendReplyButtons,
   sendTemplateMessage,
@@ -29,6 +31,8 @@ import {
 } from "@/lib/integrations/whatsapp/client";
 import { notify } from "@/lib/notifications/notify";
 
+import { FORM_SCREEN_ID } from "./flow-form";
+import { ASK_COLUMNS } from "./lead-answers";
 import { describeInteractive } from "./interactive";
 import {
   ASK_FIELDS,
@@ -414,20 +418,6 @@ type FreeFormOutcome =
   | { ok: true }
   | { ok: false; reason: string; fatal: boolean };
 
-/** Lead column each question writes to. Fixed: the answer goes nowhere else. */
-const ASK_COLUMNS: Record<AskField, keyof typeof leads.$inferInsert> = {
-  email: "email",
-  city: "city",
-  district: "district",
-  state: "state",
-  exam_year: "examYear",
-  school_college: "schoolCollege",
-  board: "board",
-  father_name: "fatherName",
-  mother_name: "motherName",
-  education_status: "educationStatus",
-};
-
 /**
  * Sends one free-form message (text, buttons, picture, question) to a lead.
  *
@@ -528,6 +518,19 @@ async function runFreeFormStep(run: RunRow, step: FlowStep): Promise<FreeFormOut
       });
       const mime = kind === "image" ? "image/jpeg" : kind === "video" ? "video/mp4" : "application/pdf";
       return { waId, body: config.caption ?? "", media: mime };
+    }
+    if (step.kind === "send_form") {
+      const formId = String((step.config as { formId?: unknown }).formId ?? "");
+      const [form] = await db.select().from(whatsappForms).where(and(eq(whatsappForms.id, formId), isNull(whatsappForms.deletedAt)));
+      if (!form || form.status !== "published" || !form.metaFlowId) throw new Error("That form isn't published.");
+      const waId = await sendFlowMessage(phoneNumberId, accessToken, phone, {
+        flowId: form.metaFlowId,
+        body: form.introText,
+        buttonLabel: form.buttonLabel,
+        screenId: FORM_SCREEN_ID,
+        flowToken: `form:${form.id}`,
+      });
+      return { waId, body: `${form.introText}\n📝 Form: ${form.name}` };
     }
     const ask = askConfig(step);
     return { waId: await sendTextMessage(phoneNumberId, accessToken, phone, ask.question), body: ask.question };
@@ -772,6 +775,7 @@ async function runOne(run: RunRow, steps: FlowStep[]): Promise<void> {
       case "send_text":
       case "send_buttons":
       case "send_media":
+      case "send_form":
       case "ask_question": {
         let outcome;
         try {

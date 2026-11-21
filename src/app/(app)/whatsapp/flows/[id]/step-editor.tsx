@@ -29,6 +29,7 @@ export const STEP_LABELS: Record<FlowStepKind, string> = {
   send_text: "Send a typed message",
   send_buttons: "Send a message with buttons",
   send_media: "Send a picture, PDF or video",
+  send_form: "Send a form to fill in",
   ask_question: "Ask a question and save the answer",
   condition: "Check something about them",
   assign_owner: "Give them to a counsellor",
@@ -60,6 +61,8 @@ export interface StepEditorLists {
   counsellors: Array<{ value: string; label: string }>;
   /** Chat labels, for the "put a label" step. */
   labels: Array<{ value: string; label: string }>;
+  /** Published native forms, for the "send a form" step. */
+  forms: Array<{ value: string; label: string }>;
 }
 
 /** Steps that read or change a lead, or message one by free text — none make sense for a database contact. */
@@ -69,6 +72,7 @@ const LEAD_ONLY_KINDS: readonly string[] = [
   "send_text",
   "send_buttons",
   "send_media",
+  "send_form",
   "ask_question",
   "condition",
   "assign_owner",
@@ -281,6 +285,25 @@ function StepConfig({
             onChange={(event) => setConfig({ ...config, filename: event.target.value })}
           />
         )}
+      </div>
+    );
+  }
+
+  if (kind === "send_form") {
+    return (
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs text-muted-foreground">Form</Label>
+        <Combobox
+          className="w-64"
+          value={String(config.formId ?? "")}
+          onChange={(value) => setConfig({ ...config, formId: value })}
+          options={lists.forms}
+          placeholder="Pick a published form"
+          searchPlaceholder="Type to search…"
+        />
+        <p className="text-xs text-muted-foreground">
+          Opens inside WhatsApp. Their answers are checked and saved onto the lead. Only reaches people who wrote to you in the last 24 hours.
+        </p>
       </div>
     );
   }

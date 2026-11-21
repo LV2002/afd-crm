@@ -22,8 +22,10 @@ import { activeDropdownValues } from "@/lib/config/dropdown-values";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 import { notify } from "@/lib/notifications/notify";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
+import { fileFormAnswers } from "@/lib/whatsapp/form-answers";
 import {
   adReferralOf,
+  formAnswersOf,
   mapMessageContent,
   type WhatsAppContact,
   type WhatsAppInboundMessage,
@@ -387,6 +389,11 @@ export async function POST(request: Request) {
           // Only when they have not opted out. Somebody whose message was
           // "STOP" is not somebody to answer with an automation.
           if (!optOut) await markBroadcastReply(message.from);
+          // A submitted native form: file its answers on the lead.
+          const formAnswers = formAnswersOf(message);
+          if (formAnswers && matched) {
+            await fileFormAnswers(matched.id, formAnswers).catch(() => undefined);
+          }
           // Greeting / away message, on the API number only: a counsellor's
           // own handset is theirs to answer.
           if (!optOut && !number) {

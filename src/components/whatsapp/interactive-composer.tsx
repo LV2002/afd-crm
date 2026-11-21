@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { listCourseChoices } from "@/app/(app)/whatsapp/inbox-actions";
 import { LIMITS } from "@/lib/whatsapp/interactive";
 import {
+  sendWhatsAppForm,
   sendWhatsAppInteractive,
   type ReplyChannel,
   type WhatsAppSendState,
@@ -23,10 +24,13 @@ export function InteractiveComposer({
   leadId,
   toPhone,
   channel,
+  forms = [],
 }: {
   leadId: string | null;
   toPhone: string;
   channel: ReplyChannel;
+  /** Published native forms that can be sent. */
+  forms?: Array<{ id: string; name: string }>;
 }) {
   const [kind, setKind] = useState<"buttons" | "list">("buttons");
   const [body, setBody] = useState("");
@@ -34,6 +38,7 @@ export function InteractiveComposer({
   const [buttonText, setButtonText] = useState("Choose");
   const [state, setState] = useState<WhatsAppSendState>({});
   const [pending, startTransition] = useTransition();
+  const [formId, setFormId] = useState("");
 
   const max = kind === "buttons" ? LIMITS.maxButtons : LIMITS.maxListRows;
   const titleMax = kind === "buttons" ? LIMITS.buttonTitleChars : LIMITS.rowTitleChars;
@@ -126,6 +131,23 @@ export function InteractiveComposer({
           Send
         </Button>
       </div>
+      {forms.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-t pt-2">
+          <select value={formId} onChange={(e) => setFormId(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm" aria-label="Form to send">
+            <option value="">Send a form instead…</option>
+            {forms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={pending || !formId}
+            onClick={() => startTransition(async () => { setState(await sendWhatsAppForm(leadId, toPhone, formId, channel)); setFormId(""); })}
+          >
+            Send form
+          </Button>
+        </div>
+      )}
       <FormMessage error={state.error} success={state.success} />
     </form>
   );

@@ -6,6 +6,7 @@ import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { getIntegrationCredential } from "@/lib/integrations/credentials";
 import {
+  sendFlowMessage,
   sendListMessage,
   sendMediaMessage,
   sendReplyButtons,
@@ -20,6 +21,7 @@ import {
   isWithinCustomerServiceWindow,
   isWithinCustomerServiceWindowForPhone,
 } from "@/lib/whatsapp/get-thread";
+import { FORM_SCREEN_ID } from "@/lib/whatsapp/flow-form";
 import { checkListMessage, checkReplyButtons, describeInteractive } from "@/lib/whatsapp/interactive";
 import { mediaKindFor, trimCaption, validateWhatsAppMedia } from "@/lib/whatsapp/media";
 
@@ -321,6 +323,55 @@ export async function sendWhatsAppInteractive(
     route.via,
     { messageType: "text", body: describeInteractive("list", value.body, value.rows.map((r) => r.title)), templateName: null },
     (id, token) => sendListMessage(id, token, toPhone, value),
+  );
+}
+
+/**
+ * Sends a published native form (with the message that introduces it) into
+ * an open conversation. Same route, permission and 24-hour window as any
+ * other interactive message. The answers come back on the webhook and are
+ * written onto the lead there.
+ */
+export async function sendWhatsAppForm(
+  leadId: string | null,
+  toPhone: string,
+  formId: string,
+  channel: ReplyChannel = "own",
+): Promise<WhatsAppSendState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "You don't have permission to do that." };
+
+  const supabase = await createClient();
+  const { data: form } = await supabase
+    .from("whatsapp_forms")
+    .select("id, name, intro_text, button_label, meta_flow_id, status")
+    .eq("id", formId)
+    .is("deleted_at", null)
+    .maybeSingle<{ id: string; name: string; intro_text: string; button_label: string; meta_flow_id: string | null; status: string }>();
+  if (!form || form.status !== "published" || !form.meta_flow_id) return { error: "That form isn't published yet." };
+
+  const route = await replyRoute(channel, user.id, user);
+  if (!route.ok) return { error: route.error };
+  const withinWindow = leadId
+    ? await isWithinCustomerServiceWindow(supabase, leadId, route.windowNumberId)
+    : await isWithinCustomerServiceWindowForPhone(supabase, toPhone, route.windowNumberId);
+  if (!withinWindow) {
+    return { error: `${leadId ? "This lead hasn't" : "They haven't"} messaged ${route.label} in the last 24 hours, so WhatsApp won't accept a form.` };
+  }
+  const flowId = form.meta_flow_id;
+  return recordAndSend(
+    leadId,
+    toPhone,
+    route.via,
+    { messageType: "text", body: `${form.intro_text}\n📝 Form: ${form.name}`, templateName: null },
+    (id, token) =>
+      sendFlowMessage(id, token, toPhone, {
+        flowId,
+        body: form.intro_text,
+        buttonLabel: form.button_label,
+        screenId: FORM_SCREEN_ID,
+        flowToken: `form:${form.id}`,
+      }),
   );
 }
 

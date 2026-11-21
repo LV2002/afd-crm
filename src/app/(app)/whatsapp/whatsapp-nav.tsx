@@ -48,6 +48,7 @@ const BUSINESS_TABS: Tab[] = [
   { href: "/whatsapp/broadcasts", label: "Broadcasts", needs: "campaign" },
   { href: "/whatsapp/flows", label: "Automations", needs: "campaign" },
   { href: "/whatsapp/replies", label: "Saved replies & labels", needs: "campaign" },
+  { href: "/whatsapp/forms", label: "Forms", needs: "campaign" },
   { href: "/whatsapp/auto-replies", label: "Auto replies & rules", needs: "campaign" },
   { href: "/whatsapp/links", label: "Tracked links", needs: "campaign" },
   { href: "/whatsapp/suppressions", label: "Opted out", needs: "campaign" },

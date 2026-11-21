@@ -8,7 +8,7 @@ import { writeAuditLog } from "@/lib/audit/log";
 import { parseConditions } from "@/lib/rules/parse-rule";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { whatsappFlowRuns, whatsappFlowSteps, whatsappFlows } from "@/lib/db/schema";
+import { whatsappFlowRuns, whatsappFlowSteps, whatsappFlows, whatsappForms } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import {
   FLOW_STEP_KINDS,
@@ -26,7 +26,8 @@ import {
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
-import { sendMediaByLink, sendReplyButtons, sendTemplateMessage, sendTextMessage } from "@/lib/integrations/whatsapp/client";
+import { FORM_SCREEN_ID } from "@/lib/whatsapp/flow-form";
+import { sendFlowMessage, sendMediaByLink, sendReplyButtons, sendTemplateMessage, sendTextMessage } from "@/lib/integrations/whatsapp/client";
 import { planFlowTest, sampleParams } from "@/lib/whatsapp/flow-test";
 import { STARTER_FLOWS } from "@/lib/whatsapp/starter-flows";
 import { startFlowForContacts, startFlows } from "@/lib/whatsapp/flow-runner";
@@ -524,6 +525,11 @@ export async function sendFlowTest(_prev: FlowTestState, formData: FormData): Pr
       } else if (step.kind === "send_buttons") {
         const config = step.config as Partial<SendButtonsConfig>;
         await sendReplyButtons(phoneNumberId, accessToken, phone, { body: String(config.text ?? ""), buttons: (config.buttons ?? []).map(String) });
+      } else if (step.kind === "send_form") {
+        const formId = String((step.config as { formId?: unknown }).formId ?? "");
+        const [form] = await db.select().from(whatsappForms).where(eq(whatsappForms.id, formId));
+        if (!form || form.status !== "published" || !form.metaFlowId) throw new Error("That form isn't published.");
+        await sendFlowMessage(phoneNumberId, accessToken, phone, { flowId: form.metaFlowId, body: form.introText, buttonLabel: form.buttonLabel, screenId: FORM_SCREEN_ID, flowToken: `form:${form.id}` });
       } else if (step.kind === "send_media") {
         const config = step.config as Partial<SendMediaConfig>;
         await sendMediaByLink(phoneNumberId, accessToken, phone, {

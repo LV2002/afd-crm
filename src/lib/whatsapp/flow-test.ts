@@ -12,7 +12,7 @@ export type TestItem =
   | { position: number; action: "send"; step: FlowStep }
   | { position: number; action: "skip"; reason: string };
 
-const SENDERS = new Set(["send_template", "send_text", "send_buttons", "send_media", "ask_question"]);
+const SENDERS = new Set(["send_template", "send_text", "send_buttons", "send_media", "send_form", "ask_question"]);
 
 export function planFlowTest(steps: FlowStep[]): TestItem[] {
   return [...steps]

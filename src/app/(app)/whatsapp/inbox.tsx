@@ -167,6 +167,13 @@ export async function WhatsAppInbox({
     .select("ai_suggest_enabled")
     .eq("id", "default")
     .maybeSingle<{ ai_suggest_enabled: boolean }>();
+  const { data: formRows } = await supabase
+    .from("whatsapp_forms")
+    .select("id, name")
+    .eq("status", "published")
+    .is("deleted_at", null)
+    .order("name")
+    .returns<Array<{ id: string; name: string }>>();
   const aiEnabled = Boolean(chatRules?.ai_suggest_enabled && process.env.GEMINI_API_KEY);
   const [savedReplies, templates] = selected && selected.leadId ? await Promise.all([loadSavedReplies(supabase), loadSendableTemplates()]) : [[], []];
   const windowClosesAt = withinWindow && selected?.lastInboundAt ? new Date(new Date(selected.lastInboundAt).getTime() + 24 * 3_600_000).toISOString() : null;
@@ -369,6 +376,7 @@ export async function WhatsAppInbox({
                   withinWindow={withinWindow}
                   channel={channel}
                   aiEnabled={aiEnabled}
+                  forms={formRows ?? []}
                 />
               ) : (
                 <UnmatchedThread

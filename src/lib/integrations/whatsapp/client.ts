@@ -339,3 +339,66 @@ export async function fetchPhoneNumberHealth(phoneNumberId: string, accessToken:
     status: body.status ?? null,
   };
 }
+
+export interface CreatedFlow {
+  id: string;
+  /** Problems Meta found in the form JSON, in its own words. Empty when it is valid. */
+  validationErrors: string[];
+}
+
+/**
+ * Creates a native WhatsApp form on the WhatsApp Business Account and
+ * publishes it, in one call. Needs the same access token and WABA id as
+ * templates. A published form cannot be edited, which is why the CRM
+ * treats a published form as final.
+ */
+export async function createAndPublishFlow(
+  wabaId: string,
+  accessToken: string,
+  input: { name: string; flowJson: Record<string, unknown> },
+): Promise<CreatedFlow> {
+  const response = await fetch(`${GRAPH_BASE_URL}/${wabaId}/flows`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({
+      name: input.name,
+      categories: ["LEAD_GENERATION"],
+      flow_json: JSON.stringify(input.flowJson),
+      publish: true,
+    }),
+  });
+  const body = (await response.json()) as { id?: string; validation_errors?: Array<{ error?: string; message?: string }> };
+  const validationErrors = (body.validation_errors ?? []).map((e) => e.message ?? e.error ?? "Invalid form");
+  if (!response.ok || !body.id) {
+    throw new MetaGraphApiError(`WhatsApp returned ${response.status} creating the form`, response.status, body);
+  }
+  return { id: body.id, validationErrors };
+}
+
+/** Sends a published form as a message with a button that opens it. Inside the 24-hour window only. */
+export async function sendFlowMessage(
+  phoneNumberId: string,
+  accessToken: string,
+  toE164: string,
+  input: { flowId: string; body: string; buttonLabel: string; screenId: string; flowToken: string },
+): Promise<string> {
+  return postMessage(phoneNumberId, accessToken, {
+    to: toE164.replace(/\D/g, ""),
+    type: "interactive",
+    interactive: {
+      type: "flow",
+      body: { text: input.body },
+      action: {
+        name: "flow",
+        parameters: {
+          flow_message_version: "3",
+          flow_token: input.flowToken,
+          flow_id: input.flowId,
+          flow_cta: input.buttonLabel,
+          flow_action: "navigate",
+          flow_action_payload: { screen: input.screenId },
+        },
+      },
+    },
+  });
+}

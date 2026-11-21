@@ -91,6 +91,7 @@ export function WhatsAppPanel({
   resolved = false,
   notes = [],
   aiEnabled = false,
+  forms = [],
 }: {
   leadId: string;
   leadName?: string;
@@ -110,6 +111,7 @@ export function WhatsAppPanel({
   notes?: InboxNote[];
   /** AI-drafted replies are on (admin switch + API key). */
   aiEnabled?: boolean;
+  forms?: Array<{ id: string; name: string }>;
 }) {
   const [mode, setMode] = useState<"reply" | "buttons" | "note">("reply");
   const [body, setBody] = useState("");
@@ -182,7 +184,7 @@ export function WhatsAppPanel({
               <Button type="submit" disabled={isPending || !body.trim()} className="w-fit" variant="outline">Save note</Button>
             </form>
           ) : mode === "buttons" && withinWindow ? (
-            <InteractiveComposer leadId={leadId || null} toPhone={toPhone} channel={channel} />
+            <InteractiveComposer leadId={leadId || null} toPhone={toPhone} channel={channel} forms={forms} />
           ) : withinWindow ? (
             <form
               className="flex flex-col gap-2"
