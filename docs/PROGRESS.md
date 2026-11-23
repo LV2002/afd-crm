@@ -9142,6 +9142,9 @@ The "doesn't look like a readable PDF" message now ends with the PDF library's o
 ### Bank statements: old Excel (.xls) files are accepted
 HDFC (and other banks) download statements as .xls. `src/lib/finance/bank-statement-xls.ts` reads the first sheet of a BIFF8 workbook with no dependency — the maintained spreadsheet libraries are not available from the registry at a safe version, and the only npm copies are individual republishes. It understands text and number cells and shared strings split across continued records; Excel-typed dates would be reported as unreadable, never guessed. The rows go through the existing CSV statement parser, so duplicate handling, balance continuity and the preview are unchanged. The header search now looks 40 rows down (HDFC puts an address block above it). `.xlsx` is still rejected with a pointer to .xls/PDF/CSV. Test data is a made-up file in `tests/fixtures/`; the real statement used to build this is not in the repo.
 
+### Finance centre choice no longer snaps back to Kannur
+Choosing "All centres" deleted the `finance_center` cookie without naming its `/finance` path, so the old centre stayed. All centres is now stored as the value `all`, every choice is written at `/finance`, and the choice is a session cookie, so each new visit starts at All centres.
+
 ### Bank reconciliation: say whose money it is (student, employee, month)
 When bank lines are categorised, the category decides what is asked, per line:
 - **Course Fees / Pre-booking / Token** (`links: enrolment`) — pick the student's admission. The line becomes a real payment on their profile with a receipt (`recordPayment`, dated by the bank), the ledger entry is tied to it, and the first payment opens the student's record (accounts → academics gate). Admissions still awaiting a first payment are listed, which covers pre-bookings.

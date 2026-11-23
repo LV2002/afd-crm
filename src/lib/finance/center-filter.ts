@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 export const FINANCE_CENTER_COOKIE = "finance_center";
+/** The cookie value for "the whole company", so choosing it is a write, not a delete. */
+export const ALL_CENTERS = "all";
 
 export interface FinanceCenter {
   id: string;
@@ -40,7 +42,7 @@ export async function getFinanceCenters(supabase: SupabaseClient): Promise<Finan
  */
 export async function getFinanceCenterId(supabase: SupabaseClient): Promise<string | undefined> {
   const chosen = (await cookies()).get(FINANCE_CENTER_COOKIE)?.value;
-  if (!chosen) return undefined;
+  if (!chosen || chosen === ALL_CENTERS) return undefined;
   const centers = await getFinanceCenters(supabase);
   return centers.some((c) => c.id === chosen) ? chosen : undefined;
 }
