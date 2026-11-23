@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { DbExecutor } from "@/lib/db/client";
 import { recordPayment } from "@/lib/enrolment/record-payment";
+import { refundFromBankLine } from "@/lib/enrolment/refund-from-bank";
 import { bankMatches, bankStatementLines } from "@/lib/db/schema";
 
 import type { StatementLine } from "./bank-statement";
@@ -54,6 +55,8 @@ export async function saveStatementLines(
 export interface LineLink {
   /** A student's fee: recorded as a payment on their profile, with a receipt, as well as in the books. */
   enrolmentId?: string;
+  /** Money back to a student: a refund on their profile and an outgoing entry in the books. */
+  refundEnrolmentId?: string;
   /** Tagged to a student with no fee record (a fine, a workshop). */
   studentId?: string;
   studentName?: string;
@@ -80,6 +83,8 @@ export async function resolveBankLines(
     userId: string | null;
     /** Per line, by line id. */
     links?: Record<string, LineLink>;
+    /** Which centre the entries belong to, for an account that serves several. */
+    centerId?: string | null;
   },
 ): Promise<number> {
   let done = 0;
@@ -128,6 +133,17 @@ export async function resolveBankLines(
         });
         if (!paid.financeTransactionId) throw new Error("The payment was recorded but its ledger entry was not.");
         postedId = paid.financeTransactionId;
+      } else if (link?.refundEnrolmentId && input.direction === "out") {
+        const refunded = await refundFromBankLine(tx, {
+          enrolmentId: link.refundEnrolmentId,
+          amountPaise: line.amountPaise,
+          accountId: line.accountId,
+          occurredOn: line.occurredOn,
+          narration: line.note ? `${line.particulars} — ${line.note}` : line.particulars,
+          category: input.choice,
+          recordedBy: input.userId,
+        });
+        postedId = refunded.financeTransactionId;
       } else {
         const posted = await postEntry(tx, {
           occurredOn: line.occurredOn,
@@ -140,6 +156,7 @@ export async function resolveBankLines(
           studentId: link?.studentId ?? null,
           studentName: link?.studentName ?? null,
           period: link?.period ?? null,
+          centerId: input.centerId ?? null,
           recordedBy: input.userId,
           source: "bank_statement",
         });

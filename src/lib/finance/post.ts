@@ -3,6 +3,8 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db, type DbExecutor } from "@/lib/db/client";
 import { bankMatches, bankStatementLines, financeAccounts, financeTransactions } from "@/lib/db/schema";
 
+import { centersServedBy, pickCenter } from "./account-centers";
+
 import type { FinanceDirection, FinanceKind } from "./ledger-math";
 
 /**
@@ -37,6 +39,11 @@ export interface PostEntryInput {
   course?: string | null;
   /** The month this money is for ('YYYY-MM'), when it differs from the month it moved. */
   period?: string | null;
+  /**
+   * The centre this entry belongs to, when the account serves several. Must be
+   * one the account serves; left out, the account's main centre is used.
+   */
+  centerId?: string | null;
   transferGroupId?: string | null;
   reversesTransactionId?: string | null;
   reversalReason?: string | null;
@@ -69,6 +76,10 @@ export async function postEntry(tx: DbExecutor, input: PostEntryInput): Promise<
     throw new Error("That account is not active. Reactivate it, or pick another.");
   }
 
+  const entryCenterId = input.centerId
+    ? pickCenter(await centersServedBy(tx, account.id, account.centerId), input.centerId, true)
+    : account.centerId;
+
   const [row] = await tx
     .insert(financeTransactions)
     .values({
@@ -76,7 +87,7 @@ export async function postEntry(tx: DbExecutor, input: PostEntryInput): Promise<
       direction: input.direction,
       kind: input.kind,
       accountId: input.accountId,
-      centerId: account.centerId,
+      centerId: entryCenterId,
       category: input.category,
       amountPaise: input.amountPaise,
       description: input.description,
@@ -95,7 +106,7 @@ export async function postEntry(tx: DbExecutor, input: PostEntryInput): Promise<
     })
     .returning({ id: financeTransactions.id, txnNo: financeTransactions.txnNo });
 
-  return { id: row.id, txnNo: row.txnNo, centerId: account.centerId };
+  return { id: row.id, txnNo: row.txnNo, centerId: entryCenterId };
 }
 
 /**

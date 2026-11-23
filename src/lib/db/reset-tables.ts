@@ -36,6 +36,8 @@ export const CONFIG_TABLES = [
   // The accounts themselves, including the opening balance somebody typed
   // in. The transactions against them are data and go.
   "finance_accounts",
+  // Which extra centres an account serves: part of how the account is set up.
+  "finance_account_centers",
   "holidays",
   "hr_settings",
   "payroll_settings",
@@ -163,6 +165,7 @@ export const DATA_TABLES = [
   "employees",
   "bank_balance_checks",
   "cash_counts",
+  "finance_transaction_comments",
   "finance_transactions",
   "bank_statement_lines",
   "contact_list_members",

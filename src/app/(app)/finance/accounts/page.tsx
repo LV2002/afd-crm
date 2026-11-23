@@ -44,6 +44,8 @@ export default async function FinanceAccountsPage() {
       .returns<Array<{ id: string; name: string }>>(),
   ]);
 
+  const centerNameOf = new Map((centers ?? []).map((c) => [c.id, c.name]));
+
   return (
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-2">
@@ -83,7 +85,14 @@ export default async function FinanceAccountsPage() {
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{account.centerName}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {account.centerName}
+                    {account.alsoServesCenterIds.length > 0 && (
+                      <span className="block text-xs">
+                        also {account.alsoServesCenterIds.map((id) => centerNameOf.get(id) ?? "").filter(Boolean).join(", ")}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="capitalize text-muted-foreground">
                     {account.type.replace("_", " ")}
                   </TableCell>
@@ -126,6 +135,7 @@ export default async function FinanceAccountsPage() {
             openingAsOf: a.opening_as_of,
             floatPaise: a.float_paise,
             isActive: a.is_active,
+            alsoServesCenterIds: a.alsoServesCenterIds,
           }))}
         />
       </section>

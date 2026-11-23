@@ -30,8 +30,11 @@ function like(q: string): string {
 /** A student's admission, to record their fee against. Includes admissions still waiting for a first payment (a pre-booking). */
 export async function searchEnrolments(query: string): Promise<PayeeOption[]> {
   const user = await getCurrentUser();
-  if (!user || !can(user, "finance.record") || !can(user, "payment.record")) return [];
-  const scope = scopeFor(user, "payment.record");
+  // A fee needs the payment permission; a refund needs the refund one. Either may look.
+  if (!user || !can(user, "finance.record")) return [];
+  const permission = can(user, "payment.record") ? "payment.record" : can(user, "payment.refund") ? "payment.refund" : null;
+  if (!permission) return [];
+  const scope = scopeFor(user, permission);
   if (!scope || query.trim().length < 2) return [];
 
   const term = like(query);

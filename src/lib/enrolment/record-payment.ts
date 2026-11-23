@@ -6,7 +6,9 @@ import {
   payments,
   receipts,
 } from "@/lib/db/schema";
+import { centersServedBy } from "@/lib/finance/account-centers";
 import { FEE_CATEGORY, HISTORY_SOURCE, postEntry } from "@/lib/finance/post";
+import { financeAccounts } from "@/lib/db/schema";
 
 import { createStudentFromEnrolment } from "./create-student";
 
@@ -98,7 +100,12 @@ export async function recordPayment(tx: DbExecutor, input: RecordPaymentInput): 
   // can be left in.
   let financeTransactionId: string | null = null;
   if (input.accountId) {
+    // The student's own centre, when the account serves it: one bank account
+    // can take every centre's fees and each fee still lands in its centre.
+    const [account] = await tx.select({ centerId: financeAccounts.centerId }).from(financeAccounts).where(eq(financeAccounts.id, input.accountId));
+    const served = account ? await centersServedBy(tx, input.accountId, account.centerId) : [];
     const posted = await postEntry(tx, {
+      centerId: served.includes(enrolment.centerId) ? enrolment.centerId : null,
       occurredOn: (input.receivedAt ?? new Date()).toISOString().slice(0, 10),
       direction: "in",
       kind: "fee",
