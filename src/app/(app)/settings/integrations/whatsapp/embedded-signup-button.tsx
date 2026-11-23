@@ -67,6 +67,14 @@ declare global {
 }
 
 const GRAPH_VERSION = "v21.0";
+
+/** Where Meta may have tied the code to: this page (without any #fragment), this page without its query, and the site root. */
+function pageAddressesNow(): string[] {
+  const here = new URL(window.location.href);
+  here.hash = "";
+  const noQuery = `${here.origin}${here.pathname}`;
+  return [...new Set([here.toString(), noQuery, `${here.origin}/`, here.origin])].filter((a) => a.startsWith("https://"));
+}
 const initialState: EmbeddedSignupState = {};
 
 export function EmbeddedSignupButton({
@@ -118,6 +126,7 @@ export function EmbeddedSignupButton({
         phoneNumberId: finished?.phoneNumberId ?? undefined,
         label: currentLabel,
         counsellorId: currentCounsellor,
+        pageAddresses: pageAddressesNow(),
       });
       setState(result);
       if (result.success) {

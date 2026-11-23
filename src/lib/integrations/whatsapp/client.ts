@@ -264,11 +264,14 @@ export async function exchangeSignupCode(
   appId: string,
   appSecret: string,
   code: string,
+  /** `undefined` sends no redirect_uri at all; a string (even an empty one) sends exactly that. */
+  redirectUri?: string,
 ): Promise<string> {
   const url = new URL(`${GRAPH_BASE_URL}/oauth/access_token`);
   url.searchParams.set("client_id", appId);
   url.searchParams.set("client_secret", appSecret);
   url.searchParams.set("code", code);
+  if (redirectUri !== undefined) url.searchParams.set("redirect_uri", redirectUri);
 
   const response = await fetch(url.toString(), { method: "GET" });
   const body = await response.json();
@@ -282,6 +285,48 @@ export async function exchangeSignupCode(
   }
 
   return body.access_token as string;
+}
+
+/** Meta's "the redirect_uri does not match the one the code was issued for" (code 100, subcode 36008). */
+export function isRedirectUriMismatch(error: unknown): boolean {
+  if (!(error instanceof MetaGraphApiError)) return false;
+  const detail = (error.body as { error?: { code?: number; error_subcode?: number } } | null)?.error;
+  return detail?.error_subcode === 36008 || (detail?.code === 100 && /redirect_uri/i.test(error.message));
+}
+
+/**
+ * Exchanges the Embedded Signup code, trying the redirect addresses Meta is
+ * known to tie a JS-SDK code to.
+ *
+ * A code from the Facebook JavaScript SDK's popup belongs to a redirect
+ * address the server cannot see, and Meta refuses the exchange with 36008 if
+ * the one sent does not match. In practice it is one of: none at all, an
+ * empty one, or the page that opened the popup. Each is tried in turn, and
+ * ONLY a 36008 moves on to the next: any other refusal (a bad secret, an
+ * expired code) is the real answer and is returned at once. Returns which
+ * form worked, so it can be recorded.
+ */
+export async function exchangeSignupCodeWithFallbacks(
+  appId: string,
+  appSecret: string,
+  code: string,
+  pageAddresses: string[] = [],
+): Promise<{ accessToken: string; redirectForm: string }> {
+  const attempts: Array<{ label: string; value: string | undefined }> = [
+    { label: "none", value: undefined },
+    { label: "empty", value: "" },
+    ...pageAddresses.map((address) => ({ label: address, value: address })),
+  ];
+  let last: unknown;
+  for (const attempt of attempts) {
+    try {
+      return { accessToken: await exchangeSignupCode(appId, appSecret, code, attempt.value), redirectForm: attempt.label };
+    } catch (error) {
+      last = error;
+      if (!isRedirectUriMismatch(error)) throw error;
+    }
+  }
+  throw last;
 }
 
 /**

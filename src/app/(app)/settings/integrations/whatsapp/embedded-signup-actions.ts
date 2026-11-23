@@ -16,7 +16,7 @@ import {
 } from "@/lib/integrations/credentials";
 import { MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
 import {
-  exchangeSignupCode,
+  exchangeSignupCodeWithFallbacks,
   getPhoneNumberInfo,
   listWabaPhoneNumbers,
   wabaIdsForToken,
@@ -78,6 +78,9 @@ const schema = z.object({
     .optional(),
   label: z.string().trim().min(1, "Give the number a label you will recognise.").max(120),
   counsellorId: z.string().uuid("Choose whose phone this is."),
+  // The address of the page that opened Meta's window (and its origin). Meta
+  // ties the code to one of these; the exchange tries them if the plain forms fail.
+  pageAddresses: z.array(z.string().url().max(300).startsWith("https://")).max(4).optional(),
 });
 
 export async function completeEmbeddedSignup(
@@ -107,7 +110,7 @@ async function run(input: z.input<typeof schema>): Promise<EmbeddedSignupState> 
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Meta returned something unexpected." };
   }
-  const { code, label, counsellorId } = parsed.data;
+  const { code, label, counsellorId, pageAddresses } = parsed.data;
   let wabaId = parsed.data.wabaId;
   let phoneNumberId = parsed.data.phoneNumberId;
 
@@ -132,8 +135,9 @@ async function run(input: z.input<typeof schema>): Promise<EmbeddedSignupState> 
   }
 
   let accessToken: string;
+  let redirectForm = "none";
   try {
-    accessToken = await exchangeSignupCode(appId, appSecret, code);
+    ({ accessToken, redirectForm } = await exchangeSignupCodeWithFallbacks(appId, appSecret, code, pageAddresses ?? []));
   } catch (error) {
     if (error instanceof MetaGraphApiError) {
       return {
@@ -246,7 +250,7 @@ async function run(input: z.input<typeof schema>): Promise<EmbeddedSignupState> 
     entityId: created.id,
     // No token, obviously. The ids are not secret and are what somebody
     // needs to trace this back to the right account in Meta.
-    after: { phoneNumberId, wabaId, label, counsellorId, mode: "coexistence" },
+    after: { phoneNumberId, wabaId, label, counsellorId, mode: "coexistence", codeExchangedWith: redirectForm },
   });
 
   revalidatePath("/settings/integrations/whatsapp");
