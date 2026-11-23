@@ -18,7 +18,18 @@ const PLACEHOLDER = {
  * hidden `kind:lineId` field, so one Apply files every ticked line with its
  * own person.
  */
-export function PayeePicker({ kind, lineId }: { kind: PayeeKind; lineId: string }) {
+export function PayeePicker({
+  kind,
+  lineId,
+  hiddenName,
+  onPick,
+}: {
+  kind: PayeeKind;
+  lineId: string;
+  /** The form field to fill. Null means "do not send": the caller keeps the choice itself. */
+  hiddenName?: string | null;
+  onPick?: (option: PayeeOption | null) => void;
+}) {
   const [query, setQuery] = useState("");
   const [options, setOptions] = useState<PayeeOption[]>([]);
   const [picked, setPicked] = useState<PayeeOption | null>(null);
@@ -45,10 +56,17 @@ export function PayeePicker({ kind, lineId }: { kind: PayeeKind; lineId: string 
   if (picked) {
     return (
       <div className="flex items-center gap-2 text-sm">
-        <input type="hidden" name={`${kind}:${lineId}`} value={picked.id} />
+        {hiddenName !== null && <input type="hidden" name={hiddenName ?? `${kind}:${lineId}`} value={picked.id} />}
         <span className="font-medium">{picked.label}</span>
         <span className="text-xs text-muted-foreground">{picked.detail}</span>
-        <button type="button" className="text-xs underline" onClick={() => setPicked(null)}>
+        <button
+          type="button"
+          className="text-xs underline"
+          onClick={() => {
+            setPicked(null);
+            onPick?.(null);
+          }}
+        >
           Change
         </button>
       </div>
@@ -78,6 +96,7 @@ export function PayeePicker({ kind, lineId }: { kind: PayeeKind; lineId: string 
                 onClick={() => {
                   setPicked(o);
                   setOpen(false);
+                  onPick?.(o);
                 }}
               >
                 <span className="font-medium">{o.label}</span>

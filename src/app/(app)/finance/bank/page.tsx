@@ -5,7 +5,7 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { getBankAccounts, getPendingLines } from "@/lib/finance/bank-queries";
 import { SKIP_OPTIONS } from "@/lib/finance/bank-constants";
 import { getFinanceCenterId } from "@/lib/finance/center-filter";
-import { getFinanceCategories } from "@/lib/finance/get-finance";
+import { getAccounts, getFinanceCategories } from "@/lib/finance/get-finance";
 import { createClient } from "@/lib/supabase/server";
 
 import { ruleFromMetadata } from "@/lib/finance/category-links";
@@ -60,6 +60,22 @@ export default async function BankImportPage({
     );
   }
 
+  // The centres each account serves (main first), for the "which centre's money" choice.
+  const [{ data: centerRows }, { data: extraRows }] = await Promise.all([
+    supabase.from("centers").select("id, name").returns<Array<{ id: string; name: string }>>(),
+    supabase.from("finance_account_centers").select("account_id, center_id").returns<Array<{ account_id: string; center_id: string }>>(),
+  ]);
+  const centerName = new Map((centerRows ?? []).map((c) => [c.id, c.name]));
+  const accountCenters: Record<string, Array<{ id: string; name: string }>> = {};
+  for (const a of accounts) {
+    const ids = [a.centerId, ...(extraRows ?? []).filter((r) => r.account_id === a.id).map((r) => r.center_id)];
+    accountCenters[a.id] = ids.map((id) => ({ id, name: centerName.get(id) ?? "Centre" }));
+  }
+
+  const allAccounts = await getAccounts(supabase);
+  const moveAccounts = allAccounts.map((a) => ({ id: a.id, name: a.name, type: a.type }));
+  const gateways = allAccounts.filter((a) => a.type === "gateway").map((a) => ({ id: a.id, name: a.name }));
+
   const canImport = can(user, "bank.import");
   const canReconcile = can(user, "bank.reconcile");
   const accountNames = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
@@ -84,6 +100,9 @@ export default async function BankImportPage({
         page={page}
         pageSize={PAGE_SIZE}
         accountNames={accountNames}
+        accountCenters={accountCenters}
+        moveAccounts={moveAccounts}
+        gateways={gateways}
         accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
         filters={{ account: params.account ?? "", dir: params.dir ?? "", q: params.q ?? "" }}
         incomeCategories={categories.income.map((c) => ruleFromMetadata(c.label, c.metadata))}

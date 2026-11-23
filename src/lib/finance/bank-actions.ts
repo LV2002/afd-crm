@@ -7,9 +7,10 @@ import { z } from "zod";
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { bankStatementLines } from "@/lib/db/schema";
+import { bankStatementLines, financeAccounts } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 
+import { centersServedBy } from "./account-centers";
 import { assertAccountInScope } from "./account-scope";
 import { parseBankStatement, type ParsedStatement, type StatementLine } from "./bank-statement";
 import { parseBankPdf } from "./bank-statement-pdf";
@@ -20,7 +21,9 @@ import { SKIP_REASONS } from "./bank-constants";
 import { getFinanceCategories } from "./get-finance";
 import { resolveBankLines, saveStatementLines } from "./bank-ledger";
 import { ruleFromMetadata, type CategoryRule } from "./category-links";
-import { categoriseWithLinks } from "./categorise-links";
+import { categoriseWithLinks, commentFor } from "./categorise-links";
+import { addComment } from "./comments";
+import { moveLinesToAccount } from "./move-money";
 
 /**
  * Bank statement import and categorising.
@@ -270,6 +273,24 @@ const resolveSchema = z.object({
  * `pending`, so a second accountant clicking the same line a moment later
  * posts nothing rather than counting the money twice.
  */
+/** The per-line answers the form sends, keyed `kind:lineId`. */
+function lineAnswers(formData: FormData): Record<string, string> {
+  const answers: Record<string, string> = {};
+  for (const [key, value] of formData.entries()) {
+    if (/^(enrolment|student|payslip|period|comment|split|gateway|gatewayFee):/.test(key) && typeof value === "string") answers[key] = value;
+  }
+  return answers;
+}
+
+/** Writes each line's comment onto the entry the line produced. */
+async function attachComments(lineIds: string[], answers: Record<string, string>, userId: string | null): Promise<void> {
+  const rows = await db.select({ id: bankStatementLines.id, transactionId: bankStatementLines.transactionId }).from(bankStatementLines).where(inArray(bankStatementLines.id, lineIds));
+  for (const row of rows) {
+    const text = commentFor(answers, row.id);
+    if (text && row.transactionId) await addComment(db, { transactionId: row.transactionId, body: text, userId });
+  }
+}
+
 export async function categoriseLines(
   _prev: BankFormState,
   formData: FormData,
@@ -315,6 +336,43 @@ export async function categoriseLines(
   const supabase = await createClient();
   const user = await getCurrentUser();
 
+  // Moving money to or from another of our own accounts (a bank account, a
+  // payment gateway, a director account): not income or expense.
+  if (parsed.data.choice.startsWith("move:")) {
+    if (!user) return { error: "You need to be signed in." };
+    const otherId = parsed.data.choice.slice(5);
+    const scope = await assertAccountInScope(otherId, "finance.record");
+    if (!scope.ok) return { error: scope.error };
+    const [other] = await db.select({ name: financeAccounts.name }).from(financeAccounts).where(eq(financeAccounts.id, otherId));
+    let moved: number;
+    try {
+      moved = await db.transaction((tx) => moveLinesToAccount(tx, { lines, otherAccountId: otherId, userId: user.id }));
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "Could not record the move." };
+    }
+    await attachComments(lines.map((l) => l.id), lineAnswers(formData), user.id);
+    await writeAuditLog(supabase, {
+      actorId: user.id,
+      action: "finance.bank_move",
+      entityType: "bank_statement_lines",
+      entityId: lines[0].id,
+      after: { count: moved, otherAccountId: otherId },
+    });
+    revalidateBank();
+    return { success: `${moved} recorded as ${direction === "in" ? "from" : "to"} ${other?.name ?? "that account"}.` };
+  }
+
+  // For an account that serves several centres: which centre this money is
+  // for. It must be one the account serves; blank means its main centre.
+  const wantedCenter = String(formData.get("centerId") ?? "").trim() || null;
+  if (wantedCenter) {
+    for (const accountId of new Set(lines.map((l) => l.accountId))) {
+      const [account] = await db.select({ centerId: financeAccounts.centerId }).from(financeAccounts).where(eq(financeAccounts.id, accountId));
+      const served = account ? await centersServedBy(db, accountId, account.centerId) : [];
+      if (!served.includes(wantedCenter)) return { error: "One of those accounts is not set up for that centre." };
+    }
+  }
+
   let rule: CategoryRule = { label: parsed.data.choice, link: null, asksPeriod: false };
   if (!skipReason) {
     const categories = await getFinanceCategories(supabase);
@@ -331,11 +389,11 @@ export async function categoriseLines(
   let done: number;
   if (!skipReason && (rule.link || rule.asksPeriod)) {
     if (!user) return { error: "You need to be signed in." };
-    const answers: Record<string, string> = {};
-    for (const [key, value] of formData.entries()) {
-      if (/^(enrolment|student|payslip|period):/.test(key) && typeof value === "string") answers[key] = value;
-    }
-    const result = await categoriseWithLinks({ lines, direction, choice: parsed.data.choice, rule, actor: user, answers });
+    const answers = lineAnswers(formData);
+    const charge = (await getFinanceCategories(supabase)).expense.find((c) => c.value === "gateway_fees")?.label;
+    const result = await categoriseWithLinks({
+      lines, direction, choice: parsed.data.choice, rule, actor: user, answers, centerId: wantedCenter, chargeCategory: charge,
+    });
     if (!result.ok) return { error: result.error };
     done = result.done;
   } else {
@@ -346,9 +404,12 @@ export async function categoriseLines(
         choice: parsed.data.choice,
         skipReason,
         userId: user?.id ?? null,
+        centerId: wantedCenter,
       }),
     );
   }
+
+  if (!skipReason) await attachComments(lines.map((l) => l.id), lineAnswers(formData), user?.id ?? null);
 
   await writeAuditLog(supabase, {
     actorId: user!.id,
