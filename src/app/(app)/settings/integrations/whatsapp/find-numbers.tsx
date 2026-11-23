@@ -34,7 +34,7 @@ function FoundRow({ number, counsellors, onDone }: { number: FoundNumber; counse
         <Button
           size="sm"
           disabled={pending || !label.trim() || !counsellorId}
-          onClick={() => start(async () => onDone(await registerFoundNumber({ phoneNumberId: number.id, displayPhoneNumber: number.displayPhoneNumber, label, counsellorId })))}
+          onClick={() => start(async () => onDone(await registerFoundNumber({ phoneNumberId: number.id, wabaId: number.wabaId, displayPhoneNumber: number.displayPhoneNumber, label, counsellorId })))}
         >
           {pending ? "Adding…" : "Add as a counsellor's number"}
         </Button>
@@ -56,7 +56,7 @@ export function FindNumbers({ counsellors }: { counsellors: CounsellorOption[] }
       <div>
         <p className="font-medium">Find a number already connected in Meta</p>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          If Meta&rsquo;s window finished but the number didn&rsquo;t appear above, this asks your WhatsApp account which numbers it has that the CRM doesn&rsquo;t
+          If Meta&rsquo;s window finished but the number didn&rsquo;t appear above, this asks every WhatsApp account the saved token can see which numbers they have that the CRM doesn&rsquo;t
           know yet. It uses the saved access token, so Meta&rsquo;s connection window isn&rsquo;t needed.
         </p>
       </div>
