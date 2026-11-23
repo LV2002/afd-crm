@@ -132,7 +132,7 @@ export async function parseBankPdf(data: Uint8Array, password: string): Promise<
       verbosity: 0,
     }).promise;
   } catch (error) {
-    const e = error as { name?: string; code?: number };
+    const e = error as { name?: string; code?: number; message?: string };
     if (e?.name === "PasswordException") {
       return fail(
         e.code === 2
@@ -140,7 +140,14 @@ export async function parseBankPdf(data: Uint8Array, password: string): Promise<
           : "This statement is password protected. Enter its password next to the file.",
       );
     }
-    return fail("That doesn't look like a readable PDF. Download the statement again from net banking.");
+    // The library's own reason (never the file's contents or password) so a
+    // failure can be told apart: a damaged file, a missing server library, a
+    // file the library cannot parse.
+    console.error("bank statement PDF could not be opened", e?.name, e?.message);
+    const reason = [e?.name, e?.message].filter(Boolean).join(": ").slice(0, 200);
+    return fail(
+      `That doesn't look like a readable PDF. Download the statement again from net banking.${reason ? ` (Reader said: ${reason})` : ""}`,
+    );
   }
 
   const raw: RawTxn[] = [];
