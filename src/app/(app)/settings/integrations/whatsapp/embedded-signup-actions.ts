@@ -18,9 +18,11 @@ import { MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
 import {
   exchangeSignupCode,
   getPhoneNumberInfo,
+  listWabaPhoneNumbers,
   subscribeAppToWaba,
 } from "@/lib/integrations/whatsapp/client";
 import { createClient } from "@/lib/supabase/server";
+import { pickNewNumber } from "@/lib/whatsapp/pick-new-number";
 import { credentialsToSave } from "@/lib/whatsapp/signup-credentials";
 import { insertOrReviveNumber } from "@/lib/whatsapp/register-number";
 
@@ -65,10 +67,12 @@ export interface EmbeddedSignupState {
 const schema = z.object({
   code: z.string().trim().min(1, "Meta did not return an authorisation code."),
   wabaId: z.string().trim().regex(/^\d+$/, "Meta returned an account id that is not a number."),
+  // Optional: Meta's Coexistence finish can name the account without the number.
   phoneNumberId: z
     .string()
     .trim()
-    .regex(/^\d+$/, "Meta returned a phone number id that is not a number."),
+    .regex(/^\d+$/, "Meta returned a phone number id that is not a number.")
+    .optional(),
   label: z.string().trim().min(1, "Give the number a label you will recognise.").max(120),
   counsellorId: z.string().uuid("Choose whose phone this is."),
 });
@@ -100,7 +104,8 @@ async function run(input: z.input<typeof schema>): Promise<EmbeddedSignupState> 
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Meta returned something unexpected." };
   }
-  const { code, wabaId, phoneNumberId, label, counsellorId } = parsed.data;
+  const { code, wabaId, label, counsellorId } = parsed.data;
+  let phoneNumberId = parsed.data.phoneNumberId;
 
   const appId = await getIntegrationCredential("whatsapp", "app_id");
   const appSecret = await getIntegrationCredential("whatsapp", "app_secret");
@@ -112,12 +117,14 @@ async function run(input: z.input<typeof schema>): Promise<EmbeddedSignupState> 
 
   // Registered already? Say so before spending the single-use code, so
   // the person is not told to run the dialog again over a duplicate.
-  const [clash] = await db
-    .select({ label: whatsappNumbers.label })
-    .from(whatsappNumbers)
-    .where(and(eq(whatsappNumbers.phoneNumberId, phoneNumberId), isNull(whatsappNumbers.deletedAt)));
-  if (clash) {
-    return { error: `That number is already registered here as "${clash.label}".` };
+  if (phoneNumberId) {
+    const [clash] = await db
+      .select({ label: whatsappNumbers.label })
+      .from(whatsappNumbers)
+      .where(and(eq(whatsappNumbers.phoneNumberId, phoneNumberId), isNull(whatsappNumbers.deletedAt)));
+    if (clash) {
+      return { error: `That number is already registered here as "${clash.label}".` };
+    }
   }
 
   let accessToken: string;
@@ -130,6 +137,37 @@ async function run(input: z.input<typeof schema>): Promise<EmbeddedSignupState> 
       };
     }
     throw error;
+  }
+
+  // Meta's Coexistence finish may name the account but not the number. Ask the
+  // account which numbers it has and take the one the CRM does not know.
+  if (!phoneNumberId) {
+    let onAccount;
+    try {
+      onAccount = await listWabaPhoneNumbers(wabaId, accessToken);
+    } catch (error) {
+      return {
+        error:
+          error instanceof MetaGraphApiError
+            ? `Meta connected the account but would not list its phone numbers: ${error.message}`
+            : "Meta connected the account but its phone numbers could not be read.",
+      };
+    }
+    const registered = await db
+      .select({ id: whatsappNumbers.phoneNumberId })
+      .from(whatsappNumbers)
+      .where(isNull(whatsappNumbers.deletedAt));
+    const apiId = await getIntegrationCredential("whatsapp", "phone_number_id");
+    const { chosen, candidates } = pickNewNumber(onAccount, [...registered.map((r) => r.id), apiId]);
+    if (!chosen) {
+      return {
+        error:
+          candidates.length === 0
+            ? "Meta finished connecting, but the account has no phone number the CRM does not already know. If the number was added in Meta, wait a minute and run the check, or add it with its Phone Number ID in the form below."
+            : `Meta finished connecting, but the account has several unregistered numbers (${candidates.map((c) => `${c.displayPhoneNumber ?? "?"} (ID ${c.id})`).join(", ")}). Add the right one with its Phone Number ID in the form below.`,
+      };
+    }
+    phoneNumberId = chosen.id;
   }
 
   // Leave the institute's saved credentials alone: they belong to the API

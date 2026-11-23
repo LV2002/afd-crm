@@ -408,3 +408,17 @@ export async function fetchWabaSubscribedApps(wabaId: string, accessToken: strin
     return id ? [id] : [];
   });
 }
+
+/** The phone numbers on a WhatsApp Business Account. Used to find the number a Coexistence signup just attached. */
+export async function listWabaPhoneNumbers(
+  wabaId: string,
+  accessToken: string,
+): Promise<Array<{ id: string; displayPhoneNumber: string | null }>> {
+  const url = new URL(`${GRAPH_BASE_URL}/${wabaId}/phone_numbers`);
+  url.searchParams.set("fields", "id,display_phone_number");
+  url.searchParams.set("limit", "50");
+  const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" });
+  const body = (await response.json()) as { data?: Array<{ id?: string; display_phone_number?: string }> };
+  if (!response.ok) throw new MetaGraphApiError(`Meta returned ${response.status} listing the account's phone numbers`, response.status, body);
+  return (body.data ?? []).flatMap((n) => (n.id ? [{ id: n.id, displayPhoneNumber: n.display_phone_number ?? null }] : []));
+}
