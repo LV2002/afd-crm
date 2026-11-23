@@ -16,10 +16,10 @@ export interface AccountNumber {
   wabaId?: string;
 }
 
-export function pickNewNumber(
-  onAccount: AccountNumber[],
+export function pickNewNumber<T extends AccountNumber>(
+  onAccount: T[],
   alreadyKnownIds: Array<string | null | undefined>,
-): { chosen: AccountNumber | null; candidates: AccountNumber[] } {
+): { chosen: T | null; candidates: T[] } {
   const known = new Set(alreadyKnownIds.filter((id): id is string => Boolean(id)));
   const candidates = onAccount.filter((n) => !known.has(n.id));
   return { chosen: candidates.length === 1 ? candidates[0] : null, candidates };

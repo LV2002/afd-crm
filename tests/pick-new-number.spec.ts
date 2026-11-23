@@ -22,6 +22,13 @@ describe("pickNewNumber", () => {
   });
 });
 
+describe("pickNewNumber keeps whatever else is on the number", () => {
+  it("returns the original objects, extra fields included", () => {
+    const { candidates } = pickNewNumber([{ id: "9", displayPhoneNumber: "+91 9", verifiedName: "AFD" }], []);
+    expect(candidates[0].verifiedName).toBe("AFD");
+  });
+});
+
 describe("signupEventName", () => {
   it("reads the event of any Embedded Signup message, as an object or a JSON string", () => {
     expect(signupEventName({ type: "WA_EMBEDDED_SIGNUP", event: "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING" })).toBe("FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING");

@@ -485,14 +485,16 @@ export async function fetchWabaSubscribedApps(wabaId: string, accessToken: strin
 export async function listWabaPhoneNumbers(
   wabaId: string,
   accessToken: string,
-): Promise<Array<{ id: string; displayPhoneNumber: string | null }>> {
+): Promise<Array<{ id: string; displayPhoneNumber: string | null; verifiedName: string | null }>> {
   const url = new URL(`${GRAPH_BASE_URL}/${wabaId}/phone_numbers`);
-  url.searchParams.set("fields", "id,display_phone_number");
+  url.searchParams.set("fields", "id,display_phone_number,verified_name");
   url.searchParams.set("limit", "50");
   const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" });
-  const body = (await response.json()) as { data?: Array<{ id?: string; display_phone_number?: string }> };
+  const body = (await response.json()) as { data?: Array<{ id?: string; display_phone_number?: string; verified_name?: string }> };
   if (!response.ok) throw new MetaGraphApiError(`Meta returned ${response.status} listing the account's phone numbers`, response.status, body);
-  return (body.data ?? []).flatMap((n) => (n.id ? [{ id: n.id, displayPhoneNumber: n.display_phone_number ?? null }] : []));
+  return (body.data ?? []).flatMap((n) =>
+    n.id ? [{ id: n.id, displayPhoneNumber: n.display_phone_number ?? null, verifiedName: n.verified_name ?? null }] : [],
+  );
 }
 
 /**
