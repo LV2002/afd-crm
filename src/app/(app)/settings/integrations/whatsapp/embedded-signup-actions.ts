@@ -19,10 +19,11 @@ import {
   exchangeSignupCode,
   getPhoneNumberInfo,
   listWabaPhoneNumbers,
+  wabaIdsForToken,
   subscribeAppToWaba,
 } from "@/lib/integrations/whatsapp/client";
 import { createClient } from "@/lib/supabase/server";
-import { pickNewNumber } from "@/lib/whatsapp/pick-new-number";
+import { pickNewNumber, type AccountNumber } from "@/lib/whatsapp/pick-new-number";
 import { credentialsToSave } from "@/lib/whatsapp/signup-credentials";
 import { insertOrReviveNumber } from "@/lib/whatsapp/register-number";
 
@@ -66,7 +67,9 @@ export interface EmbeddedSignupState {
 
 const schema = z.object({
   code: z.string().trim().min(1, "Meta did not return an authorisation code."),
-  wabaId: z.string().trim().regex(/^\d+$/, "Meta returned an account id that is not a number."),
+  // Optional: Meta's finish message sometimes never arrives. The code alone is
+  // enough, because the token it becomes names the account it was granted.
+  wabaId: z.string().trim().regex(/^\d+$/, "Meta returned an account id that is not a number.").optional(),
   // Optional: Meta's Coexistence finish can name the account without the number.
   phoneNumberId: z
     .string()
@@ -104,7 +107,8 @@ async function run(input: z.input<typeof schema>): Promise<EmbeddedSignupState> 
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Meta returned something unexpected." };
   }
-  const { code, wabaId, label, counsellorId } = parsed.data;
+  const { code, label, counsellorId } = parsed.data;
+  let wabaId = parsed.data.wabaId;
   let phoneNumberId = parsed.data.phoneNumberId;
 
   const appId = await getIntegrationCredential("whatsapp", "app_id");
@@ -139,36 +143,52 @@ async function run(input: z.input<typeof schema>): Promise<EmbeddedSignupState> 
     throw error;
   }
 
-  // Meta's Coexistence finish may name the account but not the number. Ask the
-  // account which numbers it has and take the one the CRM does not know.
-  if (!phoneNumberId) {
-    let onAccount;
+  // Meta's finish message may be missing entirely, or may name the account
+  // but not the number. Work out whatever is missing from the account itself:
+  // which accounts the token was granted, then which numbers they hold that
+  // the CRM does not already know. Exactly one is the answer; never a guess.
+  if (!wabaId || !phoneNumberId) {
+    let accounts: string[];
     try {
-      onAccount = await listWabaPhoneNumbers(wabaId, accessToken);
+      accounts = wabaId ? [wabaId] : await wabaIdsForToken(appId, appSecret, accessToken);
     } catch (error) {
       return {
         error:
           error instanceof MetaGraphApiError
-            ? `Meta connected the account but would not list its phone numbers: ${error.message}`
-            : "Meta connected the account but its phone numbers could not be read.",
+            ? `Meta gave a code but would not say which account it connected: ${error.message}`
+            : "Meta gave a code but which account it connected could not be read.",
       };
+    }
+    if (accounts.length === 0) {
+      return { error: "Meta gave a code but the connection includes no WhatsApp account. In Meta's app, check that the Embedded Signup configuration includes WhatsApp accounts and the WhatsApp permissions." };
+    }
+
+    const found: AccountNumber[] = [];
+    for (const account of accounts) {
+      try {
+        for (const n of await listWabaPhoneNumbers(account, accessToken)) found.push({ ...n, wabaId: account });
+      } catch {
+        // One unreadable account must not hide the others.
+      }
     }
     const registered = await db
       .select({ id: whatsappNumbers.phoneNumberId })
       .from(whatsappNumbers)
       .where(isNull(whatsappNumbers.deletedAt));
     const apiId = await getIntegrationCredential("whatsapp", "phone_number_id");
-    const { chosen, candidates } = pickNewNumber(onAccount, [...registered.map((r) => r.id), apiId]);
+    const { chosen, candidates } = pickNewNumber(found, [...registered.map((r) => r.id), apiId]);
     if (!chosen) {
       return {
         error:
           candidates.length === 0
-            ? "Meta finished connecting, but the account has no phone number the CRM does not already know. If the number was added in Meta, wait a minute and run the check, or add it with its Phone Number ID in the form below."
-            : `Meta finished connecting, but the account has several unregistered numbers (${candidates.map((c) => `${c.displayPhoneNumber ?? "?"} (ID ${c.id})`).join(", ")}). Add the right one with its Phone Number ID in the form below.`,
+            ? "Meta connected the account, but it has no phone number the CRM does not already know. If the number was added in Meta, wait a minute and try again, or add it with its Phone Number ID in the form below."
+            : `Meta connected the account, but it has several unregistered numbers (${candidates.map((c) => `${c.displayPhoneNumber ?? "?"} (ID ${c.id})`).join(", ")}). Add the right one with its Phone Number ID in the form below.`,
       };
     }
     phoneNumberId = chosen.id;
+    wabaId = chosen.wabaId ?? wabaId;
   }
+  if (!wabaId || !phoneNumberId) return { error: "Could not work out which number was connected." };
 
   // Leave the institute's saved credentials alone: they belong to the API
   // number every broadcast sends from. Only a missing value is filled in.
