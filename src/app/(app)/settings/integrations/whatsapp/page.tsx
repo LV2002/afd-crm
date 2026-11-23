@@ -7,6 +7,7 @@ import { countLiveWhatsAppMessages } from "@/lib/whatsapp/clear-messages";
 import { createClient } from "@/lib/supabase/server";
 
 import { getEmbeddedSignupSettings, getWhatsAppConnectionStatus } from "./actions";
+import { FindNumbers } from "./find-numbers";
 import { CoexistenceCheck } from "./coexistence-check";
 import { ClearMessagesPanel } from "./clear-messages-panel";
 import { ResetIntegrationPanel } from "./reset-integration-panel";
@@ -134,6 +135,8 @@ export default async function WhatsAppIntegrationPage() {
           configId={embeddedSignup.configId}
           counsellors={counsellors}
         />
+
+        <FindNumbers counsellors={counsellors} />
 
         {/*
           Said here rather than buried in the manual, because it is the

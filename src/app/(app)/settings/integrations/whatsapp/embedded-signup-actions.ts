@@ -150,7 +150,7 @@ async function run(input: z.input<typeof schema>): Promise<EmbeddedSignupState> 
           (domainRefused
             ? `Code 191 means ${host} is not listed as one of the app's domains: in the Meta app go to App settings → Basic, add ${host} under App Domains (no https://, no slash), save, and connect again. `
             : "Code 36008 means the address the popup used did not match any form the CRM tried. ") +
-          "Send this whole message to whoever is helping you.",
+          "The number may still have connected inside Meta. Use \"Look for numbers\" just below to find it and register it without this step.",
       };
     }
     if (error instanceof MetaGraphApiError) {
