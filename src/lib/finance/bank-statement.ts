@@ -230,6 +230,9 @@ function neighbourYear(rows: string[][], at: number, dateCol: number): number | 
   return null;
 }
 
+/** How far down to look for the header: some banks put an address and account block above it. */
+const HEADER_SEARCH_ROWS = 40;
+
 export function parseBankStatement(csvText: string): ParsedStatement {
   const result = Papa.parse<string[]>(csvText.replace(/^﻿/, ""), {
     skipEmptyLines: false,
@@ -238,7 +241,7 @@ export function parseBankStatement(csvText: string): ParsedStatement {
 
   let columns: Columns | null = null;
   let headerAt = -1;
-  for (let i = 0; i < Math.min(rows.length, 15); i++) {
+  for (let i = 0; i < Math.min(rows.length, HEADER_SEARCH_ROWS); i++) {
     const found = findColumns(rows[i]);
     if (found) {
       columns = found;

@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/server";
 import { assertAccountInScope } from "./account-scope";
 import { parseBankStatement, type ParsedStatement, type StatementLine } from "./bank-statement";
 import { parseBankPdf } from "./bank-statement-pdf";
+import { looksLikeXls, xlsToCsv, XlsReadError } from "./bank-statement-xls";
 import { autoMatchAccount } from "./reconcile";
 import { checkContinuity, chronological } from "./bank-continuity";
 import { SKIP_REASONS } from "./bank-constants";
@@ -92,9 +93,9 @@ export async function previewStatement(
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "Choose the statement file." };
   if (file.size > MAX_FILE_BYTES) return { error: "That file is over 3 MB — export a shorter period." };
-  if (/\.xlsx?$/i.test(file.name)) {
+  if (/\.xlsx$/i.test(file.name)) {
     return {
-      error: "Upload the statement as a PDF or CSV. In Excel use File → Save As → CSV.",
+      error: "Newer Excel (.xlsx) files aren't read yet. Upload the statement as .xls, PDF or CSV — in Excel use File → Save As → CSV.",
     };
   }
 
@@ -102,9 +103,19 @@ export async function previewStatement(
   // and the password is used once to open it and goes no further.
   const bytes = new Uint8Array(await file.arrayBuffer());
   const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
-  const parsed: ParsedStatement = isPdf
-    ? await parseBankPdf(bytes, String(formData.get("password") ?? ""))
-    : parseBankStatement(new TextDecoder().decode(bytes));
+  let parsed: ParsedStatement;
+  if (isPdf) {
+    parsed = await parseBankPdf(bytes, String(formData.get("password") ?? ""));
+  } else if (looksLikeXls(bytes)) {
+    try {
+      parsed = parseBankStatement(xlsToCsv(bytes));
+    } catch (error) {
+      if (error instanceof XlsReadError) return { error: error.message };
+      throw error;
+    }
+  } else {
+    parsed = parseBankStatement(new TextDecoder().decode(bytes));
+  }
   if (parsed.error) return { error: parsed.error };
   if (parsed.lines.length === 0) return { error: "No transactions were found in that file." };
   if (parsed.lines.length > MAX_LINES) {
