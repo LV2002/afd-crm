@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 
 import { FormMessage } from "@/components/layout/form-message";
 import { Badge } from "@/components/ui/badge";
@@ -15,8 +15,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { categoriseLines, type BankFormState } from "@/lib/finance/bank-actions";
+import { monthOf, type CategoryRule } from "@/lib/finance/category-links";
 import type { PendingLine } from "@/lib/finance/bank-queries";
 import { formatINR } from "@/lib/format/currency";
+
+import { PayeePicker, type PayeeKind } from "./payee-picker";
 
 const initial: BankFormState = {};
 
@@ -28,8 +31,8 @@ interface Props {
   accountNames: Record<string, string>;
   accounts: Array<{ id: string; name: string }>;
   filters: { account: string; dir: string; q: string };
-  incomeCategories: string[];
-  expenseCategories: string[];
+  incomeCategories: CategoryRule[];
+  expenseCategories: CategoryRule[];
   skipOptions: Array<{ value: string; label: string }>;
 }
 
@@ -54,6 +57,12 @@ export function PendingQueue(props: Props) {
   const mixed = kinds.size > 1;
   const direction = kinds.size === 1 ? [...kinds][0] : null;
   const options = direction === "in" ? props.incomeCategories : props.expenseCategories;
+  const [choice, setChoice] = useState("");
+  // A category from the other side (income vs expense) means nothing once the ticks change kind.
+  useEffect(() => setChoice(""), [direction]);
+  const rule = options.find((o) => o.label === choice) ?? null;
+  const pickerKind: PayeeKind | null =
+    rule?.link === "enrolment" ? "enrolment" : rule?.link === "student" ? "student" : rule?.link === "employee" ? "payslip" : null;
   const selectedTotal = selected.reduce((s, l) => s + l.amountPaise, 0);
 
   const toggle = (id: string) =>
@@ -121,10 +130,8 @@ export function PendingQueue(props: Props) {
       </form>
 
       {lines.length > 0 && (
-        <form
-          action={action}
-          className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border bg-background p-3"
-        >
+        <form action={action} className="flex flex-col gap-3">
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border bg-background p-3">
           {selected.map((l) => (
             <input key={l.id} type="hidden" name="ids" value={l.id} />
           ))}
@@ -142,7 +149,8 @@ export function PendingQueue(props: Props) {
             name="choice"
             required
             disabled={selected.length === 0 || mixed}
-            defaultValue=""
+            value={choice}
+            onChange={(e) => setChoice(e.target.value)}
             key={direction ?? "none"}
             className="h-9 min-w-56 rounded-md border bg-background px-3 text-sm"
           >
@@ -152,8 +160,8 @@ export function PendingQueue(props: Props) {
             {direction && (
               <optgroup label={direction === "in" ? "Income" : "Expense"}>
                 {options.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
+                  <option key={c.label} value={c.label}>
+                    {c.label}
                   </option>
                 ))}
               </optgroup>
@@ -172,6 +180,40 @@ export function PendingQueue(props: Props) {
             {pending ? "Saving…" : "Apply"}
           </Button>
           <FormMessage error={state.error} success={state.success} />
+        </div>
+
+        {rule && selected.length > 0 && (pickerKind || rule.asksPeriod) && (
+          <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
+            <p className="text-sm font-medium">
+              {pickerKind === "enrolment" && "Whose fee is each of these? It is recorded on that student's profile, with a receipt."}
+              {pickerKind === "student" && "Which student is each of these from?"}
+              {pickerKind === "payslip" && "Whose salary is each of these? Their payslip is marked paid, and shows as verified because the bank line proves it."}
+              {!pickerKind && "Which month is each of these for?"}
+            </p>
+            {selected.map((l) => (
+              <div key={l.id} className="flex flex-wrap items-center gap-3 border-t pt-2 first:border-t-0 first:pt-0">
+                <div className="w-64 text-sm">
+                  <div className="truncate" title={l.particulars}>{l.particulars}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {l.occurredOn} · {formatINR(l.amountPaise)}
+                  </div>
+                </div>
+                {pickerKind && <PayeePicker key={`${pickerKind}-${l.id}`} kind={pickerKind} lineId={l.id} />}
+                {rule.asksPeriod && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">For the month of</span>
+                    <input
+                      type="month"
+                      name={`period:${l.id}`}
+                      defaultValue={monthOf(l.occurredOn)}
+                      className="h-9 rounded-md border bg-background px-2 text-sm"
+                    />
+                  </label>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         </form>
       )}
 

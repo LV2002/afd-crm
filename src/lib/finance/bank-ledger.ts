@@ -1,9 +1,11 @@
 import { and, eq, sql } from "drizzle-orm";
 
 import type { DbExecutor } from "@/lib/db/client";
+import { recordPayment } from "@/lib/enrolment/record-payment";
 import { bankMatches, bankStatementLines } from "@/lib/db/schema";
 
 import type { StatementLine } from "./bank-statement";
+import { methodFromNarration } from "./category-links";
 import { postEntry } from "./post";
 
 /**
@@ -48,6 +50,17 @@ export async function saveStatementLines(
   return inserted.length;
 }
 
+/** Who or what a categorised line is for. Which of these a category needs is the category's own setting. */
+export interface LineLink {
+  /** A student's fee: recorded as a payment on their profile, with a receipt, as well as in the books. */
+  enrolmentId?: string;
+  /** Tagged to a student with no fee record (a fine, a workshop). */
+  studentId?: string;
+  studentName?: string;
+  /** The month the money is for, 'YYYY-MM'. */
+  period?: string | null;
+}
+
 /**
  * Categorises lines, or sets them aside, inside the caller's transaction.
  *
@@ -65,6 +78,8 @@ export async function resolveBankLines(
     choice: string;
     skipReason: string | null;
     userId: string | null;
+    /** Per line, by line id. */
+    links?: Record<string, LineLink>;
   },
 ): Promise<number> {
   let done = 0;
@@ -93,17 +108,44 @@ export async function resolveBankLines(
         note: input.skipReason,
       });
     } else {
-      const posted = await postEntry(tx, {
-        occurredOn: line.occurredOn,
-        direction: input.direction,
-        kind: input.direction === "in" ? "other_income" : "expense",
-        accountId: line.accountId,
-        category: input.choice,
-        amountPaise: line.amountPaise,
-        description: line.note ? `${line.particulars} — ${line.note}` : line.particulars,
-        recordedBy: input.userId,
-        source: "bank_statement",
-      });
+      const link = input.links?.[line.id];
+      let postedId: string;
+      if (link?.enrolmentId && input.direction === "in") {
+        // A student's fee. recordPayment writes the payment, the receipt and
+        // the ledger entry together, so the student's profile and the books
+        // agree, and the first one opens their record (the accounts-to-
+        // academics gate) exactly as a payment typed in by hand would.
+        const paid = await recordPayment(tx, {
+          enrolmentId: link.enrolmentId,
+          amountPaise: line.amountPaise,
+          method: methodFromNarration(line.particulars),
+          reference: line.particulars.slice(0, 120),
+          recordedBy: input.userId,
+          accountId: line.accountId,
+          // The day the bank says it arrived, not the day somebody reconciled it.
+          receivedAt: new Date(`${line.occurredOn}T12:00:00+05:30`),
+          category: input.choice,
+        });
+        if (!paid.financeTransactionId) throw new Error("The payment was recorded but its ledger entry was not.");
+        postedId = paid.financeTransactionId;
+      } else {
+        const posted = await postEntry(tx, {
+          occurredOn: line.occurredOn,
+          direction: input.direction,
+          kind: input.direction === "in" ? "other_income" : "expense",
+          accountId: line.accountId,
+          category: input.choice,
+          amountPaise: line.amountPaise,
+          description: line.note ? `${line.particulars} — ${line.note}` : line.particulars,
+          studentId: link?.studentId ?? null,
+          studentName: link?.studentName ?? null,
+          period: link?.period ?? null,
+          recordedBy: input.userId,
+          source: "bank_statement",
+        });
+        postedId = posted.id;
+      }
+      const posted = { id: postedId };
       await tx
         .update(bankStatementLines)
         .set({ transactionId: posted.id })

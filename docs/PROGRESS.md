@@ -9144,3 +9144,12 @@ HDFC (and other banks) download statements as .xls. `src/lib/finance/bank-statem
 
 ### Finance centre choice no longer snaps back to Kannur
 Choosing "All centres" deleted the `finance_center` cookie without naming its `/finance` path, so the old centre stayed. All centres is now stored as the value `all`, every choice is written at `/finance`, and the choice is a session cookie, so each new visit starts at All centres.
+
+### Bank reconciliation: say whose money it is (student, employee, month)
+When bank lines are categorised, the category decides what is asked, per line:
+- **Course Fees / Pre-booking / Token** (`links: enrolment`) — pick the student's admission. The line becomes a real payment on their profile with a receipt (`recordPayment`, dated by the bank), the ledger entry is tied to it, and the first payment opens the student's record (accounts → academics gate). Admissions still awaiting a first payment are listed, which covers pre-bookings.
+- **Workshop / Late Fee** (`links: student`) — pick the student; the ledger entry carries their id and name. No fee record.
+- **Salaries** (`links: employee`) — pick the employee's payslip; `payFromBankLine` pays it, so the HR portal shows it as paid and verified only because a bank line proves it. A salary recorded by hand stays "recorded" until it is matched, as before.
+- **Rent, GST & Taxes, Google/Meta Ads, electricity, phone, software** (`asksPeriod`) — an optional "for the month of" field, stored as `finance_transactions.period` ('YYYY-MM'). `occurred_on` stays the day cash moved, so the bank still agrees. Defaults to the month of the bank date.
+A batch is all-or-nothing. Permissions: student fees need `payment.record` (with its centre/own scope), salaries need `payroll.generate`.
+Settings live on the category's `dropdown_options.metadata` (`links`, `asksPeriod`); migration 0140 sets them and adds Course Fees, Pre-booking / Token and GST & Taxes. **Not built yet:** an admin screen for those two settings (change them in the database for now), and reports that group by `period`.
