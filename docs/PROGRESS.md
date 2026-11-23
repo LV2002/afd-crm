@@ -9135,3 +9135,11 @@ A counsellor's Coexistence number is often on a different WhatsApp Business Acco
 
 ### "Look for numbers" can be pointed at a typed WhatsApp account ID
 Meta's token inspection did not list a newly assigned account, so the panel has an optional account-ID box; that account is searched in addition to the saved one and any the token lists. If Meta refuses it, the message says to generate a fresh system-user token.
+
+### OPEN: Simi Manoj's Coexistence number is registered but no messages arrive (paused 2026-11-23)
+State: number +91 98954 84652 is registered in the CRM as Coexistence, owned by Simi Manoj, on WhatsApp account "afdindia" (ID 827478374391335, a different account from the API number's). The CRM system user "AFD CRM Sync" has full access to it. "Run the check" is green except the per-number lines (no student messages, no phone-sent echoes, no history). Test messages sent to her number did not appear in Chats.
+
+To do when Simi's phone is available:
+1. On her phone (WhatsApp Business app, green "B"): confirm chats are intact, then connect for Coexistence from the phone (Settings → Business tools → Cloud API / connect → scan Meta's QR, say **yes** to history). A number added only from Meta's side behaves as a plain API number.
+2. Run the check, scroll to "Recent deliveries" and note any "unregistered" webhook for her phone_number_id.
+3. Build: the check's "App subscribed to the WhatsApp Business Account" line only tests the API number's account. Store each number's WABA ID and have the check test and subscribe every registered number's account (needs a small migration).
