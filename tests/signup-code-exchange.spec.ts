@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { exchangeSignupCodeWithFallbacks, isRedirectUriMismatch } from "../src/lib/integrations/whatsapp/client";
+import { exchangeSignupCodeWithFallbacks, isRedirectUriMismatch, RedirectExchangeError } from "../src/lib/integrations/whatsapp/client";
 import { MetaGraphApiError } from "../src/lib/integrations/meta/graph-client";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -49,9 +49,34 @@ describe("exchangeSignupCodeWithFallbacks", () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it("throws the last refusal when every form is mismatched", async () => {
-    const fn = stub([{ ok: false, body: mismatch }, { ok: false, body: mismatch }]);
-    await expect(exchangeSignupCodeWithFallbacks("app", "secret", "code")).rejects.toThrow(/36008|redirect_uri/i);
-    expect(fn).toHaveBeenCalledTimes(2);
+  it("tries every form when all are refused, and reports what Meta said to each", async () => {
+    const domain = { error: { message: "Can't load URL", code: 191 } };
+    const fn = stub([{ ok: false, body: mismatch }, { ok: false, body: mismatch }, { ok: false, body: domain }, { ok: false, body: domain }]);
+    const error = await exchangeSignupCodeWithFallbacks("app", "secret", "code", ["https://crm.example/settings"]).catch((e) => e);
+    expect(error).toBeInstanceOf(RedirectExchangeError);
+    expect(fn).toHaveBeenCalledTimes(4);
+    expect(error.outcomes).toEqual([
+      "none → code 100/36008",
+      "empty → code 100/36008",
+      "https://crm.example/settings → code 191",
+      "https://www.facebook.com/connect/login_success.html → code 191",
+    ]);
+  });
+
+  it("continues past a code 191 (that form's domain not allowed) to the next form", async () => {
+    const fn = stub([{ ok: false, body: mismatch }, { ok: false, body: mismatch }, { ok: false, body: { error: { code: 191, message: "x" } } }, { ok: true, body: ok }]);
+    const result = await exchangeSignupCodeWithFallbacks("app", "secret", "code", ["https://crm.example/a"]);
+    expect(result.redirectForm).toBe("https://www.facebook.com/connect/login_success.html");
+    expect(fn).toHaveBeenCalledTimes(4);
+  });
+});
+
+import { isAppDomainError } from "../src/lib/integrations/whatsapp/client";
+
+describe("isAppDomainError", () => {
+  it("recognises Meta's code 191 (domain not in the app's domains), whatever language it is worded in", () => {
+    expect(isAppDomainError(new MetaGraphApiError("x", 400, { error: { message: "URL लोड करू शकत नाही", code: 191 } }))).toBe(true);
+    expect(isAppDomainError(new MetaGraphApiError("x", 400, mismatch))).toBe(false);
+    expect(isAppDomainError(new Error("nope"))).toBe(false);
   });
 });
