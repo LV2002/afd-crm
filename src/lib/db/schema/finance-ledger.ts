@@ -160,6 +160,14 @@ export const financeTransactions = pgTable(
     studentName: text("student_name"),
     course: text("course"),
 
+    /**
+     * The month this money is FOR, as 'YYYY-MM', when that is not the month
+     * it moved: October's GST paid in November, this month's rent paid on
+     * the 3rd of next. Optional, and set by whoever categorises the line.
+     * `occurred_on` stays the day the cash moved, so the bank still agrees.
+     */
+    period: text("period"),
+
     /** The two legs of one transfer share this, so they can be shown as a pair. */
     transferGroupId: uuid("transfer_group_id"),
 
