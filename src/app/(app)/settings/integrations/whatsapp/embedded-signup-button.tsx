@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import {
   isTrustedSignupOrigin,
   parseSignupMessage,
+  signupEventName,
   signupLoginOptions,
   type SignupFinished,
 } from "@/lib/integrations/whatsapp/embedded-signup";
@@ -87,6 +88,9 @@ export function EmbeddedSignupButton({
   // otherwise read the values as they were on that render for ever.
   const finishedRef = useRef<SignupFinished | null>(null);
   const codeRef = useRef<string | null>(null);
+  // What Meta actually said, kept so a silent failure can be explained.
+  const eventsRef = useRef<string[]>([]);
+  const submittedRef = useRef(false);
   const detailsRef = useRef({ label: "", counsellorId: "" });
   detailsRef.current = { label, counsellorId };
 
@@ -95,15 +99,8 @@ export function EmbeddedSignupButton({
     const code = codeRef.current;
     if (!finished || !code) return;
 
-    if (!finished.phoneNumberId) {
-      setState({
-        error:
-          "Meta connected the WhatsApp Business Account but did not add a phone number to it. Run this again and complete the number step.",
-      });
-      return;
-    }
-
     // Single-use: clear before firing so a second message cannot replay it.
+    submittedRef.current = true;
     finishedRef.current = null;
     codeRef.current = null;
 
@@ -112,7 +109,9 @@ export function EmbeddedSignupButton({
       const result = await completeEmbeddedSignup({
         code,
         wabaId: finished.wabaId,
-        phoneNumberId: finished.phoneNumberId as string,
+        // Meta's Coexistence finish may not name the number; the server then
+        // finds it on the account.
+        phoneNumberId: finished.phoneNumberId ?? undefined,
         label: currentLabel,
         counsellorId: currentCounsellor,
       });
@@ -127,6 +126,9 @@ export function EmbeddedSignupButton({
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       if (!isTrustedSignupOrigin(event.origin)) return;
+
+      const eventName = signupEventName(event.data);
+      if (eventName) eventsRef.current.push(eventName);
 
       const message = parseSignupMessage(event.data);
       if (!message) return;
@@ -157,9 +159,31 @@ export function EmbeddedSignupButton({
     setState(initialState);
     finishedRef.current = null;
     codeRef.current = null;
+    eventsRef.current = [];
+    submittedRef.current = false;
 
     window.FB.login((response) => {
       const code = response?.authResponse?.code;
+      // The window has closed. Give the finish message a few seconds to
+      // arrive; if the connection still has not gone through, say exactly
+      // what Meta did and did not send, instead of closing without a word.
+      setTimeout(() => {
+        if (submittedRef.current) return;
+        setState((previous) => {
+          const events = eventsRef.current;
+          // A deliberate cancel, or an outcome already shown, is not a silent failure.
+          if (previous.error || previous.success || events.includes("CANCEL")) return previous;
+          return {
+            error:
+              `The window closed but the connection did not complete. What Meta sent: authorisation code ${codeRef.current ? "yes" : "no"}; ` +
+              `finish message ${events.length ? events.join(", ") : "none"}. ` +
+              (codeRef.current
+                ? "Meta gave a code but never said which account was connected."
+                : "Meta gave no authorisation code, so nothing could be saved. In Meta's app, check the Embedded Signup configuration and that this site is an allowed domain.") +
+              " Send this line to whoever is helping you.",
+          };
+        });
+      }, 8000);
       if (!code) {
         // No code and no message either way means they closed the window.
         // Said softly: it is not a failure, and the popup blocker is the

@@ -162,3 +162,23 @@ export function signupLoginOptions(configId: string): Record<string, unknown> {
     },
   };
 }
+
+/**
+ * The event name of any Embedded Signup message, recognised or not — for
+ * telling a person what Meta actually reported when the flow does not
+ * complete. Null for anything that is not an Embedded Signup message.
+ */
+export function signupEventName(raw: unknown): string | null {
+  let payload: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof payload !== "object" || payload === null) return null;
+  const message = payload as Record<string, unknown>;
+  if (message.type !== "WA_EMBEDDED_SIGNUP") return null;
+  return typeof message.event === "string" ? message.event : "(no event name)";
+}
