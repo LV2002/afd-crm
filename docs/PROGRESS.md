@@ -9132,3 +9132,6 @@ On this app Meta refused the Embedded Signup code exchange with every redirect f
 
 ### "Look for numbers" searches every WhatsApp account the token can see
 A counsellor's Coexistence number is often on a different WhatsApp Business Account from the API number. `findUnregisteredNumbers` now lists numbers on the saved account plus every account in the token's granular scopes (`wabaIdsForToken`), and registering subscribes the app to the account that owns the chosen number. The token's Meta system user must be given that account as an asset.
+
+### "Look for numbers" can be pointed at a typed WhatsApp account ID
+Meta's token inspection did not list a newly assigned account, so the panel has an optional account-ID box; that account is searched in addition to the saved one and any the token lists. If Meta refuses it, the message says to generate a fresh system-user token.

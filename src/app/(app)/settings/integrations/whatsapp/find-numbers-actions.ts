@@ -35,7 +35,7 @@ export interface FindNumbersState {
  * Meta whether or not the CRM's last step worked. The institute's own API
  * number and every number already registered here are left out.
  */
-export async function findUnregisteredNumbers(): Promise<FindNumbersState> {
+export async function findUnregisteredNumbers(extraAccountId?: string): Promise<FindNumbersState> {
   const user = await getCurrentUser();
   if (!user || !can(user, "settings.manage")) return { error: "You don't have permission to do that." };
 
@@ -51,6 +51,11 @@ export async function findUnregisteredNumbers(): Promise<FindNumbersState> {
   // The saved account first, then every other WhatsApp account the token can
   // see: a counsellor's number is often on a different account from the API one.
   const accountIds = [wabaId];
+  const typed = (extraAccountId ?? "").trim();
+  if (typed) {
+    if (!/^\d+$/.test(typed)) return { error: "The WhatsApp account ID is digits only." };
+    if (!accountIds.includes(typed)) accountIds.push(typed);
+  }
   const appId = await getIntegrationCredential("whatsapp", "app_id");
   const appSecret = await getIntegrationCredential("whatsapp", "app_secret");
   if (appId && appSecret) {
@@ -63,14 +68,17 @@ export async function findUnregisteredNumbers(): Promise<FindNumbersState> {
 
   const onAccount: Array<Awaited<ReturnType<typeof listWabaPhoneNumbers>>[number] & { wabaId: string }> = [];
   let firstError: string | null = null;
+  const failedIds = new Set<string>();
   for (const id of accountIds) {
     try {
       for (const n of await listWabaPhoneNumbers(id, accessToken)) onAccount.push({ ...n, wabaId: id });
     } catch (error) {
+      failedIds.add(id);
       firstError ??= error instanceof MetaGraphApiError ? `Meta would not list the account's numbers: ${error.message}` : "Could not reach Meta.";
     }
   }
   if (onAccount.length === 0 && firstError) return { error: firstError };
+  if (typed && failedIds.has(typed)) return { error: `Meta would not show account ${typed} to the saved access token. Generate a new token for the CRM's system user (it must be created after the account was added to it) and save it in the API number's details, then look again.${firstError ? ` Meta said: ${firstError}` : ""}` };
 
   const registered = await db
     .select({ id: whatsappNumbers.phoneNumberId })

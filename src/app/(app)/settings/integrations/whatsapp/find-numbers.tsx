@@ -51,6 +51,7 @@ function FoundRow({ number, counsellors, onDone }: { number: FoundNumber; counse
 export function FindNumbers({ counsellors }: { counsellors: CounsellorOption[] }) {
   const [state, setState] = useState<FindNumbersState>({});
   const [pending, start] = useTransition();
+  const [accountId, setAccountId] = useState("");
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-4">
       <div>
@@ -60,7 +61,14 @@ export function FindNumbers({ counsellors }: { counsellors: CounsellorOption[] }
           know yet. It uses the saved access token, so Meta&rsquo;s connection window isn&rsquo;t needed.
         </p>
       </div>
-      <Button type="button" variant="outline" size="sm" className="w-fit" disabled={pending} onClick={() => start(async () => setState(await findUnregisteredNumbers()))}>
+      <Input
+        value={accountId}
+        onChange={(e) => setAccountId(e.target.value)}
+        placeholder="Optional: WhatsApp account ID to look in (from WhatsApp Manager)"
+        className="h-9 max-w-md"
+        aria-label="WhatsApp account ID"
+      />
+      <Button type="button" variant="outline" size="sm" className="w-fit" disabled={pending} onClick={() => start(async () => setState(await findUnregisteredNumbers(accountId)))}>
         <Search className="size-4" /> {pending ? "Looking…" : "Look for numbers"}
       </Button>
       <FormMessage error={state.error} success={state.success} />
