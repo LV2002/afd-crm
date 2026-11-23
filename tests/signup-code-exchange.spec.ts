@@ -55,3 +55,13 @@ describe("exchangeSignupCodeWithFallbacks", () => {
     expect(fn).toHaveBeenCalledTimes(2);
   });
 });
+
+import { isAppDomainError } from "../src/lib/integrations/whatsapp/client";
+
+describe("isAppDomainError", () => {
+  it("recognises Meta's code 191 (domain not in the app's domains), whatever language it is worded in", () => {
+    expect(isAppDomainError(new MetaGraphApiError("x", 400, { error: { message: "URL लोड करू शकत नाही", code: 191 } }))).toBe(true);
+    expect(isAppDomainError(new MetaGraphApiError("x", 400, mismatch))).toBe(false);
+    expect(isAppDomainError(new Error("nope"))).toBe(false);
+  });
+});

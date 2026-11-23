@@ -17,6 +17,7 @@ import {
 import { MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
 import {
   exchangeSignupCodeWithFallbacks,
+  isAppDomainError,
   getPhoneNumberInfo,
   listWabaPhoneNumbers,
   wabaIdsForToken,
@@ -139,6 +140,12 @@ async function run(input: z.input<typeof schema>): Promise<EmbeddedSignupState> 
   try {
     ({ accessToken, redirectForm } = await exchangeSignupCodeWithFallbacks(appId, appSecret, code, pageAddresses ?? []));
   } catch (error) {
+    if (isAppDomainError(error)) {
+      const host = pageAddresses?.[0] ? new URL(pageAddresses[0]).host : "this site's domain";
+      return {
+        error: `Meta refused because ${host} is not listed as one of the app's domains. In the Meta app go to App settings → Basic, add ${host} under App Domains (no https://, no slash), save, and connect again.`,
+      };
+    }
     if (error instanceof MetaGraphApiError) {
       return {
         error: `Meta would not exchange the code: ${error.message}. The code expires quickly — run the connection again.`,

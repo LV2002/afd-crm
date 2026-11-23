@@ -294,6 +294,13 @@ export function isRedirectUriMismatch(error: unknown): boolean {
   return detail?.error_subcode === 36008 || (detail?.code === 100 && /redirect_uri/i.test(error.message));
 }
 
+/** Meta's "Can't load URL: the domain of this URL isn't included in the app's domains" (code 191). */
+export function isAppDomainError(error: unknown): boolean {
+  if (!(error instanceof MetaGraphApiError)) return false;
+  const detail = (error.body as { error?: { code?: number } } | null)?.error;
+  return detail?.code === 191;
+}
+
 /**
  * Exchanges the Embedded Signup code, trying the redirect addresses Meta is
  * known to tie a JS-SDK code to.
