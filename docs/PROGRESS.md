@@ -9135,3 +9135,6 @@ A counsellor's Coexistence number is often on a different WhatsApp Business Acco
 
 ### "Look for numbers" can be pointed at a typed WhatsApp account ID
 Meta's token inspection did not list a newly assigned account, so the panel has an optional account-ID box; that account is searched in addition to the saved one and any the token lists. If Meta refuses it, the message says to generate a fresh system-user token.
+
+### Bank statement PDF: say why it could not be opened
+The "doesn't look like a readable PDF" message now ends with the PDF library's own reason and logs it, so a damaged file, a server-side library problem and an unsupported file can be told apart. No file contents or passwords are included.
