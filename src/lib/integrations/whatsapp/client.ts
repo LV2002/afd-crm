@@ -422,3 +422,24 @@ export async function listWabaPhoneNumbers(
   if (!response.ok) throw new MetaGraphApiError(`Meta returned ${response.status} listing the account's phone numbers`, response.status, body);
   return (body.data ?? []).flatMap((n) => (n.id ? [{ id: n.id, displayPhoneNumber: n.display_phone_number ?? null }] : []));
 }
+
+/**
+ * The WhatsApp Business Accounts an access token was granted, read from
+ * Meta's own record of the token (`debug_token` → granular scopes). Lets the
+ * CRM work out which account a signup connected from the authorisation code
+ * alone, when Meta's finish message never arrives.
+ */
+export async function wabaIdsForToken(appId: string, appSecret: string, accessToken: string): Promise<string[]> {
+  const url = new URL(`${GRAPH_BASE_URL}/debug_token`);
+  url.searchParams.set("input_token", accessToken);
+  url.searchParams.set("access_token", `${appId}|${appSecret}`);
+  const response = await fetch(url.toString(), { cache: "no-store" });
+  const body = (await response.json()) as {
+    data?: { granular_scopes?: Array<{ scope?: string; target_ids?: string[] }> };
+  };
+  if (!response.ok) throw new MetaGraphApiError(`Meta returned ${response.status} reading the token`, response.status, body);
+  const ids = (body.data?.granular_scopes ?? [])
+    .filter((g) => g.scope === "whatsapp_business_management" || g.scope === "whatsapp_business_messaging")
+    .flatMap((g) => g.target_ids ?? []);
+  return [...new Set(ids)];
+}

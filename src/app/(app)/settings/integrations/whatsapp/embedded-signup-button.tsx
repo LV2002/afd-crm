@@ -94,10 +94,14 @@ export function EmbeddedSignupButton({
   const detailsRef = useRef({ label: "", counsellorId: "" });
   detailsRef.current = { label, counsellorId };
 
-  const submitIfReady = useCallback(() => {
+  const submitIfReady = useCallback((force = false) => {
     const finished = finishedRef.current;
     const code = codeRef.current;
-    if (!finished || !code) return;
+    if (!code) return;
+    // Normally wait for Meta's finish message too. With `force` (it never
+    // came) the code alone goes to the server, which works out the account.
+    if (!finished && !force) return;
+    if (submittedRef.current) return;
 
     // Single-use: clear before firing so a second message cannot replay it.
     submittedRef.current = true;
@@ -108,10 +112,10 @@ export function EmbeddedSignupButton({
     startTransition(async () => {
       const result = await completeEmbeddedSignup({
         code,
-        wabaId: finished.wabaId,
+        wabaId: finished?.wabaId,
         // Meta's Coexistence finish may not name the number; the server then
         // finds it on the account.
-        phoneNumberId: finished.phoneNumberId ?? undefined,
+        phoneNumberId: finished?.phoneNumberId ?? undefined,
         label: currentLabel,
         counsellorId: currentCounsellor,
       });
@@ -125,7 +129,12 @@ export function EmbeddedSignupButton({
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
-      if (!isTrustedSignupOrigin(event.origin)) return;
+      if (!isTrustedSignupOrigin(event.origin)) {
+        // Not acted on, but named in the explanation if the flow stalls.
+        const stray = signupEventName(event.data);
+        if (stray) eventsRef.current.push(`${stray} (from ${event.origin}, ignored)`);
+        return;
+      }
 
       const eventName = signupEventName(event.data);
       if (eventName) eventsRef.current.push(eventName);
@@ -197,6 +206,9 @@ export function EmbeddedSignupButton({
       }
       codeRef.current = code;
       submitIfReady();
+      // Meta does not always send its finish message. Give it a few seconds,
+      // then go on with the code alone.
+      setTimeout(() => submitIfReady(true), 4000);
     }, signupLoginOptions(configId));
   }
 

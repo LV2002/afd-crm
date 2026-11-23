@@ -12,6 +12,8 @@
 export interface AccountNumber {
   id: string;
   displayPhoneNumber: string | null;
+  /** The account the number sits on, when more than one account is in play. */
+  wabaId?: string;
 }
 
 export function pickNewNumber(
