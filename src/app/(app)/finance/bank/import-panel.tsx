@@ -27,7 +27,7 @@ export function ImportPanel({ accounts }: { accounts: Array<{ id: string; name: 
       <div>
         <h2 className="text-lg font-semibold">Import a bank statement</h2>
         <p className="text-sm text-muted-foreground">
-          Upload the statement your bank gives you, as a PDF (password-protected is fine) or a CSV.
+          Upload the statement your bank gives you, as a PDF (password-protected is fine), an Excel .xls file or a CSV.
           Only transactions the CRM hasn&apos;t seen are added, so overlapping statements are fine.
           Every line is then checked against the entries in the books.{" "}
           <strong className="font-medium text-foreground">Neither the file nor its password is ever saved</strong>{" "}
@@ -54,12 +54,12 @@ export function ImportPanel({ accounts }: { accounts: Array<{ id: string; name: 
           </select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="bank-file">Statement (PDF or CSV)</Label>
+          <Label htmlFor="bank-file">Statement (PDF, XLS or CSV)</Label>
           <input
             id="bank-file"
             name="file"
             type="file"
-            accept=".pdf,.csv,application/pdf,text/csv"
+            accept=".pdf,.xls,.csv,application/pdf,application/vnd.ms-excel,text/csv"
             required
             className="text-sm file:mr-3 file:rounded-md file:border file:bg-secondary file:px-3 file:py-1.5 file:text-sm"
           />

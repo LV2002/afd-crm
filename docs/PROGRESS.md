@@ -9138,3 +9138,6 @@ Meta's token inspection did not list a newly assigned account, so the panel has 
 
 ### Bank statement PDF: say why it could not be opened
 The "doesn't look like a readable PDF" message now ends with the PDF library's own reason and logs it, so a damaged file, a server-side library problem and an unsupported file can be told apart. No file contents or passwords are included.
+
+### Bank statements: old Excel (.xls) files are accepted
+HDFC (and other banks) download statements as .xls. `src/lib/finance/bank-statement-xls.ts` reads the first sheet of a BIFF8 workbook with no dependency — the maintained spreadsheet libraries are not available from the registry at a safe version, and the only npm copies are individual republishes. It understands text and number cells and shared strings split across continued records; Excel-typed dates would be reported as unreadable, never guessed. The rows go through the existing CSV statement parser, so duplicate handling, balance continuity and the preview are unchanged. The header search now looks 40 rows down (HDFC puts an address block above it). `.xlsx` is still rejected with a pointer to .xls/PDF/CSV. Test data is a made-up file in `tests/fixtures/`; the real statement used to build this is not in the repo.

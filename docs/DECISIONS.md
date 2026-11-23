@@ -4943,3 +4943,6 @@ Leon wants to send a WhatsApp broadcast "only to the database, not the people in
 ## 2026-11-21 — No WhatsApp forms (Flows) and no Razorpay payment links
 
 Both were built (WhatsApp Phase 3c/3d) and then removed at Leon's request before merge: "I don't want the forms and Razorpay integration." Reverted in full, including their migrations (0140, 0141 never reached a database outside a test one), so nothing needs undoing in production. The course list, AI suggested replies, A/B broadcasts and "send me a test" stay. If payment links come back later, the design to keep is: a link only requests money; the webhook marks it and tells accounts; payments and receipts are still recorded by hand, because the ledger is append-only.
+
+## 2026-11-23 — Read .xls with our own small reader, not a spreadsheet library
+Bank statements arrive as .xls. SheetJS's fixed release is only distributed from its own CDN (blocked here), npm's copy is stuck on 0.18.5 with known parsing vulnerabilities, and the alternatives are one-person republishes. This code reads untrusted bank files in a finance system, so a ~250-line reader for the narrow part of the format a statement uses (text and number cells, shared strings) was preferred over an unvetted dependency. Revisit if .xlsx or Excel-typed dates are needed: that is the point to adopt a vetted library.
