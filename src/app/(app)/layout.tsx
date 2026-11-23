@@ -49,7 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         Only from `md` up. Below that the sidebar is hidden and the
         header's mobile menu is the way around.
       */}
-      <aside className="hidden w-64 shrink-0 border-r bg-card md:sticky md:top-0 md:flex md:h-screen md:flex-col print:hidden">
+      <aside className="warm-side hidden w-64 shrink-0 border-r bg-card md:sticky md:top-0 md:flex md:h-screen md:flex-col print:hidden">
         <div className="flex h-14 shrink-0 items-center gap-3 border-b px-5">
           {/* A mark for the organisation: its initial on the accent, until a logo is set. */}
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground shadow-sm shadow-primary/30">
