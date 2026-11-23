@@ -307,11 +307,15 @@ export function isAppDomainError(error: unknown): boolean {
  *
  * A code from the Facebook JavaScript SDK's popup belongs to a redirect
  * address the server cannot see, and Meta refuses the exchange with 36008 if
- * the one sent does not match. In practice it is one of: none at all, an
- * empty one, or the page that opened the popup. Each is tried in turn, and
- * ONLY a 36008 moves on to the next: any other refusal (a bad secret, an
- * expired code) is the real answer and is returned at once. Returns which
- * form worked, so it can be recorded.
+ * the one sent does not match (or 191 if that address's domain is not one of
+ * the app's domains). Each form is tried in turn: none, an empty one, the
+ * page that opened the popup, and Meta's own login-success page. A refusal
+ * about the redirect moves on to the next form; any OTHER refusal (a bad
+ * secret, an expired code) is the real answer and is returned at once.
+ *
+ * When every form fails, the error lists what Meta said to each, because
+ * "which form was refused, and why" is exactly what is needed to fix it.
+ * Returns which form worked, so it can be recorded.
  */
 export async function exchangeSignupCodeWithFallbacks(
   appId: string,
@@ -323,17 +327,33 @@ export async function exchangeSignupCodeWithFallbacks(
     { label: "none", value: undefined },
     { label: "empty", value: "" },
     ...pageAddresses.map((address) => ({ label: address, value: address })),
+    { label: "https://www.facebook.com/connect/login_success.html", value: "https://www.facebook.com/connect/login_success.html" },
   ];
-  let last: unknown;
+  const outcomes: string[] = [];
+  let lastRedirectError: MetaGraphApiError | null = null;
   for (const attempt of attempts) {
     try {
       return { accessToken: await exchangeSignupCode(appId, appSecret, code, attempt.value), redirectForm: attempt.label };
     } catch (error) {
-      last = error;
-      if (!isRedirectUriMismatch(error)) throw error;
+      if (!isRedirectUriMismatch(error) && !isAppDomainError(error)) throw error;
+      const refusal = error as MetaGraphApiError;
+      lastRedirectError = refusal;
+      const detail = (refusal.body as { error?: { code?: number; error_subcode?: number } } | null)?.error;
+      outcomes.push(`${attempt.label || "(empty)"} → code ${detail?.code ?? "?"}${detail?.error_subcode ? `/${detail.error_subcode}` : ""}`);
     }
   }
-  throw last;
+  throw new RedirectExchangeError(outcomes, lastRedirectError as MetaGraphApiError);
+}
+
+/** Every redirect form was refused. Carries what Meta said to each, in order. */
+export class RedirectExchangeError extends Error {
+  constructor(
+    readonly outcomes: string[],
+    readonly last: MetaGraphApiError,
+  ) {
+    super(`Meta refused every redirect form: ${outcomes.join("; ")}`);
+    this.name = "RedirectExchangeError";
+  }
 }
 
 /**

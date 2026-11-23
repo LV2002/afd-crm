@@ -18,6 +18,7 @@ import { MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
 import {
   exchangeSignupCodeWithFallbacks,
   isAppDomainError,
+  RedirectExchangeError,
   getPhoneNumberInfo,
   listWabaPhoneNumbers,
   wabaIdsForToken,
@@ -140,10 +141,16 @@ async function run(input: z.input<typeof schema>): Promise<EmbeddedSignupState> 
   try {
     ({ accessToken, redirectForm } = await exchangeSignupCodeWithFallbacks(appId, appSecret, code, pageAddresses ?? []));
   } catch (error) {
-    if (isAppDomainError(error)) {
+    if (error instanceof RedirectExchangeError) {
       const host = pageAddresses?.[0] ? new URL(pageAddresses[0]).host : "this site's domain";
+      const domainRefused = isAppDomainError(error.last);
       return {
-        error: `Meta refused because ${host} is not listed as one of the app's domains. In the Meta app go to App settings → Basic, add ${host} under App Domains (no https://, no slash), save, and connect again.`,
+        error:
+          `Meta refused the code every way the CRM tried it. What Meta said, in order: ${error.outcomes.join("; ")}. ` +
+          (domainRefused
+            ? `Code 191 means ${host} is not listed as one of the app's domains: in the Meta app go to App settings → Basic, add ${host} under App Domains (no https://, no slash), save, and connect again. `
+            : "Code 36008 means the address the popup used did not match any form the CRM tried. ") +
+          "Send this whole message to whoever is helping you.",
       };
     }
     if (error instanceof MetaGraphApiError) {
