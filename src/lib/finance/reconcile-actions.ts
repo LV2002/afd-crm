@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser, scopeFor, type SessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
+import { centersServedBy } from "./account-centers";
 import { bankBalanceChecks, bankMatches, bankStatementLines, cashCounts, financeAccounts } from "@/lib/db/schema";
 import { parseRupeesToPaise } from "@/lib/format/currency";
 import { sql } from "drizzle-orm";
@@ -30,8 +31,15 @@ async function reviewer(): Promise<SessionUser | null> {
 }
 
 /** Whether this reviewer may touch an account's centre. */
-function inScope(user: SessionUser, centerId: string): boolean {
+function inScopeCenter(user: SessionUser, centerId: string): boolean {
   return scopeFor(user, "bank.reconcile") === "all" || user.centerIds.includes(centerId);
+}
+
+/** An account serving several centres is in scope for the people of any of them. */
+async function inScope(user: SessionUser, account: { id: string; centerId: string }): Promise<boolean> {
+  if (scopeFor(user, "bank.reconcile") === "all") return true;
+  const served = await centersServedBy(db, account.id, account.centerId);
+  return served.some((c) => user.centerIds.includes(c));
 }
 
 async function audit(user: SessionUser, action: string, entityId: string, after: Record<string, unknown>) {
@@ -47,7 +55,7 @@ export async function matchLine(_prev: ReconcileFormState, formData: FormData): 
   if (!bankLineId || !transactionId) return { error: "Pick the entry to pair it with." };
 
   const [line] = await db.select().from(bankStatementLines).where(eq(bankStatementLines.id, bankLineId));
-  if (!line || !inScope(user, line.centerId)) return { error: "That line is outside your centre." };
+  if (!line || !(await inScope(user, { id: line.accountId, centerId: line.centerId }))) return { error: "That line is outside your centre." };
 
   const result = await matchManually(db, { bankLineId, transactionId, userId: user.id });
   if (!result.ok) return { error: result.error };
@@ -62,7 +70,7 @@ export async function waiveStatementLine(_prev: ReconcileFormState, formData: Fo
   const bankLineId = String(formData.get("bankLineId") ?? "");
   const reason = String(formData.get("reason") ?? "");
   const [line] = await db.select().from(bankStatementLines).where(eq(bankStatementLines.id, bankLineId));
-  if (!line || !inScope(user, line.centerId)) return { error: "That line is outside your centre." };
+  if (!line || !(await inScope(user, { id: line.accountId, centerId: line.centerId }))) return { error: "That line is outside your centre." };
 
   const result = await waiveLine(db, { bankLineId, userId: user.id, reason });
   if (!result.ok) return { error: result.error };
@@ -77,7 +85,7 @@ export async function undoPair(_prev: ReconcileFormState, formData: FormData): P
   const matchId = String(formData.get("matchId") ?? "");
   const reason = String(formData.get("reason") ?? "");
   const [match] = await db.select().from(bankMatches).where(eq(bankMatches.id, matchId));
-  if (!match || !inScope(user, match.centerId)) return { error: "That pair is outside your centre." };
+  if (!match || !inScopeCenter(user, match.centerId)) return { error: "That pair is outside your centre." };
 
   const result = await unmatch(db, { matchId, userId: user.id, reason });
   if (!result.ok) return { error: result.error };
@@ -114,7 +122,7 @@ export async function confirmBankBalance(_prev: ReconcileFormState, formData: Fo
   if (bankPaise === null) return { error: "Enter the balance as shown by the bank." };
 
   const [account] = await db.select().from(financeAccounts).where(eq(financeAccounts.id, accountId));
-  if (!account || account.type !== "bank" || !inScope(user, account.centerId)) return { error: "That account is outside your centre." };
+  if (!account || account.type !== "bank" || !(await inScope(user, account))) return { error: "That account is outside your centre." };
 
   const [line] = await db.execute<{ balance_paise: string | null }>(sql`
     select balance_paise from bank_statement_lines
@@ -153,7 +161,7 @@ export async function countCash(_prev: ReconcileFormState, formData: FormData): 
   if (countedPaise === null || countedPaise < 0) return { error: "Enter the amount you counted." };
 
   const [account] = await db.select().from(financeAccounts).where(eq(financeAccounts.id, accountId));
-  if (!account || account.type === "bank" || !inScope(user, account.centerId)) return { error: "That cash box is outside your centre." };
+  if (!account || account.type === "bank" || !(await inScope(user, account))) return { error: "That cash box is outside your centre." };
 
   const [row] = await db.execute<{ book: string }>(sql`
     select ${account.openingBalancePaise}::bigint + coalesce(sum(case when direction in ('in','transfer_in') then amount_paise else -amount_paise end), 0) as book

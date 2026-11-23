@@ -1,12 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
+import { financeAccountCenters } from "@/lib/db/schema";
 import { rupeesToPaise } from "@/lib/enrolment/instalment-plan";
 import { createClient } from "@/lib/supabase/server";
 
@@ -321,7 +322,7 @@ async function assertEntryInScope(
 const accountSchema = z.object({
   name: z.string().trim().min(1, "Give the account a name."),
   centerId: z.string().uuid("Pick a centre."),
-  type: z.enum(["bank", "cash", "petty_cash"]),
+  type: z.enum(["bank", "cash", "petty_cash", "director", "gateway"]),
 });
 
 export async function saveAccount(
@@ -378,9 +379,23 @@ export async function saveAccount(
     updated_at: new Date().toISOString(),
   };
 
-  const { error } = accountId
+  // The other centres this account serves (besides the main one above).
+  const wantedExtras = [...new Set(formData.getAll("alsoCenters").map(String))].filter(
+    (id) => /^[0-9a-f-]{36}$/i.test(id) && id !== parsed.data.centerId,
+  );
+  if (scope !== "all" && wantedExtras.some((id) => !user.centerIds.includes(id))) {
+    return { error: "One of those centres is outside your access." };
+  }
+
+  let savedId = accountId;
+  let { error } = accountId
     ? await supabase.from("finance_accounts").update(values).eq("id", accountId)
-    : await supabase.from("finance_accounts").insert(values);
+    : { error: null };
+  if (!accountId) {
+    const created = await supabase.from("finance_accounts").insert(values).select("id").single<{ id: string }>();
+    error = created.error;
+    savedId = created.data?.id ?? "";
+  }
 
   if (error) {
     // The unique index on name is the likely one, and its raw message is
@@ -392,12 +407,23 @@ export async function saveAccount(
     };
   }
 
+  // Written on the direct connection, like the rest of the ledger's setup:
+  // the join table has a read policy only.
+  if (savedId) {
+    await db.transaction(async (tx) => {
+      await tx.delete(financeAccountCenters).where(eq(financeAccountCenters.accountId, savedId));
+      if (wantedExtras.length > 0) {
+        await tx.insert(financeAccountCenters).values(wantedExtras.map((centerId) => ({ accountId: savedId, centerId })));
+      }
+    });
+  }
+
   await writeAuditLog(supabase, {
     actorId: user.id,
     action: accountId ? "finance_account.update" : "finance_account.create",
     entityType: "finance_accounts",
-    entityId: accountId || undefined,
-    after: values,
+    entityId: savedId || undefined,
+    after: { ...values, also_serves_centers: wantedExtras },
   });
 
   revalidatePath("/finance/accounts");

@@ -17,11 +17,18 @@ export interface FinanceCenter {
  * a centre head gets their own centre, accounts and admins get them all.
  */
 export async function getFinanceCenters(supabase: SupabaseClient): Promise<FinanceCenter[]> {
-  const { data: accounts } = await supabase
-    .from("finance_accounts")
-    .select("center_id")
-    .is("deleted_at", null);
-  const ids = [...new Set((accounts ?? []).map((a) => a.center_id as string))];
+  const [{ data: accounts }, { data: extras }] = await Promise.all([
+    supabase.from("finance_accounts").select("center_id").is("deleted_at", null),
+    // Centres an account serves besides its own count too: a bank account
+    // taking fees for Kochi and Kannur puts both on the switcher.
+    supabase.from("finance_account_centers").select("center_id"),
+  ]);
+  const ids = [
+    ...new Set([
+      ...(accounts ?? []).map((a) => a.center_id as string),
+      ...(extras ?? []).map((a) => a.center_id as string),
+    ]),
+  ];
   if (ids.length === 0) return [];
 
   const { data: centers } = await supabase

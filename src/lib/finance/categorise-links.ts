@@ -6,6 +6,8 @@ import { enrolments, leads, students, type bankStatementLines } from "@/lib/db/s
 import { payFromBankLine } from "@/lib/payroll/service";
 
 import { resolveBankLines, type LineLink } from "./bank-ledger";
+import { cleanComment } from "./comments";
+import { splitCreditLine, type Allocation } from "./split-line";
 import { isPeriod, type CategoryRule } from "./category-links";
 
 /**
@@ -31,7 +33,30 @@ class Refused extends Error {}
 /** One of the per-line answers the form sends, keyed by kind and line id. */
 export type LineAnswers = Record<string, string>;
 
-export const answerKey = (kind: "enrolment" | "student" | "payslip" | "period", lineId: string) => `${kind}:${lineId}`;
+export const answerKey = (
+  kind: "enrolment" | "student" | "payslip" | "period" | "comment" | "split" | "gateway" | "gatewayFee",
+  lineId: string,
+) => `${kind}:${lineId}`;
+
+/** The comment a person wrote beside a line, ready to store, or null. */
+export function commentFor(answers: LineAnswers, lineId: string): string | null {
+  return cleanComment(answers[answerKey("comment", lineId)]);
+}
+
+function parseAllocations(raw: string): Allocation[] | null {
+  try {
+    const list = JSON.parse(raw) as Array<{ enrolmentId?: unknown; amountPaise?: unknown }>;
+    if (!Array.isArray(list)) return null;
+    const out: Allocation[] = [];
+    for (const item of list) {
+      if (typeof item.enrolmentId !== "string" || typeof item.amountPaise !== "number") return null;
+      out.push({ enrolmentId: item.enrolmentId, amountPaise: Math.round(item.amountPaise) });
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
 
 function say(line: Line): string {
   return `“${line.particulars.slice(0, 40)}” on ${line.occurredOn}`;
@@ -44,6 +69,10 @@ export async function categoriseWithLinks(input: {
   rule: CategoryRule;
   actor: SessionUser;
   answers: LineAnswers;
+  /** The centre chosen for the batch, when the account serves several. */
+  centerId?: string | null;
+  /** What a payment gateway's charge is filed under. */
+  chargeCategory?: string;
 }): Promise<Categorised> {
   const { lines, rule, actor, answers } = input;
   const links: Record<string, LineLink> = {};
@@ -58,14 +87,49 @@ export async function categoriseWithLinks(input: {
     }
   }
 
+  // Lines the person chose to split between several students (a gateway settlement).
+  const splits = new Map<string, { allocations: Allocation[]; gatewayAccountId: string; gatewayFeePaise: number }>();
   if (rule.link === "enrolment") {
-    if (!can(actor, "payment.record")) return { ok: false, error: "Recording a student's payment needs the payment permission." };
-    const scope = scopeFor(actor, "payment.record");
-    if (!scope) return { ok: false, error: "Recording a student's payment needs the payment permission." };
+    if (!can(actor, "payment.record") || !scopeFor(actor, "payment.record")) {
+      return { ok: false, error: "Recording a student's payment needs the payment permission." };
+    }
+    const scope = scopeFor(actor, "payment.record")!;
+    for (const line of lines) {
+      const raw = answers[answerKey("split", line.id)];
+      if (!raw) continue;
+      const allocations = parseAllocations(raw);
+      if (!allocations || allocations.length === 0) return { ok: false, error: `Add the students for ${say(line)}.` };
+      const gatewayAccountId = (answers[answerKey("gateway", line.id)] ?? "").trim();
+      if (!gatewayAccountId) return { ok: false, error: `Choose the payment gateway account for ${say(line)}.` };
+      const feeRupees = Number((answers[answerKey("gatewayFee", line.id)] ?? "0").replace(/,/g, "")) || 0;
+      const found = await db
+        .select()
+        .from(enrolments)
+        .where(and(inArray(enrolments.id, [...new Set(allocations.map((a) => a.enrolmentId))]), isNull(enrolments.deletedAt)));
+      const byId = new Map(found.map((e) => [e.id, e]));
+      for (const a of allocations) {
+        const e = byId.get(a.enrolmentId);
+        if (!e) return { ok: false, error: `A student chosen for ${say(line)} no longer has that admission.` };
+        if (scope === "center" && !actor.centerIds.includes(e.centerId)) return { ok: false, error: `A student for ${say(line)} is outside your centres.` };
+        if (scope === "own") {
+          const [lead] = await db.select({ assignedTo: leads.assignedTo }).from(leads).where(eq(leads.id, e.leadId));
+          if (!lead || lead.assignedTo !== actor.id) return { ok: false, error: `A student for ${say(line)} is outside your access.` };
+        }
+      }
+      splits.set(line.id, { allocations, gatewayAccountId, gatewayFeePaise: Math.round(feeRupees * 100) });
+    }
+  }
 
-    const wanted = lines.map((l) => ({ line: l, id: (answers[answerKey("enrolment", l.id)] ?? "").trim() }));
+  if (rule.link === "enrolment" || rule.link === "refund") {
+    const permission = rule.link === "refund" ? "payment.refund" : "payment.record";
+    const why = rule.link === "refund" ? "Recording a refund needs the refund permission." : "Recording a student's payment needs the payment permission.";
+    if (!can(actor, permission)) return { ok: false, error: why };
+    const scope = scopeFor(actor, permission);
+    if (!scope) return { ok: false, error: why };
+
+    const wanted = lines.filter((l) => !splits.has(l.id)).map((l) => ({ line: l, id: (answers[answerKey("enrolment", l.id)] ?? "").trim() }));
     const missing = wanted.find((w) => !w.id);
-    if (missing) return { ok: false, error: `Choose whose fee ${say(missing.line)} is.` };
+    if (missing) return { ok: false, error: `Choose whose ${rule.link === "refund" ? "refund" : "fee"} ${say(missing.line)} is.` };
 
     const found = await db
       .select()
@@ -82,7 +146,7 @@ export async function categoriseWithLinks(input: {
         const [lead] = await db.select({ assignedTo: leads.assignedTo }).from(leads).where(eq(leads.id, enrolment.leadId));
         if (!lead || lead.assignedTo !== actor.id) return { ok: false, error: `${say(line)} is for a student outside your access.` };
       }
-      links[line.id] = { ...links[line.id], enrolmentId: id };
+      links[line.id] = rule.link === "refund" ? { ...links[line.id], refundEnrolmentId: id } : { ...links[line.id], enrolmentId: id };
     }
   }
 
@@ -124,14 +188,38 @@ export async function categoriseWithLinks(input: {
         }
         return paid;
       }
-      return resolveBankLines(tx, {
-        lines,
-        direction: input.direction,
-        choice: input.choice,
-        skipReason: null,
-        userId: actor.id,
-        links,
-      });
+      let split = 0;
+      for (const line of lines) {
+        const plan = splits.get(line.id);
+        if (!plan) continue;
+        try {
+          await splitCreditLine(tx, {
+            line,
+            allocations: plan.allocations,
+            gatewayFeePaise: plan.gatewayFeePaise,
+            gatewayAccountId: plan.gatewayAccountId,
+            feeCategory: input.choice,
+            chargeCategory: input.chargeCategory ?? "Payment Gateway Charges",
+            userId: actor.id,
+          });
+        } catch (error) {
+          throw new Refused(`${say(line)}: ${error instanceof Error ? error.message : "could not be split."}`);
+        }
+        split++;
+      }
+      const rest = lines.filter((l) => !splits.has(l.id));
+      const others = rest.length
+        ? await resolveBankLines(tx, {
+            lines: rest,
+            direction: input.direction,
+            choice: input.choice,
+            skipReason: null,
+            userId: actor.id,
+            links,
+            centerId: input.centerId ?? null,
+          })
+        : 0;
+      return split + others;
     });
     return { ok: true, done };
   } catch (error) {

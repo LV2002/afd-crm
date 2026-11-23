@@ -2,7 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { financeAccounts } from "@/lib/db/schema";
+import { financeAccountCenters, financeAccounts } from "@/lib/db/schema";
 
 /**
  * Finance writes run on the direct database connection, which bypasses RLS
@@ -26,11 +26,18 @@ export async function assertAccountInScope(
     .where(and(eq(financeAccounts.id, accountId), isNull(financeAccounts.deletedAt)));
   if (!account) return { ok: false, error: "That account no longer exists." };
 
+  // An account serving several centres is in scope for the people of any of them.
+  const extra = await db
+    .select({ centerId: financeAccountCenters.centerId })
+    .from(financeAccountCenters)
+    .where(eq(financeAccountCenters.accountId, accountId));
+  const served = [account.centerId, ...extra.map((e) => e.centerId)];
+
   const scope = scopeFor(user, permission);
   // `own` cannot match: money has no owner the way a lead does, so a role
   // granted finance at own scope reaches nothing — which is the safe
   // reading of a configuration that does not make sense.
-  if (scope !== "all" && !user.centerIds.includes(account.centerId)) {
+  if (scope !== "all" && !served.some((c) => user.centerIds.includes(c))) {
     return { ok: false, error: "That account is outside your centre." };
   }
   return { ok: true, centerId: account.centerId };

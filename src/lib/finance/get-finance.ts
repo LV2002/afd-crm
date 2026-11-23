@@ -30,7 +30,7 @@ export interface AccountRow {
   id: string;
   name: string;
   center_id: string;
-  type: "bank" | "cash" | "petty_cash";
+  type: "bank" | "cash" | "petty_cash" | "director" | "gateway";
   opening_balance_paise: number;
   opening_as_of: string | null;
   float_paise: number | null;
@@ -78,6 +78,8 @@ export async function getAccounts(
 
 export interface AccountWithBalance extends AccountRow {
   centerName: string | null;
+  /** Centres the account serves besides its main one. */
+  alsoServesCenterIds: string[];
   balancePaise: number;
   entryCount: number;
   /** Petty cash below a fifth of its float — the workbook's own threshold. */
@@ -103,8 +105,15 @@ export async function getAccountsWithBalances(
     supabase.from("centers").select("id, name").returns<Array<{ id: string; name: string }>>(),
   ]);
 
+  // An account serving several centres shows under each of them.
+  const { data: extraRows } = await supabase
+    .from("finance_account_centers")
+    .select("account_id, center_id")
+    .returns<Array<{ account_id: string; center_id: string }>>();
+  const alsoServes = new Map<string, string[]>();
+  for (const r of extraRows ?? []) alsoServes.set(r.account_id, [...(alsoServes.get(r.account_id) ?? []), r.center_id]);
   const accounts = options.centerId
-    ? allAccounts.filter((a) => a.center_id === options.centerId)
+    ? allAccounts.filter((a) => a.center_id === options.centerId || (alsoServes.get(a.id) ?? []).includes(options.centerId!))
     : allAccounts;
 
   // The opening balance is struck on a date: entries on or before it are
@@ -127,6 +136,7 @@ export async function getAccountsWithBalances(
     return {
       ...account,
       centerName: centerNames.get(account.center_id) ?? null,
+      alsoServesCenterIds: alsoServes.get(account.id) ?? [],
       balancePaise,
       entryCount: own.length,
       needsTopUp: account.type === "petty_cash" && isPettyCashLow(balancePaise, account.float_paise),

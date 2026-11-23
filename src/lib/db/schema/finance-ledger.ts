@@ -44,7 +44,39 @@ export const financeAccountTypeEnum = pgEnum("finance_account_type", [
   "bank",
   "cash",
   "petty_cash",
+  /**
+   * What the institute owes a director, and what a director has taken out:
+   * contributions and drawings are moves to and from this account, so they
+   * are in the books and the bank balance still agrees, without being income
+   * or expense. No statement, like cash.
+   */
+  "director",
+  /**
+   * A payment gateway's clearing account. Student payments land here at the
+   * amount the student paid, the gateway's charge comes out, and the net is
+   * one transfer to the bank, which is the entry the bank line matches.
+   */
+  "gateway",
 ]);
+
+/**
+ * Extra centres an account serves, besides its own (`finance_accounts.center_id`,
+ * the main one). A bank account that takes fees for every centre lists them
+ * here. Each transaction still carries one centre of its own, which for a
+ * student's fee is the student's centre, so centre reports stay true.
+ */
+export const financeAccountCenters = pgTable(
+  "finance_account_centers",
+  {
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => financeAccounts.id, { onDelete: "cascade" }),
+    centerId: uuid("center_id")
+      .notNull()
+      .references(() => centers.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.accountId, t.centerId] }), index("finance_account_centers_center_idx").on(t.centerId)],
+);
 
 /**
  * Every bank account, cash box and petty cash float, by centre.
@@ -273,6 +305,28 @@ export const bankStatementLines = pgTable(
     check("bank_lines_direction", sql`direction in ('in', 'out')`),
     check("bank_lines_amount_positive", sql`amount_paise > 0`),
   ],
+);
+
+/**
+ * A note on a transaction: which mobile this bill is for, why it was a
+ * refund. The ledger rows themselves are never edited, so the explanation
+ * lives beside them, and unlike them it can be corrected. Every edit is
+ * written to the audit log with the words it replaced.
+ */
+export const financeTransactionComments = pgTable(
+  "finance_transaction_comments",
+  {
+    id: idColumn(),
+    transactionId: uuid("transaction_id")
+      .notNull()
+      .references(() => financeTransactions.id, { onDelete: "restrict" }),
+    body: text("body").notNull(),
+    createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    editedBy: uuid("edited_by").references(() => profiles.id, { onDelete: "set null" }),
+    editedAt: timestamp("edited_at", { withTimezone: true }),
+  },
+  (t) => [index("finance_txn_comments_txn_idx").on(t.transactionId, t.createdAt)],
 );
 
 /**

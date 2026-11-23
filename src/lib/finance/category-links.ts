@@ -7,10 +7,11 @@
  *   links:       "enrolment" — a student's fee; recorded on their profile
  *                "student"   — tagged to a student, with no fee record (a fine)
  *                "employee"  — pays that person's payslip
+ *                "refund"    — money back to a student; shown on their profile
  *   asksPeriod:  offer a "for the month of" field (rent, GST, ad spend)
  */
 
-export type CategoryLink = "enrolment" | "student" | "employee";
+export type CategoryLink = "enrolment" | "student" | "employee" | "refund";
 
 export interface CategoryRule {
   label: string;
@@ -18,7 +19,7 @@ export interface CategoryRule {
   asksPeriod: boolean;
 }
 
-const LINKS: readonly CategoryLink[] = ["enrolment", "student", "employee"];
+const LINKS: readonly CategoryLink[] = ["enrolment", "student", "employee", "refund"];
 
 export function ruleFromMetadata(label: string, metadata: Record<string, unknown> | null | undefined): CategoryRule {
   const raw = metadata?.links;

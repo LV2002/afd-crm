@@ -15,7 +15,8 @@ export interface EditableAccount {
   id: string;
   name: string;
   centerId: string;
-  type: "bank" | "cash" | "petty_cash";
+  type: "bank" | "cash" | "petty_cash" | "director" | "gateway";
+  alsoServesCenterIds: string[];
   openingBalancePaise: number;
   openingAsOf: string | null;
   floatPaise: number | null;
@@ -104,6 +105,29 @@ export function AccountForm({
         </div>
       </div>
 
+      {centers.length > 1 && (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-sm font-medium">Also used by</legend>
+          <p className="text-xs text-muted-foreground">
+            Tick every other centre this account takes money for. The centre above is its main one. Each payment still belongs to one
+            centre: a student&apos;s fee goes to that student&apos;s centre.
+          </p>
+          <div className="flex flex-wrap gap-4">
+            {centers.map((center) => (
+              <label key={center.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="alsoCenters"
+                  value={center.id}
+                  defaultChecked={editing?.alsoServesCenterIds.includes(center.id) ?? false}
+                />
+                {center.name}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="type">Type</Label>
@@ -117,7 +141,13 @@ export function AccountForm({
             <option value="bank">Bank</option>
             <option value="cash">Cash</option>
             <option value="petty_cash">Petty cash</option>
+            <option value="gateway">Payment gateway (clearing account)</option>
+            <option value="director">Director account (contributions and drawings)</option>
           </select>
+          <p className="text-xs text-muted-foreground">
+            A payment gateway account holds students&apos; payments until they are settled to the bank. A director account records what the
+            institute owes a director, or what has been taken out: money moved to or from it is not income or expense.
+          </p>
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="openingBalance">Opening balance (₹)</Label>

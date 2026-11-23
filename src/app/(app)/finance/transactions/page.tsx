@@ -24,6 +24,7 @@ import { createClient } from "@/lib/supabase/server";
 import { BANK_STATUS_LABEL, bankStatusForTransactions } from "@/lib/finance/bank-status";
 
 import { EntryActions } from "./entry-actions";
+import { TransactionComments, type CommentView } from "./transaction-comments";
 import { FeeEntryActions } from "../fee-entry-actions";
 
 /**
@@ -63,6 +64,20 @@ export default async function FinanceTransactionsPage({
     entries.map((e) => ({ id: e.id, accountId: e.account_id })),
   );
   const accountNames = new Map(accounts.map((a) => [a.id, a.name]));
+  // The notes people wrote against these entries (read through the same centre rules as the entries).
+  const { data: commentRows } = entries.length
+    ? await supabase
+        .from("finance_transaction_comments")
+        .select("id, transaction_id, body, edited_at, created_at")
+        .in("transaction_id", entries.map((e) => e.id))
+        .order("created_at")
+        .returns<Array<{ id: string; transaction_id: string; body: string; edited_at: string | null }>>()
+    : { data: [] as Array<{ id: string; transaction_id: string; body: string; edited_at: string | null }> };
+  const commentsByTxn = new Map<string, CommentView[]>();
+  for (const c of commentRows ?? []) {
+    commentsByTxn.set(c.transaction_id, [...(commentsByTxn.get(c.transaction_id) ?? []), { id: c.id, body: c.body, edited: c.edited_at !== null }]);
+  }
+  const canComment = Boolean(user && can(user, "finance.record"));
   const newestFirst = entries;
   const canManage = Boolean(user && can(user, "finance.manage"));
   // A fee row is undone through its payment, which is its own permission:
@@ -131,6 +146,7 @@ export default async function FinanceTransactionsPage({
                           Reversal
                         </Badge>
                       )}
+                      <TransactionComments transactionId={entry.id} comments={commentsByTxn.get(entry.id) ?? []} canEdit={canComment} />
                       {/*
                         The row a family rings up about. Every fee payment
                         already has a numbered receipt waiting for it, and

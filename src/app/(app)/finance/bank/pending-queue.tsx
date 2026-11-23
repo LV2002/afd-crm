@@ -19,7 +19,8 @@ import { monthOf, type CategoryRule } from "@/lib/finance/category-links";
 import type { PendingLine } from "@/lib/finance/bank-queries";
 import { formatINR } from "@/lib/format/currency";
 
-import { PayeePicker, type PayeeKind } from "./payee-picker";
+import { LineDetails, type GatewayAccount } from "./line-details";
+import type { PayeeKind } from "./payee-picker";
 
 const initial: BankFormState = {};
 
@@ -29,8 +30,13 @@ interface Props {
   page: number;
   pageSize: number;
   accountNames: Record<string, string>;
+  /** The centres each account serves, main first. */
+  accountCenters: Record<string, Array<{ id: string; name: string }>>;
   accounts: Array<{ id: string; name: string }>;
   filters: { account: string; dir: string; q: string };
+  /** Every account money can be moved to or from: other banks, cash, a gateway, a director account. */
+  moveAccounts: Array<{ id: string; name: string; type: string }>;
+  gateways: GatewayAccount[];
   incomeCategories: CategoryRule[];
   expenseCategories: CategoryRule[];
   skipOptions: Array<{ value: string; label: string }>;
@@ -62,7 +68,21 @@ export function PendingQueue(props: Props) {
   useEffect(() => setChoice(""), [direction]);
   const rule = options.find((o) => o.label === choice) ?? null;
   const pickerKind: PayeeKind | null =
-    rule?.link === "enrolment" ? "enrolment" : rule?.link === "student" ? "student" : rule?.link === "employee" ? "payslip" : null;
+    rule?.link === "enrolment" || rule?.link === "refund"
+      ? "enrolment"
+      : rule?.link === "student"
+        ? "student"
+        : rule?.link === "employee"
+          ? "payslip"
+          : null;
+  const moveChoice = choice.startsWith("move:") ? props.moveAccounts.find((a) => a.id === choice.slice(5)) : null;
+  // Offered only when every ticked line is from an account that serves several centres.
+  const centerChoices = (() => {
+    if (selected.length === 0) return [];
+    const lists = [...new Set(selected.map((l) => l.accountId))].map((id) => props.accountCenters[id] ?? []);
+    if (lists.some((l) => l.length < 2)) return [];
+    return lists[0].filter((c) => lists.every((l) => l.some((x) => x.id === c.id)));
+  })();
   const selectedTotal = selected.reduce((s, l) => s + l.amountPaise, 0);
 
   const toggle = (id: string) =>
@@ -166,6 +186,18 @@ export function PendingQueue(props: Props) {
                 ))}
               </optgroup>
             )}
+            {direction && props.moveAccounts.length > 0 && (
+              <optgroup label={direction === "in" ? "Money coming from another of our accounts" : "Money going to another of our accounts"}>
+                {props.moveAccounts
+                  .filter((a) => selected.every((l) => l.accountId !== a.id))
+                  .map((a) => (
+                    <option key={a.id} value={`move:${a.id}`}>
+                      {direction === "in" ? "From" : "To"} {a.name}
+                      {a.type === "director" ? " (director)" : a.type === "gateway" ? " (gateway)" : ""}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
             {direction && (
               <optgroup label="Not income or expense">
                 {props.skipOptions.map((o) => (
@@ -176,41 +208,35 @@ export function PendingQueue(props: Props) {
               </optgroup>
             )}
           </select>
+          {centerChoices.length > 1 && (
+            <select name="centerId" defaultValue="" aria-label="Which centre's money" className="h-9 rounded-md border bg-background px-3 text-sm">
+              <option value="">Centre: {centerChoices[0].name} (main)</option>
+              {centerChoices.slice(1).map((c) => (
+                <option key={c.id} value={c.id}>
+                  Centre: {c.name}
+                </option>
+              ))}
+            </select>
+          )}
           <Button type="submit" disabled={pending || selected.length === 0 || mixed}>
             {pending ? "Saving…" : "Apply"}
           </Button>
           <FormMessage error={state.error} success={state.success} />
         </div>
 
-        {rule && selected.length > 0 && (pickerKind || rule.asksPeriod) && (
+        {selected.length > 0 && (
           <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
             <p className="text-sm font-medium">
-              {pickerKind === "enrolment" && "Whose fee is each of these? It is recorded on that student's profile, with a receipt."}
+              {pickerKind === "enrolment" && rule?.link === "refund" && "Which student is each refund to? It is shown on that student's profile as money returned."}
+              {pickerKind === "enrolment" && rule?.link !== "refund" && "Whose fee is each of these? It is recorded on that student's profile, with a receipt."}
               {pickerKind === "student" && "Which student is each of these from?"}
               {pickerKind === "payslip" && "Whose salary is each of these? Their payslip is marked paid, and shows as verified because the bank line proves it."}
-              {!pickerKind && "Which month is each of these for?"}
+              {!pickerKind && rule?.asksPeriod && "Which month is each of these for?"}
+              {!pickerKind && !rule?.asksPeriod && moveChoice && `Recorded on both sides: ${moveChoice.name} moves by the same amount, and none of it counts as income or expense.`}
+              {!pickerKind && !rule?.asksPeriod && !moveChoice && "Add a comment to any line if it will help later."}
             </p>
             {selected.map((l) => (
-              <div key={l.id} className="flex flex-wrap items-center gap-3 border-t pt-2 first:border-t-0 first:pt-0">
-                <div className="w-64 text-sm">
-                  <div className="truncate" title={l.particulars}>{l.particulars}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {l.occurredOn} · {formatINR(l.amountPaise)}
-                  </div>
-                </div>
-                {pickerKind && <PayeePicker key={`${pickerKind}-${l.id}`} kind={pickerKind} lineId={l.id} />}
-                {rule.asksPeriod && (
-                  <label className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">For the month of</span>
-                    <input
-                      type="month"
-                      name={`period:${l.id}`}
-                      defaultValue={monthOf(l.occurredOn)}
-                      className="h-9 rounded-md border bg-background px-2 text-sm"
-                    />
-                  </label>
-                )}
-              </div>
+              <LineDetails key={l.id} line={l} rule={rule} pickerKind={pickerKind} gateways={props.gateways} />
             ))}
           </div>
         )}

@@ -83,7 +83,8 @@ export default async function FinanceDashboardPage() {
   ]);
   const centerNames = new Map(centers.map((c) => [c.id, c.name]));
 
-  const totalCashPaise = accounts.reduce((sum, a) => sum + a.balancePaise, 0);
+  // A director account is what the institute owes (or is owed), not money it holds.
+  const totalCashPaise = accounts.filter((a) => a.type !== "director").reduce((sum, a) => sum + a.balancePaise, 0);
   const topExpenses = [...year.expenses.rows]
     .filter((row) => row.totalPaise > 0)
     .sort((a, b) => b.totalPaise - a.totalPaise)

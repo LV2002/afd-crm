@@ -504,6 +504,10 @@ const DROPDOWN_SEEDS: DropdownSeed[] = [
       { value: "software", label: "Software & Subscriptions", metadata: { asksPeriod: true } },
       { value: "professional_fees", label: "Professional Fees (CA/Legal)" },
       { value: "gst_tax", label: "GST & Taxes", metadata: { asksPeriod: true } },
+      // Money back to a student: recorded on their profile as well as in the books.
+      { value: "student_refund", label: "Student Refund", metadata: { links: "refund" } },
+      { value: "gateway_fees", label: "Payment Gateway Charges", metadata: { asksPeriod: true } },
+      { value: "loans_emi", label: "Loans & EMIs", metadata: { asksPeriod: true } },
       { value: "other_expenses", label: "Other Expenses" },
     ],
   },
