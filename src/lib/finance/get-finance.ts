@@ -220,17 +220,24 @@ export function reversedIds(rows: LedgerRow[]): Set<string> {
 }
 
 /** The expense and other-income heads an admin maintains in Settings → Dropdowns. */
+export interface FinanceCategoryOption {
+  value: string;
+  label: string;
+  /** The category row's own settings: what it asks for when a bank line is filed under it. */
+  metadata: Record<string, unknown> | null;
+}
+
 export async function getFinanceCategories(
   supabase: SupabaseClient,
-): Promise<{ expense: Array<{ value: string; label: string }>; income: Array<{ value: string; label: string }> }> {
+): Promise<{ expense: FinanceCategoryOption[]; income: FinanceCategoryOption[] }> {
   const { data } = await supabase
     .from("dropdown_options")
-    .select("category, value, label")
+    .select("category, value, label, metadata")
     .in("category", ["finance_expense_category", "finance_income_category"])
     .eq("is_active", true)
     .is("deleted_at", null)
     .order("sort_order")
-    .returns<Array<{ category: string; value: string; label: string }>>();
+    .returns<Array<{ category: string; value: string; label: string; metadata: Record<string, unknown> | null }>>();
 
   const rows = data ?? [];
   return {

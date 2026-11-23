@@ -30,6 +30,8 @@ export interface RecordPaymentInput {
   accountId?: string | null;
   /** History import only: the day the money actually arrived. */
   receivedAt?: Date;
+  /** The ledger category the cash side is filed under. Defaults to the fixed fee label. */
+  category?: string;
 }
 
 export interface RecordPaymentResult {
@@ -101,7 +103,7 @@ export async function recordPayment(tx: DbExecutor, input: RecordPaymentInput): 
       direction: "in",
       kind: "fee",
       accountId: input.accountId,
-      category: FEE_CATEGORY,
+      category: input.category ?? FEE_CATEGORY,
       amountPaise: input.amountPaise,
       description: `Fee payment — receipt #${receipt.receiptNo}`,
       reference: input.reference ?? null,

@@ -8,6 +8,8 @@ import { getFinanceCenterId } from "@/lib/finance/center-filter";
 import { getFinanceCategories } from "@/lib/finance/get-finance";
 import { createClient } from "@/lib/supabase/server";
 
+import { ruleFromMetadata } from "@/lib/finance/category-links";
+
 import { ImportPanel } from "./import-panel";
 import { PendingQueue } from "./pending-queue";
 
@@ -84,8 +86,8 @@ export default async function BankImportPage({
         accountNames={accountNames}
         accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
         filters={{ account: params.account ?? "", dir: params.dir ?? "", q: params.q ?? "" }}
-        incomeCategories={categories.income.map((c) => c.label)}
-        expenseCategories={categories.expense.map((c) => c.label)}
+        incomeCategories={categories.income.map((c) => ruleFromMetadata(c.label, c.metadata))}
+        expenseCategories={categories.expense.map((c) => ruleFromMetadata(c.label, c.metadata))}
         skipOptions={canReconcile ? SKIP_OPTIONS : []}
       />
     </div>

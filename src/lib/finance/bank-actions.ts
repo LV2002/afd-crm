@@ -19,6 +19,8 @@ import { checkContinuity, chronological } from "./bank-continuity";
 import { SKIP_REASONS } from "./bank-constants";
 import { getFinanceCategories } from "./get-finance";
 import { resolveBankLines, saveStatementLines } from "./bank-ledger";
+import { ruleFromMetadata, type CategoryRule } from "./category-links";
+import { categoriseWithLinks } from "./categorise-links";
 
 /**
  * Bank statement import and categorising.
@@ -313,30 +315,47 @@ export async function categoriseLines(
   const supabase = await createClient();
   const user = await getCurrentUser();
 
+  let rule: CategoryRule = { label: parsed.data.choice, link: null, asksPeriod: false };
   if (!skipReason) {
     const categories = await getFinanceCategories(supabase);
-    const allowed = (direction === "in" ? categories.income : categories.expense).map((c) => c.label);
-    if (!allowed.includes(parsed.data.choice)) {
+    const options = direction === "in" ? categories.income : categories.expense;
+    const picked = options.find((c) => c.label === parsed.data.choice);
+    if (!picked) {
       return { error: `"${parsed.data.choice}" isn't a ${direction === "in" ? "income" : "expense"} category.` };
     }
+    rule = ruleFromMetadata(picked.label, picked.metadata);
   }
 
-  const done = await db.transaction((tx) =>
-    resolveBankLines(tx, {
-      lines,
-      direction,
-      choice: parsed.data.choice,
-      skipReason,
-      userId: user?.id ?? null,
-    }),
-  );
+  // A category can ask whose money this is (a student's fee, a salary) or
+  // which month it is for. Those answers arrive per line, as `kind:lineId`.
+  let done: number;
+  if (!skipReason && (rule.link || rule.asksPeriod)) {
+    if (!user) return { error: "You need to be signed in." };
+    const answers: Record<string, string> = {};
+    for (const [key, value] of formData.entries()) {
+      if (/^(enrolment|student|payslip|period):/.test(key) && typeof value === "string") answers[key] = value;
+    }
+    const result = await categoriseWithLinks({ lines, direction, choice: parsed.data.choice, rule, actor: user, answers });
+    if (!result.ok) return { error: result.error };
+    done = result.done;
+  } else {
+    done = await db.transaction((tx) =>
+      resolveBankLines(tx, {
+        lines,
+        direction,
+        choice: parsed.data.choice,
+        skipReason,
+        userId: user?.id ?? null,
+      }),
+    );
+  }
 
   await writeAuditLog(supabase, {
     actorId: user!.id,
     action: skipReason ? "finance.bank_skip" : "finance.bank_categorise",
     entityType: "bank_statement_lines",
     entityId: lines[0].id,
-    after: { count: done, choice: skipReason ?? parsed.data.choice },
+    after: { count: done, choice: skipReason ?? parsed.data.choice, linked: rule.link },
   });
 
   revalidateBank();

@@ -35,6 +35,8 @@ export interface PostEntryInput {
   studentId?: string | null;
   studentName?: string | null;
   course?: string | null;
+  /** The month this money is for ('YYYY-MM'), when it differs from the month it moved. */
+  period?: string | null;
   transferGroupId?: string | null;
   reversesTransactionId?: string | null;
   reversalReason?: string | null;
@@ -84,6 +86,7 @@ export async function postEntry(tx: DbExecutor, input: PostEntryInput): Promise<
       studentId: input.studentId ?? null,
       studentName: input.studentName ?? null,
       course: input.course ?? null,
+      period: input.period ?? null,
       transferGroupId: input.transferGroupId ?? null,
       reversesTransactionId: input.reversesTransactionId ?? null,
       reversalReason: input.reversalReason ?? null,
