@@ -56,8 +56,12 @@ CREATE POLICY finance_accounts_select ON "finance_accounts" FOR SELECT TO authen
 
 -- Category settings (what a bank line is asked when filed under them).
 INSERT INTO "dropdown_options" ("category", "value", "label", "sort_order", "metadata")
-VALUES
+SELECT v.category, v.value, v.label, v.sort_order, v.metadata
+FROM (VALUES
   ('finance_expense_category', 'student_refund', 'Student Refund', 101, '{"links":"refund"}'::jsonb),
   ('finance_expense_category', 'gateway_fees', 'Payment Gateway Charges', 102, '{"asksPeriod":true}'::jsonb),
   ('finance_expense_category', 'loans_emi', 'Loans & EMIs', 103, '{"asksPeriod":true}'::jsonb)
+) AS v(category, value, label, sort_order, metadata)
+-- A brand-new database has no categories yet: the seed creates them, with these settings.
+WHERE EXISTS (SELECT 1 FROM "dropdown_categories" c WHERE c."key" = v.category)
 ON CONFLICT ("category", "value") DO NOTHING;

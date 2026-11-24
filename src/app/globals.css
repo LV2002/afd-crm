@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* Preview of the "Warm Studio" design language; delete this line to go back to the previous look. */
+@import "./warm-studio.css";
 
 @custom-variant dark (&:is(.dark *));
 

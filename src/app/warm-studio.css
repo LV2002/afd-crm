@@ -1,0 +1,245 @@
+/*
+ * "Warm Studio" — a calm, paper-like admin look. PREVIEW of a design language.
+ *
+ * Applied as an override of the existing theme tokens, so every screen picks
+ * it up without being edited, and so the whole look can be reverted by
+ * removing the import of this file in globals.css.
+ *
+ * One accent (orange) for "where am I" and "do this". Warm neutrals, never
+ * pure grey. White cards with a hairline border and no shadow, on a tinted
+ * page. A near-black sidebar. Light mode only: dark mode keeps its own palette.
+ */
+
+:root:not(.dark) {
+  --brand: #e4491d;
+  --brand-dark: #bf3912;
+  --brand-soft: #fdeee8;
+  --ink: #1b1613;
+  --line: #e6e0da;
+
+  --radius: 0.75rem; /* 12px: cards, tables; inputs and buttons step down from it */
+
+  --background: #f6f3ef;
+  --foreground: #1b1613;
+  --card: #ffffff;
+  --card-foreground: #1b1613;
+  --popover: #ffffff;
+  --popover-foreground: #1b1613;
+
+  --primary: #e4491d;
+  --primary-foreground: #ffffff;
+  --primary-subtle: #fdeee8;
+  --primary-ink: #b33a14;
+
+  --secondary: #eee8e1;
+  --secondary-foreground: #1b1613;
+  --muted: #efe9e2;
+  --muted-foreground: #6f6761;
+  --accent: #eee8e1;
+  --accent-foreground: #1b1613;
+
+  --border: #e6e0da;
+  --input: #cfc7bf;
+  --ring: #e4491d;
+
+  --destructive: #d4143c;
+  --destructive-foreground: #ffffff;
+  --destructive-subtle: #fde4e9;
+  --destructive-ink: #b50f31;
+  --success: #1d8f4e;
+  --success-foreground: #ffffff;
+  --success-subtle: #e1f4e8;
+  --success-ink: #167a40;
+  --warning: #c98500;
+  --warning-foreground: #1b1613;
+  --warning-subtle: #fff6e0;
+  --warning-ink: #6b4d00;
+  --info: #2b59c3;
+  --info-foreground: #ffffff;
+  --info-subtle: #e3ebfb;
+  --info-ink: #234ba3;
+}
+
+/* System fonts only, 15px body, headings bold and small. */
+:root:not(.dark) body {
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+:root:not(.dark) h1 { font-size: 1.6rem; font-weight: 700; line-height: 1.2; }
+:root:not(.dark) h2 { font-size: 1.25rem; font-weight: 700; line-height: 1.2; }
+:root:not(.dark) h3 { font-size: 1.05rem; font-weight: 700; line-height: 1.2; }
+
+/* Cards: a hairline border on a tinted page, no shadow. */
+:root:not(.dark) .rounded-lg.border,
+:root:not(.dark) .rounded-xl.border {
+  background-color: var(--card);
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+/* Tables: a tinted header row, tiny uppercase muted headings, hairline rows. */
+:root:not(.dark) table thead tr { background-color: #faf7f3; }
+:root:not(.dark) table thead th { color: var(--muted-foreground); font-size: 0.75rem; }
+:root:not(.dark) table tbody tr { border-color: var(--line); }
+:root:not(.dark) table tbody tr:hover { background-color: color-mix(in srgb, var(--brand-soft) 55%, transparent); }
+:root:not(.dark) table th,
+:root:not(.dark) table td { padding-block: 0.625rem; }
+
+/* Quiet inputs, loud focus: a 1.5px warm-grey border, and a brand border with a soft ring on focus. */
+:root:not(.dark) :is(input, textarea, select):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]) {
+  border-width: 1.5px;
+  border-color: #cfc7bf;
+  border-radius: 9px;
+}
+:root:not(.dark) :is(input, textarea, select):not([type="checkbox"]):not([type="radio"]):focus-visible {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent);
+  outline: none;
+}
+:root:not(.dark) input[type="checkbox"],
+:root:not(.dark) input[type="radio"] { accent-color: var(--brand); }
+
+/* Hover is a tint or a darker border, never movement. */
+:root:not(.dark) button:not(:disabled):hover { transition: background-color 120ms ease, border-color 120ms ease; }
+
+/* Dark sidebar, light content: the signature of the look. The sidebar gets its own local palette,
+   so every item inside it (nav links, badges, the user block) reads correctly without being edited. */
+.warm-side {
+  --card: #1b1613;
+  --foreground: #ffffff;
+  --muted-foreground: #bdb4ab;
+  --accent: #2c2520;
+  --accent-foreground: #ffffff;
+  --border: #3a322c;
+  --secondary: #2c2520;
+  --secondary-foreground: #ffffff;
+  --muted: #2c2520;
+  --primary-subtle: #e4491d;
+  --primary-ink: #ffffff;
+  background-color: #1b1613;
+  color: #ffffff;
+}
+
+/*
+ * Spreadsheet mode (components/ui/sheet-table.tsx): for wide lists. Sticky
+ * header and first two columns, one-line cells, faint dividers, click-to-copy.
+ * Uses the generic tokens, so it follows light and dark alike.
+ */
+.sheet-wrap {
+  max-height: 68vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+}
+.sheet {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.85rem;
+}
+.sheet th,
+.sheet td {
+  padding: 8px 12px;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  background: var(--card);
+  text-align: left;
+}
+.sheet tbody tr:last-child td { border-bottom: 0; }
+.sheet thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #faf7f3;
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  user-select: none;
+}
+.dark .sheet thead th { background: var(--muted); }
+.sheet-sortable { cursor: pointer; }
+.sheet-sortable:hover { color: var(--foreground); }
+
+/* The first two columns stay in view while the rest scroll sideways. */
+.sheet .sheet-open {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+  padding-inline: 8px;
+}
+.sheet thead .sheet-open { z-index: 4; }
+.sheet th:nth-child(2),
+.sheet td:nth-child(2) {
+  position: sticky;
+  left: 72px;
+  z-index: 2;
+  box-shadow: 1px 0 0 var(--border);
+}
+.sheet thead th:nth-child(2) { z-index: 4; }
+
+.sheet .sheet-cell {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: copy;
+}
+.sheet .sheet-cell:hover { background: var(--primary-subtle); }
+.sheet tbody tr:hover td:not(.sheet-cell) { background: var(--card); }
+
+/* The Open button: a dark pill, the one fixed handle on every row. */
+.sheet-open-btn {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: #1b1613;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.dark .sheet-open-btn { background: #f6f3ef; color: #1b1613; }
+.sheet-open-btn:hover { background: var(--primary); color: var(--primary-foreground); }
+.sheet .sheet-empty { padding: 40px; text-align: center; color: var(--muted-foreground); }
+
+/*
+ * Phones: the top bar goes dark like the sidebar, and the menu slides in
+ * from the left as a dark drawer with a soft shadow. Both use the same local
+ * palette as .warm-side, so everything inside them reads without being edited.
+ */
+@media (max-width: 767px) {
+  .warm-top {
+    --background: #1b1613;
+    --foreground: #ffffff;
+    --muted-foreground: #bdb4ab;
+    --accent: #2c2520;
+    --accent-foreground: #ffffff;
+    --border: #3a322c;
+    --secondary: #2c2520;
+    --secondary-foreground: #ffffff;
+    background-color: #1b1613;
+    color: #ffffff;
+    border-color: #3a322c;
+  }
+}
+
+.warm-drawer {
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
+  animation: warm-drawer-in 0.2s ease-out;
+}
+.warm-overlay { background-color: rgba(20, 14, 10, 0.5); }
+
+@keyframes warm-drawer-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .warm-drawer { animation: none; }
+}

@@ -56,11 +56,13 @@ export async function MobileNavWithBadges({
   items,
   user,
   userName,
+  brandName,
 }: {
   items: NavItem[];
   user: SessionUser;
   userName: string;
+  brandName?: string;
 }) {
   const [badges, counsellors, chatLinks] = await Promise.all([getNavBadgeCounts(user), counsellorsFor(user), getChatLinks(user)]);
-  return <MobileNav items={items} userName={userName} badges={badges} counsellors={counsellors} chatLinks={chatLinks} />;
+  return <MobileNav items={items} userName={userName} brandName={brandName} badges={badges} counsellors={counsellors} chatLinks={chatLinks} />;
 }

@@ -49,7 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         Only from `md` up. Below that the sidebar is hidden and the
         header's mobile menu is the way around.
       */}
-      <aside className="hidden w-64 shrink-0 border-r bg-card md:sticky md:top-0 md:flex md:h-screen md:flex-col print:hidden">
+      <aside className="warm-side hidden w-64 shrink-0 border-r bg-card md:sticky md:top-0 md:flex md:h-screen md:flex-col print:hidden">
         <div className="flex h-14 shrink-0 items-center gap-3 border-b px-5">
           {/* A mark for the organisation: its initial on the accent, until a logo is set. */}
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground shadow-sm shadow-primary/30">
@@ -86,11 +86,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           which is what makes a card look like a card without every card
           needing a heavier border. See globals.css.
         */}
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b bg-background/80 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/70 sm:px-6 print:hidden">
+        <header className="warm-top sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b bg-background/80 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/70 sm:px-6 print:hidden">
           {/* Below `md` the sidebar is hidden and this is the only way to
               reach another screen. It was missing entirely. */}
-          <Suspense fallback={<MobileNav items={navItems} userName={user.fullName} />}>
-            <MobileNavWithBadges items={navItems} user={user} userName={user.fullName} />
+          <Suspense fallback={<MobileNav items={navItems} userName={user.fullName} brandName={brand.name} />}>
+            <MobileNavWithBadges items={navItems} user={user} userName={user.fullName} brandName={brand.name} />
           </Suspense>
           <span className="truncate text-[0.9375rem] font-semibold md:hidden">{brand.name}</span>
           <div className="ml-auto flex items-center gap-1">
