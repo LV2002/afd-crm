@@ -5,23 +5,13 @@ import { requireCronSecret } from "@/lib/cron/require-secret";
 import { reportingFailures } from "@/lib/errors/capture";
 
 import { db } from "@/lib/db/client";
-import {
-  enrolmentInstalments,
-  enrolments,
-  leads,
-  paymentReminderRules,
-  paymentRemindersSent,
-  payments,
-  students,
-} from "@/lib/db/schema";
-import { effectiveDownPaymentDue } from "@/lib/enrolment/plan-status";
-import { allocateWithDownPayment, DOWN_PAYMENT_ID } from "@/lib/finance/allocate";
+import { leads, paymentReminderRules, paymentRemindersSent, students } from "@/lib/db/schema";
+import { loadOutstandingInstalments } from "@/lib/finance/outstanding-instalments";
 import {
   describeTiming,
   dueReminders,
   reminderKey,
   supersededRules,
-  type OutstandingInstalment,
   type ReminderRule,
 } from "@/lib/finance/reminder-schedule";
 import { formatINR } from "@/lib/format/currency";
@@ -85,93 +75,12 @@ async function run(request: Request) {
     templateLanguage: row.templateLanguage,
   }));
 
-  // Live admissions only: past the sales→accounts gate, not dropped, not
-  // deleted. A dropped student is not somebody to chase for money.
-  const liveEnrolments = await db
-    .select({
-      id: enrolments.id,
-      leadId: enrolments.leadId,
-      centerId: enrolments.centerId,
-      course: enrolments.course,
-      studentId: enrolments.studentId,
-      downPaymentPaise: enrolments.downPaymentPaise,
-      downPaymentDueDate: enrolments.downPaymentDueDate,
-      confirmedAt: enrolments.salesToAccountsAt,
-    })
-    .from(enrolments)
-    .where(and(isNull(enrolments.deletedAt), isNull(enrolments.droppedAt), eq(enrolments.isHistorical, false)));
-
+  // What is still owed per instalment, from the same calculation the
+  // Collections screen and the admin's 30-day alert use, so none of them can
+  // disagree about who is late.
+  const { liveEnrolments, outstanding, enrolmentByInstalment } = await loadOutstandingInstalments(asOf);
   if (liveEnrolments.length === 0) {
     return NextResponse.json({ asOf, rules: rules.length, sent: 0, skipped: 0, failed: 0 });
-  }
-
-  const enrolmentIds = liveEnrolments.map((row) => row.id);
-  const [instalmentRows, paymentRows] = await Promise.all([
-    db
-      .select()
-      .from(enrolmentInstalments)
-      .where(inArray(enrolmentInstalments.enrolmentId, enrolmentIds)),
-    db
-      .select({
-        id: payments.id,
-        enrolmentId: payments.enrolmentId,
-        amountPaise: payments.amountPaise,
-        direction: payments.direction,
-        receivedAt: payments.receivedAt,
-      })
-      .from(payments)
-      .where(inArray(payments.enrolmentId, enrolmentIds)),
-  ]);
-
-  // What is still owed per instalment, worked out by the same allocation
-  // the Collections screen uses — so the two can never disagree about who
-  // is late.
-  const outstanding: OutstandingInstalment[] = [];
-  const enrolmentByInstalment = new Map<string, (typeof liveEnrolments)[number]>();
-
-  for (const enrolment of liveEnrolments) {
-    const schedule = instalmentRows
-      .filter((row) => row.enrolmentId === enrolment.id)
-      .map((row) => ({
-        id: row.id,
-        sequence: row.sequence,
-        dueDate: row.dueDate,
-        amountPaise: row.amountPaise,
-      }));
-    if (schedule.length === 0 && enrolment.downPaymentPaise === 0) continue;
-
-    const received = paymentRows
-      .filter((row) => row.enrolmentId === enrolment.id)
-      .map((row) => ({
-        id: row.id,
-        // A debit is a reversal or refund: it puts the money back on the
-        // schedule, so somebody whose payment bounced becomes overdue
-        // again rather than staying quietly settled.
-        amountPaise: row.direction === "credit" ? row.amountPaise : -row.amountPaise,
-        receivedOn: row.receivedAt.toISOString().slice(0, 10),
-      }));
-
-    // The down payment is laid out first so the first money in settles it
-    // rather than instalment 1, then left out: a reminder is keyed to a real
-    // instalment row.
-    const allocated = allocateWithDownPayment(
-      schedule,
-      enrolment.downPaymentPaise,
-      effectiveDownPaymentDue(enrolment.downPaymentDueDate, enrolment.confirmedAt, asOf),
-      received,
-      asOf,
-    );
-    for (const settled of allocated.instalments) {
-      if (settled.id === DOWN_PAYMENT_ID) continue;
-      if (settled.outstandingPaise <= 0) continue;
-      outstanding.push({
-        instalmentId: settled.id,
-        enrolmentId: enrolment.id,
-        dueDate: settled.dueDate,
-        outstandingPaise: settled.outstandingPaise,
-      });
-      enrolmentByInstalment.set(settled.id, enrolment);
-    }
   }
 
   const sentRows = outstanding.length
