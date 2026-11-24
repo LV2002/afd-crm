@@ -10,7 +10,7 @@ import { db } from "@/lib/db/client";
 import { whatsappNumbers } from "@/lib/db/schema";
 import { getIntegrationCredential, getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
-import { listWabaPhoneNumbers, subscribeAppToWaba, wabaIdsForToken } from "@/lib/integrations/whatsapp/client";
+import { fetchWabaSubscribedApps, listWabaPhoneNumbers, subscribeAppToWaba, wabaIdsForToken } from "@/lib/integrations/whatsapp/client";
 import { createClient } from "@/lib/supabase/server";
 import { pickNewNumber } from "@/lib/whatsapp/pick-new-number";
 import { insertOrReviveNumber } from "@/lib/whatsapp/register-number";
@@ -155,4 +155,63 @@ export async function registerFoundNumber(input: z.input<typeof registerSchema>)
 
   revalidatePath("/settings/integrations/whatsapp");
   return { success: `${label} is registered.${note} Send a message to it from another phone and run the check.` };
+}
+
+/**
+ * Makes sure this app receives the messages of one WhatsApp account, and says
+ * what Meta answered.
+ *
+ * Meta delivers a number's messages to the app only while the app is
+ * subscribed to that number's *account*. Registering a number in the CRM does
+ * not do that by itself, and when it silently fails the number looks perfectly
+ * set up while nothing arrives. This subscribes, then asks Meta whether the
+ * subscription is really there, and lists the numbers it can see on the
+ * account, so a wrong account ID or a token without access shows up as a
+ * plain sentence instead of as silence.
+ */
+export async function connectAccountMessages(accountId: string): Promise<FindNumbersState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "settings.manage")) return { error: "You don't have permission to do that." };
+
+  const id = accountId.trim();
+  if (!/^\d+$/.test(id)) return { error: "Type the WhatsApp account ID, digits only. You find it in WhatsApp Manager, in the account menu at the top right." };
+
+  const { access_token: accessToken, app_id: appId } = await getIntegrationCredentials("whatsapp", ["access_token", "app_id"]);
+  if (!accessToken || !appId) return { error: "Save the access token and App ID first (under the API number's details)." };
+
+  let visible: string;
+  try {
+    const numbers = await listWabaPhoneNumbers(id, accessToken);
+    visible = numbers.length
+      ? `Numbers Meta shows on this account: ${numbers.map((n) => n.displayPhoneNumber ?? n.id).join(", ")}.`
+      : "Meta shows no numbers on this account.";
+  } catch (error) {
+    return {
+      error:
+        error instanceof MetaGraphApiError
+          ? `The saved access token cannot see account ${id}. Meta said: ${error.message}. Give the CRM's system user access to this account in Meta Business settings, generate a new token, save it, and try again.`
+          : "Could not reach Meta.",
+    };
+  }
+
+  try {
+    await subscribeAppToWaba(id, accessToken);
+    const apps = await fetchWabaSubscribedApps(id, accessToken);
+    if (!apps.includes(appId)) {
+      return { error: `Meta accepted the request but still does not list this app on account ${id}. ${visible}` };
+    }
+  } catch (error) {
+    return { error: error instanceof MetaGraphApiError ? `Meta refused: ${error.message}. ${visible}` : "Could not reach Meta." };
+  }
+
+  const supabase = await createClient();
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "whatsapp.account_subscribed",
+    entityType: "integration_credentials",
+    after: { accountId: id },
+  });
+  return {
+    success: `This app now receives messages for account ${id} (Meta confirms it). ${visible} Send a message to the counsellor's number from another phone and look under Chats.`,
+  };
 }
