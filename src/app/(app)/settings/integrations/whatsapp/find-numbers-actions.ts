@@ -1,6 +1,7 @@
 "use server";
 
 import { and, eq, isNull } from "drizzle-orm";
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -10,8 +11,9 @@ import { db } from "@/lib/db/client";
 import { whatsappNumbers } from "@/lib/db/schema";
 import { getIntegrationCredential, getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
-import { fetchWabaSubscribedApps, listWabaPhoneNumbers, subscribeAppToWaba, wabaIdsForToken } from "@/lib/integrations/whatsapp/client";
+import { fetchGraphFacts, fetchWabaSubscribedApps, fetchWabaSubscriptionDetail, listWabaPhoneNumbers, subscribeAppToWaba, wabaIdsForToken } from "@/lib/integrations/whatsapp/client";
 import { createClient } from "@/lib/supabase/server";
+import { describeNumberFacts, pointsAtThisApp, type FactLine } from "@/lib/whatsapp/number-facts";
 import { pickNewNumber } from "@/lib/whatsapp/pick-new-number";
 import { insertOrReviveNumber } from "@/lib/whatsapp/register-number";
 
@@ -26,6 +28,8 @@ export interface FindNumbersState {
   error?: string;
   success?: string;
   numbers?: FoundNumber[];
+  /** What Meta said about the counsellor numbers, line by line. */
+  facts?: FactLine[];
 }
 
 /**
@@ -214,4 +218,61 @@ export async function connectAccountMessages(accountId: string): Promise<FindNum
   return {
     success: `This app now receives messages for account ${id} (Meta confirms it). ${visible} Send a message to the counsellor's number from another phone and look under Chats.`,
   };
+}
+
+const NUMBER_FIELDS = [
+  "display_phone_number",
+  "status",
+  "platform_type",
+  "is_on_biz_app",
+  "account_mode",
+  "code_verification_status",
+  "quality_rating",
+  "webhook_configuration",
+];
+
+/**
+ * Asks Meta, number by number, what state each registered Coexistence number
+ * is really in, and whether anything redirects its messages away from the CRM.
+ * Read-only: it changes nothing.
+ */
+export async function askMetaAboutCounsellorNumbers(accountId?: string): Promise<FindNumbersState> {
+  const user = await getCurrentUser();
+  if (!user || !can(user, "settings.manage")) return { error: "You don't have permission to do that." };
+
+  const { access_token: accessToken } = await getIntegrationCredentials("whatsapp", ["access_token"]);
+  if (!accessToken) return { error: "Save the access token first (under the API number's details)." };
+
+  const numbers = await db
+    .select({ phoneNumberId: whatsappNumbers.phoneNumberId, label: whatsappNumbers.label })
+    .from(whatsappNumbers)
+    .where(and(eq(whatsappNumbers.mode, "coexistence"), isNull(whatsappNumbers.deletedAt)));
+  if (numbers.length === 0) return { error: "No counsellor (Coexistence) number is registered here yet." };
+
+  const host = (await headers()).get("host");
+  const expected = host ? `https://${host}/api/webhooks/whatsapp` : null;
+  const facts: FactLine[] = [];
+  for (const n of numbers) {
+    facts.push({ verdict: "info", text: `${n.label} (number ID ${n.phoneNumberId})` });
+    facts.push(...describeNumberFacts(n.label, await fetchGraphFacts(n.phoneNumberId, accessToken, NUMBER_FIELDS), expected));
+  }
+
+  const waba = accountId?.trim();
+  if (waba && /^\d+$/.test(waba)) {
+    facts.push({ verdict: "info", text: `WhatsApp account ${waba}` });
+    try {
+      const subs = await fetchWabaSubscriptionDetail(waba, accessToken);
+      if (subs.length === 0) facts.push({ verdict: "bad", text: "No app is subscribed to this account, so Meta delivers nothing from it to anyone." });
+      for (const sub of subs) {
+        facts.push(
+          sub.overrideCallbackUri && !pointsAtThisApp(sub.overrideCallbackUri, expected)
+            ? { verdict: "bad", text: `App ${sub.appId ?? "?"} is subscribed, but this account sends its messages to ${sub.overrideCallbackUri} instead of the CRM.` }
+            : { verdict: "good", text: `App ${sub.appId ?? "?"} is subscribed to this account${sub.overrideCallbackUri ? " (with the CRM's own address)" : ", with no override"}.` },
+        );
+      }
+    } catch (error) {
+      facts.push({ verdict: "bad", text: error instanceof MetaGraphApiError ? `Meta would not show this account's subscriptions: ${error.message}` : "Could not reach Meta." });
+    }
+  }
+  return { facts };
 }

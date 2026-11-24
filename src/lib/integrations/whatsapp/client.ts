@@ -481,6 +481,55 @@ export async function fetchWabaSubscribedApps(wabaId: string, accessToken: strin
   });
 }
 
+export type GraphFact = { ok: true; value: unknown } | { ok: false; error: string };
+
+/**
+ * Asks Meta for each field on a node separately.
+ *
+ * One request for all of them fails entirely if Meta does not know a single
+ * field ("(#100) Tried accessing nonexisting field"), and which fields exist
+ * differs by account and by Meta's rollout. One request per field means an
+ * unsupported field is reported as unsupported and everything else still
+ * comes back.
+ */
+export async function fetchGraphFacts(nodeId: string, accessToken: string, fields: string[]): Promise<Record<string, GraphFact>> {
+  const out: Record<string, GraphFact> = {};
+  await Promise.all(
+    fields.map(async (field) => {
+      try {
+        const response = await fetch(`${GRAPH_BASE_URL}/${nodeId}?fields=${encodeURIComponent(field)}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: "no-store",
+        });
+        const body = (await response.json()) as Record<string, unknown> & { error?: { message?: string } };
+        out[field] = response.ok ? { ok: true, value: body[field] ?? null } : { ok: false, error: body.error?.message ?? `HTTP ${response.status}` };
+      } catch {
+        out[field] = { ok: false, error: "could not reach Meta" };
+      }
+    }),
+  );
+  return out;
+}
+
+/** The raw subscribed-apps entries of an account, including any callback address that overrides the app's own. */
+export async function fetchWabaSubscriptionDetail(
+  wabaId: string,
+  accessToken: string,
+): Promise<Array<{ appId: string | null; overrideCallbackUri: string | null }>> {
+  const response = await fetch(`${GRAPH_BASE_URL}/${wabaId}/subscribed_apps`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  const body = (await response.json()) as {
+    data?: Array<{ whatsapp_business_api_data?: { id?: string }; id?: string; override_callback_uri?: string }>;
+  };
+  if (!response.ok) throw new MetaGraphApiError(`Meta returned ${response.status} reading the account's subscribed apps`, response.status, body);
+  return (body.data ?? []).map((a) => ({
+    appId: a.whatsapp_business_api_data?.id ?? a.id ?? null,
+    overrideCallbackUri: a.override_callback_uri ?? null,
+  }));
+}
+
 /** The phone numbers on a WhatsApp Business Account. Used to find the number a Coexistence signup just attached. */
 export async function listWabaPhoneNumbers(
   wabaId: string,
