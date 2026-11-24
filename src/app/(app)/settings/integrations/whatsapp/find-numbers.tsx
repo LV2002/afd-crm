@@ -7,7 +7,7 @@ import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import { findUnregisteredNumbers, registerFoundNumber, type FindNumbersState, type FoundNumber } from "./find-numbers-actions";
+import { connectAccountMessages, findUnregisteredNumbers, registerFoundNumber, type FindNumbersState, type FoundNumber } from "./find-numbers-actions";
 import type { CounsellorOption } from "./whatsapp-numbers";
 
 function FoundRow({ number, counsellors, onDone }: { number: FoundNumber; counsellors: CounsellorOption[]; onDone: (state: FindNumbersState) => void }) {
@@ -70,6 +70,20 @@ export function FindNumbers({ counsellors }: { counsellors: CounsellorOption[] }
       />
       <Button type="button" variant="outline" size="sm" className="w-fit" disabled={pending} onClick={() => start(async () => setState(await findUnregisteredNumbers(accountId)))}>
         <Search className="size-4" /> {pending ? "Looking…" : "Look for numbers"}
+      </Button>
+      <p className="max-w-2xl text-sm text-muted-foreground">
+        If a number is registered here but its messages never arrive, type its WhatsApp account ID above and press this. It switches on
+        message delivery for that account and shows what Meta answered.
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-fit"
+        disabled={pending || !accountId.trim()}
+        onClick={() => start(async () => setState(await connectAccountMessages(accountId)))}
+      >
+        Connect messages from this account
       </Button>
       <FormMessage error={state.error} success={state.success} />
       {state.numbers && state.numbers.length > 0 && (
