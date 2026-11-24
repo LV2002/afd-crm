@@ -7,7 +7,7 @@ import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import { connectAccountMessages, findUnregisteredNumbers, registerFoundNumber, type FindNumbersState, type FoundNumber } from "./find-numbers-actions";
+import { askMetaAboutCounsellorNumbers, connectAccountMessages, findUnregisteredNumbers, registerFoundNumber, type FindNumbersState, type FoundNumber } from "./find-numbers-actions";
 import type { CounsellorOption } from "./whatsapp-numbers";
 
 function FoundRow({ number, counsellors, onDone }: { number: FoundNumber; counsellors: CounsellorOption[]; onDone: (state: FindNumbersState) => void }) {
@@ -85,6 +85,28 @@ export function FindNumbers({ counsellors }: { counsellors: CounsellorOption[] }
       >
         Connect messages from this account
       </Button>
+      <p className="max-w-2xl text-sm text-muted-foreground">
+        Not sure what is wrong? This asks Meta, read-only, what state each counsellor number is really in: whether it is attached to the
+        platform, whether it is in the Business app, and whether anything sends its messages somewhere other than here.
+      </p>
+      <Button type="button" variant="outline" size="sm" className="w-fit" disabled={pending} onClick={() => start(async () => setState(await askMetaAboutCounsellorNumbers(accountId)))}>
+        Ask Meta about the counsellor numbers
+      </Button>
+      {state.facts && (
+        <ul className="flex max-w-3xl flex-col gap-1.5 text-sm">
+          {state.facts.map((f, i) => (
+            <li
+              key={i}
+              className={
+                f.verdict === "bad" ? "text-destructive" : f.verdict === "good" ? "text-green-700 dark:text-green-400" : "pt-1 font-medium"
+              }
+            >
+              {f.verdict === "bad" ? "✗ " : f.verdict === "good" ? "✓ " : ""}
+              {f.text}
+            </li>
+          ))}
+        </ul>
+      )}
       <FormMessage error={state.error} success={state.success} />
       {state.numbers && state.numbers.length > 0 && (
         <ul className="flex flex-col gap-2">
