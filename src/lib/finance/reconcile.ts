@@ -1,9 +1,25 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { DbExecutor } from "@/lib/db/client";
 import { bankMatches, bankStatementLines, financeTransactions } from "@/lib/db/schema";
 
 import { effectiveDirection, planMatches, type RecLine, type RecTxn } from "./reconcile-plan";
+
+/**
+ * A statement line that has been paired with an entry (or accepted as having
+ * none) is dealt with, so it leaves the "To categorise" list. That list is
+ * every line still marked `pending`; pairing used to record the pair and leave
+ * the line pending, so a line paired in Reconciliation, or by the automatic
+ * matcher, kept being offered for categorising, where categorising it again
+ * would have posted the same money twice.
+ */
+async function markDealtWith(tx: DbExecutor, lineIds: string[], status: "posted" | "skipped", reason: string | null = null) {
+  if (lineIds.length === 0) return;
+  await tx
+    .update(bankStatementLines)
+    .set({ status, skipReason: reason, resolvedAt: sql`now()` })
+    .where(and(inArray(bankStatementLines.id, lineIds), eq(bankStatementLines.status, "pending")));
+}
 
 /**
  * Reconciliation writes. Callers check `bank.reconcile` (or, for the
@@ -92,7 +108,8 @@ export async function autoMatchAccount(tx: DbExecutor, accountId: string): Promi
       })),
     )
     .onConflictDoNothing()
-    .returning({ id: bankMatches.id });
+    .returning({ id: bankMatches.id, bankLineId: bankMatches.bankLineId });
+  await markDealtWith(tx, inserted.map((r) => r.bankLineId), "posted");
   return inserted.length;
 }
 
@@ -130,6 +147,7 @@ export async function matchManually(
     .onConflictDoNothing()
     .returning({ id: bankMatches.id });
   if (inserted.length === 0) return { ok: false, error: "One of them is already paired with something else." };
+  await markDealtWith(tx, [line.id], "posted");
   return { ok: true };
 }
 
@@ -155,6 +173,7 @@ export async function waiveLine(
     .onConflictDoNothing()
     .returning({ id: bankMatches.id });
   if (inserted.length === 0) return { ok: false, error: "That line is already paired." };
+  await markDealtWith(tx, [line.id], "skipped", reason);
   return { ok: true };
 }
 
@@ -169,8 +188,24 @@ export async function unmatch(
     .update(bankMatches)
     .set({ active: false, unmatchedBy: input.userId, unmatchedAt: sql`now()`, unmatchReason: reason })
     .where(and(eq(bankMatches.id, input.matchId), eq(bankMatches.active, true)))
-    .returning({ bankLineId: bankMatches.bankLineId });
+    .returning({ bankLineId: bankMatches.bankLineId, method: bankMatches.method });
   if (!row) return { ok: false, error: "That pair was already undone." };
+  // A pairing made in Reconciliation (automatic, by hand, or a waiver) is what
+  // took the line out of "To categorise", so undoing it puts it back. A line
+  // that was categorised made its own ledger entry, so it must NOT come back:
+  // categorising it again would post the money twice.
+  if (row.method !== "categorised") {
+    const [stillPaired] = await tx
+      .select({ id: bankMatches.id })
+      .from(bankMatches)
+      .where(and(eq(bankMatches.bankLineId, row.bankLineId), eq(bankMatches.active, true)));
+    if (!stillPaired) {
+      await tx
+        .update(bankStatementLines)
+        .set({ status: "pending", skipReason: null, resolvedAt: null, resolvedBy: null })
+        .where(eq(bankStatementLines.id, row.bankLineId));
+    }
+  }
   return { ok: true, bankLineId: row.bankLineId };
 }
 
