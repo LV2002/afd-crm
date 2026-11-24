@@ -107,6 +107,21 @@ export const NOTIFICATION_EVENTS = [
     defaultNotifyRoleCodes: ["center_head"],
   },
   {
+    // Not the same as an SLA breach: an SLA is a response-time target a policy
+    // sets per source. This is the plain question "has anybody got in touch
+    // with this person at all in a week?", and it goes to the admin.
+    key: "lead.uncontacted",
+    label: "Lead not contacted in 7 days",
+    description:
+      "A lead has sat at Not contacted for 7 days with no call, message or visit logged. Told once per lead, by the daily check.",
+    category: "Leads",
+    variables: ["lead_name", "lead_number", "days_waiting", "source", "center_name"],
+    defaultTitle: "Not contacted for {{days_waiting}} days: {{lead_name}}",
+    defaultBody: "Lead #{{lead_number}} from {{source}} has had no contact since it arrived {{days_waiting}} days ago.",
+    defaultNotifyOwner: false,
+    defaultNotifyRoleCodes: ["admin"],
+  },
+  {
     key: "lead.sla_escalated",
     label: "SLA escalation step",
     description:
@@ -414,6 +429,22 @@ export const NOTIFICATION_EVENTS = [
     defaultBody: "Works {{work_date}} ({{work_part}}), takes {{off_date}} off ({{off_part}}). {{reason}}",
     defaultNotifyOwner: true,
     defaultNotifyRoleCodes: ["hr", "co_admin", "admin"],
+  },
+  {
+    // A month late is where a missed instalment stops being the counsellor's
+    // and accounts' to chase and becomes the admin's to know about. The earlier
+    // reminder rungs (payment.overdue) deliberately do not reach the admin.
+    key: "payment.overdue_severe",
+    label: "Fee instalment 30+ days overdue",
+    description:
+      "An instalment is a month or more past its due date and still unpaid. Told once per instalment, by the daily check. The earlier reminder steps do not notify the admin.",
+    category: "Money",
+    variables: ["student_name", "amount", "days_overdue", "due_date", "course"],
+    defaultTitle: "30+ days overdue: {{student_name}}",
+    defaultBody:
+      "{{amount}} for {{course}} was due on {{due_date}} and is now {{days_overdue}} days late.",
+    defaultNotifyOwner: false,
+    defaultNotifyRoleCodes: ["admin"],
   },
   {
     // Raised by the finance-thresholds sweep, never by a person acting.

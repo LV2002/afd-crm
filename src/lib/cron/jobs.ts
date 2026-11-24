@@ -2,6 +2,7 @@ import "server-only";
 
 import { expectOk, type NightlyJob } from "@/lib/cron/nightly-runner";
 
+import { GET as adminAlerts } from "@/app/api/cron/admin-alerts/route";
 import { GET as adSpendGoogle } from "@/app/api/cron/ad-spend-sync/google/route";
 import { GET as adSpendMeta } from "@/app/api/cron/ad-spend-sync/meta/route";
 import { GET as bankMatch } from "@/app/api/cron/bank-match/route";
@@ -134,6 +135,9 @@ export function dailyJobs(request: Request): NightlyJob[] {
   return [
     // Its own three first — these are the ones only this tier runs.
     job("payment-reminders", "Fee reminders", paymentReminders, 4000, request),
+    // Fee reminders are a date, and so is this: the admin hears at ten in the
+    // morning, not at whatever hour a sweep fired.
+    job("admin-alerts", "Admin alerts: late payments and untouched leads", adminAlerts, 4000, request),
     job(
       "recompute-temperature",
       "Temperature recalculation",

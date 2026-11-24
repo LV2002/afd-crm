@@ -1002,6 +1002,13 @@
       "when": 1796824808000,
       "tag": "0142_paired_lines_leave_queue",
       "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1796911208000,
+      "tag": "0143_admin_notification_settings",
+      "breakpoints": true
     }
   ]
 }
