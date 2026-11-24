@@ -121,3 +121,125 @@
   background-color: #1b1613;
   color: #ffffff;
 }
+
+/*
+ * Spreadsheet mode (components/ui/sheet-table.tsx): for wide lists. Sticky
+ * header and first two columns, one-line cells, faint dividers, click-to-copy.
+ * Uses the generic tokens, so it follows light and dark alike.
+ */
+.sheet-wrap {
+  max-height: 68vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+}
+.sheet {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.85rem;
+}
+.sheet th,
+.sheet td {
+  padding: 8px 12px;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  background: var(--card);
+  text-align: left;
+}
+.sheet tbody tr:last-child td { border-bottom: 0; }
+.sheet thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #faf7f3;
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  user-select: none;
+}
+.dark .sheet thead th { background: var(--muted); }
+.sheet-sortable { cursor: pointer; }
+.sheet-sortable:hover { color: var(--foreground); }
+
+/* The first two columns stay in view while the rest scroll sideways. */
+.sheet .sheet-open {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+  padding-inline: 8px;
+}
+.sheet thead .sheet-open { z-index: 4; }
+.sheet th:nth-child(2),
+.sheet td:nth-child(2) {
+  position: sticky;
+  left: 72px;
+  z-index: 2;
+  box-shadow: 1px 0 0 var(--border);
+}
+.sheet thead th:nth-child(2) { z-index: 4; }
+
+.sheet .sheet-cell {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: copy;
+}
+.sheet .sheet-cell:hover { background: var(--primary-subtle); }
+.sheet tbody tr:hover td:not(.sheet-cell) { background: var(--card); }
+
+/* The Open button: a dark pill, the one fixed handle on every row. */
+.sheet-open-btn {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: #1b1613;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.dark .sheet-open-btn { background: #f6f3ef; color: #1b1613; }
+.sheet-open-btn:hover { background: var(--primary); color: var(--primary-foreground); }
+.sheet .sheet-empty { padding: 40px; text-align: center; color: var(--muted-foreground); }
+
+/*
+ * Phones: the top bar goes dark like the sidebar, and the menu slides in
+ * from the left as a dark drawer with a soft shadow. Both use the same local
+ * palette as .warm-side, so everything inside them reads without being edited.
+ */
+@media (max-width: 767px) {
+  .warm-top {
+    --background: #1b1613;
+    --foreground: #ffffff;
+    --muted-foreground: #bdb4ab;
+    --accent: #2c2520;
+    --accent-foreground: #ffffff;
+    --border: #3a322c;
+    --secondary: #2c2520;
+    --secondary-foreground: #ffffff;
+    background-color: #1b1613;
+    color: #ffffff;
+    border-color: #3a322c;
+  }
+}
+
+.warm-drawer {
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
+  animation: warm-drawer-in 0.2s ease-out;
+}
+.warm-overlay { background-color: rgba(20, 14, 10, 0.5); }
+
+@keyframes warm-drawer-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .warm-drawer { animation: none; }
+}

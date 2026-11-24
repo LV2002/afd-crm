@@ -59,12 +59,15 @@ import { cn } from "@/lib/utils";
 export function MobileNav({
   items,
   userName,
+  brandName = "AFD India CRM",
   badges = {},
   counsellors = [],
   chatLinks = [],
 }: {
   items: NavItem[];
   userName: string;
+  /** The organisation's name, as the desktop sidebar shows it. */
+  brandName?: string;
   badges?: NavBadgeCounts;
   /** Same list, same place as the desktop sidebar: under Dashboard, while it is open. */
   counsellors?: CounsellorLink[];
@@ -119,7 +122,7 @@ export function MobileNav({
         createPortal(
           <div className="fixed inset-0 z-50 md:hidden">
             <div
-              className="absolute inset-0 bg-foreground/40"
+              className="warm-overlay absolute inset-0 bg-foreground/40"
               onClick={() => setOpen(false)}
               aria-hidden="true"
             />
@@ -128,14 +131,18 @@ export function MobileNav({
               role="dialog"
               aria-modal="true"
               aria-label="Menu"
-              className="absolute inset-y-0 left-0 flex w-[min(19rem,85vw)] flex-col bg-background shadow-xl"
+              className="warm-side warm-drawer absolute inset-y-0 left-0 flex w-[min(19rem,85vw)] flex-col bg-background shadow-xl"
             >
               <div className="flex items-center justify-between border-b px-4 py-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">AFD India CRM</p>
-                  <p className="truncate text-sm text-muted-foreground">
-                    {userName}
-                  </p>
+                <div className="flex min-w-0 items-center gap-3">
+                  {/* The same mark as the desktop sidebar: the organisation's initial on the accent. */}
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
+                    {brandName.trim().charAt(0).toUpperCase() || "A"}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-[0.9375rem] font-extrabold">{brandName}</p>
+                    <p className="truncate text-xs text-muted-foreground">{userName}</p>
+                  </div>
                 </div>
                 <Button
                   type="button"
