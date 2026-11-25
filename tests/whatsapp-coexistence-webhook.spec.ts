@@ -157,6 +157,9 @@ async function makeLead(name: string, phone: string) {
 describe("an inbound message decides lead creation by the number it arrived on", () => {
   it("does NOT create a lead on a counsellor's coexistence number, but keeps the chat for them", async () => {
     const from = "919847600101";
+    // Lead-less rows are not reached by the leadId cleanup, so clear any
+    // left by an earlier run of this same fixture phone.
+    await db.delete(whatsappMessages).where(eq(whatsappMessages.fromPhone, `+91${from.slice(2)}`));
     const body = envelope(
       "messages",
       {
