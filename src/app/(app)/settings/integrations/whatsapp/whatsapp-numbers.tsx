@@ -62,7 +62,6 @@ function NumberForm({
   const [state, action, pending] = useActionState(saveWhatsAppNumber, initialState);
   // A counsellor's own phone: a stranger asking about coaching is a real
   // enquiry, so a new number starts out creating leads.
-  const [createsLeads, setCreatesLeads] = useState(number?.createsLeads ?? true);
 
   const id = number?.id ?? "new";
 
@@ -128,20 +127,10 @@ function NumberForm({
       </div>
 
 
-      <label className="flex items-start gap-2 text-sm">
-        <Checkbox
-          name="createsLeads"
-          checked={createsLeads}
-          onCheckedChange={(next) => setCreatesLeads(next === true)}
-        />
-        <span>
-          A message from somebody new creates a lead
-          <span className="block text-xs text-muted-foreground">
-            Right for a counsellor&apos;s own number: a stranger asking about coaching is a real
-            enquiry.
-          </span>
-        </span>
-      </label>
+      <p className="text-xs text-muted-foreground">
+        Messages from new people never become leads on their own. A counsellor opens the chat and
+        chooses &ldquo;Convert to lead&rdquo; when it really is an enquiry.
+      </p>
 
       <FormMessage error={state.error} success={state.success} />
 
@@ -181,7 +170,6 @@ export function WhatsAppNumbers({
                   {number.mode === "coexistence" ? "Coexistence" : "API only"}
                 </Badge>
                 {!number.isActive && <Badge variant="secondary">Off</Badge>}
-                {number.createsLeads && <Badge variant="outline">Creates leads</Badge>}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
                 {number.displayPhoneNumber ?? number.phoneNumberId}

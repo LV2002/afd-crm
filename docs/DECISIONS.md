@@ -4955,3 +4955,7 @@ Fees, fines, salaries and recurring costs need different follow-up when a bank l
 
 ## 2026-11-24 — The 30-day and 7-day marks for admin alerts are constants, for now
 Leon asked that the admin hear about instalments 30+ days late and leads untouched for 7 days. Who is told is configuration (Settings → Notifications, per event), but the two numbers live in `lib/alerts/admin-alerts.ts`. CLAUDE.md #10 would make them settings; they were not made so because a notification setting has no numeric field and a settings screen for two numbers was not asked for. Moving them to `org_settings` with an input is the follow-up if they ever need to differ. "Contacted" means any logged interaction or any outbound WhatsApp message; a lead at a non-"new" status is not flagged even if nothing is logged.
+
+## 2026-11-25 — No automatic leads from WhatsApp
+
+Reverses the per-number `creates_leads` rule and the "ad tap creates a lead on any number" rule. Owner's instruction: a counsellor must mark a chat as a lead. Cost accepted: Click-to-WhatsApp enquiries from strangers no longer appear in Ad Performance until converted (the ad id is not kept on the conversion).

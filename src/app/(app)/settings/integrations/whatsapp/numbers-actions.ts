@@ -44,7 +44,6 @@ export async function saveWhatsAppNumber(
   const label = String(formData.get("label") ?? "").trim();
   const displayPhoneNumber = String(formData.get("displayPhoneNumber") ?? "").trim() || null;
   const counsellorId = String(formData.get("counsellorId") ?? "").trim() || null;
-  const createsLeads = formData.get("createsLeads") === "on";
 
   if (!phoneNumberId) {
     return { error: "Paste the Phone number ID from Meta — it is the only thing a webhook names." };
@@ -77,7 +76,7 @@ export async function saveWhatsAppNumber(
     displayPhoneNumber,
     mode: "coexistence",
     counsellorId,
-    createsLeads,
+    createsLeads: false,
   } as const;
 
   if (id) {
