@@ -89,6 +89,8 @@ export interface SendTemplateConfig {
   templateName: string;
   templateLanguage: string;
   params: ParamSource[];
+  /** Attach, as the template's document header, the file link stored on the database contact (an admit card). */
+  headerDocument?: "contact";
 }
 
 export interface SendTextConfig {

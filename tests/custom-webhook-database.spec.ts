@@ -61,7 +61,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await db.delete(webhookEvents).where(inArray(webhookEvents.customWebhookId, webhookIds));
   await db.delete(contactListMembers).where(inArray(contactListMembers.listId, [listId, archivedListId]));
-  await db.delete(contacts).where(inArray(contacts.phone, ["+919876500111", "+919876500222"]));
+  await db.delete(contacts).where(inArray(contacts.phone, ["+919876500111", "+919876500222", "+919876500444", "+919876500555"]));
   await db.delete(contacts).where(eq(contacts.email, "emailonly@webhookdbtest.example"));
   await db.delete(customWebhooks).where(inArray(customWebhooks.id, webhookIds));
   await db.delete(contactLists).where(inArray(contactLists.id, [listId, archivedListId]));
@@ -80,6 +80,15 @@ describe("custom webhook → database", () => {
     expect(members.map((m) => m.contactId)).toContain(contact.id);
     const made = await db.select({ id: leads.id }).from(leads).where(eq(leads.primaryPhone, "+919876500111"));
     expect(made).toHaveLength(0);
+  });
+
+  it("keeps an https admit-card link on the contact, and ignores a non-https one", async () => {
+    await post(slug, { name: "Doc One", phone: "+919876500444", admit_card_url: "https://example.com/a.pdf", submission_id: "d1" });
+    await post(slug, { name: "Doc Two", phone: "+919876500555", admit_card_url: "http://example.com/b.pdf", submission_id: "d2" });
+    const [one] = await db.select().from(contacts).where(eq(contacts.phone, "+919876500444"));
+    const [two] = await db.select().from(contacts).where(eq(contacts.phone, "+919876500555"));
+    expect((one.fields as Record<string, unknown>).document_url).toBe("https://example.com/a.pdf");
+    expect((two.fields as Record<string, unknown>).document_url).toBeUndefined();
   });
 
   it("never duplicates a person who comes in twice with different submissions", async () => {

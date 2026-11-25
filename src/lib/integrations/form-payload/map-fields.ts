@@ -36,6 +36,9 @@ export interface MappedFormLead {
   coursesInterested: string[] | null;
   /** The form's own name or id, when it sent one. */
   formName: string | null;
+  /** An https link to a file (admit card) the sender wants the person to receive. */
+  documentUrl: string | null;
+  documentName: string | null;
   /** Anything that looked like a page or URL, unparsed. */
   pageValue: string | null;
   /** UTM parameters and click ids, from explicit fields or the query string. */
@@ -71,6 +74,9 @@ export const ALIASES = {
   exams: ["exam", "exams", "interestedexam", "interestedexams", "course", "courses", "courseinterested", "programme", "program"],
   formName: ["form", "formname", "formid", "formtitle", "formlabel"],
   page: ["page", "pageurl", "pagepath", "url", "sourceurl", "pagetitle", "referrer", "location"],
+  /** A link to a file to send the person (an admit card PDF). Database destinations only. */
+  document: ["admitcard", "admitcardurl", "admitcardlink", "admitcardpdf", "document", "documenturl", "documentlink", "pdf", "pdfurl", "fileurl", "attachmenturl"],
+  documentName: ["admitcardname", "documentname", "filename"],
   /**
    * Where the UTM parameters come from. Usually the full page URL, but a
    * form that posts `location.search` on its own works too.
@@ -133,6 +139,11 @@ export function explicitUtmFields(payload: FormPayload): Record<string, string> 
     out[canonical] = value.trim();
   }
   return Object.keys(out).length > 0 ? out : null;
+}
+
+/** Only an https link is usable: WhatsApp will not fetch anything else. */
+function httpsUrl(value: string | null): string | null {
+  return value && /^https:\/\/\S+$/i.test(value) ? value : null;
 }
 
 export function mapFormPayload(
@@ -221,6 +232,8 @@ export function mapFormPayload(
       interestedExams: exams,
       coursesInterested: exams,
       formName: pick(payload, ALIASES.formName, extraAliases?.formName),
+      documentUrl: httpsUrl(pick(payload, ALIASES.document, extraAliases?.document)),
+      documentName: pick(payload, ALIASES.documentName, extraAliases?.documentName),
       pageValue,
       utm,
       raw: payload as Record<string, unknown>,

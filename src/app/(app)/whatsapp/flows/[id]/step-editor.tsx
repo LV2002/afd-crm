@@ -551,6 +551,29 @@ function StepConfig({
           <p className="whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">{template.body}</p>
         )}
 
+        {lists.audience === "contact" && (
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={config.headerDocument === "contact"}
+              onChange={(event) => {
+                const next = { ...config };
+                if (event.target.checked) next.headerDocument = "contact";
+                else delete next.headerDocument;
+                setConfig(next);
+              }}
+            />
+            <span>
+              Attach this person&apos;s own document (admit card) as the template&apos;s file header
+              <span className="block text-xs text-muted-foreground">
+                Uses the file link sent with their registration. The template must be approved with a
+                Document header. Someone with no link is skipped and the reason shown.
+              </span>
+            </span>
+          </label>
+        )}
+
         {sources.map((source, index) => (
           <div key={index} className="flex flex-wrap items-end gap-2">
             <span className="pb-2 font-mono text-xs text-muted-foreground">{`{{${index + 1}}}`}</span>

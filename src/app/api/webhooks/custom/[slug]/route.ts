@@ -291,6 +291,9 @@ async function addToDatabase(
             exam_year: lead.examYear,
             interested_exams: lead.interestedExams,
             courses_interested: lead.coursesInterested,
+            // Read by an automation step that attaches it to the first message.
+            document_url: lead.documentUrl,
+            document_name: lead.documentName,
           },
         },
         { listId: list.id, userId: null },

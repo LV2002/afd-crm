@@ -174,3 +174,31 @@ describe("when somebody is added to a database", () => {
     expect(again).toHaveLength(1);
   });
 });
+
+describe("a per-person document on the first message", () => {
+  it("attaches the contact's own link as the header, and stops a run that has none", async () => {
+    const [f] = await db
+      .insert(whatsappFlows)
+      .values({ name: `${MARK} doc`, audience: "contact", triggerType: "manual", isActive: true })
+      .returning({ id: whatsappFlows.id });
+    await db.insert(whatsappFlowSteps).values({
+      flowId: f.id,
+      position: 1,
+      kind: "send_template",
+      config: { templateName: "admit_card", templateLanguage: "en_US", params: [], headerDocument: "contact" },
+    });
+    const withDoc = await addContact("withdoc", "+919847640001");
+    await db.update(contacts).set({ fields: { document_url: "https://example.com/pass.pdf", document_name: "Admit card.pdf" } }).where(eq(contacts.id, withDoc));
+    const noDoc = await addContact("nodoc", "+919847640002");
+
+    await startFlowForContacts(f.id, [listId]);
+    await advanceRuns();
+
+    const calls = vi.mocked(sendTemplateMessage).mock.calls.filter((c) => c[3] === "admit_card");
+    expect(calls).toHaveLength(1);
+    expect(calls[0][2]).toBe("+919847640001");
+    expect(calls[0][6]).toEqual({ kind: "document", link: "https://example.com/pass.pdf", filename: "Admit card.pdf" });
+    const runs = await db.select().from(whatsappFlowRuns).where(eq(whatsappFlowRuns.flowId, f.id));
+    expect(runs.find((r) => r.contactId === noDoc)?.status).not.toBe("running");
+  });
+});

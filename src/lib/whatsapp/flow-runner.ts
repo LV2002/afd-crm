@@ -399,6 +399,20 @@ async function sendStepToContact(
     params = resolved.params;
   }
 
+  // A per-person document (admit card): the link the sender posted when this
+  // person was added. Without one the message would be refused by Meta, so say
+  // so and stop this person's run rather than burning an attempt.
+  let headerMedia: { kind: "document"; link: string; filename?: string } | undefined;
+  if (config.headerDocument === "contact") {
+    const [row] = await db.select({ fields: contacts.fields }).from(contacts).where(eq(contacts.id, contact.id));
+    const link = row?.fields?.document_url;
+    if (typeof link !== "string" || !/^https:\/\/\S+$/i.test(link)) {
+      return { ok: false, reason: "No document link on this person to attach.", fatal: true };
+    }
+    const name = row?.fields?.document_name;
+    headerMedia = { kind: "document", link, filename: typeof name === "string" && name ? name : "Document.pdf" };
+  }
+
   const waMessageId = await sendTemplateMessage(
     phoneNumberId,
     accessToken,
@@ -406,6 +420,7 @@ async function sendStepToContact(
     config.templateName ?? "",
     config.templateLanguage ?? "en_US",
     params.length > 0 ? params : undefined,
+    ...(headerMedia ? [headerMedia] : []),
   );
   return { ok: true, waMessageId };
 }
