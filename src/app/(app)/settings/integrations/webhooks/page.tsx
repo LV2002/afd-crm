@@ -23,6 +23,8 @@ interface WebhookRow {
   signing_secret: string;
   auth_token: string | null;
   ad_platform: string | null;
+  destination: string;
+  contact_list_id: string | null;
   require_signature: boolean;
   field_aliases: Record<string, string[]> | null;
   is_active: boolean;
@@ -57,11 +59,11 @@ export default async function CustomWebhooksPage() {
 
   const supabase = await createClient();
 
-  const [{ data: rows }, { data: centerRows }, { data: deliveryRows }, { data: sourceRows }] = await Promise.all([
+  const [{ data: rows }, { data: centerRows }, { data: deliveryRows }, { data: sourceRows }, { data: listRows }] = await Promise.all([
     supabase
       .from("custom_webhooks")
       .select(
-        "id, name, slug, source, sub_source, center_id, signing_secret, auth_token, ad_platform, require_signature, field_aliases, is_active",
+        "id, name, slug, source, sub_source, center_id, signing_secret, auth_token, ad_platform, destination, contact_list_id, require_signature, field_aliases, is_active",
       )
       .is("deleted_at", null)
       .order("created_at", { ascending: true })
@@ -93,7 +95,15 @@ export default async function CustomWebhooksPage() {
       .is("deleted_at", null)
       .order("sort_order")
       .returns<Array<{ value: string; label: string }>>(),
+    // Databases a webhook can fill: live (not archived) contact lists.
+    supabase
+      .from("contact_lists")
+      .select("id, name")
+      .is("archived_at", null)
+      .order("name")
+      .returns<Array<{ id: string; name: string }>>(),
   ]);
+  const lists = listRows ?? [];
   const sourceOptions = (sourceRows ?? []).map((option) => ({ value: option.value, label: option.label }));
 
   const summary = summariseDeliveries(deliveryRows ?? []);
@@ -111,6 +121,8 @@ export default async function CustomWebhooksPage() {
       signingSecret: row.signing_secret,
       authToken: row.auth_token,
       adPlatform: row.ad_platform,
+      destination: row.destination,
+      contactListId: row.contact_list_id,
       requireSignature: row.require_signature,
       aliasText: await formatAliases(row.field_aliases),
       isActive: row.is_active,
@@ -165,6 +177,7 @@ export default async function CustomWebhooksPage() {
               centers={centers}
               aliasFields={aliasFields}
               sourceOptions={sourceOptions}
+              lists={lists}
             />
           ))}
         </section>
@@ -175,7 +188,7 @@ export default async function CustomWebhooksPage() {
           <Plus className="size-4" />
           {webhooks.length === 0 ? "Add your first endpoint" : "Add another endpoint"}
         </h3>
-        <NewWebhookForm centers={centers} sourceOptions={sourceOptions} />
+        <NewWebhookForm centers={centers} sourceOptions={sourceOptions} lists={lists} />
       </section>
     </div>
   );

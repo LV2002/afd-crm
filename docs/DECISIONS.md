@@ -4959,3 +4959,6 @@ Leon asked that the admin hear about instalments 30+ days late and leads untouch
 ## 2026-11-25 — No automatic leads from WhatsApp
 
 Reverses the per-number `creates_leads` rule and the "ad tap creates a lead on any number" rule. Owner's instruction: a counsellor must mark a chat as a lead. Cost accepted: Click-to-WhatsApp enquiries from strangers no longer appear in Ad Performance until converted (the ad id is not kept on the conversion).
+## 2026-11-25 — Custom webhook destination: lead or database list
+
+`custom_webhooks.destination` (`lead` | `contact_list`) plus `contact_list_id` (check constraint: a list is required for `contact_list`). Chosen over a second route so the signature/auth/persist/duplicate handling stays in one place. Email-only deliveries are accepted for databases (identity is phone or email there) but not for leads, which still need a phone. A list that is archived or missing is a settings fault, so it returns 500 (sender retries) rather than 200 (data lost).

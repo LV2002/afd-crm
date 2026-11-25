@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { customWebhooks, dropdownOptions, enquiries } from "@/lib/db/schema";
+import { contactLists, customWebhooks, dropdownOptions, enquiries } from "@/lib/db/schema";
 import { canonicalSource } from "@/lib/identity/canonical-source";
 import { relabelEndpointLeads } from "@/lib/integrations/custom-webhook/relabel";
 import { ALIASES } from "@/lib/integrations/form-payload/map-fields";
@@ -139,6 +139,19 @@ export async function saveCustomWebhook(
   const aliases = parseAliases(String(formData.get("fieldAliases") ?? ""));
   if (!aliases.ok) return { error: aliases.error };
 
+  // Where deliveries go: the lead pipeline (default) or a database list.
+  const destination = formData.get("destination") === "contact_list" ? "contact_list" : "lead";
+  let contactListId: string | null = null;
+  if (destination === "contact_list") {
+    contactListId = String(formData.get("contactListId") ?? "").trim() || null;
+    if (!contactListId) return { error: "Pick the database these should be added to." };
+    const [list] = await db
+      .select({ id: contactLists.id })
+      .from(contactLists)
+      .where(and(eq(contactLists.id, contactListId), isNull(contactLists.archivedAt)));
+    if (!list) return { error: "That database no longer exists or is archived. Pick another." };
+  }
+
   if (id) {
     const [existing] = await db
       .select({ id: customWebhooks.id, authToken: customWebhooks.authToken })
@@ -166,6 +179,8 @@ export async function saveCustomWebhook(
         */
         authToken: wantsAuthToken ? (existing.authToken ?? token()) : null,
         adPlatform,
+        destination,
+        contactListId,
         fieldAliases: aliases.value,
         updatedAt: new Date(),
       })
@@ -206,6 +221,8 @@ export async function saveCustomWebhook(
       requireSignature,
       authToken: wantsAuthToken ? token() : null,
       adPlatform,
+      destination,
+      contactListId,
       fieldAliases: aliases.value,
       createdBy: user.id,
     });
@@ -235,6 +252,8 @@ export async function saveCustomWebhook(
       requireSignature,
       hasAuthToken: wantsAuthToken,
       adPlatform,
+      destination,
+      contactListId,
     },
   });
 
