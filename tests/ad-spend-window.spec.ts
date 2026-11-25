@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   backfillWindow,
+  clampToFloor,
   DEFAULT_BACKFILL_CHUNK_DAYS,
   DEFAULT_BACKFILL_DAYS,
   DEFAULT_LOOKBACK_DAYS,
@@ -177,5 +178,18 @@ describe("backfillWindow", () => {
       maxHistoryDays: 60,
     });
     expect(window).toMatchObject({ since: "2026-08-05", until: "2026-09-03", days: 30 });
+  });
+});
+
+describe("Meta spend floor", () => {
+  it("clamps a window that starts before the floor and drops one entirely before it", () => {
+    expect(clampToFloor("2026-09-01", "2026-10-10", "2026-10-01")).toEqual({ since: "2026-10-01", until: "2026-10-10" });
+    expect(clampToFloor("2026-10-05", "2026-10-10", "2026-10-01")).toEqual({ since: "2026-10-05", until: "2026-10-10" });
+    expect(clampToFloor("2026-08-01", "2026-09-30", "2026-10-01")).toBeNull();
+  });
+
+  it("never offers a backfill that reaches before the floor", () => {
+    expect(backfillWindow({ earliestStored: "2026-10-01", yesterday: "2026-11-24", floor: "2026-10-01" })).toBeNull();
+    expect(backfillWindow({ earliestStored: "2026-10-20", yesterday: "2026-11-24", floor: "2026-10-01" })).toMatchObject({ since: "2026-10-01", until: "2026-10-19" });
   });
 });
