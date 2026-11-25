@@ -4,7 +4,8 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db/client";
-import { customWebhooks, webhookEvents } from "@/lib/db/schema";
+import { auditLog, contactLists, customWebhooks, webhookEvents } from "@/lib/db/schema";
+import { saveContact } from "@/lib/contacts/save";
 import { adIdentifiersFrom } from "@/lib/integrations/form-payload/ad-identifiers";
 import { authKeyMatches, presentedAuthKey } from "@/lib/integrations/custom-webhook/auth-key";
 import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
@@ -13,6 +14,7 @@ import {
   submissionId,
   type ExtraAliases,
   type FormPayload,
+  type MappedFormLead,
 } from "@/lib/integrations/form-payload/map-fields";
 import { verifyMetaSignature } from "@/lib/integrations/meta/verify-signature";
 
@@ -167,7 +169,12 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
     return NextResponse.json({ ok: true, duplicate: true });
   }
 
-  const mapped = mapFormPayload(payload, (webhook.fieldAliases ?? undefined) as ExtraAliases | undefined);
+  const toList = webhook.destination === "contact_list";
+  const mapped = mapFormPayload(
+    payload,
+    (webhook.fieldAliases ?? undefined) as ExtraAliases | undefined,
+    toList ? "phone_or_email" : "phone",
+  );
 
   if (!mapped.ok) {
     // A 200, deliberately. The payload is unusable — no name, or no
@@ -180,6 +187,10 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
       .set({ status: "failed", attempts: sql`${webhookEvents.attempts} + 1`, lastError: mapped.reason })
       .where(eq(webhookEvents.id, inserted.id));
     return NextResponse.json({ ok: false, error: mapped.reason });
+  }
+
+  if (toList) {
+    return addToDatabase(webhook, inserted.id, mapped.lead);
   }
 
   try {
@@ -233,6 +244,74 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
       .where(eq(webhookEvents.id, inserted.id));
 
     return NextResponse.json({ error: "Could not record the enquiry" }, { status: 500 });
+  }
+}
+
+/**
+ * The "database" destination: the person goes onto a contact list instead of
+ * becoming a lead. Same verify → persist → process order as the lead path,
+ * the same response shapes, and the same rule that a repeat is never an
+ * error (`saveContact` matches by phone then email and only fills blanks).
+ */
+async function addToDatabase(
+  webhook: typeof customWebhooks.$inferSelect,
+  eventId: string,
+  lead: MappedFormLead,
+) {
+  const fail = async (message: string) =>
+    db
+      .update(webhookEvents)
+      .set({ status: "failed", attempts: sql`${webhookEvents.attempts} + 1`, lastError: message })
+      .where(eq(webhookEvents.id, eventId));
+
+  try {
+    const [list] = webhook.contactListId
+      ? await db
+          .select({ id: contactLists.id, name: contactLists.name })
+          .from(contactLists)
+          .where(and(eq(contactLists.id, webhook.contactListId), isNull(contactLists.archivedAt)))
+      : [];
+    if (!list) {
+      // A settings problem, not a bad payload: non-2xx so the sender keeps
+      // the row and retries once somebody has picked a list that exists.
+      await fail("This endpoint sends to a database that is missing or archived. Pick another in Settings.");
+      return NextResponse.json({ error: "Destination database unavailable" }, { status: 500 });
+    }
+
+    const saved = await db.transaction((tx) =>
+      saveContact(
+        tx,
+        {
+          name: lead.studentName,
+          phone: lead.primaryPhone || null,
+          email: lead.email,
+          fields: {
+            city: lead.city,
+            exam_year: lead.examYear,
+            interested_exams: lead.interestedExams,
+            courses_interested: lead.coursesInterested,
+          },
+        },
+        { listId: list.id, userId: null },
+      ),
+    );
+
+    await db.insert(auditLog).values({
+      actorId: null,
+      action: "contact.webhook_add",
+      entityType: "contacts",
+      entityId: saved.contactId,
+      after: { webhookId: webhook.id, listId: list.id, created: saved.created, alreadyOnList: saved.alreadyOnList },
+    });
+
+    await db
+      .update(webhookEvents)
+      .set({ status: "done", processedAt: new Date(), attempts: sql`${webhookEvents.attempts} + 1` })
+      .where(eq(webhookEvents.id, eventId));
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    await fail(error instanceof Error ? error.message : String(error));
+    return NextResponse.json({ error: "Could not record the contact" }, { status: 500 });
   }
 }
 

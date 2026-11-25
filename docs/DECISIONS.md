@@ -4955,3 +4955,7 @@ Fees, fines, salaries and recurring costs need different follow-up when a bank l
 
 ## 2026-11-24 — The 30-day and 7-day marks for admin alerts are constants, for now
 Leon asked that the admin hear about instalments 30+ days late and leads untouched for 7 days. Who is told is configuration (Settings → Notifications, per event), but the two numbers live in `lib/alerts/admin-alerts.ts`. CLAUDE.md #10 would make them settings; they were not made so because a notification setting has no numeric field and a settings screen for two numbers was not asked for. Moving them to `org_settings` with an input is the follow-up if they ever need to differ. "Contacted" means any logged interaction or any outbound WhatsApp message; a lead at a non-"new" status is not flagged even if nothing is logged.
+
+## 2026-11-25 — Custom webhook destination: lead or database list
+
+`custom_webhooks.destination` (`lead` | `contact_list`) plus `contact_list_id` (check constraint: a list is required for `contact_list`). Chosen over a second route so the signature/auth/persist/duplicate handling stays in one place. Email-only deliveries are accepted for databases (identity is phone or email there) but not for leads, which still need a phone. A list that is archived or missing is a settings fault, so it returns 500 (sender retries) rather than 200 (data lost).

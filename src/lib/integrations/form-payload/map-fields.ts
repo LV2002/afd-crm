@@ -138,6 +138,12 @@ export function explicitUtmFields(payload: FormPayload): Record<string, string> 
 export function mapFormPayload(
   payload: FormPayload,
   extraAliases?: ExtraAliases,
+  /**
+   * `phone_or_email` is for a database list, where an email alone is enough
+   * to know a person. A lead still needs a phone (it is how leads are
+   * matched and called).
+   */
+  identity: "phone" | "phone_or_email" = "phone",
 ): MapResult | MapFailure {
   const name = pick(payload, ALIASES.name, extraAliases?.name);
   const phoneRaw = pick(payload, ALIASES.phone, extraAliases?.phone);
@@ -147,13 +153,22 @@ export function mapFormPayload(
   // needs to know what the sender actually called things.
   const keys = Object.keys(payload).slice(0, 12).join(", ") || "nothing";
   if (!name) return { ok: false, reason: `No name field found. Fields sent: ${keys}.` };
-  if (!phoneRaw) return { ok: false, reason: `No phone field found. Fields sent: ${keys}.` };
+  const emailRaw = pick(payload, ALIASES.email, extraAliases?.email);
+  const emailOnly = identity === "phone_or_email" && !phoneRaw && Boolean(emailRaw);
+  if (!phoneRaw && !emailOnly) {
+    return {
+      ok: false,
+      reason: `No ${identity === "phone_or_email" ? "phone or email" : "phone"} field found. Fields sent: ${keys}.`,
+    };
+  }
 
   // Checked here rather than left to resolveOrCreateLead so the failure
   // is recorded against this delivery with a readable reason, instead of
   // surfacing as a thrown error three layers down.
-  if (!normalizePhone(phoneRaw)) {
-    return { ok: false, reason: `"${phoneRaw}" is not a phone number we can use.` };
+  if (phoneRaw && !normalizePhone(phoneRaw)) {
+    if (!(identity === "phone_or_email" && emailRaw)) {
+      return { ok: false, reason: `"${phoneRaw}" is not a phone number we can use.` };
+    }
   }
 
   const exams = toList(pick(payload, ALIASES.exams, extraAliases?.exams));
@@ -196,7 +211,7 @@ export function mapFormPayload(
     ok: true,
     lead: {
       studentName: name,
-      primaryPhone: phoneRaw,
+      primaryPhone: phoneRaw ?? "",
       email: pick(payload, ALIASES.email, extraAliases?.email),
       city: pick(payload, ALIASES.city, extraAliases?.city),
       examYear: pick(payload, ALIASES.examYear, extraAliases?.examYear),
