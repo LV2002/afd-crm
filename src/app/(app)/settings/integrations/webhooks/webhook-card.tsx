@@ -17,6 +17,7 @@ import {
   samplePayload,
 } from "@/lib/integrations/custom-webhook/setup-guide";
 
+import { DestinationPicker, type ListChoice } from "./destination-picker";
 import { SourcePicker, type SourceChoice } from "./source-picker";
 import {
   deleteCustomWebhook,
@@ -42,6 +43,8 @@ export interface CustomWebhookView {
   authToken: string | null;
   /** `google`, `meta`, or null when the feed is not paid advertising. */
   adPlatform: string | null;
+  destination: string;
+  contactListId: string | null;
   requireSignature: boolean;
   aliasText: string;
   isActive: boolean;
@@ -137,8 +140,10 @@ export function WebhookCard({
   centers,
   aliasFields,
   sourceOptions,
+  lists,
 }: {
   webhook: CustomWebhookView;
+  lists: ListChoice[];
   centers: Array<{ id: string; name: string }>;
   aliasFields: string[];
   sourceOptions: SourceChoice[];
@@ -318,6 +323,12 @@ export function WebhookCard({
                 idPrefix={webhook.id}
                 options={sourceOptions}
                 currentValue={webhook.source}
+              />
+              <DestinationPicker
+                idPrefix={webhook.id}
+                lists={lists}
+                destination={webhook.destination}
+                contactListId={webhook.contactListId}
               />
               <div className="flex flex-col gap-2">
                 <Label htmlFor={`sub-${webhook.id}`}>Sub-source (optional)</Label>

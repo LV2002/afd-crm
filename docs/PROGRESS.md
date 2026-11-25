@@ -9184,3 +9184,6 @@ Both new alerts go out at most 30 per run, oldest first, so the first run does n
 ## Meta ad spend limited to 1 October 2026 onward
 
 Meta spend rows dated before 2026-10-01 are deleted (migration 0146, audited as `ad_spend.trim_before_floor`), and `META_SPEND_FLOOR` clamps every Meta fetch — the nightly sync and "Import past ad spend" — so older days cannot return. Syncing from 1 Oct onward continues. Google spend is untouched. The floor is a code constant, not a setting.
+## Custom webhooks can send to a database
+
+Each custom webhook now has a destination: **Leads** (unchanged, the default) or **A database** with a chosen contact list (Settings → Integrations → Custom webhooks, on the new-endpoint form and each card). A database delivery goes verify → persist → process like any other, then `saveContact()` adds the person to the list: matched by phone then email, never duplicated, blanks filled, no lead made and nobody assigned. Needs a name and a phone *or* an email. An archived/missing list returns 500 with the reason on the delivery, so the sender retries once it is fixed. Migration 0144; tests in `tests/custom-webhook-database.spec.ts`. Not built: mapping arbitrary extra columns onto contact fields (only city, exam year, exams/courses are carried).

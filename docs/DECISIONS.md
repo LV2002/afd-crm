@@ -4959,3 +4959,6 @@ Leon asked that the admin hear about instalments 30+ days late and leads untouch
 ## 2026-11-25 — Meta spend floor
 
 Owner asked to drop Meta spend before 1 Oct 2026 while keeping the sync. Implemented as a constant floor in `ad-spend-window.ts` plus a one-off delete migration. Deliberately not a setting: it is a one-time cleanup decision; make it configuration if it ever needs to move.
+## 2026-11-25 — Custom webhook destination: lead or database list
+
+`custom_webhooks.destination` (`lead` | `contact_list`) plus `contact_list_id` (check constraint: a list is required for `contact_list`). Chosen over a second route so the signature/auth/persist/duplicate handling stays in one place. Email-only deliveries are accepted for databases (identity is phone or email there) but not for leads, which still need a phone. A list that is archived or missing is a settings fault, so it returns 500 (sender retries) rather than 200 (data lost).
