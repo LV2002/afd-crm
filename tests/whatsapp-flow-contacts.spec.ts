@@ -15,11 +15,12 @@ vi.mock("../src/lib/integrations/whatsapp/client", () => ({ sendTemplateMessage:
 vi.mock("../src/lib/notifications/notify", () => ({ notify: vi.fn() }));
 
 const { sendTemplateMessage } = await import("../src/lib/integrations/whatsapp/client");
-const { advanceRuns, enrolNewListMembers, resolveContactReply, startFlowForContacts } = await import("../src/lib/whatsapp/flow-runner");
+const { advanceRuns, enrolNewListMembers, recordFlowDelivery, resolveContactReply, startFlowForContacts } = await import("../src/lib/whatsapp/flow-runner");
 const { db } = await import("../src/lib/db/client");
+const { describeDeliveryError } = await import("../src/lib/whatsapp/delivery-errors");
 const {
   contactListMembers, contactLists, contacts, leadIdentifiers, leads,
-  whatsappFlowRuns, whatsappFlowSteps, whatsappFlows, whatsappSuppressions,
+  whatsappFlowRunEvents, whatsappFlowRuns, whatsappFlowSteps, whatsappFlows, whatsappSuppressions,
 } = await import("../src/lib/db/schema");
 const { setIntegrationCredential, deleteIntegrationCredential } = await import("../src/lib/integrations/credentials");
 
@@ -200,5 +201,36 @@ describe("a per-person document on the first message", () => {
     expect(calls[0][6]).toEqual({ kind: "document", link: "https://example.com/pass.pdf", filename: "Admit card.pdf" });
     const runs = await db.select().from(whatsappFlowRuns).where(eq(whatsappFlowRuns.flowId, f.id));
     expect(runs.find((r) => r.contactId === noDoc)?.status).not.toBe("running");
+  });
+});
+
+describe("what Meta says after a message was accepted", () => {
+  it("records a delivery failure on the run that sent it, in plain words", async () => {
+    const [f] = await db
+      .insert(whatsappFlows)
+      .values({ name: `${MARK} delivery`, audience: "contact", triggerType: "manual", isActive: true })
+      .returning({ id: whatsappFlows.id });
+    await db.insert(whatsappFlowSteps).values({
+      flowId: f.id, position: 1, kind: "send_template",
+      config: { templateName: "delivery_probe", templateLanguage: "en_US", params: [] },
+    });
+    // Built by hand rather than by advanceRuns(): other spec files share this
+    // database and sweep runs too, so a send here could be taken by them.
+    const contactId = await addContact("delivery", "+919847650001");
+    const [run] = await db.insert(whatsappFlowRuns).values({ flowId: f.id, contactId, status: "completed" }).returning({ id: whatsappFlowRuns.id });
+    await db.insert(whatsappFlowRunEvents).values({ runId: run.id, kind: "sent", detail: "Send \"delivery_probe\" · wamid.DELIVERYPROBE1" });
+
+    await recordFlowDelivery("wamid.DELIVERYPROBE1", "failed", describeDeliveryError(131042, "Payment issue"));
+    await recordFlowDelivery("wamid.UNKNOWN", "failed", "ignored");
+
+    const events = await db.select().from(whatsappFlowRunEvents).where(eq(whatsappFlowRunEvents.runId, run.id));
+    const failed = events.find((e) => e.kind === "delivery_failed");
+    expect(failed?.detail).toMatch(/payment method/);
+    expect(events.some((e) => e.kind === "sent" && e.detail?.includes("wamid.DELIVERYPROBE1"))).toBe(true);
+  });
+
+  it("explains known codes and still says something for unknown ones", () => {
+    expect(describeDeliveryError(131053)).toMatch(/download the attached file/);
+    expect(describeDeliveryError(999999, "Odd")).toBe("Error 999999 (Odd)");
   });
 });
