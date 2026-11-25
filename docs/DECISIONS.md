@@ -4959,3 +4959,7 @@ Leon asked that the admin hear about instalments 30+ days late and leads untouch
 ## 2026-11-25 — Custom webhook destination: lead or database list
 
 `custom_webhooks.destination` (`lead` | `contact_list`) plus `contact_list_id` (check constraint: a list is required for `contact_list`). Chosen over a second route so the signature/auth/persist/duplicate handling stays in one place. Email-only deliveries are accepted for databases (identity is phone or email there) but not for leads, which still need a phone. A list that is archived or missing is a settings fault, so it returns 500 (sender retries) rather than 200 (data lost).
+
+## 2026-11-25 — Auto-start database automations by sweep, plus instant on webhook
+
+Chose a stateless sweep (joined since `from`, no prior run) over a DB trigger or a per-flow cursor: it needs no migration, catches adds from every path (import, UI, webhook), and is idempotent. The webhook path additionally runs the sweep inline so the first message is immediate. The first message must be an approved template (a free-form message needs the person to have written first).

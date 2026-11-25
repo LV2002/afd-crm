@@ -30,6 +30,7 @@ const TRIGGER_LABELS: Record<FlowTrigger, string> = {
   lead_created: "A new lead arrives",
   temperature_entered: "A lead's temperature changes to…",
   inbound_keyword: "Somebody messages us a word",
+  list_joined: "When somebody is added to a database",
   manual: "Only when somebody starts it by hand",
 };
 
@@ -40,6 +41,7 @@ export interface FlowValues {
   triggerType: FlowTrigger;
   temperature: string;
   keywords: string;
+  listIds: string[];
   centerId: string;
   audience: "lead" | "contact";
   /** Extra narrowing beyond the trigger. Empty means every lead it fires for. */
@@ -52,7 +54,9 @@ export function FlowForm({
   centers,
   fields,
   optionsByField,
+  lists,
 }: {
+  lists: Array<{ id: string; name: string }>;
   values: FlowValues;
   statuses: Array<{ value: string; label: string }>;
   centers: Array<{ id: string; name: string }>;
@@ -66,13 +70,16 @@ export function FlowForm({
   const [centerId, setCenterId] = useState(values.centerId);
   const [audience, setAudience] = useState(values.audience);
   const forDatabase = audience === "contact";
+  const [listIds, setListIds] = useState<string[]>(values.listIds);
 
   // The trigger's own settings travel as one JSON field, because their
   // shape depends entirely on which trigger it is.
   const triggerConfig = JSON.stringify(
     trigger === "temperature_entered"
       ? { temperature }
-      : trigger === "inbound_keyword"
+      : trigger === "list_joined"
+        ? { listIds }
+        : trigger === "inbound_keyword"
         ? {
             keywords: keywords
               .split(",")
@@ -134,9 +141,51 @@ export function FlowForm({
       )}
 
       {forDatabase && (
-        <p className="rounded-md bg-muted px-3 py-2 text-sm">
-          You start this one by hand, from its page, by ticking the lists it should go to.
-        </p>
+        <div className="flex flex-col gap-2">
+          <Label>What starts it</Label>
+          <select
+            name="triggerType"
+            value={trigger === "list_joined" ? "list_joined" : "manual"}
+            onChange={(event) => setTrigger(event.target.value as FlowTrigger)}
+            className="h-9 rounded-md border bg-transparent px-3 text-sm"
+          >
+            <option value="list_joined">{TRIGGER_LABELS.list_joined}</option>
+            <option value="manual">{TRIGGER_LABELS.manual}</option>
+          </select>
+          {trigger === "list_joined" ? (
+            <div className="flex flex-col gap-2 rounded-md border p-3">
+              <p className="text-sm">Watch these databases:</p>
+              {lists.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No database is marked as agreed to WhatsApp yet. Tick that on the database first.
+                </p>
+              )}
+              {lists.map((list) => (
+                <label key={list.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={listIds.includes(list.id)}
+                    onChange={(event) =>
+                      setListIds((current) =>
+                        event.target.checked ? [...current, list.id] : current.filter((id) => id !== list.id),
+                      )
+                    }
+                  />
+                  {list.name}
+                </label>
+              ))}
+              <p className="text-xs text-muted-foreground">
+                Anyone added to these from now on (by import, webhook or by hand) gets the first message within a few
+                minutes, then the rest of the automation. People already on the list are not messaged, leads and
+                opted-out people are skipped, and nobody gets it twice. Switch the automation on for it to run.
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              You start it from its page by ticking the lists it should go to.
+            </p>
+          )}
+        </div>
       )}
 
       <div className={forDatabase ? "hidden" : "flex flex-col gap-2"}>
@@ -150,7 +199,7 @@ export function FlowForm({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {FLOW_TRIGGERS.map((key) => (
+            {FLOW_TRIGGERS.filter((key) => key !== "list_joined").map((key) => (
               <SelectItem key={key} value={key}>
                 {TRIGGER_LABELS[key]}
               </SelectItem>

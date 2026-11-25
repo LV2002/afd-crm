@@ -79,13 +79,44 @@ export async function saveFlow(_prev: FlowFormState, formData: FormData): Promis
   const audience = formData.get("audience") === "contact" ? ("contact" as const) : ("lead" as const);
   // A flow for the database has no lead events to react to: it is started by
   // hand for chosen lists.
-  const triggerType = audience === "contact" ? "manual" : formData.get("triggerType");
+  const requested = formData.get("triggerType");
+  const triggerType =
+    audience === "contact" ? (requested === "list_joined" ? "list_joined" : "manual") : requested;
   const centerId = String(formData.get("centerId") ?? "").trim() || null;
 
   if (!name) return { error: "Give the automation a name." };
   if (!isTrigger(triggerType)) return { error: "Pick what starts it." };
+  if (triggerType === "list_joined" && audience !== "contact") {
+    return { error: "That trigger is only for automations that go to the database." };
+  }
 
-  const triggerConfig = readJson(formData.get("triggerConfig"));
+  let triggerConfig = readJson(formData.get("triggerConfig"));
+  if (audience === "contact" && triggerType === "manual") triggerConfig = {};
+  if (triggerType === "list_joined") {
+    const wanted = Array.isArray(triggerConfig.listIds) ? triggerConfig.listIds.map(String).filter(Boolean) : [];
+    if (wanted.length === 0) return { error: "Tick the database lists to watch." };
+    const agreed = await db.execute<{ id: string }>(sql`
+      select id from contact_lists
+      where archived_at is null and use_for_whatsapp
+        and id in (${sql.join(wanted.map((id) => sql`${id}::uuid`), sql`, `)})
+    `);
+    const listIds = [...agreed].map((r) => r.id).sort();
+    if (listIds.length === 0) return { error: "None of those lists is marked as agreed to WhatsApp." };
+    // "From" is when watching began: people already on the lists then are not
+    // messaged, only those added after. Kept across saves unless the lists change.
+    let from = new Date().toISOString();
+    if (flowId) {
+      const [prev] = await db
+        .select({ t: whatsappFlows.triggerType, c: whatsappFlows.triggerConfig })
+        .from(whatsappFlows)
+        .where(eq(whatsappFlows.id, flowId));
+      const prevIds = Array.isArray(prev?.c?.listIds) ? prev.c.listIds.map(String).sort() : [];
+      if (prev?.t === "list_joined" && typeof prev.c?.from === "string" && JSON.stringify(prevIds) === JSON.stringify(listIds)) {
+        from = prev.c.from;
+      }
+    }
+    triggerConfig = { listIds, from };
+  }
   if (triggerType === "temperature_entered" && !triggerConfig.temperature) {
     return { error: "Pick the temperature that starts it." };
   }

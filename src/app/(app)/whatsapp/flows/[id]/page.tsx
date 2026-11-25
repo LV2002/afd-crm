@@ -240,6 +240,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
             keywords: Array.isArray(triggerConfig.keywords)
               ? (triggerConfig.keywords as string[]).join(", ")
               : "",
+            listIds: Array.isArray(triggerConfig.listIds) ? (triggerConfig.listIds as string[]) : [],
             centerId: flow.centerId ?? "",
             audience: flow.audience,
             appliesTo: (flow.appliesTo as RuleConditions | null)?.all ?? [],
@@ -250,6 +251,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
             centers={centerRows}
           fields={ruleOptions.fields}
           optionsByField={ruleOptions.optionsByField}
+          lists={[...listRows].filter((l) => Boolean(l.agreed)).map((l) => ({ id: l.id, name: l.name }))}
         />
       </section>
 

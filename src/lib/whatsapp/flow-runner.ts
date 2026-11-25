@@ -877,6 +877,9 @@ async function runOne(run: RunRow, steps: FlowStep[]): Promise<void> {
  * without anybody having to reply.
  */
 export async function advanceRuns(): Promise<{ advanced: number }> {
+  // People who joined a chosen database since the last sweep start first, so
+  // their first message goes out in this same run.
+  await enrolNewListMembers();
   const due = await db
     .select({
       id: whatsappFlowRuns.id,
@@ -994,8 +997,15 @@ export async function startFlowForContacts(
     .selectDistinct({ contactId: contactListMembers.contactId })
     .from(contactListMembers)
     .where(inArray(contactListMembers.listId, listIds));
-  const ids = members.map((m) => m.contactId);
+  return enrolContacts(flowId, members.map((m) => m.contactId), "Started for a database list");
+}
 
+/** The shared eligibility checks and run creation behind both ways of enrolling contacts. */
+async function enrolContacts(
+  flowId: string,
+  ids: string[],
+  note: string,
+): Promise<{ started: number; skipped: number }> {
   let started = 0;
   for (let i = 0; i < ids.length; i += 500) {
     const chunk = ids.slice(i, i + 500);
@@ -1016,10 +1026,64 @@ export async function startFlowForContacts(
       .values(go.map((contactId) => ({ flowId, contactId, status: "running", wakeAt: new Date() })))
       .onConflictDoNothing()
       .returning({ id: whatsappFlowRuns.id });
-    for (const run of created) await logEvent(run.id, null, "started", "Started for a database list");
+    for (const run of created) await logEvent(run.id, null, "started", note);
     started += created.length;
   }
   return { started, skipped: ids.length - started };
+}
+
+/**
+ * Starts "when someone is added to a database" automations for people who
+ * joined their lists since the automation was set up.
+ *
+ * Stateless and safe to run as often as you like: a person is picked up only
+ * if they joined a chosen list at or after the automation's `from` time AND
+ * have never had a run of this automation (live or finished), so nobody is
+ * messaged twice and nobody already on the list when it was created is
+ * swept in. The same eligibility rules as a manual start apply: lists must be
+ * marked as agreed to WhatsApp, leads and opted-out people are left out.
+ * The first message goes out when the run is next advanced (the same sweep).
+ */
+export async function enrolNewListMembers(): Promise<{ started: number }> {
+  let started = 0;
+  try {
+    const flows = await db
+      .select({ id: whatsappFlows.id, triggerConfig: whatsappFlows.triggerConfig })
+      .from(whatsappFlows)
+      .where(
+        and(
+          eq(whatsappFlows.triggerType, "list_joined"),
+          eq(whatsappFlows.audience, "contact"),
+          eq(whatsappFlows.isActive, true),
+          isNull(whatsappFlows.deletedAt),
+        ),
+      );
+    for (const flow of flows) {
+      const config = flow.triggerConfig ?? {};
+      const listIds = Array.isArray(config.listIds) ? config.listIds.filter((v): v is string => typeof v === "string") : [];
+      const from = typeof config.from === "string" ? new Date(config.from) : null;
+      if (listIds.length === 0 || !from || Number.isNaN(from.getTime())) continue;
+
+      const fresh = await db.execute<{ contact_id: string }>(sql`
+        select distinct m.contact_id
+        from contact_list_members m
+        join contact_lists l on l.id = m.list_id and l.archived_at is null and l.use_for_whatsapp
+        where m.list_id in (${sql.join(listIds.map((id) => sql`${id}::uuid`), sql`, `)})
+          and m.added_at >= ${from.toISOString()}::timestamptz
+          and not exists (
+            select 1 from whatsapp_flow_runs r where r.flow_id = ${flow.id}::uuid and r.contact_id = m.contact_id
+          )
+        limit 2000
+      `);
+      const ids = [...fresh].map((r) => r.contact_id);
+      if (ids.length === 0) continue;
+      const result = await enrolContacts(flow.id, ids, "Added to a database list");
+      started += result.started;
+    }
+  } catch (error) {
+    console.error("enrolNewListMembers failed", error);
+  }
+  return { started };
 }
 
 /**

@@ -33,6 +33,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   // paused, and its owner is told to choose another trigger.
   tag_added: "A tag is put on a lead (removed — pick another trigger)",
   inbound_keyword: "Somebody messages us a word",
+  list_joined: "Somebody is added to a database",
   manual: "Started by hand",
 };
 

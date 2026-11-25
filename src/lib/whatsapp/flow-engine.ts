@@ -53,6 +53,8 @@ export const FLOW_TRIGGERS = [
   "lead_created",
   "temperature_entered",
   "inbound_keyword",
+  // Database automations only: starts when someone is added to a chosen list.
+  "list_joined",
   "manual",
 ] as const;
 export type FlowTrigger = (typeof FLOW_TRIGGERS)[number];
