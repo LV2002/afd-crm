@@ -65,7 +65,9 @@ export function FlowForm({
 }) {
   const [state, action, pending] = useActionState(saveFlow, initialState);
   // A database automation can only start by hand or when somebody joins a
-  // list; one saved with a retired trigger opens as "by hand".
+  // list. One saved with a retired lead trigger (a removed tag trigger, say)
+  // opens as "by hand", which is also what the dropdown below displays, so
+  // saving it no longer leaves a warning that cannot be cleared.
   const [trigger, setTrigger] = useState<FlowTrigger>(
     values.audience === "contact" && values.triggerType !== "list_joined" ? "manual" : values.triggerType,
   );
