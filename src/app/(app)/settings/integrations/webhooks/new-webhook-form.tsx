@@ -6,6 +6,7 @@ import { useActionState } from "react";
 import { FormMessage } from "@/components/layout/form-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DestinationPicker, type ListChoice } from "./destination-picker";
 import { SourcePicker, type SourceChoice } from "./source-picker";
 import { Label } from "@/components/ui/label";
 
@@ -28,7 +29,9 @@ const initialState: WebhookFormState = {};
 export function NewWebhookForm({
   centers,
   sourceOptions,
+  lists,
 }: {
+  lists: ListChoice[];
   centers: Array<{ id: string; name: string }>;
   sourceOptions: SourceChoice[];
 }) {
@@ -45,6 +48,7 @@ export function NewWebhookForm({
           </p>
         </div>
         <SourcePicker idPrefix="new" options={sourceOptions} />
+        <DestinationPicker idPrefix="new" lists={lists} />
       </div>
 
       {/*

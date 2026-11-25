@@ -13,6 +13,7 @@ import {
 
 import { idColumn, softDelete, timestamps } from "./_helpers";
 import { profiles } from "./auth";
+import { contactLists } from "./contacts";
 import { centers } from "./org";
 
 /**
@@ -191,6 +192,14 @@ export const customWebhooks = pgTable(
      * keeps.
      */
     adPlatform: text("ad_platform"),
+    /**
+     * Where a delivery goes: `lead` runs it through the lead pipeline;
+     * `contact_list` adds the person to a database list instead (a
+     * retargeting sheet, a purchased exam list) with no lead made.
+     */
+    destination: text("destination").notNull().default("lead"),
+    /** The list a `contact_list` endpoint fills. Required for that destination. */
+    contactListId: uuid("contact_list_id").references(() => contactLists.id, { onDelete: "set null" }),
     isActive: boolean("is_active").notNull().default(true),
     createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
     ...timestamps(),
