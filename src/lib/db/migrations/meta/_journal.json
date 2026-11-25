@@ -1009,6 +1009,13 @@
       "when": 1796911208000,
       "tag": "0143_admin_notification_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1797170408000,
+      "tag": "0146_meta_spend_floor",
+      "breakpoints": true
     }
   ]
 }

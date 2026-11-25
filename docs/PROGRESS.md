@@ -9180,3 +9180,7 @@ Meta delivers a number's messages to the app only while the app is subscribed to
 - **Lead not contacted in 7 days** (`lead.uncontacted`): leads still at a "new"-kind status a week after they arrived, with no logged interaction and no outbound WhatsApp message, not do-not-contact, told once per lead to the admin. Separate from SLA breaches, which are about response-time targets.
 - **Leave and comp-day requests** (`leave.requested`, `comp.requested`): already fired inline the moment the request is saved, and the admin was in the defaults; migration 0143 makes sure the admin is in any saved setting and the event is on.
 Both new alerts go out at most 30 per run, oldest first, so the first run does not drop hundreds into the bell. Who gets each is still editable under Settings → Notifications; the 30 and 7 are constants in `lib/alerts/admin-alerts.ts` (see DECISIONS).
+
+## Meta ad spend limited to 1 October 2026 onward
+
+Meta spend rows dated before 2026-10-01 are deleted (migration 0146, audited as `ad_spend.trim_before_floor`), and `META_SPEND_FLOOR` clamps every Meta fetch — the nightly sync and "Import past ad spend" — so older days cannot return. Syncing from 1 Oct onward continues. Google spend is untouched. The floor is a code constant, not a setting.
