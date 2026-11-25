@@ -11,6 +11,7 @@ import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { googleSheetScript } from "@/lib/integrations/custom-webhook/google-sheet-script";
 import {
   RESPONSE_CASES,
   SUCCESS_RESPONSE,
@@ -258,6 +259,39 @@ export function WebhookCard({
               </>
             }
           />
+
+          <details className="rounded-md border p-3">
+            <summary className="cursor-pointer text-sm font-medium">Send rows from a Google Sheet automatically</summary>
+            <div className="mt-3 flex flex-col gap-3">
+              <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+                <li>Open the Google Sheet the tool fills in. Row 1 must hold the column titles.</li>
+                <li>
+                  Go to <strong className="text-foreground">Extensions → Apps Script</strong>, delete what is there, and paste the script below.
+                </li>
+                <li>Press Save, choose the function <code className="font-mono">install</code> in the toolbar and press Run. Google asks you to allow it once.</li>
+                <li>
+                  That is all. Every 5 minutes, each row not yet sent goes to the CRM, and a new{" "}
+                  <strong className="text-foreground">CRM status</strong> column says what happened to it: Sent, Skipped (with the reason), or Retry.
+                </li>
+              </ol>
+              <CopyBlock
+                label="Google Apps Script"
+                value={googleSheetScript({
+                  url,
+                  signingSecret: webhook.requireSignature ? webhook.signingSecret : null,
+                  authKey: webhook.authToken,
+                })}
+                note={
+                  <>
+                    One sheet, one script, one endpoint: make a separate endpoint for each tool so its leads carry their own source name. A row needs a
+                    name and a phone number; columns called Name, Full Name, Phone, Mobile, WhatsApp and so on are recognised, and any other column is kept
+                    with the lead. Someone already in the CRM is matched to their existing record, not duplicated. The script holds this endpoint&apos;s key,
+                    so keep the sheet&apos;s editors to people you trust.
+                  </>
+                }
+              />
+            </div>
+          </details>
 
           <CopyBlock
             label="Expected response"
