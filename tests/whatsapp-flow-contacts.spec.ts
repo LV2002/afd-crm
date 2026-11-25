@@ -15,7 +15,7 @@ vi.mock("../src/lib/integrations/whatsapp/client", () => ({ sendTemplateMessage:
 vi.mock("../src/lib/notifications/notify", () => ({ notify: vi.fn() }));
 
 const { sendTemplateMessage } = await import("../src/lib/integrations/whatsapp/client");
-const { advanceRuns, resolveContactReply, startFlowForContacts } = await import("../src/lib/whatsapp/flow-runner");
+const { advanceRuns, enrolNewListMembers, resolveContactReply, startFlowForContacts } = await import("../src/lib/whatsapp/flow-runner");
 const { db } = await import("../src/lib/db/client");
 const {
   contactListMembers, contactLists, contacts, leadIdentifiers, leads,
@@ -124,5 +124,81 @@ describe("flows for database contacts", () => {
     await expect(
       db.execute(sql`insert into whatsapp_flow_runs (flow_id) values (${flowId}::uuid)`),
     ).rejects.toThrow();
+  });
+});
+
+describe("when somebody is added to a database", () => {
+  let watchId: string;
+  beforeAll(async () => {
+    const [f] = await db
+      .insert(whatsappFlows)
+      .values({
+        name: `${MARK} watch`,
+        audience: "contact",
+        triggerType: "list_joined",
+        triggerConfig: { listIds: [listId], from: new Date().toISOString() },
+        isActive: true,
+      })
+      .returning({ id: whatsappFlows.id });
+    watchId = f.id;
+    await db.insert(whatsappFlowSteps).values({
+      flowId: watchId,
+      position: 1,
+      kind: "send_template",
+      config: { templateName: "welcome", templateLanguage: "en_US", params: [] },
+    });
+  });
+
+  it("messages only people added after it was set up, once, and not leads or opted-out people", async () => {
+    // Joined before the automation existed: must not be messaged.
+    const [old] = await db.insert(contacts).values({ name: `${MARK} old`, phone: "+919847630001" }).returning({ id: contacts.id });
+    await db.insert(contactListMembers).values({ contactId: old.id, listId, addedAt: new Date(Date.now() - 86_400_000) });
+
+    const fresh = await addContact("fresh", "+919847630002");
+    await addContact("freshoptout", "+919847630003");
+    await db.insert(whatsappSuppressions).values({ phone: "+919847630003", reason: MARK, source: "keyword" });
+
+    const first = await enrolNewListMembers();
+    expect(first.started).toBeGreaterThanOrEqual(1);
+    const runs = await db.select().from(whatsappFlowRuns).where(eq(whatsappFlowRuns.flowId, watchId));
+    expect(runs.map((r) => r.contactId)).toEqual([fresh]);
+
+    await advanceRuns();
+    const sentTo = vi.mocked(sendTemplateMessage).mock.calls.map((c) => c[2]);
+    expect(sentTo).toContain("+919847630002");
+    expect(sentTo).not.toContain("+919847630001");
+
+    // A second sweep must not start them again, even after the run finished.
+    await enrolNewListMembers();
+    const again = await db.select().from(whatsappFlowRuns).where(eq(whatsappFlowRuns.flowId, watchId));
+    expect(again).toHaveLength(1);
+  });
+});
+
+describe("a per-person document on the first message", () => {
+  it("attaches the contact's own link as the header, and stops a run that has none", async () => {
+    const [f] = await db
+      .insert(whatsappFlows)
+      .values({ name: `${MARK} doc`, audience: "contact", triggerType: "manual", isActive: true })
+      .returning({ id: whatsappFlows.id });
+    await db.insert(whatsappFlowSteps).values({
+      flowId: f.id,
+      position: 1,
+      kind: "send_template",
+      config: { templateName: "admit_card", templateLanguage: "en_US", params: [], headerDocument: "contact" },
+    });
+    const withDoc = await addContact("withdoc", "+919847640001");
+    await db.update(contacts).set({ fields: { document_url: "https://example.com/pass.pdf", document_name: "Admit card.pdf" } }).where(eq(contacts.id, withDoc));
+    const noDoc = await addContact("nodoc", "+919847640002");
+
+    await startFlowForContacts(f.id, [listId]);
+    await advanceRuns();
+
+    const calls = vi.mocked(sendTemplateMessage).mock.calls.filter((c) => c[3] === "admit_card");
+    expect(calls).toHaveLength(1);
+    expect(calls[0][2]).toBe("+919847640001");
+    expect(calls[0][6]).toEqual({ kind: "document", link: "https://example.com/pass.pdf", filename: "Admit card.pdf" });
+    const runs = await db.select().from(whatsappFlowRuns).where(eq(whatsappFlowRuns.flowId, f.id));
+    expect(runs.find((r) => r.contactId === noDoc)?.status).not.toBe("running");
   });
 });

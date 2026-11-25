@@ -53,6 +53,8 @@ export const FLOW_TRIGGERS = [
   "lead_created",
   "temperature_entered",
   "inbound_keyword",
+  // Database automations only: starts when someone is added to a chosen list.
+  "list_joined",
   "manual",
 ] as const;
 export type FlowTrigger = (typeof FLOW_TRIGGERS)[number];
@@ -87,6 +89,8 @@ export interface SendTemplateConfig {
   templateName: string;
   templateLanguage: string;
   params: ParamSource[];
+  /** Attach, as the template's document header, the file link stored on the database contact (an admit card). */
+  headerDocument?: "contact";
 }
 
 export interface SendTextConfig {

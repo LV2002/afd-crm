@@ -221,13 +221,25 @@ export async function sendTemplateMessage(
    * header component on a text-header template, so the caller only passes
    * this when the operator attached a file.
    */
-  headerMedia?: { kind: "image" | "video" | "document"; mediaId: string },
+  headerMedia?:
+    | { kind: "image" | "video" | "document"; mediaId: string }
+    // A file WhatsApp fetches itself from a public https link, for a document
+    // that differs per person (an admit card).
+    | { kind: "document"; link: string; filename?: string },
 ): Promise<string> {
   const components: Array<Record<string, unknown>> = [];
   if (headerMedia) {
     components.push({
       type: "header",
-      parameters: [{ type: headerMedia.kind, [headerMedia.kind]: { id: headerMedia.mediaId } }],
+      parameters: [
+        {
+          type: headerMedia.kind,
+          [headerMedia.kind]:
+            "link" in headerMedia
+              ? { link: headerMedia.link, ...(headerMedia.filename ? { filename: headerMedia.filename } : {}) }
+              : { id: headerMedia.mediaId },
+        },
+      ],
     });
   }
   if (bodyParams && bodyParams.length > 0) {
