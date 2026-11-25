@@ -64,7 +64,13 @@ export function FlowForm({
   optionsByField: ConditionFieldOptions;
 }) {
   const [state, action, pending] = useActionState(saveFlow, initialState);
-  const [trigger, setTrigger] = useState<FlowTrigger>(values.triggerType);
+  // A database automation can only start by hand or when somebody joins a
+  // list. One saved with a retired lead trigger (a removed tag trigger, say)
+  // opens as "by hand", which is also what the dropdown below displays, so
+  // saving it no longer leaves a warning that cannot be cleared.
+  const [trigger, setTrigger] = useState<FlowTrigger>(
+    values.audience === "contact" && values.triggerType !== "list_joined" ? "manual" : values.triggerType,
+  );
   const [temperature, setTemperature] = useState(values.temperature);
   const [keywords, setKeywords] = useState(values.keywords);
   const [centerId, setCenterId] = useState(values.centerId);
@@ -208,7 +214,7 @@ export function FlowForm({
         </Select>
       </div>
 
-      {!(FLOW_TRIGGERS as readonly string[]).includes(trigger) && (
+      {!forDatabase && !(FLOW_TRIGGERS as readonly string[]).includes(trigger) && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
           This automation was started by a tag, and tags no longer exist, so it can&apos;t start
           any more. Pick a different trigger above and save.
