@@ -132,7 +132,7 @@ export async function saveFlow(_prev: FlowFormState, formData: FormData): Promis
   // called from the middle of ordinary work and swallows its own errors.
   // An unknown field name stored here would make the automation silently
   // reach nobody, with nothing anywhere saying why.
-  const appliesToParsed = parseConditions(audience === "contact" ? null : formData.get("appliesTo"));
+  const appliesToParsed = parseConditions(audience === "contact" ? "" : formData.get("appliesTo"));
   if (!appliesToParsed.ok) return { error: appliesToParsed.error };
   const conditions = appliesToParsed.value.all ?? [];
   // Stored as a fresh object rather than the parser's `RuleConditions`,
