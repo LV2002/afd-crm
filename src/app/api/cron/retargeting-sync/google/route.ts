@@ -27,6 +27,7 @@ import {
   setIntegrationCredential,
 } from "@/lib/integrations/credentials";
 import { syncContactAudience } from "@/lib/integrations/contact-audience";
+import { syncListAudiences } from "@/lib/integrations/list-audiences";
 import { hashPhoneE164 } from "@/lib/integrations/hash-pii";
 
 export const dynamic = "force-dynamic";
@@ -121,14 +122,23 @@ async function run(request: Request) {
       );
   }
 
-  // The contact database goes into the same list, by its own rules — see
-  // lib/integrations/contact-audience.ts.
-  const contactsSync = await syncContactAudience({
+  // Databases are NOT part of the leads list: each one has its own user list
+  // (see lib/integrations/list-audiences.ts). Anyone an earlier version sent
+  // into the leads list from a database is taken back out.
+  const contactsSync = await syncContactAudience(
+    {
+      platform: "google",
+      add: async () => undefined,
+      remove: (phones) =>
+        removeUsersFromList(customerId, credentials, userListResourceName, phones.map(hashPhoneE164)),
+    },
+    { retireOnly: true },
+  );
+  const databases = await syncListAudiences({
     platform: "google",
-    add: (phones) =>
-      addUsersToList(customerId, credentials, userListResourceName, phones.map(hashPhoneE164)),
-    remove: (phones) =>
-      removeUsersFromList(customerId, credentials, userListResourceName, phones.map(hashPhoneE164)),
+    create: (name) => createUserList(customerId, credentials, name),
+    add: (id, phones) => addUsersToList(customerId, credentials, id, phones.map(hashPhoneE164)),
+    remove: (id, phones) => removeUsersFromList(customerId, credentials, id, phones.map(hashPhoneE164)),
   });
 
   return NextResponse.json({
@@ -138,6 +148,7 @@ async function run(request: Request) {
     eligible: eligibleLeadIds.length,
     excludedAdmitted: allLeads.filter((lead) => lead.hasAdmission).length,
     contacts: contactsSync,
+    databases,
   });
 }
 

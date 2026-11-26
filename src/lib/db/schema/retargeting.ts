@@ -1,8 +1,8 @@
-import { pgTable, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { idColumn } from "./_helpers";
 import { adPlatformEnum } from "./ad-spend";
-import { contacts } from "./contacts";
+import { contactLists, contacts } from "./contacts";
 import { leads } from "./leads";
 
 /**
@@ -56,4 +56,43 @@ export const adAudienceContactMembers = pgTable(
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("ad_audience_contact_members_platform_contact_uq").on(t.platform, t.contactId)],
+);
+
+/**
+ * One ad-platform audience per database (contact list) per platform, kept
+ * apart from the leads audience. `externalId` is Meta's custom audience id or
+ * Google's user list resource name.
+ */
+export const contactListAudiences = pgTable(
+  "contact_list_audiences",
+  {
+    id: idColumn(),
+    listId: uuid("list_id")
+      .notNull()
+      .references(() => contactLists.id, { onDelete: "cascade" }),
+    platform: adPlatformEnum("platform").notNull(),
+    externalId: text("external_id").notNull(),
+    name: text("name").notNull(),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("contact_list_audiences_list_platform_uq").on(t.listId, t.platform)],
+);
+
+/** Who was sent to which list's audience, so a person who leaves the list can be removed. */
+export const adListAudienceMembers = pgTable(
+  "ad_list_audience_members",
+  {
+    id: idColumn(),
+    listId: uuid("list_id")
+      .notNull()
+      .references(() => contactLists.id, { onDelete: "cascade" }),
+    platform: adPlatformEnum("platform").notNull(),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("ad_list_audience_members_uq").on(t.listId, t.platform, t.contactId)],
 );

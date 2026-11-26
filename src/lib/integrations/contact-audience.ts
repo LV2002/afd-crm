@@ -98,8 +98,14 @@ export interface ContactSyncResult {
  * same as the lead sync, because a platform cannot be asked who is in an
  * audience.
  */
-export async function syncContactAudience(sender: PlatformSender): Promise<ContactSyncResult> {
-  const eligible = await loadEligibleContacts();
+export async function syncContactAudience(
+  sender: PlatformSender,
+  options: { retireOnly?: boolean } = {},
+): Promise<ContactSyncResult> {
+  // `retireOnly`: nobody should be in the shared leads audience from the
+  // database any more (each list has its own audience now), so anyone sent
+  // there earlier is taken back out and the record is emptied.
+  const eligible = options.retireOnly ? [] : await loadEligibleContacts();
   const synced = await db
     .select({ contactId: adAudienceContactMembers.contactId })
     .from(adAudienceContactMembers)
