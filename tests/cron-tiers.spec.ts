@@ -58,6 +58,7 @@ describe("what belongs on which schedule", () => {
       "ad-spend-sync/meta",
       "bank-match",
       "finance-thresholds",
+      "meta-events",
       "retargeting-sync/google",
       "retargeting-sync/meta",
     ]);

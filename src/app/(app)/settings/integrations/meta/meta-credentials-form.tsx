@@ -34,6 +34,12 @@ const FIELDS: Array<{ key: keyof MetaConnectionStatus["configured"]; label: stri
     secret: true,
   },
   { key: "ad_account_id", label: "Ad Account ID", help: "Numeric id, without the act_ prefix.", secret: false },
+  {
+    key: "dataset_id",
+    label: "Dataset ID (CRM funnel)",
+    help: "Events Manager → Data sources → your dataset → Settings → Dataset ID. Lets the CRM tell Meta when a lead from a lead ad is contacted, qualified or takes admission. The Ads Access Token needs ads_management.",
+    secret: false,
+  },
 ];
 
 export function MetaCredentialsForm({ status }: { status: MetaConnectionStatus }) {

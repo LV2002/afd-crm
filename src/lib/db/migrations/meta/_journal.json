@@ -1030,6 +1030,13 @@
       "when": 1797256808000,
       "tag": "0147_list_audiences",
       "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "7",
+      "when": 1797343208000,
+      "tag": "0148_meta_capi_events",
+      "breakpoints": true
     }
   ]
 }

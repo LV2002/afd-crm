@@ -1,9 +1,9 @@
-import { pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { idColumn } from "./_helpers";
 import { adPlatformEnum } from "./ad-spend";
 import { contactLists, contacts } from "./contacts";
-import { leads } from "./leads";
+import { leads, temperatureHistory } from "./leads";
 
 /**
  * Membership state for the daily retargeting sync (Meta Custom Audiences,
@@ -95,4 +95,30 @@ export const adListAudienceMembers = pgTable(
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("ad_list_audience_members_uq").on(t.listId, t.platform, t.contactId)],
+);
+
+/**
+ * A status change reported to Meta as a Conversions API event (CRM funnel /
+ * Conversion Leads). One row per `temperature_history` row, so each change
+ * is sent once; `failed` rows are retried on later runs.
+ */
+export const metaCapiEvents = pgTable(
+  "meta_capi_events",
+  {
+    id: idColumn(),
+    historyId: uuid("history_id")
+      .notNull()
+      .references(() => temperatureHistory.id, { onDelete: "cascade" }),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => leads.id, { onDelete: "cascade" }),
+    eventName: text("event_name").notNull(),
+    /** sent | failed | skipped */
+    status: text("status").notNull(),
+    error: text("error"),
+    attempts: integer("attempts").notNull().default(0),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("meta_capi_events_history_uq").on(t.historyId)],
 );
