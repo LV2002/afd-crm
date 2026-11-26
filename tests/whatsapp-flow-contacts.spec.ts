@@ -234,3 +234,29 @@ describe("what Meta says after a message was accepted", () => {
     expect(describeDeliveryError(999999, "Odd")).toBe("Error 999999 (Odd)");
   });
 });
+
+describe("timed steps", () => {
+  it("a run parks at a wait_until step until that moment, then carries on", async () => {
+    const [f] = await db
+      .insert(whatsappFlows)
+      .values({ name: `${MARK} timed`, audience: "contact", triggerType: "manual", isActive: true })
+      .returning({ id: whatsappFlows.id });
+    const [wait] = await db
+      .insert(whatsappFlowSteps)
+      .values({ flowId: f.id, position: 1, kind: "wait_until", config: { at: "2099-01-01T09:00" } })
+      .returning({ id: whatsappFlowSteps.id });
+    await db.insert(whatsappFlowSteps).values({
+      flowId: f.id, position: 2, kind: "send_template",
+      config: { templateName: "timed_probe", templateLanguage: "en_US", params: [] },
+    });
+    await addContact("timed", "+919847660001");
+    await startFlowForContacts(f.id, [listId]);
+    await advanceRuns();
+
+    const [run] = await db.select().from(whatsappFlowRuns).where(eq(whatsappFlowRuns.flowId, f.id));
+    expect(run.status).toBe("waiting");
+    expect(run.wakeAt?.getUTCFullYear()).toBe(2099);
+    expect(wait.id).toBeTruthy();
+    expect(vi.mocked(sendTemplateMessage).mock.calls.some((c) => c[3] === "timed_probe")).toBe(false);
+  });
+});

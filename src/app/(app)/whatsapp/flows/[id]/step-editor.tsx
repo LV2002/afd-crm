@@ -34,7 +34,8 @@ export const STEP_LABELS: Record<FlowStepKind, string> = {
   assign_owner: "Give them to a counsellor",
   schedule_followup: "Set a follow-up reminder",
   add_label: "Put a label on the chat",
-  wait: "Wait",
+  wait: "Wait (minutes, hours or days)",
+  wait_until: "Wait until a date and time",
   wait_for_reply: "Wait for their reply",
   set_temperature: "Change their temperature",
   notify_owner: "Tell their counsellor",
@@ -446,17 +447,62 @@ function StepConfig({
   }
 
   if (kind === "wait") {
+    // Older steps only have `hours`; show that as the amount until it is edited.
+    const unit = typeof config.unit === "string" ? config.unit : typeof config.amount === "number" ? "hours" : "hours";
+    const amount = typeof config.amount === "number" ? config.amount : Number(config.hours ?? 24);
+    return (
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">Wait</Label>
+            <Input
+              type="number"
+              min={1}
+              className="h-9 w-24"
+              value={amount}
+              onChange={(event) => setConfig({ ...config, amount: Number(event.target.value), unit, hours: undefined })}
+            />
+          </div>
+          <select
+            className="h-9 rounded-md border bg-transparent px-3 text-sm"
+            value={unit}
+            onChange={(event) => setConfig({ ...config, amount, unit: event.target.value, hours: undefined })}
+          >
+            <option value="minutes">minutes</option>
+            <option value="hours">hours</option>
+            <option value="days">days</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs text-muted-foreground">Then continue at this time of day (optional, India time)</Label>
+          <Input
+            type="time"
+            className="h-9 w-36"
+            value={String(config.atTime ?? "")}
+            onChange={(event) => setConfig({ ...config, atTime: event.target.value || undefined })}
+          />
+          <p className="text-xs text-muted-foreground">
+            For example 1 day, at 10:00, sends the next message at 10 in the morning the day after, not at
+            whatever hour the last one went.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (kind === "wait_until") {
     return (
       <div className="flex flex-col gap-1">
-        <Label className="text-xs text-muted-foreground">Hours to wait</Label>
+        <Label className="text-xs text-muted-foreground">Continue on (India time)</Label>
         <Input
-          type="number"
-          min={1}
-          className="h-9 w-28"
-          value={Number(config.hours ?? 24)}
-          onChange={(event) => setConfig({ ...config, hours: Number(event.target.value) })}
+          type="datetime-local"
+          className="h-9 w-64"
+          value={String(config.at ?? "")}
+          onChange={(event) => setConfig({ ...config, at: event.target.value })}
         />
-        <p className="text-xs text-muted-foreground">24 is a day, 48 is two, 168 is a week.</p>
+        <p className="text-xs text-muted-foreground">
+          Everyone reaching this step waits until then. A date already past lets them straight through.
+        </p>
       </div>
     );
   }

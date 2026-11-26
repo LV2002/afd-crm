@@ -47,7 +47,7 @@ import {
   resolveGoto,
   stepAt,
   waitConfig,
-  waitMs,
+  wakeTimeFor,
   type FlowStep,
   type FlowTrigger,
   type SendTemplateConfig,
@@ -729,14 +729,15 @@ async function runOne(run: RunRow, steps: FlowStep[]): Promise<void> {
         break;
       }
 
-      case "wait": {
+      case "wait":
+      case "wait_until": {
         await db
           .update(whatsappFlowRuns)
           .set({
             status: "waiting",
             currentStepId: current.id,
             awaitingStepId: null,
-            wakeAt: new Date(Date.now() + waitMs(current)),
+            wakeAt: wakeTimeFor(current),
             updatedAt: new Date(),
           })
           .where(eq(whatsappFlowRuns.id, run.id));
