@@ -1,4 +1,9 @@
+import { inArray } from "drizzle-orm";
+
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { db } from "@/lib/db/client";
+import { contactListAudiences } from "@/lib/db/schema";
+import { formatDateIST } from "@/lib/format/date";
 import { getDropdownOptions } from "@/lib/fields/resolve-field-options";
 import { createClient } from "@/lib/supabase/server";
 
@@ -42,6 +47,15 @@ export default async function ListsPage() {
   );
   const countByList = new Map(counts);
 
+  // The ad audiences each list feeds. Read directly: the table is only for
+  // the sync jobs and has no policy for browser roles.
+  const audienceRows =
+    lists.length === 0
+      ? []
+      : await db.select().from(contactListAudiences).where(inArray(contactListAudiences.listId, lists.map((l) => l.id)));
+  const audiencesByList = new Map<string, typeof audienceRows>();
+  for (const row of audienceRows) audiencesByList.set(row.listId, [...(audiencesByList.get(row.listId) ?? []), row]);
+
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       <p className="text-sm text-muted-foreground">
@@ -67,6 +81,24 @@ export default async function ListsPage() {
         {lists.map((l) => (
           <div key={l.id} className="flex flex-col gap-1">
             <p className="text-sm text-muted-foreground">{countByList.get(l.id)?.toLocaleString("en-IN")} people</p>
+            {l.use_for_ads && (
+              <p className="text-xs text-muted-foreground">
+                {(audiencesByList.get(l.id) ?? []).length === 0
+                  ? "Ad audiences: created on the next hourly sync (Meta and Google)."
+                  : (audiencesByList.get(l.id) ?? [])
+                      .map(
+                        (a) =>
+                          `${a.platform === "meta" ? "Meta" : "Google"}: ${
+                            a.lastError
+                              ? `problem — ${a.lastError}`
+                              : a.lastSyncedAt
+                                ? `synced ${formatDateIST(a.lastSyncedAt, "d MMM, h:mm a")}`
+                                : "created"
+                          }`,
+                      )
+                      .join(" · ")}
+              </p>
+            )}
             <ListForm
               values={{
                 id: l.id,

@@ -12,6 +12,7 @@ import {
   type RetargetingCandidate,
 } from "@/lib/integrations/audience-sync";
 import { syncContactAudience } from "@/lib/integrations/contact-audience";
+import { syncListAudiences } from "@/lib/integrations/list-audiences";
 import { loadRetargetingCandidates } from "@/lib/integrations/retargeting-candidates";
 import { retargetingWindowDays } from "@/lib/integrations/retargeting-window";
 import {
@@ -112,12 +113,22 @@ async function run(request: Request) {
       );
   }
 
-  // The contact database (seminars, purchased lists) goes into the same
-  // audience, by its own rules — see lib/integrations/contact-audience.ts.
-  const contactsSync = await syncContactAudience({
+  // Databases are NOT part of the leads audience: each one has its own
+  // audience (see lib/integrations/list-audiences.ts). Anyone an earlier
+  // version sent into the leads audience from a database is taken back out.
+  const contactsSync = await syncContactAudience(
+    {
+      platform: "meta",
+      add: async () => undefined,
+      remove: (phones) => removeUsersFromAudience(audienceId, accessToken, phones.map(hashPhone)),
+    },
+    { retireOnly: true },
+  );
+  const databases = await syncListAudiences({
     platform: "meta",
-    add: (phones) => addUsersToAudience(audienceId, accessToken, phones.map(hashPhone)),
-    remove: (phones) => removeUsersFromAudience(audienceId, accessToken, phones.map(hashPhone)),
+    create: (name) => createCustomAudience(adAccountId, accessToken, name),
+    add: (id, phones) => addUsersToAudience(id, accessToken, phones.map(hashPhone)),
+    remove: (id, phones) => removeUsersFromAudience(id, accessToken, phones.map(hashPhone)),
   });
 
   return NextResponse.json({
@@ -127,6 +138,7 @@ async function run(request: Request) {
     eligible: eligibleLeadIds.length,
     excludedAdmitted: allLeads.filter((lead) => lead.hasAdmission).length,
     contacts: contactsSync,
+    databases,
   });
 }
 

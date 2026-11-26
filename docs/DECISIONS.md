@@ -4966,3 +4966,7 @@ Owner asked to drop Meta spend before 1 Oct 2026 while keeping the sync. Impleme
 ## 2026-11-25 — Auto-start database automations by sweep, plus instant on webhook
 
 Chose a stateless sweep (joined since `from`, no prior run) over a DB trigger or a per-flow cursor: it needs no migration, catches adds from every path (import, UI, webhook), and is idempotent. The webhook path additionally runs the sweep inline so the first message is immediate. The first message must be an approved template (a free-form message needs the person to have written first).
+
+## 2026-11-26 — One ad audience per database
+
+Owner asked for each database to be its own audience on Meta and Google, separate from leads. Replaced the "contacts go into the leads audience" path (`syncContactAudience`, now only used to retire what it had sent). Kept the exclusion of people who are leads, so an enrolled student stops seeing course ads via the lead rules. Sync is hourly with the existing cron tier; adding people is not instant on the platforms side either way.

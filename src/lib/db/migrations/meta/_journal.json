@@ -1023,6 +1023,13 @@
       "when": 1797170408000,
       "tag": "0146_meta_spend_floor",
       "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1797256808000,
+      "tag": "0147_list_audiences",
+      "breakpoints": true
     }
   ]
 }
