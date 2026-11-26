@@ -41,6 +41,7 @@ const META_KEYS = [
   "page_access_token",
   "ads_access_token",
   "ad_account_id",
+  "dataset_id",
 ] as const;
 type MetaKey = (typeof META_KEYS)[number];
 
@@ -51,6 +52,7 @@ const KEY_LABELS: Record<MetaKey, string> = {
   page_access_token: "Page Access Token",
   ads_access_token: "Ads Access Token",
   ad_account_id: "Ad Account ID",
+  dataset_id: "Dataset ID (CRM funnel)",
 };
 
 /**

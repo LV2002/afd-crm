@@ -4,6 +4,7 @@ import { expectOk, type NightlyJob } from "@/lib/cron/nightly-runner";
 
 import { GET as adminAlerts } from "@/app/api/cron/admin-alerts/route";
 import { GET as adSpendGoogle } from "@/app/api/cron/ad-spend-sync/google/route";
+import { GET as metaEvents } from "@/app/api/cron/meta-events/route";
 import { GET as adSpendMeta } from "@/app/api/cron/ad-spend-sync/meta/route";
 import { GET as bankMatch } from "@/app/api/cron/bank-match/route";
 import { GET as financeThresholds } from "@/app/api/cron/finance-thresholds/route";
@@ -110,6 +111,9 @@ export function hourlyJobs(request: Request): NightlyJob[] {
     // "about to reach 20 lakh" the same morning.
     job("finance-thresholds", "Money approaching a mark", financeThresholds, 3000, request),
     job("ad-spend-sync/meta", "Meta ad spend", adSpendMeta, 6000, request),
+    // Lead status changes to Meta's CRM funnel. Each change is sent once, and
+    // Meta only accepts events up to seven days old, so hourly is plenty.
+    job("meta-events", "Meta CRM funnel events", metaEvents, 5000, request),
     job("ad-spend-sync/google", "Google ad spend", adSpendGoogle, 6000, request),
     // Diffed against what was last sent, so an hourly run that finds
     // nothing new costs one API call and changes nothing.
