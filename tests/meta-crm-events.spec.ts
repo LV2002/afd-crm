@@ -18,6 +18,12 @@ const { capiEventName, sendCrmEventsToMeta } = await import("../src/lib/integrat
 
 const MARK = "MetaCapiTest";
 const fetchMock = vi.fn();
+interface Ev {
+  event_name: string;
+  action_source: string;
+  custom_data: unknown;
+  user_data: { lead_id: string; ph?: string[] };
+}
 
 async function sweep() {
   const ls = await db.select({ id: leads.id }).from(leads).where(like(leads.studentName, `${MARK}%`));
@@ -73,12 +79,12 @@ describe("sending status changes to Meta", () => {
     expect(first.sent).toBeGreaterThanOrEqual(1);
     const bodies = fetchMock.mock.calls
       .filter((c) => String(c[0]).includes("/999000111/events"))
-      .flatMap((c) => (JSON.parse(c[1].body as string) as { data: Array<Record<string, unknown> & { user_data: { lead_id: string; ph?: string[] } }> }).data);
+      .flatMap((c) => (JSON.parse(c[1].body as string) as { data: Ev[] }).data);
     const mine = bodies.filter((e) => e.user_data.lead_id === "123456789012345");
     expect(mine).toHaveLength(1);
-    expect((mine[0] as { event_name: string }).event_name).toBe("Hot");
-    expect((mine[0] as { action_source: string }).action_source).toBe("system_generated");
-    expect((mine[0] as { custom_data: unknown }).custom_data).toMatchObject({ event_source: "crm" });
+    expect(mine[0].event_name).toBe("Hot");
+    expect(mine[0].action_source).toBe("system_generated");
+    expect(mine[0].custom_data).toMatchObject({ event_source: "crm" });
     expect(mine[0].user_data.ph?.[0]).toMatch(/^[0-9a-f]{64}$/);
     // The raw phone never leaves.
     expect(JSON.stringify(bodies)).not.toContain("9847800001");
@@ -86,7 +92,7 @@ describe("sending status changes to Meta", () => {
     // A second run sends nothing for them again.
     fetchMock.mockClear();
     await sendCrmEventsToMeta();
-    const again = fetchMock.mock.calls.flatMap((c) => (JSON.parse(c[1].body as string) as { data: Array<Record<string, unknown> & { user_data: { lead_id: string; ph?: string[] } }> }).data);
+    const again = fetchMock.mock.calls.flatMap((c) => (JSON.parse(c[1].body as string) as { data: Ev[] }).data);
     expect(again.filter((e) => e.user_data.lead_id === "123456789012345")).toHaveLength(0);
 
     const skipped = await db.select().from(metaCapiEvents).where(eq(metaCapiEvents.leadId, walkIn));
