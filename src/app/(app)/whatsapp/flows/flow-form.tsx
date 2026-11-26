@@ -126,7 +126,16 @@ export function FlowForm({
       {!values.id ? (
         <div className="flex flex-col gap-2">
           <Label>Who it&rsquo;s for</Label>
-          <Select value={audience} onValueChange={(v) => setAudience(v as "lead" | "contact")}>
+          <Select
+            value={audience}
+            onValueChange={(v) => {
+              setAudience(v as "lead" | "contact");
+              // A database automation almost always means "whenever somebody is
+              // added", so that is what it starts as; switching back restores a
+              // lead trigger.
+              setTrigger(v === "contact" ? "list_joined" : "temperature_entered");
+            }}
+          >
             <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -194,7 +203,8 @@ export function FlowForm({
         </div>
       )}
 
-      <div className={forDatabase ? "hidden" : "flex flex-col gap-2"}>
+      {!forDatabase && (
+      <div className="flex flex-col gap-2">
         <Label>What starts it</Label>
         <Select
           name="triggerType"
@@ -213,6 +223,7 @@ export function FlowForm({
           </SelectContent>
         </Select>
       </div>
+      )}
 
       {!forDatabase && !(FLOW_TRIGGERS as readonly string[]).includes(trigger) && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">

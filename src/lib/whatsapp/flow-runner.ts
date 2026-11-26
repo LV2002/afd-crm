@@ -102,6 +102,26 @@ async function logEvent(
   await db.insert(whatsappFlowRunEvents).values({ runId, stepId, kind, detail });
 }
 
+/**
+ * Meta's later word on a message an automation sent: delivered, read or
+ * failed. Recorded as an event on the run that sent it, so "sent" is never
+ * mistaken for "arrived". Silently does nothing for a message no run sent.
+ */
+export async function recordFlowDelivery(
+  waMessageId: string,
+  status: "sent" | "delivered" | "read" | "failed",
+  failure?: string | null,
+): Promise<void> {
+  if (status === "sent") return;
+  const [event] = await db
+    .select({ runId: whatsappFlowRunEvents.runId, stepId: whatsappFlowRunEvents.stepId })
+    .from(whatsappFlowRunEvents)
+    .where(and(eq(whatsappFlowRunEvents.kind, "sent"), sql`${whatsappFlowRunEvents.detail} like ${"%" + waMessageId + "%"}`))
+    .limit(1);
+  if (!event) return;
+  await logEvent(event.runId, event.stepId, status === "failed" ? "delivery_failed" : status, failure ?? null);
+}
+
 async function endRun(runId: string, status: string, reason: string): Promise<void> {
   await db
     .update(whatsappFlowRuns)
@@ -697,7 +717,14 @@ async function runOne(run: RunRow, steps: FlowStep[]): Promise<void> {
           }
           return;
         }
-        await logEvent(run.id, current.id, "sent", describeStep(current));
+        // The message id is kept in the detail so the delivery report that
+        // arrives later can be matched back to this run.
+        await logEvent(
+          run.id,
+          current.id,
+          "sent",
+          `${describeStep(current)}${outcome.waMessageId ? ` · ${outcome.waMessageId}` : ""}`,
+        );
         current = nextStep(steps, current.position);
         break;
       }
