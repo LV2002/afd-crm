@@ -405,7 +405,7 @@ export async function sendWhatsAppTemplateWithHeader(
     { messageType: "template", body: null, templateName, mediaMimeType: file.type },
     async (phoneNumberId, accessToken) => {
       const mediaId = await uploadMedia(phoneNumberId, accessToken, file, file.name);
-      const waMessageId = await sendTemplateMessage(phoneNumberId, accessToken, toPhone, templateName, language, templateValues(values), { kind, mediaId });
+      const waMessageId = await sendTemplateMessage(phoneNumberId, accessToken, toPhone, templateName, language, templateValues(values), { kind, mediaId, filename: file.name });
       return { waMessageId, mediaId };
     },
   );

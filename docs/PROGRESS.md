@@ -9226,3 +9226,7 @@ Meta's funnel screen said "events not being sent": the CRM never sent any. An ho
 ## Leads list back to the normal table
 
 The spreadsheet-style leads table (sticky columns, click-to-copy) was reverted at the owner's request: the leads list is the table it was before Warm Studio. The dark phone menu and top bar from the same design stay. The unused sheet-table component, its sort/cell helpers, CSS and test were removed.
+
+## Document names on WhatsApp API messages
+
+A document sent by uploaded file (a broadcast's template header, a template sent with a file from the inbox) went to WhatsApp as a bare media id, so the recipient saw a generic name ("Document"). The file's own name is now sent with it (`filename` on the document parameter; never on an image/video, which Meta rejects). A per-person document from a database automation uses the `admit_card_name` / `document_name` the sender posts, otherwise the file name in the link, otherwise "Document.pdf". Tests: `tests/whatsapp-document-name.spec.ts`. Free-form inbox documents and automation "send a file" steps already carried a name.
