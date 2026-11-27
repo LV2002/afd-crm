@@ -9213,3 +9213,7 @@ Every database (contact list) that is not archived and has "May be used for Meta
 ## Lead status sent to Meta's CRM funnel (Conversion Leads)
 
 Meta's funnel screen said "events not being sent": the CRM never sent any. An hourly job (`meta-events`, `/api/cron/meta-events`) now reports every status change of a lead that came from a Meta lead ad to Meta's Conversions API — event name is the status label in Title Case ("Took admission" → "Took Admission", Contacted, Hot…), tied to the lead's own Meta lead id, with `event_source: crm`, hashed phone/email. Source is `temperature_history` (so no write path can forget), each change sent once (`meta_capi_events`), failures retried, starting "Not contacted" skipped, leads not from a Meta lead ad skipped. **Needs the Dataset ID** (Settings → Integrations → Meta; Events Manager → Data sources → dataset → Settings) and an Ads Access Token with `ads_management`. Meta only accepts events up to 7 days old, so earlier admissions cannot be back-filled. Migration 0148; tests `tests/meta-crm-events.spec.ts`. Not run against live Meta.
+
+## Leads list back to the normal table
+
+The spreadsheet-style leads table (sticky columns, click-to-copy) was reverted at the owner's request: the leads list is the table it was before Warm Studio. The dark phone menu and top bar from the same design stay. The unused sheet-table component, its sort/cell helpers, CSS and test were removed.
