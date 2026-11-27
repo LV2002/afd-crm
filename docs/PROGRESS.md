@@ -9274,3 +9274,8 @@ Settings → Health showed "Failed query: select … from whatsapp_numbers" with
 - The Automations list always printed "Started by hand for database lists" for every database automation, whatever its real trigger. It now says "Starts when somebody is added to: <lists>" and has a **Started (7 days)** column.
 - An automation that starts when somebody joins a database shows a panel: lists watched, since when, people started, people waiting for the next check, **when the scheduled check last ran**, and **Check for new people now** (enrols everyone new and sends first messages immediately; same rules as the scheduled check). The scheduled check (`/api/cron/frequent`, every 10 minutes) is what starts people added by import or by hand; people added through a custom webhook start at once. If it has never run, set it up under Settings → Health / `docs/CRON-SETUP.md`.
 - The automation pages now record the real server error when they fail (`guardPage`): in production Next.js hides it behind a digest, which is why Settings → Health listed crashes without a reason.
+
+## Automation page opens even when an extra fails (2026-11-27)
+- `/whatsapp/flows/[id]`: cost rates, the template list, the database list and the auto-start panel are now loaded "soft" — if one fails the page still opens and the real reason is recorded under Settings → Health (`page:whatsapp/flows/[id]:<part>`).
+- The "Only for these leads" condition builder is no longer rendered (hidden) for database automations.
+- Could not reproduce the crash locally against any flow shape; the hardening is a guard, not a confirmed root-cause fix.
