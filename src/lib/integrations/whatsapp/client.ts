@@ -222,7 +222,8 @@ export async function sendTemplateMessage(
    * this when the operator attached a file.
    */
   headerMedia?:
-    | { kind: "image" | "video" | "document"; mediaId: string }
+    // `filename` is what the recipient sees as the document's name; without it WhatsApp falls back to "Document".
+    | { kind: "image" | "video" | "document"; mediaId: string; filename?: string }
     // A file WhatsApp fetches itself from a public https link, for a document
     // that differs per person (an admit card).
     | { kind: "document"; link: string; filename?: string },
@@ -237,7 +238,10 @@ export async function sendTemplateMessage(
           [headerMedia.kind]:
             "link" in headerMedia
               ? { link: headerMedia.link, ...(headerMedia.filename ? { filename: headerMedia.filename } : {}) }
-              : { id: headerMedia.mediaId },
+              : {
+                  id: headerMedia.mediaId,
+                  ...(headerMedia.kind === "document" && headerMedia.filename ? { filename: headerMedia.filename } : {}),
+                },
         },
       ],
     });

@@ -9227,7 +9227,17 @@ Meta's funnel screen said "events not being sent": the CRM never sent any. An ho
 
 The spreadsheet-style leads table (sticky columns, click-to-copy) was reverted at the owner's request: the leads list is the table it was before Warm Studio. The dark phone menu and top bar from the same design stay. The unused sheet-table component, its sort/cell helpers, CSS and test were removed.
 
+## Document names on WhatsApp API messages
+
+A document sent by uploaded file (a broadcast's template header, a template sent with a file from the inbox) went to WhatsApp as a bare media id, so the recipient saw a generic name ("Document"). The file's own name is now sent with it (`filename` on the document parameter; never on an image/video, which Meta rejects). A per-person document from a database automation uses the `admit_card_name` / `document_name` the sender posts, otherwise the file name in the link, otherwise "Document.pdf". Tests: `tests/whatsapp-document-name.spec.ts`. Free-form inbox documents and automation "send a file" steps already carried a name.
 ## Lead deletion for counsellors, centre heads and co-admins; keep chosen Meta campaigns out of the CRM
 
 - **Delete a lead:** counsellors can delete their own leads, centre heads leads in their centre(s), co-admins any lead (admin already could). Deleting is still soft with a required reason and recoverable. Migration 0150 grants `lead.delete` to those roles (existing grants untouched) and `role-seeds.ts` does the same for a fresh install; an admin can change any of it under Settings → Roles.
 - **Meta campaigns that stay out of the CRM:** Settings → Integrations → Meta → "Leads to keep out of the CRM". Add a campaign, ad set or lead form by its Meta ID (or tap "Keep out of the CRM" beside a campaign leads have recently come from). The lead webhook still verifies and records every delivery, but for a match it marks the delivery done with the reason and creates no lead. Switch a rule back on to resume. Leads already in the CRM stay. Table `meta_lead_filters` (migration 0151); tests in `tests/meta-webhook.spec.ts`. Does not change anything on Meta's side: Meta still collects the lead in its Leads Center.
+### OPEN: Simi Manoj's Coexistence number is registered but no messages arrive (paused 2026-11-23)
+State: number +91 98954 84652 is registered in the CRM as Coexistence, owned by Simi Manoj, on WhatsApp account "afdindia" (ID 827478374391335, a different account from the API number's). The CRM system user "AFD CRM Sync" has full access to it. "Run the check" is green except the per-number lines (no student messages, no phone-sent echoes, no history). Test messages sent to her number did not appear in Chats.
+
+To do when Simi's phone is available:
+1. On her phone (WhatsApp Business app, green "B"): confirm chats are intact, then connect for Coexistence from the phone (Settings → Business tools → Cloud API / connect → scan Meta's QR, say **yes** to history). A number added only from Meta's side behaves as a plain API number.
+2. Run the check, scroll to "Recent deliveries" and note any "unregistered" webhook for her phone_number_id.
+3. Build: the check's "App subscribed to the WhatsApp Business Account" line only tests the API number's account. Store each number's WABA ID and have the check test and subscribe every registered number's account (needs a small migration).
