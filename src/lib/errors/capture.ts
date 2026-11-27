@@ -42,9 +42,32 @@ export interface CaptureInput {
   context?: Record<string, unknown>;
 }
 
-function describe(error: unknown): { message: string; stack: string | null } {
+/**
+ * The reason behind an error: drizzle wraps every database failure as
+ * "Failed query: <sql>" and keeps the real reason (a timeout, "too many
+ * clients", a dropped connection) on `cause`, which used to be thrown away —
+ * so the Health screen could say a query failed and never why. Followed down
+ * a few levels and appended.
+ */
+export function causeOf(error: unknown): string | null {
+  const parts: string[] = [];
+  let current: unknown = error instanceof Error ? (error as { cause?: unknown }).cause : undefined;
+  for (let depth = 0; current && depth < 3; depth += 1) {
+    const e = current as { code?: unknown; message?: unknown; cause?: unknown };
+    const code = typeof e.code === "string" ? e.code : null;
+    const message = typeof e.message === "string" ? e.message : null;
+    if (code || message) parts.push([code, message].filter(Boolean).join(": "));
+    current = e.cause;
+  }
+  return parts.length > 0 ? parts.join(" ← ").slice(0, 400) : null;
+}
+
+export function describeError(error: unknown): { message: string; stack: string | null } {
   if (error instanceof Error) {
-    return { message: error.message || error.name, stack: error.stack ?? null };
+    const cause = causeOf(error);
+    // The SQL in "Failed query: …" is long and repeats; the reason goes first so it is what a person reads.
+    const base = error.message || error.name;
+    return { message: cause ? `${base} — reason: ${cause}` : base, stack: error.stack ?? null };
   }
   if (typeof error === "string") return { message: error, stack: null };
   try {
@@ -55,7 +78,7 @@ function describe(error: unknown): { message: string; stack: string | null } {
 }
 
 export async function captureError(input: CaptureInput): Promise<void> {
-  const { message, stack } = describe(input.error);
+  const { message, stack } = describeError(input.error);
   const fingerprint = fingerprintError(input.source, message);
 
   // Always on the console too. Vercel's own logs are where somebody looks

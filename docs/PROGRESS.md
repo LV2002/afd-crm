@@ -9245,3 +9245,7 @@ To do when Simi's phone is available:
 ## Meta campaign leads can go to a database instead of the CRM
 
 On Settings → Integrations → Meta, a campaign, ad set or lead form can now be set to **Add the people to a database instead** (choose the list) as well as "Keep the leads out". The lead webhook still records every delivery; for a database rule it adds the person to that list (name, phone, email, city and the form's custom answers) and creates no lead. **Anyone already on any database (matched by phone, then email) is skipped** — not added to the list, not duplicated — and the delivery says so. If the chosen list is archived or deleted the delivery fails (so Meta retries) with the reason. Leads already in the CRM are not moved. Migration 0152 (safe to re-run); tests in `tests/meta-webhook.spec.ts`.
+
+## Health screen: show why a database query failed; the sidebar no longer takes pages down
+
+Settings → Health showed "Failed query: select … from whatsapp_numbers" with no reason: drizzle keeps the real cause (timeout, "too many connections", dropped connection) on `error.cause`, which was discarded. Recorded errors now append it ("— reason: 53300: remaining connection slots…"). The sidebar's chat list (`getChatLinks`, run on every page) is the query that was failing; it now falls back to showing just the API inbox instead of crashing the page. Next time this appears, the reason will be on the Health screen. If it is a connection-limit error, point `DATABASE_URL` at Supabase's transaction pooler (port 6543). Test: `tests/error-cause.spec.ts`.
