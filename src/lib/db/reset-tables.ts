@@ -52,6 +52,8 @@ export const CONFIG_TABLES = [
   "whatsapp_auto_replies",
   "whatsapp_chat_rules",
   "whatsapp_links",
+  // What WhatsApp charges per message: rates an admin set, kept on a reset.
+  "whatsapp_rates",
   "whatsapp_labels",
   // The marks worth a warning (₹20 lakh, ₹1 crore) — an admin's list.
   "finance_alert_rules",
@@ -121,6 +123,9 @@ export const DATA_TABLES = [
   // Who is in which retargeting audience. Rebuilt from the leads by the
   // nightly sync, so there is nothing here to preserve.
   "ad_audience_contact_members",
+  // The tap log for tracked links, and what Meta billed per message.
+  "whatsapp_link_clicks",
+  "whatsapp_spend",
   // Status changes already reported to Meta; go with the leads they describe.
   "meta_capi_events",
   // Each database's own audience and who was sent to it; the lists themselves

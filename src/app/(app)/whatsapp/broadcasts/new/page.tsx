@@ -16,6 +16,8 @@ import {
 import { audienceFields, type AudienceEntity } from "@/lib/whatsapp/audience";
 import { createClient } from "@/lib/supabase/server";
 
+import { loadRates } from "@/lib/whatsapp/spend";
+
 import { listTemplates } from "../../templates/actions";
 import { NewBroadcastForm, type AudienceFieldOptions } from "./new-broadcast-form";
 
@@ -54,7 +56,7 @@ export default async function NewWhatsAppBroadcastPage() {
     );
   }
 
-  const [leadFields, studentFields, templateResult, { data: listRows }] = await Promise.all([
+  const [leadFields, studentFields, templateResult, { data: listRows }, rates] = await Promise.all([
     optionsFor("lead"),
     optionsFor("student"),
     listTemplates(),
@@ -66,6 +68,7 @@ export default async function NewWhatsAppBroadcastPage() {
       .is("archived_at", null)
       .order("name")
       .returns<Array<{ id: string; name: string; use_for_whatsapp: boolean }>>(),
+    loadRates(),
   ]);
   const canUseDatabase = can(user, "contact.read");
   const contactLists = (listRows ?? []).map((l) => ({ id: l.id, name: l.name, agreed: l.use_for_whatsapp }));
@@ -82,6 +85,7 @@ export default async function NewWhatsAppBroadcastPage() {
             language: template.language,
             body: templateBody(template),
             placeholders: templatePlaceholderCount(template),
+            category: template.category,
             // Decides whether the form offers a file at all: Meta rejects
             // a media header on a text-header template, and rejects a send
             // that omits one on a media-header template.
@@ -116,6 +120,7 @@ export default async function NewWhatsAppBroadcastPage() {
         contactLists={contactLists}
         canUseDatabase={canUseDatabase}
         templates={templates}
+        rates={rates}
       />
     </div>
   );
