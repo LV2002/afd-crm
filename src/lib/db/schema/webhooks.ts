@@ -224,6 +224,9 @@ export const metaLeadFilters = pgTable(
     kind: text("kind").notNull(),
     externalId: text("external_id").notNull(),
     label: text("label"),
+    /** `skip`: the lead is not brought in. `contact_list`: it is added to the database in `contactListId` instead of becoming a lead. */
+    destination: text("destination").notNull().default("skip"),
+    contactListId: uuid("contact_list_id").references(() => contactLists.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -231,5 +234,9 @@ export const metaLeadFilters = pgTable(
   (t) => [
     uniqueIndex("meta_lead_filters_kind_id_uq").on(t.kind, t.externalId).where(sql`deleted_at is null`),
     check("meta_lead_filters_kind_check", sql`${t.kind} in ('campaign', 'adset', 'form')`),
+    check(
+      "meta_lead_filters_destination_check",
+      sql`${t.destination} in ('skip', 'contact_list') and (${t.destination} <> 'contact_list' or ${t.contactListId} is not null)`,
+    ),
   ],
 );

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db/client";
@@ -9,6 +9,8 @@ import { ingestFieldCatalog } from "@/lib/fields/ingest-field-catalog";
 import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { FILTER_KIND_LABELS, matchMetaLeadFilter } from "@/lib/integrations/meta/lead-filter";
+import { contactLists } from "@/lib/db/schema";
+import { saveContact, findExistingContact } from "@/lib/contacts/save";
 import { fetchMetaLead } from "@/lib/integrations/meta/graph-client";
 import {
   describeCustomAnswerMapping,
@@ -185,16 +187,16 @@ export async function POST(request: Request) {
       // marked done, but no lead is made. 200, so Meta does not retry it.
       const blocked = await matchMetaLeadFilter(lead);
       if (blocked) {
+        const what = `${FILTER_KIND_LABELS[blocked.kind].toLowerCase()} ${blocked.label ? `“${blocked.label}” ` : ""}(${blocked.externalId})`;
+        let note: string;
+        if (blocked.destination === "contact_list") {
+          note = await addMetaLeadToDatabase(lead, blocked.contactListId, what);
+        } else {
+          note = `Not brought into the CRM: ${what} is switched off under Settings → Integrations → Meta.`;
+        }
         await db
           .update(webhookEvents)
-          .set({
-            status: "done",
-            processedAt: new Date(),
-            attempts: sql`${webhookEvents.attempts} + 1`,
-            lastError: `Not brought into the CRM: ${FILTER_KIND_LABELS[blocked.kind].toLowerCase()} ${
-              blocked.label ? `“${blocked.label}” ` : ""
-            }(${blocked.externalId}) is switched off under Settings → Integrations → Meta.`,
-          })
+          .set({ status: "done", processedAt: new Date(), attempts: sql`${webhookEvents.attempts} + 1`, lastError: note })
           .where(eq(webhookEvents.id, inserted.id));
         continue;
       }
@@ -284,4 +286,47 @@ export async function POST(request: Request) {
   // succeeded are safe to see again (onConflictDoNothing skips them), so
   // a retry only ever re-attempts the ones that actually failed.
   return NextResponse.json({ ok: allOk, processed: leadgenIds.length }, { status: allOk ? 200 : 500 });
+}
+
+/**
+ * A lead from a campaign routed to a database: the person goes onto that list
+ * instead of becoming a lead. Somebody who is already on ANY database (matched
+ * by phone, then email) is left alone, so a person who is on a seminar list
+ * and then fills this form is not added again or put on a second list.
+ * Throws when the destination list is gone, so the delivery is recorded as
+ * failed and Meta retries once an admin has chosen another.
+ */
+async function addMetaLeadToDatabase(
+  lead: Awaited<ReturnType<typeof fetchMetaLead>>,
+  contactListId: string | null,
+  what: string,
+): Promise<string> {
+  const [list] = contactListId
+    ? await db
+        .select({ id: contactLists.id, name: contactLists.name })
+        .from(contactLists)
+        .where(and(eq(contactLists.id, contactListId), isNull(contactLists.archivedAt)))
+    : [];
+  if (!list) throw new Error(`The database chosen for ${what} is missing or archived — pick another under Settings → Integrations → Meta.`);
+
+  const mapped = mapMetaLeadFields(lead);
+  if (!mapped) throw new Error(`Lead ${lead.id} has no usable name/phone in its field_data`);
+  if (isMetaTestPlaceholder(mapped.primaryPhone) || isMetaTestPlaceholder(mapped.studentName)) {
+    throw new Error("This is Meta's test lead with placeholder answers, so there is nothing real to add.");
+  }
+
+  const existing = await findExistingContact(db, mapped.primaryPhone, mapped.email);
+  if (existing) {
+    return `Not added: already on a database (${existing.name}). ${what} sends new people to “${list.name}”, and someone already in the database is skipped.`;
+  }
+
+  const catalog = await ingestFieldCatalog("lead");
+  const answers = mapMetaCustomAnswers(lead.field_data ?? [], catalog).values;
+  const fields: Record<string, unknown> = { ...answers, city: mapped.city };
+  for (const key of ["student_name", "primary_phone", "email"]) delete fields[key];
+
+  await db.transaction((tx) =>
+    saveContact(tx, { name: mapped.studentName, phone: mapped.primaryPhone, email: mapped.email, fields }, { listId: list.id, userId: null }),
+  );
+  return `Added to the database “${list.name}” instead of the CRM (${what}).`;
 }

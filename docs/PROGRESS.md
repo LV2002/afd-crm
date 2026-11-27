@@ -9241,3 +9241,7 @@ To do when Simi's phone is available:
 1. On her phone (WhatsApp Business app, green "B"): confirm chats are intact, then connect for Coexistence from the phone (Settings → Business tools → Cloud API / connect → scan Meta's QR, say **yes** to history). A number added only from Meta's side behaves as a plain API number.
 2. Run the check, scroll to "Recent deliveries" and note any "unregistered" webhook for her phone_number_id.
 3. Build: the check's "App subscribed to the WhatsApp Business Account" line only tests the API number's account. Store each number's WABA ID and have the check test and subscribe every registered number's account (needs a small migration).
+
+## Meta campaign leads can go to a database instead of the CRM
+
+On Settings → Integrations → Meta, a campaign, ad set or lead form can now be set to **Add the people to a database instead** (choose the list) as well as "Keep the leads out". The lead webhook still records every delivery; for a database rule it adds the person to that list (name, phone, email, city and the form's custom answers) and creates no lead. **Anyone already on any database (matched by phone, then email) is skipped** — not added to the list, not duplicated — and the delivery says so. If the chosen list is archived or deleted the delivery fails (so Meta retries) with the reason. Leads already in the CRM are not moved. Migration 0152 (safe to re-run); tests in `tests/meta-webhook.spec.ts`.

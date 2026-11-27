@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { metaLeadFilters } from "@/lib/db/schema";
+import { contactLists, metaLeadFilters } from "@/lib/db/schema";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import type { MetaFilterKind } from "@/lib/integrations/meta/lead-filter";
 import { createClient } from "@/lib/supabase/server";
@@ -45,6 +45,19 @@ export async function addMetaLeadFilter(_prev: FilterState, formData: FormData):
   if (!KINDS.includes(kind)) return { error: "Choose campaign, ad set or lead form." };
   if (!/^\d{5,25}$/.test(externalId)) return { error: "The ID is the long number Meta shows for it — digits only." };
 
+  // Keep these leads out entirely, or add the people to a database instead.
+  const destination = formData.get("destination") === "contact_list" ? "contact_list" : "skip";
+  let contactListId: string | null = null;
+  if (destination === "contact_list") {
+    contactListId = String(formData.get("contactListId") ?? "").trim() || null;
+    if (!contactListId) return { error: "Choose the database these people should be added to." };
+    const [list] = await db
+      .select({ id: contactLists.id })
+      .from(contactLists)
+      .where(and(eq(contactLists.id, contactListId), isNull(contactLists.archivedAt)));
+    if (!list) return { error: "That database no longer exists or is archived. Pick another." };
+  }
+
   const [existing] = await db
     .select({ id: metaLeadFilters.id })
     .from(metaLeadFilters)
@@ -52,7 +65,7 @@ export async function addMetaLeadFilter(_prev: FilterState, formData: FormData):
   if (existing) return { error: "That one is already switched off." };
 
   label = label ?? (await lookUpName(externalId));
-  const [row] = await db.insert(metaLeadFilters).values({ kind, externalId, label, createdBy: user.id }).returning({ id: metaLeadFilters.id });
+  const [row] = await db.insert(metaLeadFilters).values({ kind, externalId, label, destination, contactListId, createdBy: user.id }).returning({ id: metaLeadFilters.id });
 
   const supabase = await createClient();
   await writeAuditLog(supabase, {
@@ -60,10 +73,16 @@ export async function addMetaLeadFilter(_prev: FilterState, formData: FormData):
     action: "meta_lead_filter.add",
     entityType: "meta_lead_filters",
     entityId: row.id,
-    after: { kind, externalId, label },
+    after: { kind, externalId, label, destination, contactListId },
   });
   revalidatePath("/settings/integrations/meta");
-  return { success: `Leads from this ${kind === "adset" ? "ad set" : kind === "form" ? "form" : "campaign"} will no longer come into the CRM.` };
+  const noun = kind === "adset" ? "ad set" : kind === "form" ? "form" : "campaign";
+  return {
+    success:
+      destination === "contact_list"
+        ? `New leads from this ${noun} will be added to that database instead of the CRM (anyone already on a database is skipped).`
+        : `Leads from this ${noun} will no longer come into the CRM.`,
+  };
 }
 
 /** Turns a campaign / ad set / form back on: its leads come in again from the next submission. */

@@ -17,6 +17,8 @@ export interface FilterHit {
   kind: MetaFilterKind;
   externalId: string;
   label: string | null;
+  destination: "skip" | "contact_list";
+  contactListId: string | null;
 }
 
 /**
@@ -26,7 +28,7 @@ export interface FilterHit {
  */
 export function findFilterHit(
   lead: Pick<MetaLeadgenResponse, "campaign_id" | "adset_id" | "form_id">,
-  rules: Array<{ kind: string; externalId: string; label: string | null }>,
+  rules: Array<{ kind: string; externalId: string; label: string | null; destination: string; contactListId: string | null }>,
 ): FilterHit | null {
   const ids: Record<MetaFilterKind, string | undefined> = {
     campaign: lead.campaign_id,
@@ -36,7 +38,13 @@ export function findFilterHit(
   for (const rule of rules) {
     const kind = rule.kind as MetaFilterKind;
     if (ids[kind] && ids[kind] === rule.externalId.trim()) {
-      return { kind, externalId: rule.externalId, label: rule.label };
+      return {
+        kind,
+        externalId: rule.externalId,
+        label: rule.label,
+        destination: rule.destination === "contact_list" ? "contact_list" : "skip",
+        contactListId: rule.contactListId,
+      };
     }
   }
   return null;
@@ -46,7 +54,13 @@ export async function matchMetaLeadFilter(
   lead: Pick<MetaLeadgenResponse, "campaign_id" | "adset_id" | "form_id">,
 ): Promise<FilterHit | null> {
   const rules = await db
-    .select({ kind: metaLeadFilters.kind, externalId: metaLeadFilters.externalId, label: metaLeadFilters.label })
+    .select({
+      kind: metaLeadFilters.kind,
+      externalId: metaLeadFilters.externalId,
+      label: metaLeadFilters.label,
+      destination: metaLeadFilters.destination,
+      contactListId: metaLeadFilters.contactListId,
+    })
     .from(metaLeadFilters)
     .where(isNull(metaLeadFilters.deletedAt));
   return findFilterHit(lead, rules);
