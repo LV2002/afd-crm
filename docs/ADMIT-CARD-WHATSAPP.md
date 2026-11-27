@@ -47,5 +47,5 @@ Call it right after `MailApp.sendEmail(...)`. Use the field names above or add y
 - The first message **must be an approved template**; free-form messages only work after the person replies.
 - The link must be **https** and publicly reachable. Small Drive PDFs work; if WhatsApp can't fetch one the delivery shows as failed on the
   automation page — host the PDF on your own site instead.
-- Someone with no link, an invalid number, an opt-out, or who is already a lead is skipped, with the reason on the run.
+- Someone with no link, an invalid number, an opt-out, or marked do-not-contact is skipped, with the reason on the run.
 - Only people added **after** the automation is switched on are messaged; the same person is never run through it twice.

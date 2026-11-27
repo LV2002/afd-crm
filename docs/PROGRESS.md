@@ -9249,3 +9249,9 @@ On Settings → Integrations → Meta, a campaign, ad set or lead form can now b
 ## Health screen: show why a database query failed; the sidebar no longer takes pages down
 
 Settings → Health showed "Failed query: select … from whatsapp_numbers" with no reason: drizzle keeps the real cause (timeout, "too many connections", dropped connection) on `error.cause`, which was discarded. Recorded errors now append it ("— reason: 53300: remaining connection slots…"). The sidebar's chat list (`getChatLinks`, run on every page) is the query that was failing; it now falls back to showing just the API inbox instead of crashing the page. Next time this appears, the reason will be on the Health screen. If it is a connection-limit error, point `DATABASE_URL` at Supabase's transaction pooler (port 6543). Test: `tests/error-cause.spec.ts`.
+
+## Database people get WhatsApp whether or not they are leads; Meta campaign → database keeps leads too; flows page no longer hangs
+
+- **Being a lead no longer excludes a database person** from WhatsApp broadcasts and automations (owner's decision). Still excluded: opted-out numbers, people matching a lead marked do-not-contact, removed contacts, and lists not marked as agreed to WhatsApp. `messageableContactIds`, the contact audience builder, the broadcast sweep and the automation runner follow the same rule; the screens say so. **Ad audiences are unchanged**: a person who is a lead still follows the lead rules there (admitted students stop seeing course ads).
+- A Meta campaign routed to a database already added the person whether or not they are a lead (only someone already on a database is skipped).
+- **Flows/broadcast/template pages:** the Meta template list fetch has an 8-second timeout, those pages are allowed up to 60 seconds, and the cost-rate lookup runs in parallel — a slow answer from Meta used to hold the page until the platform cut the render ("Connection closed", "Server Components render" errors).

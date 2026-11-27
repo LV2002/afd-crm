@@ -145,7 +145,7 @@ export function FlowForm({
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            A database automation goes only to people on the lists you choose, never to your leads. It can&rsquo;t be
+            A database automation goes to the people on the lists you choose, whether or not they are also leads. It can&rsquo;t be
             changed later.
           </p>
         </div>
@@ -191,8 +191,8 @@ export function FlowForm({
               ))}
               <p className="text-xs text-muted-foreground">
                 Anyone added to these from now on (by import, webhook or by hand) gets the first message within a few
-                minutes, then the rest of the automation. People already on the list are not messaged, leads and
-                opted-out people are skipped, and nobody gets it twice. Switch the automation on for it to run.
+                minutes, then the rest of the automation. People already on the list are not messaged, opted-out and
+                do-not-contact people are skipped, and nobody gets it twice. Switch the automation on for it to run.
               </p>
             </div>
           ) : (

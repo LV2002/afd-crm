@@ -58,6 +58,9 @@ const RUN_STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive"
   failed: "destructive",
 };
 
+// Pages that wait on Meta for the template list are given the longest the platform allows.
+export const maxDuration = 60;
+
 export default async function WhatsAppFlowPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.campaign")) return <AccessDenied />;
@@ -71,7 +74,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
   if (!flow) notFound();
 
   const supabase = await createClient();
-  const [stepRows, temperatureOptions, centerRows, templateResult, runRows, ruleOptions, people, labelRows] =
+  const [stepRows, temperatureOptions, centerRows, templateResult, runRows, ruleOptions, people, labelRows, rates] =
     await Promise.all([
       db
         .select()
@@ -117,6 +120,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
         .from(whatsappLabels)
         .where(isNull(whatsappLabels.deletedAt))
         .orderBy(asc(whatsappLabels.name)),
+      loadRates(),
     ]);
 
   const forDatabase = flow.audience === "contact";
@@ -151,7 +155,6 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
 
   // What one person costs to take through this automation, from the
   // templates its steps send and the rates under WhatsApp → Spend.
-  const rates = await loadRates();
   const categoryByTemplate = new Map(
     templateResult.status === "ok" ? templateResult.templates.map((t) => [t.name, t.category] as const) : [],
   );

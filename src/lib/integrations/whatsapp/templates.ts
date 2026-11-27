@@ -81,6 +81,10 @@ export async function listMessageTemplates(
     // Approval state changes on Meta's side, so a cached list is a list
     // that tells somebody a template is still pending after it went live.
     cache: "no-store",
+    // A slow answer from Meta must not hold a whole page hostage: every page
+    // that lists templates also does a dozen database reads, and a hung fetch
+    // here used to run until the platform killed the render ("Connection closed").
+    signal: AbortSignal.timeout(8000),
   });
   const body = await response.json();
   if (!response.ok) {

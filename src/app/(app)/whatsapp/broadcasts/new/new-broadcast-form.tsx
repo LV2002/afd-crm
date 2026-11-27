@@ -236,8 +236,8 @@ export function NewBroadcastForm({
           <div className="flex flex-col gap-2 rounded-md border p-3">
             <p className="text-sm font-medium">Which lists</p>
             <p className="text-xs text-muted-foreground">
-              Goes only to people on these lists who are <strong>not leads</strong>. Anyone who has become a lead is left out; the
-              Leads choice reaches them. Only lists marked as having agreed to WhatsApp can be chosen.
+              Goes to everyone on these lists, <strong>whether or not they are also leads</strong>. People who have opted out, or
+              are marked do-not-contact, are left out. Only lists marked as having agreed to WhatsApp can be chosen.
             </p>
             {!contactLists.some((l) => l.agreed) && (
               <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-900">

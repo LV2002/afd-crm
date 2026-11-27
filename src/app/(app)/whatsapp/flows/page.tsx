@@ -37,6 +37,9 @@ const TRIGGER_LABELS: Record<string, string> = {
   manual: "Started by hand",
 };
 
+// Pages that wait on Meta for the template list are given the longest the platform allows.
+export const maxDuration = 60;
+
 export default async function WhatsAppFlowsPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.campaign")) return <AccessDenied />;

@@ -30,6 +30,9 @@ import { NewBroadcastForm, type AudienceFieldOptions } from "./new-broadcast-for
  * Both entities' fields are loaded up front so switching between them is
  * instant rather than a round trip.
  */
+// Pages that wait on Meta for the template list are given the longest the platform allows.
+export const maxDuration = 60;
+
 export default async function NewWhatsAppBroadcastPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.campaign")) return <AccessDenied />;

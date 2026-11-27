@@ -8,7 +8,7 @@ import { getFieldSchema, type FieldEntity } from "@/lib/fields/get-field-schema"
 import { db } from "@/lib/db/client";
 import { normalizePhone } from "@/lib/identity/normalize-phone";
 import { mayReceiveMarketing } from "@/lib/consent/consent";
-import { leadStateFor } from "@/lib/contacts/lead-matches";
+import { doNotContactAmong } from "@/lib/contacts/whatsapp-eligibility";
 import { suppressedAmong } from "@/lib/whatsapp/opt-out";
 import { applyPivotFilters, dimensionFields, type PivotField } from "@/lib/reports/pivot";
 
@@ -318,9 +318,9 @@ async function resolveContactAudience(
   );
   const matchedRows = matched.map((m) => rows.find((c) => c.id === m.id)).filter((c): c is ContactRow => Boolean(c));
 
-  const state = await leadStateFor(
-    matchedRows.map((c) => ({ id: c.id, phone: c.phone, email: c.email, leadId: c.lead_id })),
-  );
+  // Being a lead does not take somebody out of a database broadcast; only a
+  // lead marked do-not-contact does.
+  const neverContact = await doNotContactAmong(matchedRows.map((c) => c.id));
   const suppressed = await suppressedAmong(
     db,
     matchedRows.map((c) => c.phone ?? "").filter(Boolean),
@@ -329,9 +329,8 @@ async function resolveContactAudience(
   const members: AudienceMember[] = [];
   const seen = new Set<string>();
   for (const c of matchedRows) {
-    const s = state.get(c.id);
-    if (s?.linked || s?.match) {
-      skipped.alreadyLeads += 1;
+    if (neverContact.has(c.id)) {
+      skipped.doNotContact += 1;
       continue;
     }
     const phone = c.phone?.trim() ?? "";
