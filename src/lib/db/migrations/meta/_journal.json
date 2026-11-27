@@ -1051,6 +1051,20 @@
       "when": 1797602408000,
       "tag": "0149_whatsapp_costs_and_link_campaigns",
       "breakpoints": true
+    },
+    {
+      "idx": 150,
+      "version": "7",
+      "when": 1797688808000,
+      "tag": "0150_lead_delete_for_staff",
+      "breakpoints": true
+    },
+    {
+      "idx": 151,
+      "version": "7",
+      "when": 1797775208000,
+      "tag": "0151_meta_lead_filters",
+      "breakpoints": true
     }
   ]
 }

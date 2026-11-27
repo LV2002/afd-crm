@@ -34,7 +34,8 @@ vi.mock("../src/lib/integrations/meta/graph-client", () => ({
 const { fetchMetaLead } = await import("../src/lib/integrations/meta/graph-client");
 const { GET, POST } = await import("../src/app/api/webhooks/meta-leads/route");
 const { db } = await import("../src/lib/db/client");
-const { leadIdentifiers, leads, webhookEvents } = await import("../src/lib/db/schema");
+const { leadIdentifiers, leads, metaLeadFilters, webhookEvents } = await import("../src/lib/db/schema");
+const { findFilterHit } = await import("../src/lib/integrations/meta/lead-filter");
 const { setIntegrationCredential, deleteIntegrationCredential } = await import("../src/lib/integrations/credentials");
 
 const APP_SECRET = "test-app-secret";
@@ -242,5 +243,44 @@ describe("POST /api/webhooks/meta-leads (lead ingestion)", () => {
     const [event] = await db.select().from(webhookEvents).where(eq(webhookEvents.externalId, leadgenId));
     expect(event.status).toBe("failed");
     expect(event.lastError).toMatch(/Graph API is down/);
+  });
+});
+
+describe("campaigns switched off for the CRM", () => {
+  it("matches a lead by campaign, ad set or form, and by nothing else", () => {
+    const rules = [
+      { kind: "campaign", externalId: "111111", label: "Webinar" },
+      { kind: "form", externalId: "222222", label: null },
+    ];
+    expect(findFilterHit({ campaign_id: "111111" }, rules)).toMatchObject({ kind: "campaign", label: "Webinar" });
+    expect(findFilterHit({ campaign_id: "999", form_id: "222222" }, rules)).toMatchObject({ kind: "form" });
+    expect(findFilterHit({ campaign_id: "999", adset_id: "111111" }, rules)).toBeNull();
+    expect(findFilterHit({}, rules)).toBeNull();
+  });
+
+  it("records a blocked campaign's lead as done with the reason, and creates no lead", async () => {
+    const leadgenId = String(Math.floor(Math.random() * 1e12) + 1e12);
+    const campaignId = "7777700000001";
+    const [rule] = await db.insert(metaLeadFilters).values({ kind: "campaign", externalId: campaignId, label: "Test campaign" }).returning({ id: metaLeadFilters.id });
+    try {
+      vi.mocked(fetchMetaLead).mockResolvedValue({
+        id: leadgenId,
+        campaign_id: campaignId,
+        field_data: [
+          { name: "full_name", values: [`${MARKER} Blocked`] },
+          { name: "phone_number", values: ["+919847700555"] },
+        ],
+      });
+      const body = leadgenPayload(leadgenId);
+      const res = await POST(new Request("https://example.com/api/webhooks/meta-leads", { method: "POST", headers: { "x-hub-signature-256": sign(body, APP_SECRET) }, body }));
+      expect(res.status).toBe(200);
+      const [event] = await db.select().from(webhookEvents).where(eq(webhookEvents.externalId, leadgenId));
+      expect(event.status).toBe("done");
+      expect(event.lastError).toMatch(/Not brought into the CRM/);
+      const made = await db.select({ id: leads.id }).from(leads).where(like(leads.studentName, `${MARKER} Blocked%`));
+      expect(made).toHaveLength(0);
+    } finally {
+      await db.delete(metaLeadFilters).where(eq(metaLeadFilters.id, rule.id));
+    }
   });
 });
