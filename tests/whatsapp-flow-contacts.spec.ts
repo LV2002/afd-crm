@@ -15,7 +15,7 @@ vi.mock("../src/lib/integrations/whatsapp/client", () => ({ sendTemplateMessage:
 vi.mock("../src/lib/notifications/notify", () => ({ notify: vi.fn() }));
 
 const { sendTemplateMessage } = await import("../src/lib/integrations/whatsapp/client");
-const { advanceRuns, enrolNewListMembers, recordFlowDelivery, resolveContactReply, startFlowForContacts } = await import("../src/lib/whatsapp/flow-runner");
+const { advanceRuns, countNewListMembers, enrolNewListMembers, recordFlowDelivery, resolveContactReply, startFlowForContacts } = await import("../src/lib/whatsapp/flow-runner");
 const { db } = await import("../src/lib/db/client");
 const { describeDeliveryError } = await import("../src/lib/whatsapp/delivery-errors");
 const {
@@ -272,5 +272,36 @@ describe("timed steps", () => {
     expect(run.wakeAt?.getUTCFullYear()).toBe(2099);
     expect(wait.id).toBeTruthy();
     expect(vi.mocked(sendTemplateMessage).mock.calls.some((c) => c[3] === "timed_probe")).toBe(false);
+  });
+});
+
+describe("checking one automation for new people", () => {
+  it("counts who is waiting, and starts only that automation's people when asked", async () => {
+    const [f] = await db
+      .insert(whatsappFlows)
+      .values({
+        name: `${MARK} single`,
+        audience: "contact",
+        triggerType: "list_joined",
+        triggerConfig: { listIds: [listId], from: new Date().toISOString() },
+        isActive: true,
+      })
+      .returning({ id: whatsappFlows.id, triggerConfig: whatsappFlows.triggerConfig });
+    await db.insert(whatsappFlowSteps).values({
+      flowId: f.id,
+      position: 1,
+      kind: "send_template",
+      config: { templateName: "single_probe", templateLanguage: "en_US", params: [] },
+    });
+    expect(await countNewListMembers(f.id, f.triggerConfig)).toBe(0);
+
+    const fresh = await addContact("single new", "+919847670001");
+    expect(await countNewListMembers(f.id, f.triggerConfig)).toBeGreaterThanOrEqual(1);
+
+    const result = await enrolNewListMembers(f.id);
+    expect(result.started).toBe(1);
+    const runs = await db.select().from(whatsappFlowRuns).where(eq(whatsappFlowRuns.flowId, f.id));
+    expect(runs.map((r) => r.contactId)).toEqual([fresh]);
+    expect(await countNewListMembers(f.id, f.triggerConfig)).toBe(0);
   });
 });
