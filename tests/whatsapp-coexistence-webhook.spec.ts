@@ -255,6 +255,31 @@ describe("messages the counsellor sent from their phone", () => {
     expect(message.status).toBe("sent");
   });
 
+  it("keep a WhatsApp system notice as a notice, and a voice note as media, instead of '[system message]'", async () => {
+    const phone = "+919847600209";
+    await makeLead("EchoKinds", phone);
+    const systemId = `wamid.${randomUUID()}`;
+    const voiceId = `wamid.${randomUUID()}`;
+    const response = await post(
+      envelope(
+        "smb_message_echoes",
+        {
+          message_echoes: [
+            { id: systemId, from: BUSINESS_DISPLAY, to: "919847600209", timestamp: "1791100600", type: "system", system: { body: "Number changed" } },
+            { id: voiceId, from: BUSINESS_DISPLAY, to: "919847600209", timestamp: "1791100700", type: "audio", audio: { id: "media-voice-1", mime_type: "audio/ogg; codecs=opus", voice: true } },
+          ],
+        },
+        COEX_PHONE_ID,
+      ),
+    );
+    expect(response.status).toBe(200);
+    const [notice] = await db.select().from(whatsappMessages).where(eq(whatsappMessages.waMessageId, systemId));
+    expect(notice).toMatchObject({ messageType: "system", body: "Number changed" });
+    const [voice] = await db.select().from(whatsappMessages).where(eq(whatsappMessages.waMessageId, voiceId));
+    expect(voice).toMatchObject({ messageType: "media", mediaId: "media-voice-1", direction: "outbound" });
+    expect(voice.mediaMimeType).toMatch(/^audio\//);
+  });
+
   it("are stored with no lead when the other party is not in the CRM", async () => {
     // Still no lead invented — a counsellor's phone also messages their
     // colleagues and their mother, and a CRM that created a lead for

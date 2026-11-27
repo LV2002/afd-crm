@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles, StickyNote } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { matchSavedReplies, type SendableTemplate } from "@/lib/whatsapp/templat
 import { suggestWhatsAppReply } from "@/app/(app)/whatsapp/ai-actions";
 import { addConversationNote } from "@/app/(app)/whatsapp/inbox-actions";
 import { ConversationBar } from "@/components/whatsapp/conversation-bar";
-import { MessageContent } from "@/components/whatsapp/message-content";
+import { ChatThread } from "@/components/whatsapp/chat-thread";
 import { InteractiveComposer } from "@/components/whatsapp/interactive-composer";
 import { MediaPicker } from "@/components/whatsapp/media-picker";
 import { TemplateSender } from "@/components/whatsapp/template-sender";
@@ -24,50 +24,6 @@ import {
   type ReplyChannel,
   type WhatsAppSendState,
 } from "@/lib/whatsapp/send-actions";
-
-const STATUS_LABEL: Record<WhatsAppThreadMessage["status"], string> = {
-  queued: "Sending…",
-  sent: "Sent",
-  delivered: "Delivered",
-  read: "Read",
-  failed: "Failed",
-  received: "",
-};
-
-function MessageBubble({ message }: { message: WhatsAppThreadMessage }) {
-  const isOutbound = message.direction === "outbound";
-  return (
-    <div className={cn("flex flex-col gap-0.5", isOutbound ? "items-end" : "items-start")}>
-      <div
-        className={cn(
-          "max-w-[80%] rounded-lg px-3 py-2 text-sm",
-          isOutbound ? "bg-primary text-primary-foreground" : "bg-muted",
-        )}
-      >
-        <MessageContent message={message} />
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {new Date(message.occurredAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
-        {isOutbound && STATUS_LABEL[message.status] && ` · ${STATUS_LABEL[message.status]}`}
-        {message.status === "failed" && message.errorMessage && ` — ${message.errorMessage}`}
-      </p>
-    </div>
-  );
-}
-
-function NoteBubble({ note }: { note: InboxNote }) {
-  return (
-    <div className="flex flex-col gap-0.5 self-center">
-      <div className="max-w-md rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
-        <p className="mb-0.5 flex items-center gap-1 text-xs font-medium"><StickyNote className="size-3" /> Private note · only staff see this</p>
-        <p className="whitespace-pre-wrap">{note.body}</p>
-      </div>
-      <p className="text-center text-xs text-muted-foreground">
-        {note.authorName ?? "Staff"} · {new Date(note.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
-      </p>
-    </div>
-  );
-}
 
 /**
  * One conversation: what was said, private notes between the lines, and the
@@ -122,15 +78,6 @@ export function WhatsAppPanel({
   const slash = mode === "reply" && /^\/\S*$/.test(body) ? body : null;
   const suggestions = useMemo(() => (slash === null ? [] : matchSavedReplies(savedReplies, slash).slice(0, 6)), [slash, savedReplies]);
 
-  // Messages and notes in the order they happened.
-  const timeline = useMemo(
-    () => [
-      ...messages.map((m) => ({ at: m.occurredAt, kind: "message" as const, m })),
-      ...notes.map((n) => ({ at: n.createdAt, kind: "note" as const, n })),
-    ].sort((a, b) => a.at.localeCompare(b.at)),
-    [messages, notes],
-  );
-
   if (messages.length === 0 && !canSend) return null;
 
   const insertReply = (reply: SavedReply) => {
@@ -141,13 +88,7 @@ export function WhatsAppPanel({
     <div className="flex flex-col gap-3 rounded-lg border p-4">
       <ConversationBar phone={toPhone} labels={labels} labelIds={labelIds} resolved={resolved} windowClosesAt={windowClosesAt} canEdit={canSend} />
 
-      <div className="flex max-h-[28rem] flex-col gap-3 overflow-y-auto">
-        {timeline.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No messages yet.</p>
-        ) : (
-          timeline.map((t) => (t.kind === "message" ? <MessageBubble key={t.m.id} message={t.m} /> : <NoteBubble key={t.n.id} note={t.n} />))
-        )}
-      </div>
+      <ChatThread messages={messages} notes={notes} />
 
       {canSend && (
         <>

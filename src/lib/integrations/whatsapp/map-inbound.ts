@@ -13,7 +13,11 @@ export interface WhatsAppInboundMessage {
   /** A pin dropped on a map. */
   location?: { latitude?: number; longitude?: number; name?: string; address?: string };
   /** One or more contact cards. */
-  contacts?: Array<{ name?: { formatted_name?: string } }>;
+  contacts?: Array<{ name?: { formatted_name?: string }; phones?: Array<{ phone?: string; wa_id?: string }> }>;
+  /** A notice from WhatsApp itself: somebody changed their number, a security code changed. */
+  system?: { body?: string; type?: string; new_wa_id?: string };
+  /** A purchase from a catalogue. */
+  order?: { catalog_id?: string; text?: string; product_items?: Array<{ product_retailer_id?: string; quantity?: number }> };
   /** An emoji reaction to an earlier message. An empty `emoji` is the reaction being taken back. */
   reaction?: { message_id?: string; emoji?: string };
   /**
@@ -26,6 +30,8 @@ export interface WhatsAppInboundMessage {
     type?: string;
     button_reply?: { id?: string; title?: string };
     list_reply?: { id?: string; title?: string; description?: string };
+    /** The answers somebody submitted on a WhatsApp Flow form. */
+    nfm_reply?: { name?: string; body?: string; response_json?: string };
   };
   /**
    * Present on the first message of a conversation that began with a tap on a
@@ -85,7 +91,7 @@ export interface WhatsAppContact {
  */
 
 export interface MappedMessageContent {
-  messageType: "text" | "template" | "media";
+  messageType: "text" | "template" | "media" | "system";
   body: string | null;
   mediaId: string | null;
   mediaMimeType: string | null;
@@ -144,7 +150,36 @@ export function mapMessageContent(message: WhatsAppInboundMessage): MappedMessag
     };
   }
 
-  if (message.type === "reaction" || message.type === "unsupported") {
+  // A notice from WhatsApp itself ("Anjali changed their phone number"). Kept,
+  // as its own kind, so the thread shows it in the middle like WhatsApp does.
+  if (message.type === "system") {
+    return {
+      messageType: "system",
+      body: message.system?.body?.trim() || "WhatsApp system notice",
+      mediaId: null,
+      mediaMimeType: null,
+    };
+  }
+
+  // The answers to a WhatsApp Flow form, one per line.
+  const flowReply = message.interactive?.nfm_reply;
+  if (flowReply) {
+    return { messageType: "text", body: describeFlowReply(flowReply), mediaId: null, mediaMimeType: null };
+  }
+
+  if (message.type === "order" && message.order) {
+    const items = (message.order.product_items ?? []).reduce((sum, item) => sum + (item.quantity ?? 1), 0);
+    const note = message.order.text?.trim();
+    return {
+      messageType: "text",
+      body: `🛒 Order${items ? ` — ${items} item${items === 1 ? "" : "s"}` : ""}${note ? `: ${note}` : ""}`,
+      mediaId: null,
+      mediaMimeType: null,
+    };
+  }
+
+  // WhatsApp's own "request welcome" prompt and reactions are not messages.
+  if (message.type === "reaction" || message.type === "unsupported" || message.type === "request_welcome") {
     return { messageType: "text", body: null, mediaId: null, mediaMimeType: null, ignore: true };
   }
 
@@ -152,20 +187,26 @@ export function mapMessageContent(message: WhatsAppInboundMessage): MappedMessag
     const { name, address, latitude, longitude } = message.location;
     const where = [name, address].filter(Boolean).join(", ");
     const coords =
-      latitude !== undefined && longitude !== undefined ? `${latitude}, ${longitude}` : "";
+      latitude !== undefined && longitude !== undefined ? `${latitude},${longitude}` : "";
+    // A link, so it opens in maps from the thread; the thread turns it into a tappable link.
+    const link = coords ? `\nhttps://www.google.com/maps?q=${coords}` : "";
     return {
       messageType: "text",
-      body: `📍 Location${where ? `: ${where}` : ""}${coords ? ` (${coords})` : ""}`,
+      body: `📍 Location${where ? `: ${where}` : ""}${link}`,
       mediaId: null,
       mediaMimeType: null,
     };
   }
 
   if (message.type === "contacts" && message.contacts?.length) {
-    const names = message.contacts.map((c) => c.name?.formatted_name).filter(Boolean);
+    const cards = message.contacts.map((c) => {
+      const name = c.name?.formatted_name?.trim();
+      const phones = (c.phones ?? []).map((p) => p.phone ?? p.wa_id).filter(Boolean);
+      return [name, phones.join(", ")].filter(Boolean).join(" — ");
+    }).filter(Boolean);
     return {
       messageType: "text",
-      body: `👤 Shared ${names.length > 1 ? "contacts" : "a contact"}${names.length ? `: ${names.join(", ")}` : ""}`,
+      body: `👤 Shared ${cards.length > 1 ? "contacts" : "a contact"}${cards.length ? `:\n${cards.join("\n")}` : ""}`,
       mediaId: null,
       mediaMimeType: null,
     };
@@ -175,7 +216,10 @@ export function mapMessageContent(message: WhatsAppInboundMessage): MappedMessag
   // somebody can tell what it was, rather than an unexplained blank.
   return {
     messageType: "text",
-    body: message.type && message.type !== "text" ? `[${message.type} message]` : null,
+    body:
+      message.type && message.type !== "text"
+        ? `This kind of message (${message.type}) cannot be shown here. Open it in the WhatsApp app.`
+        : null,
     mediaId: null,
     mediaMimeType: null,
   };
@@ -199,4 +243,18 @@ export function buttonText(message: WhatsAppInboundMessage): string | null {
   const reply = message.interactive?.button_reply ?? message.interactive?.list_reply;
   if (reply) return (reply.title ?? reply.id ?? "").trim() || null;
   return null;
+}
+
+/** "Name: Anjali\nCity: Kochi" from a Flow form's JSON answers; the form's own "Sent" caption when it carries none. */
+export function describeFlowReply(reply: { body?: string; response_json?: string }): string {
+  try {
+    const parsed = JSON.parse(reply.response_json ?? "{}") as Record<string, unknown>;
+    const lines = Object.entries(parsed)
+      .filter(([key, value]) => key !== "flow_token" && value !== null && value !== undefined && String(value).trim() !== "")
+      .map(([key, value]) => `${key.replace(/_/g, " ")}: ${Array.isArray(value) ? value.join(", ") : String(value)}`);
+    if (lines.length > 0) return `📝 Form answers\n${lines.join("\n")}`;
+  } catch {
+    /* fall through to the caption */
+  }
+  return `📝 ${reply.body?.trim() || "Submitted a form"}`;
 }

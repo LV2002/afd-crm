@@ -40,6 +40,11 @@ import { createClient } from "@/lib/supabase/server";
  * the CRM" for good. They are moved onto the lead in the same breath.
  */
 
+/** A number as stored with and without the leading '+', for matching a conversation in either direction. */
+function phoneForms(phone: string): string {
+  return [phone, phone.replace(/^\+/, "")].join(",");
+}
+
 export interface WhatsAppConvertState {
   error?: string;
   success?: string;
@@ -98,7 +103,7 @@ async function runConvert(formData: FormData): Promise<WhatsAppConvertState> {
     .from("whatsapp_messages")
     .select("id, counsellor_id, number_id")
     .is("lead_id", null)
-    .eq("from_phone", phone)
+    .or(`from_phone.in.(${phoneForms(phone)}),to_phone.in.(${phoneForms(phone)})`)
     .limit(1)
     .maybeSingle<{ id: string; counsellor_id: string | null; number_id: string | null }>();
 
@@ -137,7 +142,7 @@ async function runConvert(formData: FormData): Promise<WhatsAppConvertState> {
     .from("whatsapp_messages")
     .update({ lead_id: result.leadId }, { count: "exact" })
     .is("lead_id", null)
-    .eq("from_phone", phone);
+    .or(`from_phone.in.(${phoneForms(phone)}),to_phone.in.(${phoneForms(phone)})`);
 
   await writeAuditLog(supabase, {
     actorId: user.id,

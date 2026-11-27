@@ -7,10 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import type { WhatsAppThreadMessage } from "@/lib/whatsapp/get-thread";
 import { MediaPicker } from "@/components/whatsapp/media-picker";
-import { MessageContent } from "@/components/whatsapp/message-content";
+import { ChatThread } from "@/components/whatsapp/chat-thread";
 import {
   sendWhatsAppMedia,
   sendWhatsAppMessage,
@@ -124,37 +123,7 @@ export function UnmatchedThread({
         </form>
       )}
 
-      <div className="flex max-h-96 flex-col gap-3 overflow-y-auto">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={cn(
-              "flex flex-col gap-0.5",
-              message.direction === "outbound" ? "items-end" : "items-start",
-            )}
-          >
-            <div
-              className={cn(
-                "max-w-[80%] rounded-lg px-3 py-2 text-sm",
-                message.direction === "outbound"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted",
-              )}
-            >
-              <MessageContent message={message} />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {new Date(message.occurredAt).toLocaleString("en-IN", {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
-              {message.status === "failed" && message.errorMessage
-                ? ` — ${message.errorMessage}`
-                : ""}
-            </p>
-          </div>
-        ))}
-      </div>
+      <ChatThread messages={messages} />
 
       {canSend &&
         (withinWindow ? (

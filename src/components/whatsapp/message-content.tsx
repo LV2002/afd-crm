@@ -1,5 +1,6 @@
 "use client";
 
+import { FormattedText } from "@/components/whatsapp/formatted-text";
 import { InboundMedia } from "@/components/whatsapp/inbound-media";
 import type { WhatsAppThreadMessage } from "@/lib/whatsapp/get-thread";
 import { mediaLabel } from "@/lib/whatsapp/media-label";
@@ -26,6 +27,7 @@ export function MessageContent({ message }: { message: WhatsAppThreadMessage }) 
             messageId={message.id}
             mimeType={message.mediaMimeType}
             filename={message.mediaFilename}
+            outbound={isOutbound}
           />
         ) : (
           <span className="text-xs opacity-70">
@@ -43,7 +45,7 @@ export function MessageContent({ message }: { message: WhatsAppThreadMessage }) 
         {!message.mediaStoragePath && !isOutbound && message.mediaError && (
           <span className="text-xs opacity-70">{message.mediaError}</span>
         )}
-        {message.body && <span>{message.body}</span>}
+        {message.body && <FormattedText text={message.body} />}
       </span>
     );
   }
@@ -56,5 +58,5 @@ export function MessageContent({ message }: { message: WhatsAppThreadMessage }) 
     );
   }
 
-  return <>{message.body ?? <span className="italic opacity-80">(no text)</span>}</>;
+  return message.body ? <FormattedText text={message.body} /> : <span className="italic opacity-80">(no text)</span>;
 }

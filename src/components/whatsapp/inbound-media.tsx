@@ -1,10 +1,11 @@
 "use client";
 
-import { Download, ImageIcon } from "lucide-react";
+import { Download, FileText, ImageIcon } from "lucide-react";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 
+import { VoiceNote } from "./voice-note";
 import { getWhatsAppMediaUrl } from "./media-actions";
 
 /**
@@ -24,10 +25,12 @@ export function InboundMedia({
   messageId,
   mimeType,
   filename,
+  outbound = false,
 }: {
   messageId: string;
   mimeType: string | null;
   filename: string | null;
+  outbound?: boolean;
 }) {
   const [url, setUrl] = React.useState<string | null>(null);
   const [state, setState] = React.useState<"idle" | "loading" | "failed">("idle");
@@ -54,7 +57,7 @@ export function InboundMedia({
 
   if (isAudio) {
     return url ? (
-      <audio controls preload="metadata" src={url} className="h-10 w-64 max-w-full" />
+      <VoiceNote src={url} outbound={outbound} />
     ) : (
       <span className="text-sm opacity-80">
         {state === "failed" ? "Could not load the voice note." : "Loading the voice note…"}
@@ -64,7 +67,7 @@ export function InboundMedia({
 
   if (isVideo) {
     return url ? (
-      <video controls preload="metadata" src={url} className="max-h-72 w-auto max-w-full rounded-md border" />
+      <video controls preload="metadata" src={url} className="max-h-72 w-auto max-w-full rounded-md" />
     ) : (
       <Button size="sm" variant="secondary" onClick={load} disabled={state === "loading"}>
         <Download className="size-4" />
@@ -84,7 +87,7 @@ export function InboundMedia({
           <img
             src={url}
             alt={filename ?? "Image received on WhatsApp"}
-            className="max-h-64 w-auto max-w-full rounded-md border"
+            className="max-h-72 w-auto max-w-full rounded-md"
           />
         </a>
       );
@@ -97,9 +100,14 @@ export function InboundMedia({
     );
   }
 
+  // A document: a card with the file's own name, like WhatsApp's.
   return (
-    <span className="flex flex-col gap-1.5">
-      <span className="text-sm opacity-80">{filename ?? mimeType ?? "A file"}</span>
+    <span className="flex min-w-52 items-center gap-3 rounded-md bg-black/5 p-2.5 dark:bg-white/5">
+      <FileText className="size-8 shrink-0 text-[#667781] dark:text-[#8696a0]" />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm font-medium">{filename ?? "Document"}</span>
+        <span className="text-xs opacity-70">{(mimeType ?? "file").split("/").pop()?.toUpperCase()}</span>
+      </span>
       {url ? (
         <Button asChild size="sm" variant="secondary">
           <a href={url} target="_blank" rel="noopener noreferrer">
