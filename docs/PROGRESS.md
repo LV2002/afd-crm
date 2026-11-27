@@ -9220,3 +9220,6 @@ Meta's funnel screen said "events not being sent": the CRM never sent any. An ho
 - **Spend monitor.** **WhatsApp → Spend**: per month, total, by category, by broadcast and by automation, from Meta's own delivery reports (`statuses[].pricing.category/billable`, recorded in `whatsapp_spend` by the status webhook, once per message). It appears after delivery, not before — Meta is the authority on what it billed.
 - **Link taps per campaign.** A tracked link can be tied to a broadcast, an automation, or a campaign name; every tap is now logged (`whatsapp_link_clicks`, with an optional `?r=` reference to tell recipients apart) and **Tracked links** shows taps by campaign, last 7 days and distinct people. Not built: automatic per-recipient links (a sender adds `?r=` themselves).
 - **Source "WhatsApp API".** Converting a chat that arrived on the business API number into a lead now gives it the source "WhatsApp API" (`whatsapp_api` in the Lead source list); chats on a counsellor's own number stay "WhatsApp". Migration 0149.
+## Leads list back to the normal table
+
+The spreadsheet-style leads table (sticky columns, click-to-copy) was reverted at the owner's request: the leads list is the table it was before Warm Studio. The dark phone menu and top bar from the same design stay. The unused sheet-table component, its sort/cell helpers, CSS and test were removed.
