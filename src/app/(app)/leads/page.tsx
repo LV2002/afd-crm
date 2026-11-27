@@ -6,6 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { OptionBadge } from "@/components/ui/option-badge";
 import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { filterTerm } from "@/lib/db/filter-term";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { fieldColumn, getRawFieldValue } from "@/lib/fields/field-column";
@@ -22,9 +30,7 @@ import {
   parseLeadDateFilters,
   recentMonths,
 } from "@/lib/leads/date-filters";
-import { leadCellText } from "@/lib/leads/cell-text";
 import { maskPhone } from "@/lib/leads/mask-phone";
-import { SheetTable, type SheetRow } from "@/components/ui/sheet-table";
 import { droppedLeadIds } from "@/lib/enrolment/dropped-leads";
 import { mergeUserRefLabels } from "@/lib/fields/user-ref-labels";
 import { createClient } from "@/lib/supabase/server";
@@ -328,20 +334,6 @@ export default async function LeadsPage({
     </EmptyState>
   );
 
-  const sheetRows: SheetRow[] = (rows ?? []).map((row) => ({
-    id: String(row.id),
-    href: `/leads/${row.id}`,
-    cells: Object.fromEntries(
-      listFields.map((field) => [
-        field.id,
-        {
-          node: renderCell(field, row, optionsWithUsers, canRevealPhone, dropped.has(String(row.id))),
-          text: leadCellText(field, row, optionsWithUsers),
-        },
-      ]),
-    ),
-  }));
-
   return (
     <div className="flex min-w-0 flex-col gap-4">
       {/*
@@ -482,20 +474,33 @@ export default async function LeadsPage({
         {(rows ?? []).length === 0 && <li>{emptyState}</li>}
       </ul>
 
-      {/*
-        From a tablet up: a spreadsheet. The header and the first two columns
-        stay put while the rest scroll sideways; a click on a cell copies it
-        (a phone number copies masked, as shown); a header sorts the page.
-        The cells are rendered here and handed over finished, because a
-        server component cannot give a client one a function.
-      */}
-      <div className="hidden md:block">
-        <SheetTable
-          columns={listFields.map((field) => ({ key: field.id, header: field.label }))}
-          rows={sheetRows}
-          empty={emptyState}
-        />
-      </div>
+      <Table className="hidden md:table">
+        <TableHeader>
+          <TableRow>
+            {listFields.map((field) => (
+              <TableHead key={field.id}>{field.label}</TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {(rows ?? []).map((row) => (
+            <TableRow key={String(row.id)}>
+              {listFields.map((field) => (
+                <TableCell key={field.id}>
+                  {renderCell(field, row, optionsWithUsers, canRevealPhone, dropped.has(String(row.id)))}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+          {(rows ?? []).length === 0 && (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={listFields.length} className="p-0">
+                {emptyState}
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
 
       {total > PAGE_SIZES[0] && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
