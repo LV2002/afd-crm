@@ -84,6 +84,15 @@ export async function saveContact(
 
 type ExistingContact = typeof contacts.$inferSelect;
 
+/** The contact that already has this phone or email, if any. Exported so a caller can decline to add somebody who is already on a database. */
+export async function findExistingContact(
+  tx: DbExecutor,
+  phone: string | null,
+  email: string | null,
+): Promise<ExistingContact | null> {
+  return findExisting(tx, normalizePhone(phone), normalizeEmail(email));
+}
+
 async function findExisting(
   tx: DbExecutor,
   phone: string | null,

@@ -34,7 +34,7 @@ vi.mock("../src/lib/integrations/meta/graph-client", () => ({
 const { fetchMetaLead } = await import("../src/lib/integrations/meta/graph-client");
 const { GET, POST } = await import("../src/app/api/webhooks/meta-leads/route");
 const { db } = await import("../src/lib/db/client");
-const { leadIdentifiers, leads, metaLeadFilters, webhookEvents } = await import("../src/lib/db/schema");
+const { contactListMembers, contactLists, contacts, leadIdentifiers, leads, metaLeadFilters, webhookEvents } = await import("../src/lib/db/schema");
 const { findFilterHit } = await import("../src/lib/integrations/meta/lead-filter");
 const { setIntegrationCredential, deleteIntegrationCredential } = await import("../src/lib/integrations/credentials");
 
@@ -249,8 +249,8 @@ describe("POST /api/webhooks/meta-leads (lead ingestion)", () => {
 describe("campaigns switched off for the CRM", () => {
   it("matches a lead by campaign, ad set or form, and by nothing else", () => {
     const rules = [
-      { kind: "campaign", externalId: "111111", label: "Webinar" },
-      { kind: "form", externalId: "222222", label: null },
+      { kind: "campaign", externalId: "111111", label: "Webinar", destination: "skip", contactListId: null },
+      { kind: "form", externalId: "222222", label: null, destination: "skip", contactListId: null },
     ];
     expect(findFilterHit({ campaign_id: "111111" }, rules)).toMatchObject({ kind: "campaign", label: "Webinar" });
     expect(findFilterHit({ campaign_id: "999", form_id: "222222" }, rules)).toMatchObject({ kind: "form" });
@@ -282,5 +282,79 @@ describe("campaigns switched off for the CRM", () => {
     } finally {
       await db.delete(metaLeadFilters).where(eq(metaLeadFilters.id, rule.id));
     }
+  });
+});
+
+describe("a campaign routed to a database", () => {
+  const campaignId = "7777700000002";
+  let listId: string;
+  let otherListId: string;
+  let ruleId: string;
+
+  async function deliver(phone: string, name: string) {
+    const leadgenId = String(Math.floor(Math.random() * 1e12) + 2e12);
+    vi.mocked(fetchMetaLead).mockResolvedValue({
+      id: leadgenId,
+      campaign_id: campaignId,
+      field_data: [
+        { name: "full_name", values: [name] },
+        { name: "phone_number", values: [phone] },
+      ],
+    });
+    const body = leadgenPayload(leadgenId);
+    const res = await POST(new Request("https://example.com/api/webhooks/meta-leads", { method: "POST", headers: { "x-hub-signature-256": sign(body, APP_SECRET) }, body }));
+    const [event] = await db.select().from(webhookEvents).where(eq(webhookEvents.externalId, leadgenId));
+    return { res, event };
+  }
+
+  beforeAll(async () => {
+    const [a] = await db.insert(contactLists).values({ name: `${MARKER} campaign list` }).returning({ id: contactLists.id });
+    const [b] = await db.insert(contactLists).values({ name: `${MARKER} other list` }).returning({ id: contactLists.id });
+    listId = a.id;
+    otherListId = b.id;
+    const [r] = await db
+      .insert(metaLeadFilters)
+      .values({ kind: "campaign", externalId: campaignId, label: "Webinar", destination: "contact_list", contactListId: listId })
+      .returning({ id: metaLeadFilters.id });
+    ruleId = r.id;
+  });
+  afterAll(async () => {
+    await db.delete(metaLeadFilters).where(eq(metaLeadFilters.id, ruleId));
+    await db.delete(contactListMembers).where(eq(contactListMembers.listId, listId));
+    await db.delete(contactListMembers).where(eq(contactListMembers.listId, otherListId));
+    await db.delete(contacts).where(like(contacts.name, `${MARKER}%`));
+    await db.delete(contactLists).where(like(contactLists.name, `${MARKER}%`));
+  });
+
+  it("adds the person to the chosen database and creates no lead", async () => {
+    const { res, event } = await deliver("+919847701111", `${MARKER} Newcomer`);
+    expect(res.status).toBe(200);
+    expect(event.status).toBe("done");
+    expect(event.lastError).toMatch(/Added to the database/);
+    const [contact] = await db.select().from(contacts).where(eq(contacts.phone, "+919847701111"));
+    const members = await db.select().from(contactListMembers).where(eq(contactListMembers.contactId, contact.id));
+    expect(members.map((m) => m.listId)).toEqual([listId]);
+    expect(await db.select({ id: leads.id }).from(leads).where(like(leads.studentName, `${MARKER} Newcomer%`))).toHaveLength(0);
+  });
+
+  it("skips somebody who is already on another database, adding them to nothing", async () => {
+    const [existing] = await db.insert(contacts).values({ name: `${MARKER} Already There`, phone: "+919847702222" }).returning({ id: contacts.id });
+    await db.insert(contactListMembers).values({ contactId: existing.id, listId: otherListId });
+
+    const { res, event } = await deliver("+919847702222", `${MARKER} Already There Again`);
+    expect(res.status).toBe(200);
+    expect(event.status).toBe("done");
+    expect(event.lastError).toMatch(/Not added: already on a database/);
+    const members = await db.select().from(contactListMembers).where(eq(contactListMembers.contactId, existing.id));
+    expect(members.map((m) => m.listId)).toEqual([otherListId]);
+  });
+
+  it("fails the delivery, so Meta retries, when the chosen database is gone", async () => {
+    await db.update(contactLists).set({ archivedAt: new Date() }).where(eq(contactLists.id, listId));
+    const { res, event } = await deliver("+919847703333", `${MARKER} Orphan`);
+    expect(res.status).toBe(500);
+    expect(event.status).toBe("failed");
+    expect(event.lastError).toMatch(/missing or archived/);
+    await db.update(contactLists).set({ archivedAt: null }).where(eq(contactLists.id, listId));
   });
 });

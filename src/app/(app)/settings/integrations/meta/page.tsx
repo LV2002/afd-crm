@@ -2,10 +2,10 @@ import { AccessDenied } from "@/components/layout/access-denied";
 import { ImportAdSpend } from "@/components/integrations/import-ad-spend";
 import { RecentDeliveries } from "@/components/integrations/recent-deliveries";
 import { can, getCurrentUser } from "@/lib/auth/session";
-import { desc, isNull, sql } from "drizzle-orm";
+import { asc, desc, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
-import { metaLeadFilters } from "@/lib/db/schema";
+import { contactLists, metaLeadFilters } from "@/lib/db/schema";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { adSpendHistory } from "@/lib/integrations/ad-spend-history";
 import { recentWebhookDeliveries } from "@/lib/integrations/recent-deliveries";
@@ -42,6 +42,12 @@ export default async function MetaIntegrationPage() {
     .from(metaLeadFilters)
     .where(isNull(metaLeadFilters.deletedAt))
     .orderBy(desc(metaLeadFilters.createdAt));
+  const listRows = await db
+    .select({ id: contactLists.id, name: contactLists.name })
+    .from(contactLists)
+    .where(isNull(contactLists.archivedAt))
+    .orderBy(asc(contactLists.name));
+  const listNameById = new Map(listRows.map((l) => [l.id, l.name]));
   const blockedCampaigns = new Set(rules.filter((r) => r.kind === "campaign").map((r) => r.externalId));
   const recent = [
     ...(await db.execute<{ campaign_id: string; leads: number }>(sql`
@@ -93,14 +99,23 @@ export default async function MetaIntegrationPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">Leads to keep out of the CRM</h2>
+        <h2 className="font-medium">Campaigns that stay out of the CRM</h2>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          A lead form on some campaigns does not need to land in the CRM. Switch a campaign, ad set or lead form off here and
-          its new leads are received, recorded as skipped, and never become leads. Leads already in the CRM stay; you can
+          A lead form on some campaigns does not need to land in the CRM. Choose a campaign, ad set or lead form here and its new leads either stay out of
+          the CRM completely, or are added to a database you choose instead (someone already on any database is skipped).
+          Either way they never become leads. Leads already in the CRM stay; you can
           delete them from Leads. The ID is the number Meta shows for the campaign, ad set or form in Ads Manager.
         </p>
         <LeadFilters
-          rules={rules.map((r) => ({ id: r.id, kind: r.kind, externalId: r.externalId, label: r.label }))}
+          rules={rules.map((r) => ({
+            id: r.id,
+            kind: r.kind,
+            externalId: r.externalId,
+            label: r.label,
+            destination: r.destination,
+            listName: r.contactListId ? (listNameById.get(r.contactListId) ?? null) : null,
+          }))}
+          lists={listRows}
           seen={seen}
         />
       </section>
