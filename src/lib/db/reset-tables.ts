@@ -54,6 +54,8 @@ export const CONFIG_TABLES = [
   "whatsapp_links",
   // What WhatsApp charges per message: rates an admin set, kept on a reset.
   "whatsapp_rates",
+  // Meta campaigns, ad sets and forms whose leads are kept out of the CRM: admin settings.
+  "meta_lead_filters",
   "whatsapp_labels",
   // The marks worth a warning (₹20 lakh, ₹1 crore) — an admin's list.
   "finance_alert_rules",

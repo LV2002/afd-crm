@@ -72,6 +72,9 @@ const BASE_ROLE_SEEDS: RoleSeed[] = [
           "lead.update",
           "lead.assign",
           "lead.merge",
+          // Owner's decision (2026-11-27): centre heads may delete (soft, with a
+          // reason, recoverable) leads in their centre(s).
+          "lead.delete",
           "lead.export",
           "lead.reveal_phone",
           "lead.import",
@@ -129,6 +132,9 @@ const BASE_ROLE_SEEDS: RoleSeed[] = [
           "lead.read",
           "lead.create",
           "lead.update",
+          // Owner's decision (2026-11-27): counsellors may delete their own leads
+          // (soft, with a reason, and recoverable).
+          "lead.delete",
           "lead.reveal_phone",
           "interaction.read",
           "interaction.create",

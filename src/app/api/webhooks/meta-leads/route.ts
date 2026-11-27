@@ -8,6 +8,7 @@ import { webhookEvents } from "@/lib/db/schema";
 import { ingestFieldCatalog } from "@/lib/fields/ingest-field-catalog";
 import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
 import { getIntegrationCredentials } from "@/lib/integrations/credentials";
+import { FILTER_KIND_LABELS, matchMetaLeadFilter } from "@/lib/integrations/meta/lead-filter";
 import { fetchMetaLead } from "@/lib/integrations/meta/graph-client";
 import {
   describeCustomAnswerMapping,
@@ -178,6 +179,26 @@ export async function POST(request: Request) {
       }
 
       const lead = await fetchMetaLead(leadgenId, pageAccessToken);
+
+      // A campaign, ad set or form the admin has switched off for the CRM:
+      // the delivery is recorded (verify → persist → process still holds) and
+      // marked done, but no lead is made. 200, so Meta does not retry it.
+      const blocked = await matchMetaLeadFilter(lead);
+      if (blocked) {
+        await db
+          .update(webhookEvents)
+          .set({
+            status: "done",
+            processedAt: new Date(),
+            attempts: sql`${webhookEvents.attempts} + 1`,
+            lastError: `Not brought into the CRM: ${FILTER_KIND_LABELS[blocked.kind].toLowerCase()} ${
+              blocked.label ? `“${blocked.label}” ` : ""
+            }(${blocked.externalId}) is switched off under Settings → Integrations → Meta.`,
+          })
+          .where(eq(webhookEvents.id, inserted.id));
+        continue;
+      }
+
       const mapped = mapMetaLeadFields(lead);
       if (!mapped) {
         throw new Error(`Lead ${leadgenId} has no usable name/phone in its field_data`);

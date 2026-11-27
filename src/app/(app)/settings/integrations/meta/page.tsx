@@ -2,11 +2,17 @@ import { AccessDenied } from "@/components/layout/access-denied";
 import { ImportAdSpend } from "@/components/integrations/import-ad-spend";
 import { RecentDeliveries } from "@/components/integrations/recent-deliveries";
 import { can, getCurrentUser } from "@/lib/auth/session";
+import { desc, isNull, sql } from "drizzle-orm";
+
+import { db } from "@/lib/db/client";
+import { metaLeadFilters } from "@/lib/db/schema";
+import { getIntegrationCredentials } from "@/lib/integrations/credentials";
 import { adSpendHistory } from "@/lib/integrations/ad-spend-history";
 import { recentWebhookDeliveries } from "@/lib/integrations/recent-deliveries";
 import { createClient } from "@/lib/supabase/server";
 
 import { getMetaConnectionStatus, importPastMetaAdSpend } from "./actions";
+import { LeadFilters } from "./lead-filters";
 import { MetaCredentialsForm } from "./meta-credentials-form";
 import { SubscribePageButton } from "./subscribe-page-button";
 import { TestConnectionButton } from "./test-connection-button";
@@ -28,6 +34,38 @@ export default async function MetaIntegrationPage() {
 
   const status = await getMetaConnectionStatus();
   const spend = await adSpendHistory("meta");
+
+  // Campaigns, ad sets and forms switched off for the CRM, and the campaigns
+  // leads have recently come from (offered as one-click choices).
+  const rules = await db
+    .select()
+    .from(metaLeadFilters)
+    .where(isNull(metaLeadFilters.deletedAt))
+    .orderBy(desc(metaLeadFilters.createdAt));
+  const blockedCampaigns = new Set(rules.filter((r) => r.kind === "campaign").map((r) => r.externalId));
+  const recent = [
+    ...(await db.execute<{ campaign_id: string; leads: number }>(sql`
+      select campaign_id, count(*)::int as leads
+      from enquiries
+      where source = 'meta' and campaign_id ~ '^[0-9]{5,25}$' and created_at > now() - interval '60 days'
+      group by campaign_id
+      order by max(created_at) desc
+      limit 12`)),
+  ].filter((r) => !blockedCampaigns.has(r.campaign_id));
+  const { ads_access_token: adsToken } = await getIntegrationCredentials("meta", ["ads_access_token"]);
+  const names = new Map<string, string>();
+  if (adsToken) {
+    await Promise.allSettled(
+      recent.map(async (r) => {
+        const url = new URL(`https://graph.facebook.com/v21.0/${r.campaign_id}`);
+        url.searchParams.set("fields", "name");
+        url.searchParams.set("access_token", adsToken);
+        const response = await fetch(url.toString(), { signal: AbortSignal.timeout(3000) });
+        if (response.ok) names.set(r.campaign_id, ((await response.json()) as { name?: string }).name ?? "");
+      }),
+    );
+  }
+  const seen = recent.map((r) => ({ campaignId: r.campaign_id, name: names.get(r.campaign_id) || null, leads: r.leads }));
 
   return (
     <div className="flex flex-col gap-8">
@@ -52,6 +90,19 @@ export default async function MetaIntegrationPage() {
         <p className="text-xs text-muted-foreground">
           Prefix with this CRM&apos;s domain — e.g. <code>https://your-domain.com/api/webhooks/meta-leads</code>.
         </p>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">Leads to keep out of the CRM</h2>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          A lead form on some campaigns does not need to land in the CRM. Switch a campaign, ad set or lead form off here and
+          its new leads are received, recorded as skipped, and never become leads. Leads already in the CRM stay; you can
+          delete them from Leads. The ID is the number Meta shows for the campaign, ad set or form in Ads Manager.
+        </p>
+        <LeadFilters
+          rules={rules.map((r) => ({ id: r.id, kind: r.kind, externalId: r.externalId, label: r.label }))}
+          seen={seen}
+        />
       </section>
 
       <section className="flex flex-col gap-3">
