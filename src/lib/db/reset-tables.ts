@@ -121,6 +121,12 @@ export const DATA_TABLES = [
   // Who is in which retargeting audience. Rebuilt from the leads by the
   // nightly sync, so there is nothing here to preserve.
   "ad_audience_contact_members",
+  // Status changes already reported to Meta; go with the leads they describe.
+  "meta_capi_events",
+  // Each database's own audience and who was sent to it; the lists themselves
+  // are wiped by a reset, so these go with them.
+  "ad_list_audience_members",
+  "contact_list_audiences",
   "ad_audience_members",
   /**
    * Real money spent on real ads, pulled from Meta and Google.

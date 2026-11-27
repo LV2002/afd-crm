@@ -22,6 +22,7 @@ import {
   validateFlow,
   waitConfig,
   waitMs,
+  wakeTimeFor,
   validateAnswer,
   type FlowStep,
 } from "../src/lib/whatsapp/flow-engine";
@@ -264,5 +265,29 @@ describe("stepEdges (the flow map)", () => {
     expect(stepEdges(steps, steps[0])).toEqual([{ label: null, to: 2 }]);
     expect(stepEdges(steps, steps[2])).toEqual([{ label: null, to: 4 }]);
     expect(stepEdges(steps, steps[3])).toEqual([]);
+  });
+});
+
+describe("wakeTimeFor", () => {
+  // 2026-12-01 05:00 UTC is 10:30 in India.
+  const now = new Date("2026-12-01T05:00:00Z");
+
+  it("waits an amount of minutes, hours or days, and still honours the old hours-only shape", () => {
+    expect(wakeTimeFor(step(1, "wait", { amount: 30, unit: "minutes" }), now).toISOString()).toBe("2026-12-01T05:30:00.000Z");
+    expect(wakeTimeFor(step(1, "wait", { amount: 3, unit: "days" }), now).toISOString()).toBe("2026-12-04T05:00:00.000Z");
+    expect(wakeTimeFor(step(1, "wait", { hours: 2 }), now).toISOString()).toBe("2026-12-01T07:00:00.000Z");
+  });
+
+  it("can push the wake-up on to a time of day in India time", () => {
+    // After 1 day it is 10:30 IST on the 2nd; "at 10:00" means the next 10:00 IST, i.e. the 3rd.
+    expect(wakeTimeFor(step(1, "wait", { amount: 1, unit: "days", atTime: "10:00" }), now).toISOString()).toBe("2026-12-03T04:30:00.000Z");
+    // After 1 day, "at 18:00" is still the same day, 18:00 IST.
+    expect(wakeTimeFor(step(1, "wait", { amount: 1, unit: "days", atTime: "18:00" }), now).toISOString()).toBe("2026-12-02T12:30:00.000Z");
+  });
+
+  it("waits until a fixed date and time in India time, and lets a past one straight through", () => {
+    expect(wakeTimeFor(step(1, "wait_until", { at: "2026-12-10T09:00" }), now).toISOString()).toBe("2026-12-10T03:30:00.000Z");
+    expect(wakeTimeFor(step(1, "wait_until", { at: "2026-11-01T09:00" }), now).toISOString()).toBe(now.toISOString());
+    expect(wakeTimeFor(step(1, "wait_until", {}), now).toISOString()).toBe(now.toISOString());
   });
 });

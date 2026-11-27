@@ -4959,6 +4959,17 @@ Leon asked that the admin hear about instalments 30+ days late and leads untouch
 ## 2026-11-25 — No automatic leads from WhatsApp
 
 Reverses the per-number `creates_leads` rule and the "ad tap creates a lead on any number" rule. Owner's instruction: a counsellor must mark a chat as a lead. Cost accepted: Click-to-WhatsApp enquiries from strangers no longer appear in Ad Performance until converted (the ad id is not kept on the conversion).
+## 2026-11-25 — Meta spend floor
+
+Owner asked to drop Meta spend before 1 Oct 2026 while keeping the sync. Implemented as a constant floor in `ad-spend-window.ts` plus a one-off delete migration. Deliberately not a setting: it is a one-time cleanup decision; make it configuration if it ever needs to move.
 ## 2026-11-25 — Custom webhook destination: lead or database list
 
 `custom_webhooks.destination` (`lead` | `contact_list`) plus `contact_list_id` (check constraint: a list is required for `contact_list`). Chosen over a second route so the signature/auth/persist/duplicate handling stays in one place. Email-only deliveries are accepted for databases (identity is phone or email there) but not for leads, which still need a phone. A list that is archived or missing is a settings fault, so it returns 500 (sender retries) rather than 200 (data lost).
+
+## 2026-11-25 — Auto-start database automations by sweep, plus instant on webhook
+
+Chose a stateless sweep (joined since `from`, no prior run) over a DB trigger or a per-flow cursor: it needs no migration, catches adds from every path (import, UI, webhook), and is idempotent. The webhook path additionally runs the sweep inline so the first message is immediate. The first message must be an approved template (a free-form message needs the person to have written first).
+
+## 2026-11-26 — One ad audience per database
+
+Owner asked for each database to be its own audience on Meta and Google, separate from leads. Replaced the "contacts go into the leads audience" path (`syncContactAudience`, now only used to retire what it had sent). Kept the exclusion of people who are leads, so an enrolled student stops seeing course ads via the lead rules. Sync is hourly with the existing cron tier; adding people is not instant on the platforms side either way.

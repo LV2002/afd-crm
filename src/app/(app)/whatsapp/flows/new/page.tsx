@@ -1,9 +1,9 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 
 import { AccessDenied } from "@/components/layout/access-denied";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { centers } from "@/lib/db/schema";
+import { centers, contactLists } from "@/lib/db/schema";
 import { loadTemperatureOptionsDirect } from "@/lib/leads/temperature-options-direct";
 import { createClient } from "@/lib/supabase/server";
 
@@ -18,7 +18,7 @@ export default async function NewWhatsAppFlowPage() {
   if (!user || !can(user, "whatsapp.campaign")) return <AccessDenied />;
 
   const supabase = await createClient();
-  const [temperatureOptions, centerRows, ruleOptions] = await Promise.all([
+  const [temperatureOptions, centerRows, ruleOptions, listRows] = await Promise.all([
     loadTemperatureOptionsDirect(),
     db
       .select({ id: centers.id, name: centers.name })
@@ -26,6 +26,11 @@ export default async function NewWhatsAppFlowPage() {
       .where(eq(centers.isActive, true))
       .orderBy(asc(centers.name)),
     loadRuleOptions(supabase),
+    db
+      .select({ id: contactLists.id, name: contactLists.name })
+      .from(contactLists)
+      .where(and(isNull(contactLists.archivedAt), eq(contactLists.useForWhatsapp, true)))
+      .orderBy(asc(contactLists.name)),
   ]);
 
   return (
@@ -45,6 +50,7 @@ export default async function NewWhatsAppFlowPage() {
           triggerType: "temperature_entered",
           temperature: "",
           keywords: "",
+          listIds: [],
           centerId: "",
           audience: "lead",
           appliesTo: [],
@@ -55,6 +61,7 @@ export default async function NewWhatsAppFlowPage() {
         centers={centerRows}
         fields={ruleOptions.fields}
         optionsByField={ruleOptions.optionsByField}
+        lists={listRows}
       />
     </div>
   );

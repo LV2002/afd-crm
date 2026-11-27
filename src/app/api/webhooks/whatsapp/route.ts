@@ -14,7 +14,8 @@ import {
   releasePhone,
   suppressPhone,
 } from "@/lib/whatsapp/opt-out";
-import { resolveContactReply, resolveReply, startFlows } from "@/lib/whatsapp/flow-runner";
+import { recordFlowDelivery, resolveContactReply, resolveReply, startFlows } from "@/lib/whatsapp/flow-runner";
+import { describeDeliveryError } from "@/lib/whatsapp/delivery-errors";
 import { maybeAutoReply } from "@/lib/whatsapp/auto-reply-runner";
 import { applyBroadcastStatus, markBroadcastReply } from "@/lib/whatsapp/broadcast-tracking";
 import { downloadMessageMedia, worthFetchingInline } from "@/lib/whatsapp/inbound-media";
@@ -75,7 +76,7 @@ interface WhatsAppStatus {
   status: "sent" | "delivered" | "read" | "failed";
   timestamp: string;
   recipient_id: string;
-  errors?: Array<{ title?: string; message?: string }>;
+  errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>;
 }
 
 interface WhatsAppChangeValue {
@@ -431,6 +432,15 @@ export async function POST(request: Request) {
             .where(eq(whatsappMessages.waMessageId, status.id));
           // Broadcast funnel: how far did this recipient's message get.
           await applyBroadcastStatus(status.id, status.status);
+          // An automation that sent it: show delivery (or the exact failure) on its run.
+          const failure = status.errors?.[0];
+          await recordFlowDelivery(
+            status.id,
+            status.status,
+            failure
+              ? `${describeDeliveryError(failure.code, failure.title ?? failure.message)}${failure.error_data?.details ? ` — Meta says: ${failure.error_data.details}` : ""}`
+              : null,
+          );
 
           await db
             .update(webhookEvents)

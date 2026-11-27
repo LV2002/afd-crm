@@ -3,6 +3,8 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { adSpendDaily } from "@/lib/db/schema";
 
+import { clampToFloor, META_SPEND_FLOOR } from "@/lib/integrations/ad-spend-window";
+
 import { fetchMetaInsights, mapMetaInsightsRow } from "./insights-client";
 
 /**
@@ -32,7 +34,10 @@ export async function syncMetaAdSpend(
   since: string,
   until: string,
 ): Promise<AdSpendSyncResult> {
-  const rows = await fetchMetaInsights(adAccountId, accessToken, since, until);
+  // Nothing before the floor is ever stored, whoever asked.
+  const window = clampToFloor(since, until, META_SPEND_FLOOR);
+  if (!window) return { synced: 0, daysWithSpend: 0, undated: 0 };
+  const rows = await fetchMetaInsights(adAccountId, accessToken, window.since, window.until);
 
   const datesSeen = new Set<string>();
   let undated = 0;

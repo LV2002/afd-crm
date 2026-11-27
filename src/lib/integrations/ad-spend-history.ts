@@ -4,6 +4,7 @@ import { db } from "@/lib/db/client";
 import { adSpendDaily } from "@/lib/db/schema";
 import {
   backfillWindow,
+  META_SPEND_FLOOR,
   MAX_HISTORY_DAYS,
   type DateString,
   type SpendWindow,
@@ -55,6 +56,7 @@ export async function adSpendHistory(
       earliestStored: earliest,
       yesterday: yesterdayDateStringIST(now),
       maxHistoryDays: MAX_HISTORY_DAYS,
+      floor: platform === "meta" ? META_SPEND_FLOOR : undefined,
     }),
   };
 }

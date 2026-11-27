@@ -91,6 +91,11 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
           wakeAt: whatsappFlowRuns.wakeAt,
           studentName: sql<string>`coalesce(${leads.studentName}, ${contacts.name})`,
           leadId: leads.id,
+          // What Meta last said about the message this run sent: delivered,
+          // read, or the failure. "Sent" alone only means Meta accepted it.
+          deliveryKind: sql<string | null>`(select e.kind from whatsapp_flow_run_events e where e.run_id = ${whatsappFlowRuns.id} and e.kind in ('delivered','read','delivery_failed') order by e.created_at desc limit 1)`,
+          deliveryDetail: sql<string | null>`(select e.detail from whatsapp_flow_run_events e where e.run_id = ${whatsappFlowRuns.id} and e.kind in ('delivered','read','delivery_failed') order by e.created_at desc limit 1)`,
+          sentCount: sql<number>`(select count(*)::int from whatsapp_flow_run_events e where e.run_id = ${whatsappFlowRuns.id} and e.kind = 'sent')`,
         })
         .from(whatsappFlowRuns)
         .leftJoin(leads, eq(leads.id, whatsappFlowRuns.leadId))
@@ -240,6 +245,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
             keywords: Array.isArray(triggerConfig.keywords)
               ? (triggerConfig.keywords as string[]).join(", ")
               : "",
+            listIds: Array.isArray(triggerConfig.listIds) ? (triggerConfig.listIds as string[]) : [],
             centerId: flow.centerId ?? "",
             audience: flow.audience,
             appliesTo: (flow.appliesTo as RuleConditions | null)?.all ?? [],
@@ -250,6 +256,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
             centers={centerRows}
           fields={ruleOptions.fields}
           optionsByField={ruleOptions.optionsByField}
+          lists={[...listRows].filter((l) => Boolean(l.agreed)).map((l) => ({ id: l.id, name: l.name }))}
         />
       </section>
 
@@ -263,6 +270,7 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
               <TableRow>
                 <TableHead>{forDatabase ? "Contact" : "Lead"}</TableHead>
                 <TableHead>Where they are</TableHead>
+                <TableHead>Delivery</TableHead>
                 <TableHead>Started</TableHead>
                 <TableHead>Next move</TableHead>
               </TableRow>
@@ -277,6 +285,22 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
                     </Badge>
                     {run.stopReason && (
                       <span className="ml-2 text-xs text-muted-foreground">{run.stopReason}</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="max-w-xs text-xs">
+                    {run.deliveryKind === "delivery_failed" ? (
+                      <span className="text-destructive">Not delivered. {run.deliveryDetail}</span>
+                    ) : run.deliveryKind === "read" ? (
+                      "Read"
+                    ) : run.deliveryKind === "delivered" ? (
+                      "Delivered"
+                    ) : run.sentCount > 0 ? (
+                      <span className="text-muted-foreground">
+                        Sent to WhatsApp, no delivery report yet. If this stays blank, the number or the
+                        account is not receiving reports from Meta.
+                      </span>
+                    ) : (
+                      "—"
                     )}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">

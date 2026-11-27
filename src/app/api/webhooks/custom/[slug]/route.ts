@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
 import { auditLog, contactLists, customWebhooks, webhookEvents } from "@/lib/db/schema";
 import { saveContact } from "@/lib/contacts/save";
+import { advanceRuns } from "@/lib/whatsapp/flow-runner";
 import { adIdentifiersFrom } from "@/lib/integrations/form-payload/ad-identifiers";
 import { authKeyMatches, presentedAuthKey } from "@/lib/integrations/custom-webhook/auth-key";
 import { resolveOrCreateLead } from "@/lib/identity/resolve-or-create-lead";
@@ -290,6 +291,9 @@ async function addToDatabase(
             exam_year: lead.examYear,
             interested_exams: lead.interestedExams,
             courses_interested: lead.coursesInterested,
+            // Read by an automation step that attaches it to the first message.
+            document_url: lead.documentUrl,
+            document_name: lead.documentName,
           },
         },
         { listId: list.id, userId: null },
@@ -308,6 +312,13 @@ async function addToDatabase(
       .update(webhookEvents)
       .set({ status: "done", processedAt: new Date(), attempts: sql`${webhookEvents.attempts} + 1` })
       .where(eq(webhookEvents.id, eventId));
+
+    // "When somebody is added to a database" automations: enrol and send the
+    // first message now rather than at the next sweep. Best effort: the
+    // person is already saved, and the sweep catches anything missed here.
+    if (saved.created || !saved.alreadyOnList) {
+      await advanceRuns().catch((error) => console.error("instant automation start failed", error));
+    }
     return NextResponse.json({ ok: true });
   } catch (error) {
     await fail(error instanceof Error ? error.message : String(error));

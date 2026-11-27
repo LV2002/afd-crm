@@ -147,6 +147,8 @@ export interface BackfillWindowInput {
   chunkDays?: number;
   /** How far back pressing will ever reach, in total. */
   maxHistoryDays?: number;
+  /** Nothing earlier than this is ever fetched. */
+  floor?: DateString;
 }
 
 export const DEFAULT_BACKFILL_CHUNK_DAYS = 90;
@@ -158,10 +160,25 @@ export const DEFAULT_BACKFILL_CHUNK_DAYS = 90;
  */
 export const MAX_HISTORY_DAYS = 1095;
 
+/**
+ * Meta ad spend is not kept from before this day (owner's decision,
+ * 2026-11-25). Applied everywhere Meta spend is fetched, so neither the
+ * nightly run nor "Import past ad spend" can bring older days back; migration
+ * 0146 deleted what was already stored.
+ */
+export const META_SPEND_FLOOR: DateString = "2026-10-01";
+
+/** `since` raised to `floor` when it is earlier; null when the whole window is before it. */
+export function clampToFloor(since: DateString, until: DateString, floor: DateString): { since: DateString; until: DateString } | null {
+  if (until < floor) return null;
+  return { since: since < floor ? floor : since, until };
+}
+
 export function backfillWindow(input: BackfillWindowInput): SpendWindow | null {
   const chunkDays = input.chunkDays ?? DEFAULT_BACKFILL_CHUNK_DAYS;
   const maxHistoryDays = input.maxHistoryDays ?? MAX_HISTORY_DAYS;
-  const horizon = addDaysToDateString(input.yesterday, -(maxHistoryDays - 1));
+  const rawHorizon = addDaysToDateString(input.yesterday, -(maxHistoryDays - 1));
+  const horizon = input.floor && input.floor > rawHorizon ? input.floor : rawHorizon;
 
   // Nothing stored at all: start where the nightly run would have, so a
   // first press on a fresh instance is the ordinary ninety days rather

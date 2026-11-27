@@ -20,7 +20,7 @@ export function planFlowTest(steps: FlowStep[]): TestItem[] {
     .map((step): TestItem => {
       if (SENDERS.has(step.kind)) return { position: step.position, action: "send", step };
       const reason =
-        step.kind === "wait" || step.kind === "wait_for_reply"
+        step.kind === "wait" || step.kind === "wait_until" || step.kind === "wait_for_reply"
           ? "Waiting is skipped in a test."
           : step.kind === "condition"
             ? "Branches need a real lead."

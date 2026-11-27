@@ -37,6 +37,8 @@ export const FLOW_STEP_KINDS = [
   "send_media",
   "ask_question",
   "wait",
+  // Park until a fixed calendar date and time (IST), e.g. the morning of an event.
+  "wait_until",
   "wait_for_reply",
   "condition",
   "set_temperature",
@@ -53,6 +55,8 @@ export const FLOW_TRIGGERS = [
   "lead_created",
   "temperature_entered",
   "inbound_keyword",
+  // Database automations only: starts when someone is added to a chosen list.
+  "list_joined",
   "manual",
 ] as const;
 export type FlowTrigger = (typeof FLOW_TRIGGERS)[number];
@@ -87,6 +91,8 @@ export interface SendTemplateConfig {
   templateName: string;
   templateLanguage: string;
   params: ParamSource[];
+  /** Attach, as the template's document header, the file link stored on the database contact (an admit card). */
+  headerDocument?: "contact";
 }
 
 export interface SendTextConfig {
@@ -275,6 +281,43 @@ export function waitMs(step: FlowStep): number {
   return Math.round(hours * 60 * 60 * 1000);
 }
 
+const IST_OFFSET_MS = 19_800_000;
+const UNIT_MS = { minutes: 60_000, hours: 3_600_000, days: 86_400_000 } as const;
+
+/**
+ * When a parked `wait` / `wait_until` step lets the run continue.
+ *
+ * `wait`: an amount in minutes, hours or days (older steps carry just
+ * `hours`), optionally pushed on to a time of day in IST — "after 1 day, at
+ * 10:00 AM" — so a message never lands at 3 a.m. just because the previous
+ * one did. `wait_until`: a fixed date and time in IST; one already in the
+ * past lets the run straight through.
+ */
+export function wakeTimeFor(step: FlowStep, now: Date = new Date()): Date {
+  const config = step.config as { amount?: unknown; unit?: unknown; atTime?: unknown; at?: unknown };
+
+  if (step.kind === "wait_until") {
+    const at = typeof config.at === "string" ? Date.parse(`${config.at}:00+05:30`) : NaN;
+    return Number.isNaN(at) ? now : new Date(Math.max(at, now.getTime()));
+  }
+
+  const unit = typeof config.unit === "string" && config.unit in UNIT_MS ? (config.unit as keyof typeof UNIT_MS) : null;
+  const amount = typeof config.amount === "number" && config.amount > 0 ? config.amount : null;
+  const base = new Date(now.getTime() + (unit && amount ? Math.round(amount * UNIT_MS[unit]) : waitMs(step)));
+
+  const time = typeof config.atTime === "string" ? /^(\d{1,2}):(\d{2})$/.exec(config.atTime) : null;
+  if (!time) return base;
+  const hh = Number(time[1]);
+  const mm = Number(time[2]);
+  if (hh > 23 || mm > 59) return base;
+  // Next occurrence of hh:mm India time at or after `base`.
+  const ist = new Date(base.getTime() + IST_OFFSET_MS);
+  ist.setUTCHours(hh, mm, 0, 0);
+  let target = ist.getTime() - IST_OFFSET_MS;
+  if (target < base.getTime()) target += 86_400_000;
+  return new Date(target);
+}
+
 export interface FlowValidationIssue {
   position: number | null;
   message: string;
@@ -318,6 +361,13 @@ export function validateFlow(steps: FlowStep[], trigger?: FlowTrigger): FlowVali
       const config = step.config as Partial<SendTemplateConfig>;
       if (!config.templateName) {
         issues.push({ position: step.position, message: "Choose an approved template." });
+      }
+    }
+
+    if (step.kind === "wait_until") {
+      const at = (step.config as { at?: unknown }).at;
+      if (typeof at !== "string" || Number.isNaN(Date.parse(`${at}:00+05:30`))) {
+        issues.push({ position: step.position, message: "Pick the date and time to wait until." });
       }
     }
 
@@ -389,8 +439,18 @@ export function describeStep(step: FlowStep): string {
       const config = step.config as Partial<SendTemplateConfig>;
       return `Send "${config.templateName ?? "(no template)"}"`;
     }
-    case "wait":
-      return `Wait ${describeHours(waitMs(step) / 3_600_000)}`;
+    case "wait": {
+      const config = step.config as { amount?: unknown; unit?: unknown; atTime?: unknown };
+      const timed =
+        typeof config.amount === "number" && typeof config.unit === "string" && config.unit in UNIT_MS
+          ? `${config.amount} ${config.amount === 1 ? config.unit.replace(/s$/, "") : config.unit}`
+          : describeHours(waitMs(step) / 3_600_000);
+      return `Wait ${timed}${typeof config.atTime === "string" && config.atTime ? `, then continue at ${config.atTime}` : ""}`;
+    }
+    case "wait_until": {
+      const at = (step.config as { at?: unknown }).at;
+      return `Wait until ${typeof at === "string" && at ? at.replace("T", " ") : "(no date set)"}`;
+    }
     case "wait_for_reply": {
       const config = waitConfig(step);
       const answers = config.branches.map((branch) => branch.match).join(", ");
