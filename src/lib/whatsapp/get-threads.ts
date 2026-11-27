@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { mediaLabel } from "./media-label";
+import { readableMessage } from "./placeholders";
 
 /**
  * The WhatsApp inbox: one row per lead somebody has exchanged messages
@@ -55,15 +56,30 @@ interface MessageRow {
   lead_id: string | null;
   number_id: string | null;
   from_phone: string;
+  to_phone: string | null;
   direction: "inbound" | "outbound";
-  message_type: "text" | "template" | "media";
+  message_type: "text" | "template" | "media" | "system";
   body: string | null;
   template_name: string | null;
   media_mime_type: string | null;
   occurred_at: string;
 }
 
-function preview(row: MessageRow): string {
+/**
+ * The other person's number on a message: who wrote it when it came in, who it
+ * was sent to when it went out. An outbound row's `from_phone` is OUR number,
+ * so keying a conversation on `from_phone` alone dropped every reply we sent
+ * to somebody who is not a lead (they were filed under our own number and the
+ * conversation showed only their side).
+ */
+export function contactPhoneOf(row: { direction: "inbound" | "outbound"; from_phone: string; to_phone: string | null }): string {
+  return row.direction === "outbound" ? (row.to_phone ?? row.from_phone) : row.from_phone;
+}
+
+function preview(raw: MessageRow): string {
+  const shown = readableMessage({ messageType: raw.message_type, body: raw.body });
+  const row = { ...raw, message_type: shown.messageType as MessageRow["message_type"], body: shown.body };
+  if (row.message_type === "system") return (row.body ?? "").replace(/\s+/g, " ").trim() || "WhatsApp system notice";
   if (row.message_type === "media") {
     const caption = (row.body ?? "").replace(/\s+/g, " ").trim();
     return caption ? `${mediaLabel(row.media_mime_type)} · ${caption}` : mediaLabel(row.media_mime_type);
@@ -90,13 +106,26 @@ export interface ThreadScope {
   includeUnassigned: boolean;
 }
 
+/** Restricts a `whatsapp_messages` query to the numbers of one inbox (API, or counsellors' own). Shared so the list and the open conversation always agree on what belongs to which inbox. */
+export function applyThreadScope<T extends { or(filter: string): T; in(column: string, values: string[]): T; is(column: string, value: null): T }>(
+  query: T,
+  scope: ThreadScope | undefined,
+): T | null {
+  if (!scope) return query;
+  const quoted = scope.numberIds.join(",");
+  if (scope.numberIds.length > 0 && scope.includeUnassigned) return query.or(`number_id.in.(${quoted}),number_id.is.null`);
+  if (scope.numberIds.length > 0) return query.in("number_id", scope.numberIds);
+  if (scope.includeUnassigned) return query.is("number_id", null);
+  return null;
+}
+
 export async function getWhatsAppThreads(
   supabase: SupabaseClient,
   scope?: ThreadScope,
 ): Promise<WhatsAppThreadSummary[]> {
   let query = supabase
     .from("whatsapp_messages")
-    .select("lead_id, number_id, from_phone, direction, message_type, body, template_name, media_mime_type, occurred_at")
+    .select("lead_id, number_id, from_phone, to_phone, direction, message_type, body, template_name, media_mime_type, occurred_at")
     .is("deleted_at", null);
 
   /*
@@ -136,7 +165,7 @@ export async function getWhatsAppThreads(
   // entered yet is still one conversation, and losing it would be losing
   // the only record that they answered.
   const threadKey = (row: MessageRow): string =>
-    row.lead_id ? `lead:${row.lead_id}` : `phone:${row.from_phone}`;
+    row.lead_id ? `lead:${row.lead_id}` : `phone:${contactPhoneOf(row)}`;
 
   // Rows arrive newest first, so the first one seen for a thread is its
   // latest message and everything after it is history.
@@ -198,8 +227,8 @@ export async function getWhatsAppThreads(
       return {
         key,
         leadId: lead?.id ?? null,
-        leadName: lead?.student_name ?? message.from_phone,
-        phone: lead?.primary_phone ?? message.from_phone,
+        leadName: lead?.student_name ?? contactPhoneOf(message),
+        phone: lead?.primary_phone ?? contactPhoneOf(message),
         assignedTo: lead?.assigned_to ?? null,
         counsellorName: lead?.assigned_to ? (nameById.get(lead.assigned_to) ?? null) : null,
         numberId: message.number_id,

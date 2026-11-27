@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { and, eq, isNull } from "drizzle-orm";
 
+import { can, getCurrentUser, scopeFor } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { whatsappNumbers } from "@/lib/db/schema";
+import { profiles, whatsappNumbers } from "@/lib/db/schema";
 
 import { WhatsAppInbox, type InboxParams } from "../inbox";
 
@@ -35,15 +36,56 @@ export default async function PersonalWhatsAppPage({
 }: {
   searchParams: Promise<InboxParams>;
 }) {
+  const user = await getCurrentUser();
   const allOwn = await db
-    .select({ id: whatsappNumbers.id, label: whatsappNumbers.label })
+    .select({
+      id: whatsappNumbers.id,
+      label: whatsappNumbers.label,
+      counsellorId: whatsappNumbers.counsellorId,
+      counsellorName: profiles.fullName,
+      displayPhoneNumber: whatsappNumbers.displayPhoneNumber,
+    })
     .from(whatsappNumbers)
-    .where(and(eq(whatsappNumbers.mode, "coexistence"), isNull(whatsappNumbers.deletedAt)));
-  // `?number=<id>` narrows the inbox to one counsellor's number — what the
-  // Chats list links to. An id that is not one of ours is ignored.
+    .leftJoin(profiles, eq(profiles.id, whatsappNumbers.counsellorId))
+    .where(and(eq(whatsappNumbers.mode, "coexistence"), isNull(whatsappNumbers.deletedAt)))
+    .orderBy(whatsappNumbers.label);
+
+  /*
+    One counsellor's chats at a time, like each person's own WhatsApp.
+
+    A counsellor sees only their own number. Somebody who may read other
+    people's chats (a campaign manager, a centre head, an admin) first picks
+    whose chats to open — never a pile of everybody's conversations merged
+    into one list, which is unreadable and was the complaint.
+  */
+  const seesOthers = Boolean(user && (can(user, "whatsapp.campaign") || (scopeFor(user, "whatsapp.read") ?? "own") !== "own"));
+  const candidates = seesOthers ? allOwn : allOwn.filter((n) => n.counsellorId === user?.id);
   const { number: numberParam } = await searchParams;
-  const chosen = allOwn.find((n) => n.id === numberParam) ?? null;
-  const ownNumbers = chosen ? [chosen] : allOwn;
+  const chosen = candidates.find((n) => n.id === numberParam) ?? (candidates.length === 1 ? candidates[0] : null);
+  const ownNumbers = chosen ? [chosen] : [];
+
+  if (!chosen && candidates.length > 1) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Each counsellor&apos;s chats are kept apart, like their own WhatsApp. Choose whose conversations to open.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {candidates.map((n) => (
+            <Link key={n.id} href={`/whatsapp/personal?number=${n.id}`} className="flex items-center gap-3 rounded-lg border p-4 hover:bg-accent/40">
+              <span className="flex size-10 items-center justify-center rounded-full bg-[#25d366] text-lg font-semibold text-white">
+                {(n.counsellorName ?? n.label).charAt(0).toUpperCase()}
+              </span>
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate font-medium">{n.counsellorName ?? n.label}</span>
+                <span className="truncate text-xs text-muted-foreground">{n.displayPhoneNumber ?? n.label}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <WhatsAppInbox
@@ -55,7 +97,7 @@ export default async function PersonalWhatsAppPage({
       keep={chosen ? { number: chosen.id } : undefined}
       intro={
         <>
-          {chosen ? <>Showing <strong>{chosen.label}</strong> only. <Link href="/whatsapp/personal" className="underline">All counsellor numbers</Link>. </> : null}
+          {chosen ? <>Showing <strong>{chosen.counsellorName ?? chosen.label}</strong>&apos;s chats only.{candidates.length > 1 ? <> <Link href="/whatsapp/personal" className="underline">Choose another counsellor</Link>. </> : " "}</> : null}
           Conversations on the counsellors&apos; own numbers. A message from somebody not yet in
           the CRM <strong>creates a lead</strong> here, assigned to whoever owns the phone —
           the opposite of the broadcast number, and deliberately so. Replies leave from the
@@ -64,7 +106,7 @@ export default async function PersonalWhatsAppPage({
         </>
       }
       emptyNotice={
-        ownNumbers.length === 0 ? (
+        candidates.length === 0 ? (
           <div className="rounded-lg border border-dashed p-4">
             <p className="text-sm font-medium">No counsellor&apos;s number is connected yet.</p>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">

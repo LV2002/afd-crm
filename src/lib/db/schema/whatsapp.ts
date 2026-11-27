@@ -33,7 +33,7 @@ import { leads } from "./leads";
  * also what RLS scopes the thread by. `sent_by` records the individual
  * who actually pressed send.
  */
-export const whatsappMessageTypeEnum = pgEnum("whatsapp_message_type", ["text", "template", "media"]);
+export const whatsappMessageTypeEnum = pgEnum("whatsapp_message_type", ["text", "template", "media", "system"]);
 
 export const whatsappMessageStatusEnum = pgEnum("whatsapp_message_status", [
   "queued",

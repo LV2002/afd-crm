@@ -148,11 +148,11 @@ export async function WhatsAppInbox({
   const [messages, withinWindow] = selected
     ? selected.leadId
       ? await Promise.all([
-          getWhatsAppThread(supabase, selected.leadId),
+          getWhatsAppThread(supabase, selected.leadId, scope),
           isWithinCustomerServiceWindow(supabase, selected.leadId, windowNumberId),
         ])
       : await Promise.all([
-          getWhatsAppThreadByPhone(supabase, selected.phone),
+          getWhatsAppThreadByPhone(supabase, selected.phone, scope),
           // Hardcoded false until now, which was true of what the screen
           // could do rather than of the conversation: an unmatched thread
           // exists because somebody wrote to us, so the window is usually
@@ -278,14 +278,20 @@ export async function WhatsAppInbox({
                   key={thread.key}
                   href={href({ thread: thread.key })}
                   className={cn(
-                    "flex flex-col gap-0.5 border-b p-3 last:border-b-0 hover:bg-accent/40",
+                    "flex gap-3 border-b p-3 last:border-b-0 hover:bg-accent/40",
                     thread.key === selectedKey && "bg-accent",
                   )}
                 >
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#dfe5e7] text-lg font-medium text-[#54656f] dark:bg-[#6a7175] dark:text-white">
+                    {thread.leadName.replace(/[^\p{L}\p{N}]/gu, "").charAt(0).toUpperCase() || "#"}
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="truncate text-sm font-medium">{thread.leadName}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {formatDateIST(thread.lastMessageAt, "d MMM")}
+                    <span className={cn("shrink-0 text-xs", thread.awaitingReply ? "font-medium text-[#00a884]" : "text-muted-foreground")}>
+                      {formatDateIST(thread.lastMessageAt, "d MMM yyyy") === formatDateIST(new Date(), "d MMM yyyy")
+                        ? formatDateIST(thread.lastMessageAt, "h:mm a")
+                        : formatDateIST(thread.lastMessageAt, "d MMM")}
                     </span>
                   </div>
                   <p className="truncate text-xs text-muted-foreground">
@@ -326,6 +332,7 @@ export async function WhatsAppInbox({
                         Reply
                       </Badge>
                     )}
+                  </div>
                   </div>
                 </Link>
               ))

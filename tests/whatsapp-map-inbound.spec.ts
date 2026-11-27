@@ -113,13 +113,39 @@ describe("message types that used to arrive as empty messages", () => {
   it("turns a pin and a contact card into readable text", () => {
     expect(
       mapMessageContent({ ...base, type: "location", location: { latitude: 9.93, longitude: 76.26, name: "AFD Kochi" } }).body,
-    ).toBe("📍 Location: AFD Kochi (9.93, 76.26)");
+    ).toBe("📍 Location: AFD Kochi\nhttps://www.google.com/maps?q=9.93,76.26");
     expect(
       mapMessageContent({ ...base, type: "contacts", contacts: [{ name: { formatted_name: "Anjali" } }] }).body,
-    ).toBe("👤 Shared a contact: Anjali");
+    ).toBe("👤 Shared a contact:\nAnjali");
   });
 
   it("says plainly what an unknown type was, rather than leaving a blank", () => {
-    expect(mapMessageContent({ ...base, type: "order" }).body).toBe("[order message]");
+    expect(mapMessageContent({ ...base, type: "order" }).body).toBe("This kind of message (order) cannot be shown here. Open it in the WhatsApp app.");
+  });
+});
+
+describe("message types the inbox used to show as '[system message]'", () => {
+  const base = { id: "wamid.x", from: "919847000001", timestamp: "1791100000" };
+  it("keeps a WhatsApp system notice as a notice, with its own words", () => {
+    const mapped = mapMessageContent({ ...base, type: "system", system: { body: "Anjali changed their phone number to +91 98470 00000" } });
+    expect(mapped).toMatchObject({ messageType: "system", body: "Anjali changed their phone number to +91 98470 00000" });
+    expect(mapMessageContent({ ...base, type: "system" })).toMatchObject({ messageType: "system", body: "WhatsApp system notice" });
+  });
+
+  it("shows a contact card's number, a Flow form's answers and an order", () => {
+    expect(
+      mapMessageContent({ ...base, type: "contacts", contacts: [{ name: { formatted_name: "Anjali" }, phones: [{ phone: "+91 98470 00001" }] }] }).body,
+    ).toBe("👤 Shared a contact:\nAnjali — +91 98470 00001");
+    const form = mapMessageContent({
+      ...base,
+      type: "interactive",
+      interactive: { type: "nfm_reply", nfm_reply: { body: "Sent", response_json: JSON.stringify({ flow_token: "x", full_name: "Anjali", exam_year: "2027" }) } },
+    });
+    expect(form.body).toBe("📝 Form answers\nfull name: Anjali\nexam year: 2027");
+    expect(mapMessageContent({ ...base, type: "order", order: { product_items: [{ quantity: 2 }], text: "NID kit" } }).body).toBe("🛒 Order — 2 items: NID kit");
+  });
+
+  it("does not make a message of WhatsApp's own prompts", () => {
+    expect(mapMessageContent({ ...base, type: "request_welcome" }).ignore).toBe(true);
   });
 });

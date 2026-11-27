@@ -2,10 +2,13 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { applyThreadScope, type ThreadScope } from "./get-threads";
+import { readableMessage } from "./placeholders";
+
 export interface WhatsAppThreadMessage {
   id: string;
   direction: "inbound" | "outbound";
-  messageType: "text" | "template" | "media";
+  messageType: "text" | "template" | "media" | "system";
   body: string | null;
   templateName: string | null;
   mediaId: string | null;
@@ -23,7 +26,7 @@ export interface WhatsAppThreadMessage {
 interface MessageRow {
   id: string;
   direction: "inbound" | "outbound";
-  message_type: "text" | "template" | "media";
+  message_type: "text" | "template" | "media" | "system";
   body: string | null;
   template_name: string | null;
   media_id: string | null;
@@ -37,20 +40,29 @@ interface MessageRow {
 }
 
 /** RLS (`whatsapp_messages_select`, `whatsapp.read` scoped) does the actual visibility enforcement — an empty result for a lead this user can't see is indistinguishable from "no messages yet," which is the correct behaviour for a panel embedded on a page RLS already gated access to. */
-export async function getWhatsAppThread(supabase: SupabaseClient, leadId: string): Promise<WhatsAppThreadMessage[]> {
-  const { data } = await supabase
+export async function getWhatsAppThread(
+  supabase: SupabaseClient,
+  leadId: string,
+  /** The inbox being read: only that inbox's numbers' messages are shown, so the API chat and a counsellor's own chat with the same person stay separate. */
+  scope?: ThreadScope,
+): Promise<WhatsAppThreadMessage[]> {
+  const base = supabase
     .from("whatsapp_messages")
-    .select("id, direction, message_type, body, template_name, media_id, media_mime_type, media_storage_path, media_filename, media_error, status, error_message, occurred_at")
+    .select(THREAD_COLUMNS)
     .eq("lead_id", leadId)
-    .is("deleted_at", null)
-    .order("occurred_at", { ascending: true })
-    .returns<MessageRow[]>();
+    .is("deleted_at", null);
+  const scoped = applyThreadScope(base, scope);
+  if (!scoped) return [];
+  const { data } = await scoped.order("occurred_at", { ascending: true }).returns<MessageRow[]>();
 
   return (data ?? []).map(toThreadMessage);
 }
 
+const THREAD_COLUMNS =
+  "id, direction, message_type, body, template_name, media_id, media_mime_type, media_storage_path, media_filename, media_error, status, error_message, occurred_at";
+
 function toThreadMessage(row: MessageRow): WhatsAppThreadMessage {
-  return {
+  return readableMessage({
     id: row.id,
     direction: row.direction,
     messageType: row.message_type,
@@ -64,7 +76,7 @@ function toThreadMessage(row: MessageRow): WhatsAppThreadMessage {
     status: row.status,
     errorMessage: row.error_message,
     occurredAt: row.occurred_at,
-  };
+  });
 }
 
 /**
@@ -80,15 +92,21 @@ function toThreadMessage(row: MessageRow): WhatsAppThreadMessage {
 export async function getWhatsAppThreadByPhone(
   supabase: SupabaseClient,
   phone: string,
+  scope?: ThreadScope,
 ): Promise<WhatsAppThreadMessage[]> {
-  const { data } = await supabase
+  // Both directions: what they wrote (their number is `from_phone`) AND what we
+  // sent them (their number is `to_phone`). Reading `from_phone` alone showed
+  // only their side, which is why replies "disappeared" from these chats.
+  const forms = [phone, phone.replace(/^\+/, "")];
+  const base = supabase
     .from("whatsapp_messages")
-    .select("id, direction, message_type, body, template_name, media_id, media_mime_type, media_storage_path, media_filename, media_error, status, error_message, occurred_at")
+    .select(THREAD_COLUMNS)
     .is("lead_id", null)
-    .eq("from_phone", phone)
-    .is("deleted_at", null)
-    .order("occurred_at", { ascending: true })
-    .returns<MessageRow[]>();
+    .or(`from_phone.in.(${forms.join(",")}),to_phone.in.(${forms.join(",")})`)
+    .is("deleted_at", null);
+  const scoped = applyThreadScope(base, scope);
+  if (!scoped) return [];
+  const { data } = await scoped.order("occurred_at", { ascending: true }).returns<MessageRow[]>();
 
   return (data ?? []).map(toThreadMessage);
 }
