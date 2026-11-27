@@ -131,7 +131,7 @@ export async function registerFoundNumber(input: z.input<typeof registerSchema>)
     displayPhoneNumber,
     mode: "coexistence",
     counsellorId,
-    createsLeads: true,
+    createsLeads: false,
   });
 
   // Best effort: make sure the app is subscribed to the account so this

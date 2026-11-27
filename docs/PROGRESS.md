@@ -9181,6 +9181,9 @@ Meta delivers a number's messages to the app only while the app is subscribed to
 - **Leave and comp-day requests** (`leave.requested`, `comp.requested`): already fired inline the moment the request is saved, and the admin was in the defaults; migration 0143 makes sure the admin is in any saved setting and the event is on.
 Both new alerts go out at most 30 per run, oldest first, so the first run does not drop hundreds into the bell. Who gets each is still editable under Settings → Notifications; the 30 and 7 are constants in `lib/alerts/admin-alerts.ts` (see DECISIONS).
 
+## WhatsApp chats become leads only when a counsellor says so
+
+Inbound WhatsApp no longer creates a lead on ANY number (counsellor Coexistence numbers, the API number, or a Meta ad tap). A message from someone already a lead attaches to them as before (an ad tap from a known lead still records the ad as their latest touch); anyone else is stored as a conversation "Not in the CRM" and visible to the number's counsellor. **Convert to lead** on that thread (existing action) now assigns the new lead to the counsellor who owns the number it arrived on; on the shared API number the assignment rules decide. The "Creates leads" toggle and badge are gone from Settings → WhatsApp numbers; migration 0145 sets every number's `creates_leads` to false (column kept, unused). Test: `tests/whatsapp-coexistence-webhook.spec.ts`.
 ## Meta ad spend limited to 1 October 2026 onward
 
 Meta spend rows dated before 2026-10-01 are deleted (migration 0146, audited as `ad_spend.trim_before_floor`), and `META_SPEND_FLOOR` clamps every Meta fetch — the nightly sync and "Import past ad spend" — so older days cannot return. Syncing from 1 Oct onward continues. Google spend is untouched. The floor is a code constant, not a setting.

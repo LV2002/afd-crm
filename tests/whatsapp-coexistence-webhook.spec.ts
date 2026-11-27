@@ -155,8 +155,11 @@ async function makeLead(name: string, phone: string) {
 }
 
 describe("an inbound message decides lead creation by the number it arrived on", () => {
-  it("creates a lead on a counsellor's coexistence number, assigned to them", async () => {
+  it("does NOT create a lead on a counsellor's coexistence number, but keeps the chat for them", async () => {
     const from = "919847600101";
+    // Lead-less rows are not reached by the leadId cleanup, so clear any
+    // left by an earlier run of this same fixture phone.
+    await db.delete(whatsappMessages).where(eq(whatsappMessages.fromPhone, `+91${from.slice(2)}`));
     const body = envelope(
       "messages",
       {
@@ -177,14 +180,11 @@ describe("an inbound message decides lead creation by the number it arrived on",
     const response = await post(body);
     expect(response.status).toBe(200);
 
-    const [lead] = await db.select().from(leads).where(eq(leads.primaryPhone, `+91${from.slice(2)}`));
-    expect(lead, "a stranger messaging a counsellor is an enquiry").toBeTruthy();
-    expect(lead.studentName).toBe(`${MARKER} Nivedita`);
-    // The person already holding the conversation is the right owner —
-    // routing this through the rules engine to somebody else would be
-    // actively wrong.
-    expect(lead.assignedTo).toBe(counsellorId);
-    expect(lead.firstTouchSource).toBe("whatsapp");
+    const rows = await db.select().from(leads).where(eq(leads.primaryPhone, `+91${from.slice(2)}`));
+    expect(rows, "a counsellor must choose to make it a lead").toHaveLength(0);
+    const [msg] = await db.select().from(whatsappMessages).where(eq(whatsappMessages.fromPhone, `+91${from.slice(2)}`));
+    expect(msg?.leadId).toBeNull();
+    expect(msg?.counsellorId).toBe(counsellorId);
   });
 
   it("does not create one on the institute's broadcast number", async () => {
