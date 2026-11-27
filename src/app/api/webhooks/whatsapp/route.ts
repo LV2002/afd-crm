@@ -234,24 +234,14 @@ export async function POST(request: Request) {
         }
 
         try {
-          // Whether an inbound message may create a lead is a property of
-          // the NUMBER, not of this handler.
-          //
-          // On the institute's broadcast number it must not: a reply
-          // there is somebody who pressed a button on a campaign, and
-          // manufacturing a lead from it fills the pipeline with people
-          // who never enquired — and puts "whatsapp" on the first-touch
-          // source of somebody who actually came from Meta.
-          //
-          // On a counsellor's own coexistence number the opposite holds.
-          // A stranger messaging a counsellor to ask about NIFT coaching
-          // is the highest-intent enquiry this institute gets, and until
-          // Coexistence it was typed in by hand or lost. So that number
-          // is marked `creates_leads` and the lead goes through
-          // `resolveOrCreateLead()` like every other source — assigned
-          // to whoever owns the phone, because they are already holding
-          // the conversation.
-          let matched = await findLeadByPhone(message.from);
+          // An inbound message NEVER creates a lead, on any number (owner's
+          // rule, 2026-11-25). It is matched to a lead that already exists;
+          // otherwise it is stored as a conversation "Not in the CRM", and
+          // a counsellor decides with "Convert to lead" (see
+          // convertWhatsAppThreadToLead), which assigns it to the owner of
+          // the number it arrived on. A stranger's hello, a button reply and
+          // a family member are indistinguishable until a person looks.
+          const matched = await findLeadByPhone(message.from);
 
           /*
             A conversation that began with a tap on a Meta ad.
@@ -265,40 +255,24 @@ export async function POST(request: Request) {
             or, for somebody already known, recording this as their latest
             touch. The ad id lets Ad Performance count it against spend.
           */
+          /*
+            A tap on a Meta ad is still recorded, but only against a person
+            who is already a lead: it becomes their latest touch, and the
+            ad id lets Ad Performance count it against spend. Nobody new is
+            created from it; the counsellor converts the chat if it is one.
+          */
           const adReferral = adReferralOf(message);
-          if (adReferral) {
-            const profileName = value.contacts?.find((c) => c.wa_id === message.from)?.profile?.name;
+          if (adReferral && matched) {
             await resolveOrCreateLead({
-              studentName: profileName?.trim() || `WhatsApp ${message.from.slice(-4)}`,
+              studentName: matched.studentName,
               primaryPhone: message.from,
               source: "meta",
               subSource: adReferral.headline ?? "Click-to-WhatsApp ad",
               adId: adReferral.adId,
               adPlatform: "meta",
-              // Only a counsellor's own number names an owner; otherwise
-              // the assignment rules decide, like any other Meta lead.
-              assignedTo: number?.createsLeads ? number.counsellorId : null,
               raw: message as unknown as Record<string, unknown>,
               dedupeKey: `wa:${message.id}`,
             });
-            matched = await findLeadByPhone(message.from);
-          } else if (!matched && number?.createsLeads) {
-            const profileName = value.contacts?.find((c) => c.wa_id === message.from)?.profile?.name;
-            await resolveOrCreateLead({
-              // WhatsApp gives a profile name, which is whatever the
-              // person set — often a nickname, sometimes an emoji. Kept
-              // anyway: a counsellor renames it on first contact, and a
-              // lead called "Appu 🌸" is more use than one called
-              // "WhatsApp enquiry".
-              studentName: profileName?.trim() || `WhatsApp ${message.from.slice(-4)}`,
-              primaryPhone: message.from,
-              source: "WhatsApp",
-              subSource: number.label,
-              assignedTo: number.counsellorId,
-              raw: message as unknown as Record<string, unknown>,
-              dedupeKey: `wa:${message.id}`,
-            });
-            matched = await findLeadByPhone(message.from);
           }
 
           // Before anything else. WhatsApp expects a business to honour

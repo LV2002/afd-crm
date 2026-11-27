@@ -1039,9 +1039,16 @@
       "breakpoints": true
     },
     {
+      "idx": 145,
+      "version": "7",
+      "when": 1797516008000,
+      "tag": "0145_whatsapp_numbers_stop_creating_leads",
+      "breakpoints": true
+    },
+    {
       "idx": 149,
       "version": "7",
-      "when": 1797429608000,
+      "when": 1797602408000,
       "tag": "0149_whatsapp_costs_and_link_campaigns",
       "breakpoints": true
     }

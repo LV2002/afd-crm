@@ -253,7 +253,7 @@ async function run(input: z.input<typeof schema>): Promise<EmbeddedSignupState> 
     // coaching is the highest-intent enquiry this institute gets.
     // That is the whole reason for Coexistence, so it is on by default
     // here — and still an editable box on the row afterwards.
-    createsLeads: true,
+    createsLeads: false,
   });
 
   const supabase = await createClient();
