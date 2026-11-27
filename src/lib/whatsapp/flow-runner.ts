@@ -367,6 +367,18 @@ async function sendStep(
  * apart. Becoming a lead ends the run: the leads side owns that person now.
  * Nothing is logged to a lead's chat (there is no lead).
  */
+/** A readable file name from the last part of a link ("…/Admit%20card%20Anjali.pdf" → "Admit card Anjali.pdf"). */
+export function filenameFromLink(link: string): string {
+  try {
+    const last = decodeURIComponent(new URL(link).pathname.split("/").filter(Boolean).pop() ?? "");
+    // A file-id style segment (long, no spaces, no extension) is no name at all.
+    if (/\.[A-Za-z0-9]{2,5}$/.test(last) && last.length < 120) return last;
+  } catch {
+    /* fall through */
+  }
+  return "Document.pdf";
+}
+
 async function sendStepToContact(
   step: FlowStep,
   contactId: string,
@@ -430,7 +442,7 @@ async function sendStepToContact(
       return { ok: false, reason: "No document link on this person to attach.", fatal: true };
     }
     const name = row?.fields?.document_name;
-    headerMedia = { kind: "document", link, filename: typeof name === "string" && name ? name : "Document.pdf" };
+    headerMedia = { kind: "document", link, filename: typeof name === "string" && name ? name : filenameFromLink(link) };
   }
 
   const waMessageId = await sendTemplateMessage(

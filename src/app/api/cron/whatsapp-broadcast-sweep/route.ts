@@ -111,6 +111,7 @@ async function run(request: Request) {
       params: whatsappBroadcastRecipients.params,
       headerMediaId: whatsappBroadcasts.headerMediaId,
       headerMediaKind: whatsappBroadcasts.headerMediaKind,
+      headerMediaFilename: whatsappBroadcasts.headerMediaFilename,
     })
     .from(whatsappBroadcastRecipients)
     .innerJoin(
@@ -215,7 +216,7 @@ async function run(request: Request) {
         // attached one — Meta rejects a header component on a template
         // whose header is text.
         row.headerMediaId && isHeaderKind(row.headerMediaKind)
-          ? { kind: row.headerMediaKind, mediaId: row.headerMediaId }
+          ? { kind: row.headerMediaKind, mediaId: row.headerMediaId, filename: row.headerMediaKind === "document" ? (row.headerMediaFilename ?? undefined) : undefined }
           : undefined,
       );
 
