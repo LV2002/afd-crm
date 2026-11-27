@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
 import { AccessDenied } from "@/components/layout/access-denied";
@@ -15,7 +15,9 @@ import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import {
   centers,
+  contactLists,
   contacts,
+  cronRuns,
   leads,
   profiles,
   whatsappFlowRuns,
@@ -45,6 +47,9 @@ import { TestSend } from "./test-send";
 import { CATEGORY_LABELS, flowCostPerPerson, formatRate, formatTotal } from "@/lib/whatsapp/pricing";
 import { loadRates } from "@/lib/whatsapp/spend";
 
+import { guardPage } from "@/lib/errors/page-guard";
+import { countNewListMembers } from "@/lib/whatsapp/flow-runner";
+import { AutoStartPanel } from "./auto-start-panel";
 import { StartForLists } from "./start-for-lists";
 import { AddStep, ExistingStep, type StepEditorLists } from "./step-editor";
 
@@ -61,7 +66,11 @@ const RUN_STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive"
 // Pages that wait on Meta for the template list are given the longest the platform allows.
 export const maxDuration = 60;
 
-export default async function WhatsAppFlowPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function WhatsAppFlowPage(props: { params: Promise<{ id: string }> }) {
+  return guardPage("page:whatsapp/flows/[id]", () => renderFlowPage(props));
+}
+
+async function renderFlowPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.campaign")) return <AccessDenied />;
 
@@ -136,6 +145,36 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
           `)
         : none<{ id: string; name: string; agreed: boolean }>(),
     ]);
+
+  // For an automation that starts when somebody joins a database: what it is
+  // watching and doing, so "is it actually working?" has an answer on screen.
+  let autoStart: React.ComponentProps<typeof AutoStartPanel> | null = null;
+  if (forDatabase && flow.triggerType === "list_joined") {
+    const config = (flow.triggerConfig ?? {}) as Record<string, unknown>;
+    const watchedIds = Array.isArray(config.listIds) ? (config.listIds as string[]) : [];
+    const [nameRows, counts, lastCheck, waiting] = await Promise.all([
+      watchedIds.length > 0
+        ? db.select({ id: contactLists.id, name: contactLists.name }).from(contactLists).where(inArray(contactLists.id, watchedIds))
+        : Promise.resolve([] as Array<{ id: string; name: string }>),
+      db
+        .select({ started: sql<number>`count(*)::int`, last: sql<Date | null>`max(${whatsappFlowRuns.startedAt})` })
+        .from(whatsappFlowRuns)
+        .where(eq(whatsappFlowRuns.flowId, flow.id)),
+      db.select({ at: cronRuns.finishedAt }).from(cronRuns).where(eq(cronRuns.jobKey, "frequent")).orderBy(desc(cronRuns.finishedAt)).limit(1),
+      flow.isActive ? countNewListMembers(flow.id, flow.triggerConfig) : Promise.resolve(0),
+    ]);
+    const stamp = (value: Date | string | null | undefined) => (value ? formatDateIST(value instanceof Date ? value.toISOString() : value, "d MMM, h:mm a") : null);
+    autoStart = {
+      flowId: flow.id,
+      isActive: flow.isActive,
+      lists: watchedIds.map((id) => nameRows.find((n) => n.id === id)?.name ?? "a deleted list"),
+      watchingSince: stamp(typeof config.from === "string" ? config.from : null),
+      started: counts[0]?.started ?? 0,
+      lastStartedAt: stamp(counts[0]?.last ?? null),
+      waiting,
+      lastCheckAt: stamp(lastCheck[0]?.at ?? null),
+    };
+  }
 
   const steps: FlowStep[] = stepRows.map((row) => ({
     id: row.id,
@@ -220,6 +259,8 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
       </div>
 
       <FlowControls flowId={flow.id} isActive={flow.isActive} liveRuns={liveRuns.length} />
+
+      {autoStart && <AutoStartPanel {...autoStart} />}
 
       {forDatabase && (
         <StartForLists

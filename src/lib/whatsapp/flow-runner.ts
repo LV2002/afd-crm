@@ -1099,38 +1099,52 @@ async function enrolContacts(
  * marked as agreed to WhatsApp, leads and opted-out people are left out.
  * The first message goes out when the run is next advanced (the same sweep).
  */
-export async function enrolNewListMembers(): Promise<{ started: number }> {
+interface WatchedFlow {
+  id: string;
+  triggerConfig: Record<string, unknown> | null;
+}
+
+/** The people who joined a flow's watched lists since it was set up and have never been through it (before eligibility is checked). */
+async function newMembersFor(flow: WatchedFlow): Promise<string[]> {
+  const config = flow.triggerConfig ?? {};
+  const listIds = Array.isArray(config.listIds) ? config.listIds.filter((v): v is string => typeof v === "string") : [];
+  const from = typeof config.from === "string" ? new Date(config.from) : null;
+  if (listIds.length === 0 || !from || Number.isNaN(from.getTime())) return [];
+
+  const fresh = await db.execute<{ contact_id: string }>(sql`
+    select distinct m.contact_id
+    from contact_list_members m
+    join contact_lists l on l.id = m.list_id and l.archived_at is null and l.use_for_whatsapp
+    where m.list_id in (${sql.join(listIds.map((id) => sql`${id}::uuid`), sql`, `)})
+      and m.added_at >= ${from.toISOString()}::timestamptz
+      and not exists (
+        select 1 from whatsapp_flow_runs r where r.flow_id = ${flow.id}::uuid and r.contact_id = m.contact_id
+      )
+    limit 2000
+  `);
+  return [...fresh].map((r) => r.contact_id);
+}
+
+async function watchingFlows(onlyFlowId?: string): Promise<WatchedFlow[]> {
+  return db
+    .select({ id: whatsappFlows.id, triggerConfig: whatsappFlows.triggerConfig })
+    .from(whatsappFlows)
+    .where(
+      and(
+        eq(whatsappFlows.triggerType, "list_joined"),
+        eq(whatsappFlows.audience, "contact"),
+        eq(whatsappFlows.isActive, true),
+        isNull(whatsappFlows.deletedAt),
+        onlyFlowId ? eq(whatsappFlows.id, onlyFlowId) : undefined,
+      ),
+    );
+}
+
+export async function enrolNewListMembers(onlyFlowId?: string): Promise<{ started: number }> {
   let started = 0;
   try {
-    const flows = await db
-      .select({ id: whatsappFlows.id, triggerConfig: whatsappFlows.triggerConfig })
-      .from(whatsappFlows)
-      .where(
-        and(
-          eq(whatsappFlows.triggerType, "list_joined"),
-          eq(whatsappFlows.audience, "contact"),
-          eq(whatsappFlows.isActive, true),
-          isNull(whatsappFlows.deletedAt),
-        ),
-      );
-    for (const flow of flows) {
-      const config = flow.triggerConfig ?? {};
-      const listIds = Array.isArray(config.listIds) ? config.listIds.filter((v): v is string => typeof v === "string") : [];
-      const from = typeof config.from === "string" ? new Date(config.from) : null;
-      if (listIds.length === 0 || !from || Number.isNaN(from.getTime())) continue;
-
-      const fresh = await db.execute<{ contact_id: string }>(sql`
-        select distinct m.contact_id
-        from contact_list_members m
-        join contact_lists l on l.id = m.list_id and l.archived_at is null and l.use_for_whatsapp
-        where m.list_id in (${sql.join(listIds.map((id) => sql`${id}::uuid`), sql`, `)})
-          and m.added_at >= ${from.toISOString()}::timestamptz
-          and not exists (
-            select 1 from whatsapp_flow_runs r where r.flow_id = ${flow.id}::uuid and r.contact_id = m.contact_id
-          )
-        limit 2000
-      `);
-      const ids = [...fresh].map((r) => r.contact_id);
+    for (const flow of await watchingFlows(onlyFlowId)) {
+      const ids = await newMembersFor(flow);
       if (ids.length === 0) continue;
       const result = await enrolContacts(flow.id, ids, "Added to a database list");
       started += result.started;
@@ -1139,6 +1153,15 @@ export async function enrolNewListMembers(): Promise<{ started: number }> {
     console.error("enrolNewListMembers failed", error);
   }
   return { started };
+}
+
+/** How many new people are waiting to be started for one automation (they start at the next check). */
+export async function countNewListMembers(flowId: string, triggerConfig: Record<string, unknown> | null): Promise<number> {
+  try {
+    return (await newMembersFor({ id: flowId, triggerConfig })).length;
+  } catch {
+    return 0;
+  }
 }
 
 /**

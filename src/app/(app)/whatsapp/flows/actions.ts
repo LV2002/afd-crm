@@ -29,7 +29,7 @@ import { MetaGraphApiError } from "@/lib/integrations/meta/graph-client";
 import { sendMediaByLink, sendReplyButtons, sendTemplateMessage, sendTextMessage } from "@/lib/integrations/whatsapp/client";
 import { planFlowTest, sampleParams } from "@/lib/whatsapp/flow-test";
 import { STARTER_FLOWS } from "@/lib/whatsapp/starter-flows";
-import { startFlowForContacts, startFlows } from "@/lib/whatsapp/flow-runner";
+import { advanceRuns, enrolNewListMembers, startFlowForContacts, startFlows } from "@/lib/whatsapp/flow-runner";
 
 export interface FlowFormState {
   error?: string;
@@ -581,4 +581,45 @@ export async function sendFlowTest(_prev: FlowTestState, formData: FormData): Pr
       ? " Typed messages and buttons only reach a number that has written to the institute's WhatsApp in the last 24 hours — send it a message first, then test again."
       : "";
   return { success: `Sent ${sent} message${sent === 1 ? "" : "s"} to ${phone}.${note}`, report };
+}
+
+/**
+ * "Check for new people now" on an automation that starts when somebody joins a
+ * database: enrol everyone who has joined since it was set up and send their
+ * first message straight away, instead of waiting for the next scheduled check.
+ * Same rules as the scheduled check (agreed-to-WhatsApp lists, opt-outs, never
+ * twice), so pressing it is always safe.
+ */
+export async function startNewPeopleNow(_prev: FlowFormState, formData: FormData): Promise<FlowFormState> {
+  const user = await requireCampaigner();
+  if (!user) return { error: "You don't have permission to do that." };
+  const flowId = String(formData.get("flowId") ?? "").trim();
+  if (!flowId) return { error: "Which automation?" };
+
+  const [flow] = await db
+    .select({ isActive: whatsappFlows.isActive, triggerType: whatsappFlows.triggerType })
+    .from(whatsappFlows)
+    .where(and(eq(whatsappFlows.id, flowId), isNull(whatsappFlows.deletedAt)));
+  if (!flow) return { error: "That automation no longer exists." };
+  if (flow.triggerType !== "list_joined") return { error: "This automation does not start when people are added." };
+  if (!flow.isActive) return { error: "Switch it on first." };
+
+  const { started } = await enrolNewListMembers(flowId);
+  const { advanced } = await advanceRuns();
+
+  const supabase = await createClient();
+  await writeAuditLog(supabase, {
+    actorId: user.id,
+    action: "whatsapp.flow_check_new_people",
+    entityType: "whatsapp_flows",
+    entityId: flowId,
+    after: { started, advanced },
+  });
+  revalidatePath(`/whatsapp/flows/${flowId}`);
+  return {
+    success:
+      started === 0
+        ? `Nobody new to start. ${advanced} message${advanced === 1 ? "" : "s"} due were sent.`
+        : `Started ${started} ${started === 1 ? "person" : "people"}; their first messages are going out now.`,
+  };
 }

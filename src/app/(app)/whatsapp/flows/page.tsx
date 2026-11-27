@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { asc, isNull, sql } from "drizzle-orm";
+import { asc, inArray, isNull, sql } from "drizzle-orm";
 
 import { AccessDenied } from "@/components/layout/access-denied";
 import { Badge } from "@/components/ui/badge";
@@ -15,10 +15,12 @@ import {
 import type { RuleConditions } from "@/lib/assignment/evaluate-conditions";
 import { can, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { whatsappFlowRuns, whatsappFlowSteps, whatsappFlows } from "@/lib/db/schema";
+import { contactLists, whatsappFlowRuns, whatsappFlowSteps, whatsappFlows } from "@/lib/db/schema";
 import { describeConditions } from "@/lib/rules/describe-rule";
 import { createClient } from "@/lib/supabase/server";
 import { STARTER_FLOWS } from "@/lib/whatsapp/starter-flows";
+
+import { guardPage } from "@/lib/errors/page-guard";
 
 import { createStarterFlow } from "./actions";
 
@@ -41,6 +43,10 @@ const TRIGGER_LABELS: Record<string, string> = {
 export const maxDuration = 60;
 
 export default async function WhatsAppFlowsPage() {
+  return guardPage("page:whatsapp/flows", renderFlowsPage);
+}
+
+async function renderFlowsPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.campaign")) return <AccessDenied />;
 
@@ -56,11 +62,27 @@ export default async function WhatsAppFlowsPage() {
       appliesTo: whatsappFlows.appliesTo,
       isActive: whatsappFlows.isActive,
       steps: sql<number>`(select count(*) from ${whatsappFlowSteps} where ${whatsappFlowSteps.flowId} = ${whatsappFlows.id})`,
+      triggerConfig: whatsappFlows.triggerConfig,
       live: sql<number>`(select count(*) from ${whatsappFlowRuns} where ${whatsappFlowRuns.flowId} = ${whatsappFlows.id} and status in ('running','waiting'))`,
+      started7: sql<number>`(select count(*) from ${whatsappFlowRuns} where ${whatsappFlowRuns.flowId} = ${whatsappFlows.id} and started_at > now() - interval '7 days')`,
     })
     .from(whatsappFlows)
     .where(isNull(whatsappFlows.deletedAt))
     .orderBy(asc(whatsappFlows.name));
+
+  // Names of the databases the "when somebody is added" automations watch.
+  const watchedIds = [
+    ...new Set(
+      flows.flatMap((flow) =>
+        flow.triggerType === "list_joined" && Array.isArray(flow.triggerConfig?.listIds) ? (flow.triggerConfig.listIds as string[]) : [],
+      ),
+    ),
+  ];
+  const watchedNames = new Map<string, string>();
+  if (watchedIds.length > 0) {
+    const rows = await db.select({ id: contactLists.id, name: contactLists.name }).from(contactLists).where(inArray(contactLists.id, watchedIds));
+    for (const row of rows) watchedNames.set(row.id, row.name);
+  }
 
   // The words for conditions ("Only: centre is Kochi") are only needed when an
   // automation actually has conditions.
@@ -114,6 +136,7 @@ export default async function WhatsAppFlowsPage() {
               <TableHead>Starts when</TableHead>
               <TableHead>Steps</TableHead>
               <TableHead>People in it</TableHead>
+              <TableHead>Started (7 days)</TableHead>
               <TableHead>On</TableHead>
             </TableRow>
           </TableHeader>
@@ -130,7 +153,11 @@ export default async function WhatsAppFlowsPage() {
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {flow.audience === "contact"
-                    ? "Started by hand for database lists"
+                    ? flow.triggerType === "list_joined"
+                      ? `Starts when somebody is added to: ${
+                          ((flow.triggerConfig?.listIds as string[] | undefined) ?? []).map((id) => watchedNames.get(id) ?? "a deleted list").join(", ") || "no list chosen"
+                        }`
+                      : "Started by hand for database lists"
                     : (TRIGGER_LABELS[flow.triggerType] ?? flow.triggerType)}
                   {/* An automation narrowed to a slice of leads looked
                       identical here to one that reaches everybody, which
@@ -143,6 +170,7 @@ export default async function WhatsAppFlowsPage() {
                 </TableCell>
                 <TableCell>{Number(flow.steps)}</TableCell>
                 <TableCell>{Number(flow.live)}</TableCell>
+                <TableCell>{Number(flow.started7)}</TableCell>
                 <TableCell>
                   <Badge variant={flow.isActive ? "default" : "secondary"}>
                     {flow.isActive ? "On" : "Off"}
