@@ -38,7 +38,7 @@ export default async function WhatsAppTemplatesPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.campaign")) return <AccessDenied />;
 
-  const result = await listTemplates();
+  const result = await listTemplates({ fresh: true });
 
   return (
     <div className="flex flex-col gap-6">

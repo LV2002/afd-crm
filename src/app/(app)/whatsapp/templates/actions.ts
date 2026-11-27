@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { can, getCurrentUser } from "@/lib/auth/session";
@@ -35,7 +35,17 @@ export type TemplateListResult =
  * without telling us — a template approved overnight, or paused later for
  * poor feedback — so a local copy would be confidently wrong.
  */
-export async function listTemplates(): Promise<TemplateListResult> {
+const TEMPLATE_CACHE_TAG = "whatsapp-templates";
+
+/**
+ * `fresh` reads straight from Meta (the Templates screen, where approval state
+ * is the point). Everywhere else the list is kept for a minute: the pages that
+ * only need template names and categories (an automation being edited, a new
+ * broadcast) used to wait on Meta for several seconds every time they
+ * rendered, and an action that saves a step re-renders the page. Submitting or
+ * deleting a template clears the saved list straight away.
+ */
+export async function listTemplates(options: { fresh?: boolean } = {}): Promise<TemplateListResult> {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.campaign")) {
     return { status: "error", message: "You don't have permission to manage templates." };
@@ -48,7 +58,13 @@ export async function listTemplates(): Promise<TemplateListResult> {
   if (!accessToken || !wabaId) return { status: "not_connected" };
 
   try {
-    return { status: "ok", templates: await listMessageTemplates(wabaId, accessToken) };
+    const templates = options.fresh
+      ? await listMessageTemplates(wabaId, accessToken)
+      : await unstable_cache(() => listMessageTemplates(wabaId, accessToken), ["whatsapp-template-list", wabaId], {
+          revalidate: 60,
+          tags: [TEMPLATE_CACHE_TAG],
+        })();
+    return { status: "ok", templates };
   } catch (err) {
     return {
       status: "error",
@@ -178,6 +194,7 @@ export async function submitTemplate(
     after: { name, language, category, status: result.status },
   });
 
+  revalidateTag(TEMPLATE_CACHE_TAG);
   revalidatePath("/whatsapp/templates");
   return {
     success: `Submitted "${name}" for approval. It becomes sendable once Meta approves it — usually within minutes.`,
@@ -215,6 +232,7 @@ export async function removeTemplate(name: string): Promise<TemplateFormState> {
     before: { name },
   });
 
+  revalidateTag(TEMPLATE_CACHE_TAG);
   revalidatePath("/whatsapp/templates");
   return { success: `Deleted "${name}".` };
 }
