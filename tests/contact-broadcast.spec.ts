@@ -73,11 +73,12 @@ const cityField = {
 };
 
 describe("the Database audience", () => {
-  it("includes only people on agreed lists, never leads, and honours opt-outs and filters", async () => {
+  it("includes people on agreed lists whether or not they are leads, and honours opt-outs, do-not-contact and filters", async () => {
     const a = await addContact("Anjali", "+919847620001", agreed, { city: "Kochi" });
     const b = await addContact("Rahul", "+919847620002", agreed, { city: "Kochi" });
     const lead = await addContact("Is a lead", "+919847620003", agreed, { city: "Kochi" });
     const stopped = await addContact("Said stop", "+919847620004", agreed, { city: "Kochi" });
+    const noContact = await addContact("Do not contact", "+919847620006", agreed, { city: "Kochi" });
     const elsewhere = await addContact("Other city", "+919847620005", agreed, { city: "Thrissur" });
     const noPhone = await addContact("Email only", null, agreed, { city: "Kochi" }, "e@example.com");
 
@@ -85,11 +86,14 @@ describe("the Database audience", () => {
     const [l] = await db.insert(leads).values({ studentName: `${MARK} lead`, primaryPhone: "+919847620003" }).returning({ id: leads.id });
     await db.insert(leadIdentifiers).values({ leadId: l.id, kind: "phone", valueNormalised: "+919847620003", isPrimary: true });
     await db.insert(whatsappSuppressions).values({ phone: "+919847620004", reason: "stop", source: "keyword" });
+    // A lead marked do-not-contact is the one kind of lead that stays out.
+    const [dnc] = await db.insert(leads).values({ studentName: `${MARK} dnc`, primaryPhone: "+919847620006", doNotContact: true }).returning({ id: leads.id });
+    await db.insert(leadIdentifiers).values({ leadId: dnc.id, kind: "phone", valueNormalised: "+919847620006", isPrimary: true });
 
-    const rows = [a, b, lead, stopped, elsewhere, noPhone].map((id, i) => ({
+    const rows = [a, b, lead, stopped, elsewhere, noPhone, noContact].map((id, i) => ({
       id,
       name: `${MARK} ${i}`,
-      phone: ["+919847620001", "+919847620002", "+919847620003", "+919847620004", "+919847620005", null][i],
+      phone: ["+919847620001", "+919847620002", "+919847620003", "+919847620004", "+919847620005", null, "+919847620006"][i],
       email: i === 5 ? "e@example.com" : null,
       fields: { city: i === 4 ? "Thrissur" : "Kochi" },
       lead_id: null,
@@ -102,8 +106,9 @@ describe("the Database audience", () => {
 
     const result = await resolveAudience(supabase, user, { entity: "contact", filters: { city: "Kochi" }, listIds: [agreed] });
 
-    expect(result.members.map((m) => m.phone).sort()).toEqual(["+919847620001", "+919847620002"]);
-    expect(result.skipped).toMatchObject({ alreadyLeads: 1, optedOut: 1, noPhone: 1 });
+    expect(result.members.map((m) => m.phone).sort()).toEqual(["+919847620001", "+919847620002", "+919847620003"]);
+    expect(result.skipped).toMatchObject({ optedOut: 1, noPhone: 1, doNotContact: 1 });
+    expect(result.skipped.alreadyLeads).toBe(0);
     expect(result.members.every((m) => m.entity === "contact")).toBe(true);
   });
 
@@ -126,18 +131,21 @@ describe("the Database audience", () => {
 });
 
 describe("messageableContactIds (the send-time check)", () => {
-  it("drops a contact who has become a lead, been removed, or whose list lost its tick", async () => {
+  it("keeps a contact who has become a lead, and drops one who was removed, is do-not-contact, or whose list lost its tick", async () => {
     const ok = await addContact("still ok", "+919847620010", agreed);
     const becameLead = await addContact("became lead", "+919847620011", agreed);
     const removed = await addContact("removed", "+919847620012", agreed);
     const unticked = await addContact("unticked", "+919847620013", notAgreed);
+    const dncContact = await addContact("dnc", "+919847620014", agreed);
 
     const [l] = await db.insert(leads).values({ studentName: `${MARK} l2`, primaryPhone: "+919847620011" }).returning({ id: leads.id });
     await db.insert(leadIdentifiers).values({ leadId: l.id, kind: "phone", valueNormalised: "+919847620011", isPrimary: true });
     await db.update(contacts).set({ deletedAt: new Date() }).where(eq(contacts.id, removed));
+    const [d] = await db.insert(leads).values({ studentName: `${MARK} l3`, primaryPhone: "+919847620014", doNotContact: true }).returning({ id: leads.id });
+    await db.insert(leadIdentifiers).values({ leadId: d.id, kind: "phone", valueNormalised: "+919847620014", isPrimary: true });
 
-    const allowed = await messageableContactIds([ok, becameLead, removed, unticked]);
-    expect([...allowed]).toEqual([ok]);
+    const allowed = await messageableContactIds([ok, becameLead, removed, unticked, dncContact]);
+    expect([...allowed].sort()).toEqual([ok, becameLead].sort());
     expect((await messageableContactIds([])).size).toBe(0);
   });
 });

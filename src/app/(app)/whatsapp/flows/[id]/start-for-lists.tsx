@@ -31,8 +31,8 @@ export function StartForLists({
       <input type="hidden" name="flowId" value={flowId} />
       <h3 className="text-sm font-semibold">Start it for these lists</h3>
       <p className="text-xs text-muted-foreground">
-        Goes only to people on the lists you tick who are <strong>not leads</strong> and have not opted out. Anyone who
-        becomes a lead part-way through is dropped from it.
+        Goes to everyone on the lists you tick, <strong>whether or not they are also leads</strong>. People who have opted
+        out, or are marked do-not-contact, are left out.
       </p>
       {!anyAgreed && (
         <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-900">

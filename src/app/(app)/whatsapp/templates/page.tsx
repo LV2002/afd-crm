@@ -31,6 +31,9 @@ import { TemplateForm } from "./template-form";
  * failed; now the approved ones are visible, with what they say and what
  * they still need filled in.
  */
+// Pages that wait on Meta for the template list are given the longest the platform allows.
+export const maxDuration = 60;
+
 export default async function WhatsAppTemplatesPage() {
   const user = await getCurrentUser();
   if (!user || !can(user, "whatsapp.campaign")) return <AccessDenied />;

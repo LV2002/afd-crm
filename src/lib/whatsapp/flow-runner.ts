@@ -398,7 +398,7 @@ async function sendStepToContact(
   if (!eligible.has(contact.id)) {
     return {
       ok: false,
-      reason: "No longer on a list that may be messaged, or has since become a lead.",
+      reason: "No longer on a list that may be messaged, or marked do-not-contact.",
       fatal: true,
     };
   }

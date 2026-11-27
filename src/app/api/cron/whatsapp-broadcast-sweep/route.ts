@@ -144,9 +144,8 @@ async function run(request: Request) {
     rows.map((row) => row.phone),
   );
 
-  // Database contacts are re-checked too: one who has become a lead since
-  // the broadcast was composed belongs to the leads audience, and one whose
-  // list no longer carries consent must not be sent to at all.
+  // Database contacts are re-checked too: one whose list no longer carries
+  // consent, or who has been marked do-not-contact, must not be sent to at all.
   const stillMessageable = await messageableContactIds(
     rows.map((row) => row.contactId).filter((id): id is string => Boolean(id)),
   );
@@ -159,7 +158,7 @@ async function run(request: Request) {
           .update(whatsappBroadcastRecipients)
           .set({
             status: "failed",
-            errorMessage: "No longer on a list that may be messaged, or has since become a lead.",
+            errorMessage: "No longer on a list that may be messaged, or marked do-not-contact.",
           })
           .where(eq(whatsappBroadcastRecipients.id, row.recipientId));
         await db

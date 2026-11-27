@@ -79,7 +79,7 @@ beforeEach(() => {
 });
 
 describe("flows for database contacts", () => {
-  it("starts for eligible contacts only, and messages them", async () => {
+  it("starts for eligible contacts only (leads included, opt-outs and do-not-contact excluded), and messages them", async () => {
     const ok = await addContact("ok", "+919847620001");
     const optedOut = await addContact("optout", "+919847620002");
     await db.insert(whatsappSuppressions).values({ phone: "+919847620002", reason: MARK, source: "keyword" });
@@ -87,17 +87,21 @@ describe("flows for database contacts", () => {
     const [lead] = await db.insert(leads).values({ studentName: `${MARK} lead`, primaryPhone: "+919847620003" }).returning({ id: leads.id });
     await db.insert(leadIdentifiers).values({ leadId: lead.id, kind: "phone", valueNormalised: "+919847620003" });
 
+    const noContact = await addContact("dnc", "+919847620005");
+    const [dnc] = await db.insert(leads).values({ studentName: `${MARK} dnc`, primaryPhone: "+919847620005", doNotContact: true }).returning({ id: leads.id });
+    await db.insert(leadIdentifiers).values({ leadId: dnc.id, kind: "phone", valueNormalised: "+919847620005" });
+
     const result = await startFlowForContacts(flowId, [listId]);
-    expect(result.started).toBe(1);
+    expect(result.started).toBe(2);
 
     const runs = await db.select().from(whatsappFlowRuns).where(eq(whatsappFlowRuns.flowId, flowId));
-    expect(runs.map((r) => r.contactId)).toEqual([ok]);
-    expect(runs[0].leadId).toBeNull();
-    expect([optedOut, isLead]).not.toContain(runs[0].contactId);
+    expect(runs.map((r) => r.contactId).sort()).toEqual([ok, isLead].sort());
+    expect(runs.every((r) => r.leadId === null)).toBe(true);
+    expect([optedOut, noContact]).not.toContain(runs[0].contactId);
 
     await advanceRuns();
-    expect(sendTemplateMessage).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(sendTemplateMessage).mock.calls[0][2]).toBe("+919847620001");
+    const sentTo = vi.mocked(sendTemplateMessage).mock.calls.map((c) => c[2]);
+    expect(sentTo.sort()).toEqual(["+919847620001", "+919847620003"]);
   });
 
   it("a second start does not double-enrol someone already in it", async () => {
@@ -111,13 +115,23 @@ describe("flows for database contacts", () => {
     expect(sendTemplateMessage).toHaveBeenCalledWith("123", "t", "+919847620001", "seminar_details", "en_US", undefined);
   });
 
-  it("stops the run before a send if the contact has become a lead", async () => {
+  it("keeps messaging a contact who has become a lead, but stops for one marked do-not-contact", async () => {
     const c = await addContact("late", "+919847620004");
     await db.insert(whatsappFlowRuns).values({ flowId, contactId: c, status: "running", wakeAt: new Date() });
-    await db.update(contacts).set({ leadId: (await db.insert(leads).values({ studentName: `${MARK} late lead`, primaryPhone: "+919847620004" }).returning({ id: leads.id }))[0].id }).where(eq(contacts.id, c));
+    const [lateLead] = await db.insert(leads).values({ studentName: `${MARK} late lead`, primaryPhone: "+919847620004" }).returning({ id: leads.id });
+    await db.update(contacts).set({ leadId: lateLead.id }).where(eq(contacts.id, c));
     await advanceRuns();
-    expect(sendTemplateMessage).not.toHaveBeenCalled();
-    const [run] = await db.select().from(whatsappFlowRuns).where(eq(whatsappFlowRuns.contactId, c));
+    expect(vi.mocked(sendTemplateMessage).mock.calls.some((call) => call[2] === "+919847620004")).toBe(true);
+
+    // Now the same person is marked do-not-contact: the next send stops.
+    vi.mocked(sendTemplateMessage).mockClear();
+    const d = await addContact("late dnc", "+919847620008");
+    await db.insert(whatsappFlowRuns).values({ flowId, contactId: d, status: "running", wakeAt: new Date() });
+    const [dncLead] = await db.insert(leads).values({ studentName: `${MARK} late dnc lead`, primaryPhone: "+919847620008", doNotContact: true }).returning({ id: leads.id });
+    await db.insert(leadIdentifiers).values({ leadId: dncLead.id, kind: "phone", valueNormalised: "+919847620008" });
+    await advanceRuns();
+    expect(vi.mocked(sendTemplateMessage).mock.calls.some((call) => call[2] === "+919847620008")).toBe(false);
+    const [run] = await db.select().from(whatsappFlowRuns).where(eq(whatsappFlowRuns.contactId, d));
     expect(run.status).toBe("stopped");
   });
 
