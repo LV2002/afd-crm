@@ -96,11 +96,11 @@ async function runConvert(formData: FormData): Promise<WhatsAppConvertState> {
   */
   const { data: visible } = await supabase
     .from("whatsapp_messages")
-    .select("id")
+    .select("id, number_id")
     .is("lead_id", null)
     .eq("from_phone", phone)
     .limit(1)
-    .maybeSingle<{ id: string }>();
+    .maybeSingle<{ id: string; number_id: string | null }>();
 
   if (!visible) {
     return { error: "That conversation is not available to you." };
@@ -113,7 +113,9 @@ async function runConvert(formData: FormData): Promise<WhatsAppConvertState> {
   const result = await resolveOrCreateLead({
     studentName: parsed.data.studentName,
     primaryPhone: phone,
-    source: "whatsapp",
+    // A chat on the business API number (no counsellor number on the message)
+    // is a "WhatsApp API" lead; one on a counsellor's own number stays "whatsapp".
+    source: visible.number_id === null ? "whatsapp_api" : "whatsapp",
     raw: { convertedFromThread: phone },
     dedupeKey: `whatsapp:${phone}`,
     actorId: user.id,

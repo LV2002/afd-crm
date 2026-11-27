@@ -9,12 +9,26 @@ import { Input } from "@/components/ui/input";
 
 import { createLink, deleteLink, type LinkState } from "./actions";
 
-export function NewLinkForm() {
+export interface CampaignOption {
+  value: string;
+  label: string;
+}
+
+export function NewLinkForm({ campaigns }: { campaigns: CampaignOption[] }) {
   const [state, action, pending] = useActionState(createLink, {} as LinkState);
   return (
     <form action={action} className="flex flex-wrap items-start gap-2">
       <Input name="name" placeholder="Name, e.g. Fee page" className="h-9 w-48" aria-label="Name" />
       <Input name="url" placeholder="https://afdindia.com/fees" className="h-9 w-80" aria-label="Where it goes" />
+      <select name="belongsTo" className="h-9 rounded-md border bg-transparent px-3 text-sm" aria-label="Campaign" defaultValue="">
+        <option value="">Not tied to a broadcast or automation</option>
+        {campaigns.map((c) => (
+          <option key={c.value} value={c.value}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+      <Input name="campaign" placeholder="Campaign name (optional)" className="h-9 w-52" aria-label="Campaign name" />
       <Button type="submit" size="sm" disabled={pending}>Create link</Button>
       <FormMessage error={state.error} success={state.success} />
     </form>

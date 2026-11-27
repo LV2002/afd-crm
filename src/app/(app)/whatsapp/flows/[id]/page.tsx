@@ -42,6 +42,9 @@ import { FlowForm } from "../flow-form";
 import { FlowControls } from "./flow-controls";
 import { FlowMap } from "./flow-map";
 import { TestSend } from "./test-send";
+import { CATEGORY_LABELS, flowCostPerPerson, formatRate, formatTotal } from "@/lib/whatsapp/pricing";
+import { loadRates } from "@/lib/whatsapp/spend";
+
 import { StartForLists } from "./start-for-lists";
 import { AddStep, ExistingStep, type StepEditorLists } from "./step-editor";
 
@@ -146,6 +149,14 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
           }))
       : [];
 
+  // What one person costs to take through this automation, from the
+  // templates its steps send and the rates under WhatsApp → Spend.
+  const rates = await loadRates();
+  const categoryByTemplate = new Map(
+    templateResult.status === "ok" ? templateResult.templates.map((t) => [t.name, t.category] as const) : [],
+  );
+  const perPerson = flowCostPerPerson(stepRows, categoryByTemplate, rates);
+
   const lists: StepEditorLists = {
     templates,
     // What an automation may SET. Took admission needs a confirmed
@@ -182,6 +193,20 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
         <Badge variant={flow.isActive ? "default" : "secondary"}>
           {flow.isActive ? "On" : "Off"}
         </Badge>
+      </div>
+
+      <div className="max-w-2xl rounded-md border bg-muted/40 p-3 text-sm">
+        <p>
+          Cost per person:{" "}
+          <span className="font-semibold">{perPerson.parts.length === 0 ? "₹0.00" : `up to ${formatTotal(perPerson.total)}`}</span>
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {perPerson.parts.length === 0
+            ? "No template messages in this automation, so nothing is billed (replies inside an open 24-hour window are free)."
+            : `${perPerson.parts
+                .map((p) => `${p.template}: ${formatRate(p.rate)} (${CATEGORY_LABELS[p.category] ?? p.category})`)
+                .join(" + ")}. At most this, since not everybody reaches every step, and free inside an open reply window. Multiply by the number of people to estimate a start.`}
+        </p>
       </div>
 
       <FlowControls flowId={flow.id} isActive={flow.isActive} liveRuns={liveRuns.length} />

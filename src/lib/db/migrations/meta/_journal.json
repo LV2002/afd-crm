@@ -1037,6 +1037,13 @@
       "when": 1797343208000,
       "tag": "0148_meta_capi_events",
       "breakpoints": true
+    },
+    {
+      "idx": 149,
+      "version": "7",
+      "when": 1797429608000,
+      "tag": "0149_whatsapp_costs_and_link_campaigns",
+      "breakpoints": true
     }
   ]
 }

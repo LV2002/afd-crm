@@ -4,6 +4,8 @@ import { boolean, index, integer, pgTable, primaryKey, text, timestamp, uniqueIn
 import { idColumn } from "./_helpers";
 import { profiles } from "./auth";
 import { leads } from "./leads";
+import { whatsappBroadcasts } from "./whatsapp-broadcasts";
+import { whatsappFlows } from "./whatsapp-flows";
 
 /** Messages staff send often, typed in from a slash: /fees. Shared by everybody who can send. */
 export const whatsappSavedReplies = pgTable(
@@ -104,6 +106,10 @@ export const whatsappLinks = pgTable(
     name: text("name").notNull(),
     url: text("url").notNull(),
     clicks: integer("clicks").notNull().default(0),
+    /** Which campaign the link is for, by name; and optionally the broadcast or automation that carries it. */
+    campaign: text("campaign"),
+    broadcastId: uuid("broadcast_id").references(() => whatsappBroadcasts.id, { onDelete: "set null" }),
+    flowId: uuid("flow_id").references(() => whatsappFlows.id, { onDelete: "set null" }),
     lastClickedAt: timestamp("last_clicked_at", { withTimezone: true }),
     createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -136,4 +142,47 @@ export const whatsappReplyAlerts = pgTable(
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("whatsapp_reply_alerts_uq").on(t.leadId, t.inboundAt, t.level)],
+);
+
+/** One row per tap on a tracked link, so clicks can be shown over time and per campaign. */
+export const whatsappLinkClicks = pgTable(
+  "whatsapp_link_clicks",
+  {
+    id: idColumn(),
+    linkId: uuid("link_id")
+      .notNull()
+      .references(() => whatsappLinks.id, { onDelete: "cascade" }),
+    clickedAt: timestamp("clicked_at", { withTimezone: true }).notNull().defaultNow(),
+    /** The optional `?r=` value on the short link, when a sender uses one to tell recipients apart. */
+    ref: text("ref"),
+    userAgent: text("user_agent"),
+  },
+  (t) => [index("whatsapp_link_clicks_link_idx").on(t.linkId, t.clickedAt)],
+);
+
+/** What WhatsApp charges per message, by category, in ten-thousandths of a rupee (8631 = ₹0.8631). Editable. */
+export const whatsappRates = pgTable("whatsapp_rates", {
+  category: text("category").primaryKey(),
+  rateTenThousandths: integer("rate_ten_thousandths").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid("updated_by").references(() => profiles.id, { onDelete: "set null" }),
+});
+
+/**
+ * What a sent message was billed as, from Meta's own delivery report (which
+ * carries `pricing.category` and `pricing.billable`). One row per message.
+ */
+export const whatsappSpend = pgTable(
+  "whatsapp_spend",
+  {
+    id: idColumn(),
+    waMessageId: text("wa_message_id").notNull(),
+    category: text("category").notNull(),
+    billable: boolean("billable").notNull(),
+    amountTenThousandths: integer("amount_ten_thousandths").notNull(),
+    broadcastId: uuid("broadcast_id").references(() => whatsappBroadcasts.id, { onDelete: "set null" }),
+    flowId: uuid("flow_id").references(() => whatsappFlows.id, { onDelete: "set null" }),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("whatsapp_spend_message_uq").on(t.waMessageId), index("whatsapp_spend_occurred_idx").on(t.occurredAt)],
 );

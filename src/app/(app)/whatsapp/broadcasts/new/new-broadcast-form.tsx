@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import type { FieldOption } from "@/lib/fields/resolve-field-options";
 import { NOT_SET, NOT_SET_LABEL, type PivotField } from "@/lib/reports/pivot";
 import type { AudienceEntity } from "@/lib/whatsapp/audience";
+import { CATEGORY_LABELS, estimateCost, formatRate, formatTotal, normaliseCategory, type RateMap } from "@/lib/whatsapp/pricing";
 import { BROADCAST_HEADER_EXTENSIONS } from "@/lib/whatsapp/media";
 import { MERGE_VARIABLES, mergeVariablesFor } from "@/lib/whatsapp/merge-variables";
 import { fillTemplateBody, resolveParams, type ParamSource } from "@/lib/whatsapp/personalise";
@@ -55,6 +56,8 @@ export interface TemplateChoice {
   language: string;
   body: string;
   placeholders: number;
+  /** Meta's template category: MARKETING, UTILITY or AUTHENTICATION. Decides what each message costs. */
+  category: string;
   /** Set when the template was approved with an image, video or document header. */
   headerMediaKind: "image" | "video" | "document" | null;
 }
@@ -77,7 +80,10 @@ export function NewBroadcastForm({
   contactLists,
   canUseDatabase,
   templates,
+  rates,
 }: {
+  /** What WhatsApp charges per message by category, in ten-thousandths of a rupee. */
+  rates: RateMap;
   leadFields: AudienceFieldOptions[];
   studentFields: AudienceFieldOptions[];
   /** Lists in the contact database. Empty when the person cannot see the database. */
@@ -321,6 +327,15 @@ export function NewBroadcastForm({
           )}
           {preview?.error && <p className="text-sm text-destructive">{preview.error}</p>}
         </div>
+
+        {preview && !preview.error && template && (
+          <CostEstimate
+            count={preview.count}
+            rates={rates}
+            categoryA={template.category}
+            categoryB={templateB ? templateB.category : null}
+          />
+        )}
 
         {preview && !preview.error && (
           <p className="text-xs text-muted-foreground">
@@ -579,5 +594,42 @@ export function NewBroadcastForm({
               : "Send"}
       </Button>
     </form>
+  );
+}
+
+/**
+ * What this broadcast will cost, before anything is sent. An upper bound: a
+ * utility template reaching somebody whose 24-hour window is open is free,
+ * and WhatsApp does not charge for a message it cannot deliver. For an A/B
+ * test each version goes to half the people.
+ */
+function CostEstimate({
+  count,
+  rates,
+  categoryA,
+  categoryB,
+}: {
+  count: number;
+  rates: RateMap;
+  categoryA: string;
+  categoryB: string | null;
+}) {
+  const halfA = categoryB ? Math.ceil(count / 2) : count;
+  const a = estimateCost(categoryA, halfA, rates);
+  const b = categoryB ? estimateCost(categoryB, count - halfA, rates) : null;
+  const total = a.total + (b?.total ?? 0);
+  const label = (c: ReturnType<typeof estimateCost>) =>
+    `${c.messages} × ${formatRate(c.perMessage)} (${CATEGORY_LABELS[normaliseCategory(c.category)] ?? c.category})`;
+  return (
+    <div className="rounded-md border bg-muted/40 p-3 text-sm">
+      <p>
+        Estimated cost: <span className="font-semibold">{formatTotal(total)}</span>
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {label(a)}
+        {b ? ` + ${label(b)}` : ""}. At most this: free inside an open reply window, nothing for a message that fails. Rates are
+        edited under WhatsApp → Spend.
+      </p>
+    </div>
   );
 }

@@ -16,6 +16,7 @@ import {
 } from "@/lib/whatsapp/opt-out";
 import { recordFlowDelivery, resolveContactReply, resolveReply, startFlows } from "@/lib/whatsapp/flow-runner";
 import { describeDeliveryError } from "@/lib/whatsapp/delivery-errors";
+import { recordMessageSpend } from "@/lib/whatsapp/spend";
 import { maybeAutoReply } from "@/lib/whatsapp/auto-reply-runner";
 import { applyBroadcastStatus, markBroadcastReply } from "@/lib/whatsapp/broadcast-tracking";
 import { downloadMessageMedia, worthFetchingInline } from "@/lib/whatsapp/inbound-media";
@@ -76,6 +77,7 @@ interface WhatsAppStatus {
   status: "sent" | "delivered" | "read" | "failed";
   timestamp: string;
   recipient_id: string;
+  pricing?: { billable?: boolean; pricing_model?: string; category?: string };
   errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>;
 }
 
@@ -458,6 +460,8 @@ export async function POST(request: Request) {
             .where(eq(whatsappMessages.waMessageId, status.id));
           // Broadcast funnel: how far did this recipient's message get.
           await applyBroadcastStatus(status.id, status.status);
+          // What Meta billed it as, for the spend page.
+          await recordMessageSpend(status.id, status.pricing);
           // An automation that sent it: show delivery (or the exact failure) on its run.
           const failure = status.errors?.[0];
           await recordFlowDelivery(
