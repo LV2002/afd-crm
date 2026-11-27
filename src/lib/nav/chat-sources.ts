@@ -23,12 +23,24 @@ export async function getChatLinks(user: SessionUser): Promise<ChatLink[]> {
   const isCampaigner = can(user, "whatsapp.campaign");
   const seesOthers = isCampaigner || (scopeFor(user, "whatsapp.read") ?? "own") !== "own";
 
-  const numbers = await db
-    .select({ id: whatsappNumbers.id, label: whatsappNumbers.label, mode: whatsappNumbers.mode, counsellorId: whatsappNumbers.counsellorId })
-    .from(whatsappNumbers)
-    .where(isNull(whatsappNumbers.deletedAt));
-  const owners = await db.select({ id: profiles.id, name: profiles.fullName }).from(profiles);
-  const nameOf = new Map(owners.map((o) => [o.id, o.name]));
+  /*
+    The chat list in the sidebar is on every page, so a database hiccup here
+    must not take the page down with it. If the lookup fails the sidebar shows
+    only the API inbox (which needs no lookup) and the page renders; the real
+    failure is still recorded by whatever else was running.
+  */
+  let numbers: Array<{ id: string; label: string; mode: string; counsellorId: string | null }> = [];
+  let nameOf = new Map<string, string>();
+  try {
+    numbers = await db
+      .select({ id: whatsappNumbers.id, label: whatsappNumbers.label, mode: whatsappNumbers.mode, counsellorId: whatsappNumbers.counsellorId })
+      .from(whatsappNumbers)
+      .where(isNull(whatsappNumbers.deletedAt));
+    const owners = await db.select({ id: profiles.id, name: profiles.fullName }).from(profiles);
+    nameOf = new Map(owners.map((o) => [o.id, o.name]));
+  } catch (error) {
+    console.error("chat links lookup failed", error);
+  }
 
   const links: ChatLink[] = [];
   if (isCampaigner) links.push({ key: "api", label: "WhatsApp API", href: "/whatsapp/api", kind: "api" });
