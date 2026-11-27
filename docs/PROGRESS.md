@@ -9226,3 +9226,8 @@ Meta's funnel screen said "events not being sent": the CRM never sent any. An ho
 ## Leads list back to the normal table
 
 The spreadsheet-style leads table (sticky columns, click-to-copy) was reverted at the owner's request: the leads list is the table it was before Warm Studio. The dark phone menu and top bar from the same design stay. The unused sheet-table component, its sort/cell helpers, CSS and test were removed.
+
+## Lead deletion for counsellors, centre heads and co-admins; keep chosen Meta campaigns out of the CRM
+
+- **Delete a lead:** counsellors can delete their own leads, centre heads leads in their centre(s), co-admins any lead (admin already could). Deleting is still soft with a required reason and recoverable. Migration 0150 grants `lead.delete` to those roles (existing grants untouched) and `role-seeds.ts` does the same for a fresh install; an admin can change any of it under Settings → Roles.
+- **Meta campaigns that stay out of the CRM:** Settings → Integrations → Meta → "Leads to keep out of the CRM". Add a campaign, ad set or lead form by its Meta ID (or tap "Keep out of the CRM" beside a campaign leads have recently come from). The lead webhook still verifies and records every delivery, but for a match it marks the delivery done with the reason and creates no lead. Switch a rule back on to resume. Leads already in the CRM stay. Table `meta_lead_filters` (migration 0151); tests in `tests/meta-webhook.spec.ts`. Does not change anything on Meta's side: Meta still collects the lead in its Leads Center.

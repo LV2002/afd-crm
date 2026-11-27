@@ -4973,3 +4973,7 @@ Chose a stateless sweep (joined since `from`, no prior run) over a DB trigger or
 ## 2026-11-26 — One ad audience per database
 
 Owner asked for each database to be its own audience on Meta and Google, separate from leads. Replaced the "contacts go into the leads audience" path (`syncContactAudience`, now only used to retire what it had sent). Kept the exclusion of people who are leads, so an enrolled student stops seeing course ads via the lead rules. Sync is hourly with the existing cron tier; adding people is not instant on the platforms side either way.
+
+## 2026-11-27 — Staff may delete leads; filter Meta leads by campaign/ad set/form
+
+Owner asked that counsellors, centre heads and co-admins can delete a lead. Scopes follow each role's existing reach (own / centre / all); deletion stays soft with a reason. Meta lead filtering is applied after the lead is fetched (the webhook payload alone does not carry the campaign) and records a skipped delivery rather than dropping it, so "why is a lead missing" stays answerable.

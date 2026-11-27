@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   integer,
   jsonb,
   pgEnum,
@@ -206,4 +208,28 @@ export const customWebhooks = pgTable(
     ...softDelete(),
   },
   (t) => [uniqueIndex("custom_webhooks_slug_uq").on(t.slug)],
+);
+
+/**
+ * Meta lead-ad campaigns, ad sets or forms whose leads stay OUT of the CRM.
+ * The Meta lead webhook fetches each lead, and a match here records the
+ * delivery as skipped instead of creating a lead. Edited under Settings →
+ * Integrations → Meta.
+ */
+export const metaLeadFilters = pgTable(
+  "meta_lead_filters",
+  {
+    id: idColumn(),
+    /** campaign | adset | form */
+    kind: text("kind").notNull(),
+    externalId: text("external_id").notNull(),
+    label: text("label"),
+    createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("meta_lead_filters_kind_id_uq").on(t.kind, t.externalId).where(sql`deleted_at is null`),
+    check("meta_lead_filters_kind_check", sql`${t.kind} in ('campaign', 'adset', 'form')`),
+  ],
 );
