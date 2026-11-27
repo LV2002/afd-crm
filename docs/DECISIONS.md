@@ -4977,3 +4977,7 @@ Owner asked for each database to be its own audience on Meta and Google, separat
 ## 2026-11-27 — Staff may delete leads; filter Meta leads by campaign/ad set/form
 
 Owner asked that counsellors, centre heads and co-admins can delete a lead. Scopes follow each role's existing reach (own / centre / all); deletion stays soft with a reason. Meta lead filtering is applied after the lead is fetched (the webhook payload alone does not carry the campaign) and records a skipped delivery rather than dropping it, so "why is a lead missing" stays answerable.
+
+## 2026-11-27 — Never change the journal `when` of a migration that may already have run
+
+Vercel runs migrations on every build, previews included, against the one database. #169's preview applied migration 0149 under one `when`; changing that `when` afterwards (to keep it ordered after 0145) made the next build see it as new and fail with "already exists", which stopped every later deploy. Fix: 0149 and 0151 are written to be safe to re-run (IF NOT EXISTS, drop-then-add constraints). Going forward: if a migration must be re-ordered after a preview has built, make it idempotent first.
