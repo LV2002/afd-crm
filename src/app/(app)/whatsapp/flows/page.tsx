@@ -45,8 +45,6 @@ export default async function WhatsAppFlowsPage() {
   if (!user || !can(user, "whatsapp.campaign")) return <AccessDenied />;
 
   const supabase = await createClient();
-  const ruleOptions = await loadRuleOptions(supabase);
-  const label = ruleLabelLookup(ruleOptions);
 
   const flows = await db
     .select({
@@ -64,6 +62,14 @@ export default async function WhatsAppFlowsPage() {
     .where(isNull(whatsappFlows.deletedAt))
     .orderBy(asc(whatsappFlows.name));
 
+  // The words for conditions ("Only: centre is Kochi") are only needed when an
+  // automation actually has conditions.
+  const label = ruleLabelLookup(
+    flows.some((flow) => flow.appliesTo)
+      ? await loadRuleOptions(supabase)
+      : { users: [], centers: [], optionsByField: {}, fields: [] },
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
@@ -73,9 +79,14 @@ export default async function WhatsAppFlowsPage() {
           only reach people who wrote to you in the last 24 hours; later in a sequence, use an
           approved template. Nobody who has opted out or is marked do-not-contact is ever messaged.
         </p>
-        <Button asChild>
-          <Link href="/whatsapp/flows/new">New automation</Link>
-        </Button>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button asChild variant="outline">
+            <Link href="/whatsapp/flows/report">Sent &amp; cost report</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/whatsapp/flows/new">New automation</Link>
+          </Button>
+        </div>
       </div>
 
       <section className="flex flex-col gap-2 rounded-lg border border-dashed p-4">

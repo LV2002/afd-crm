@@ -35,7 +35,7 @@ import { templateBody, templatePlaceholderCount } from "@/lib/integrations/whats
 import { loadTemperatureOptionsDirect } from "@/lib/leads/temperature-options-direct";
 import { createClient } from "@/lib/supabase/server";
 
-import { loadRuleOptions } from "@/app/(app)/settings/rules/load-options";
+import { loadRuleOptions, type RuleOptions } from "@/app/(app)/settings/rules/load-options";
 
 import { listTemplates } from "../../templates/actions";
 import { FlowForm } from "../flow-form";
@@ -74,14 +74,19 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
   if (!flow) notFound();
 
   const supabase = await createClient();
-  const [stepRows, temperatureOptions, centerRows, templateResult, runRows, ruleOptions, people, labelRows, rates] =
+  const forDatabase = flow.audience === "contact";
+  // A database automation has no temperature, counsellor or label steps and no
+  // lead conditions, so none of that is read for it. Everything else is read at
+  // the same time, not one thing after another.
+  const none = <T,>(): Promise<T[]> => Promise.resolve([]);
+  const [stepRows, temperatureOptions, centerRows, templateResult, runRows, ruleOptions, people, labelRows, rates, listRows] =
     await Promise.all([
       db
         .select()
         .from(whatsappFlowSteps)
         .where(eq(whatsappFlowSteps.flowId, id))
         .orderBy(asc(whatsappFlowSteps.position)),
-      loadTemperatureOptionsDirect(),
+      forDatabase ? none<Awaited<ReturnType<typeof loadTemperatureOptionsDirect>>[number]>() : loadTemperatureOptionsDirect(),
       db
         .select({ id: centers.id, name: centers.name })
         .from(centers)
@@ -109,26 +114,28 @@ export default async function WhatsAppFlowPage({ params }: { params: Promise<{ i
         .where(eq(whatsappFlowRuns.flowId, id))
         .orderBy(desc(whatsappFlowRuns.startedAt))
         .limit(25),
-      loadRuleOptions(supabase),
-      db
-        .select({ id: profiles.id, name: profiles.fullName })
-        .from(profiles)
-        .where(eq(profiles.isActive, true))
-        .orderBy(asc(profiles.fullName)),
-      db
-        .select({ id: whatsappLabels.id, name: whatsappLabels.name })
-        .from(whatsappLabels)
-        .where(isNull(whatsappLabels.deletedAt))
-        .orderBy(asc(whatsappLabels.name)),
+      forDatabase ? Promise.resolve<RuleOptions>({ users: [], centers: [], optionsByField: {}, fields: [] }) : loadRuleOptions(supabase),
+      forDatabase
+        ? none<{ id: string; name: string }>()
+        : db
+            .select({ id: profiles.id, name: profiles.fullName })
+            .from(profiles)
+            .where(eq(profiles.isActive, true))
+            .orderBy(asc(profiles.fullName)),
+      forDatabase
+        ? none<{ id: string; name: string }>()
+        : db
+            .select({ id: whatsappLabels.id, name: whatsappLabels.name })
+            .from(whatsappLabels)
+            .where(isNull(whatsappLabels.deletedAt))
+            .orderBy(asc(whatsappLabels.name)),
       loadRates(),
+      forDatabase
+        ? db.execute<{ id: string; name: string; agreed: boolean }>(sql`
+            select id, name, use_for_whatsapp as agreed from contact_lists where archived_at is null order by name
+          `)
+        : none<{ id: string; name: string; agreed: boolean }>(),
     ]);
-
-  const forDatabase = flow.audience === "contact";
-  const listRows = forDatabase
-    ? await db.execute<{ id: string; name: string; agreed: boolean }>(sql`
-        select id, name, use_for_whatsapp as agreed from contact_lists where archived_at is null order by name
-      `)
-    : [];
 
   const steps: FlowStep[] = stepRows.map((row) => ({
     id: row.id,
