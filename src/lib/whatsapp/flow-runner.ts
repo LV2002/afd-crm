@@ -83,6 +83,7 @@ import { suppressedAmong } from "./opt-out";
 
 /** One sweep's worth of runs. Sized like the broadcast sweep, for the same reasons. */
 const RUNS_PER_SWEEP = 100;
+const SWEEP_BUDGET_MS = 40_000;
 
 interface RunRow {
   id: string;
@@ -955,8 +956,12 @@ export async function advanceRuns(): Promise<{ advanced: number }> {
 
   const stepCache = new Map<string, FlowStep[]>();
   let advanced = 0;
+  // Stop starting new people well before the scheduled job's own limit; the
+  // rest are still due and are picked up by the next sweep in ten minutes.
+  const deadline = Date.now() + SWEEP_BUDGET_MS;
 
   for (const run of due) {
+    if (Date.now() > deadline) break;
     let steps = stepCache.get(run.flowId);
     if (!steps) {
       steps = await stepsFor(run.flowId);

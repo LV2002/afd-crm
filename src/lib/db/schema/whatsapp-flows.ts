@@ -153,6 +153,8 @@ export const whatsappFlowRuns = pgTable(
       .where(sql`status in ('running','waiting') and contact_id is not null`),
     check("whatsapp_flow_runs_one_subject", sql`num_nonnulls(lead_id, contact_id) = 1`),
     index("whatsapp_flow_runs_wake_idx").on(t.wakeAt).where(sql`status in ('running','waiting')`),
+    index("whatsapp_flow_runs_flow_started_idx").on(t.flowId, t.startedAt.desc()),
+    index("whatsapp_flow_runs_flow_contact_idx").on(t.flowId, t.contactId),
     index("whatsapp_flow_runs_awaiting_idx").on(t.leadId).where(sql`awaiting_step_id is not null`),
   ],
 );
