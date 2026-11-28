@@ -279,7 +279,8 @@ export function FlowForm({
         </Select>
       </div>
 
-      <div className={forDatabase ? "hidden" : "flex flex-col gap-2 border-t pt-4"}>
+      {!forDatabase && (
+      <div className="flex flex-col gap-2 border-t pt-4">
         <Label>Only for these leads (optional)</Label>
         <p className="text-xs text-muted-foreground">
           The trigger above decides <strong>when</strong> a run starts; this decides{" "}
@@ -293,6 +294,7 @@ export function FlowForm({
           optionsByField={optionsByField}
         />
       </div>
+      )}
 
       <FormMessage error={state.error} success={state.success} />
       <Button type="submit" disabled={pending} className="w-fit">

@@ -48,6 +48,7 @@ import { CATEGORY_LABELS, flowCostPerPerson, formatRate, formatTotal } from "@/l
 import { loadRates } from "@/lib/whatsapp/spend";
 
 import { guardPage } from "@/lib/errors/page-guard";
+import { captureError } from "@/lib/errors/capture";
 import { countNewListMembers } from "@/lib/whatsapp/flow-runner";
 import { AutoStartPanel } from "./auto-start-panel";
 import { StartForLists } from "./start-for-lists";
@@ -65,6 +66,20 @@ const RUN_STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive"
 
 // Pages that wait on Meta for the template list are given the longest the platform allows.
 export const maxDuration = 60;
+
+/**
+ * The extras on this page (cost rates, the template list, the database list,
+ * the auto-start panel) are not worth losing the whole page over. If one fails
+ * the page opens without it and the real reason goes to Settings → Health.
+ */
+async function soft<T>(what: string, fallback: T, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    await captureError({ source: `page:whatsapp/flows/[id]:${what}`, error }).catch(() => undefined);
+    return fallback;
+  }
+}
 
 export default async function WhatsAppFlowPage(props: { params: Promise<{ id: string }> }) {
   return guardPage("page:whatsapp/flows/[id]", () => renderFlowPage(props));
@@ -101,7 +116,7 @@ async function renderFlowPage({ params }: { params: Promise<{ id: string }> }) {
         .from(centers)
         .where(eq(centers.isActive, true))
         .orderBy(asc(centers.name)),
-      listTemplates(),
+      soft("templates", { status: "error", message: "Could not load templates" } as Awaited<ReturnType<typeof listTemplates>>, () => listTemplates()),
       db
         .select({
           id: whatsappFlowRuns.id,
@@ -138,11 +153,13 @@ async function renderFlowPage({ params }: { params: Promise<{ id: string }> }) {
             .from(whatsappLabels)
             .where(isNull(whatsappLabels.deletedAt))
             .orderBy(asc(whatsappLabels.name)),
-      loadRates(),
+      soft("rates", {} as Awaited<ReturnType<typeof loadRates>>, () => loadRates()),
       forDatabase
-        ? db.execute<{ id: string; name: string; agreed: boolean }>(sql`
-            select id, name, use_for_whatsapp as agreed from contact_lists where archived_at is null order by name
-          `)
+        ? soft("lists", [] as Array<{ id: string; name: string; agreed: boolean }>, async () => [
+            ...(await db.execute<{ id: string; name: string; agreed: boolean }>(sql`
+              select id, name, use_for_whatsapp as agreed from contact_lists where archived_at is null order by name
+            `)),
+          ])
         : none<{ id: string; name: string; agreed: boolean }>(),
     ]);
 
@@ -150,6 +167,7 @@ async function renderFlowPage({ params }: { params: Promise<{ id: string }> }) {
   // watching and doing, so "is it actually working?" has an answer on screen.
   let autoStart: React.ComponentProps<typeof AutoStartPanel> | null = null;
   if (forDatabase && flow.triggerType === "list_joined") {
+    autoStart = await soft("auto-start", null, async () => {
     const config = (flow.triggerConfig ?? {}) as Record<string, unknown>;
     const watchedIds = Array.isArray(config.listIds) ? (config.listIds as string[]) : [];
     const [nameRows, counts, lastCheck, waiting] = await Promise.all([
@@ -163,8 +181,12 @@ async function renderFlowPage({ params }: { params: Promise<{ id: string }> }) {
       db.select({ at: cronRuns.finishedAt }).from(cronRuns).where(eq(cronRuns.jobKey, "frequent")).orderBy(desc(cronRuns.finishedAt)).limit(1),
       flow.isActive ? countNewListMembers(flow.id, flow.triggerConfig) : Promise.resolve(0),
     ]);
-    const stamp = (value: Date | string | null | undefined) => (value ? formatDateIST(value instanceof Date ? value.toISOString() : value, "d MMM, h:mm a") : null);
-    autoStart = {
+    const stamp = (value: Date | string | null | undefined) => {
+      if (!value) return null;
+      const date = value instanceof Date ? value : new Date(value);
+      return Number.isNaN(date.getTime()) ? null : formatDateIST(date.toISOString(), "d MMM, h:mm a");
+    };
+    return {
       flowId: flow.id,
       isActive: flow.isActive,
       lists: watchedIds.map((id) => nameRows.find((n) => n.id === id)?.name ?? "a deleted list"),
@@ -174,6 +196,7 @@ async function renderFlowPage({ params }: { params: Promise<{ id: string }> }) {
       waiting,
       lastCheckAt: stamp(lastCheck[0]?.at ?? null),
     };
+    });
   }
 
   const steps: FlowStep[] = stepRows.map((row) => ({
@@ -266,7 +289,7 @@ async function renderFlowPage({ params }: { params: Promise<{ id: string }> }) {
         <StartForLists
           flowId={flow.id}
           isActive={flow.isActive}
-          lists={[...listRows].map((l) => ({ id: l.id, name: l.name, agreed: Boolean(l.agreed) }))}
+          lists={listRows.map((l) => ({ id: l.id, name: l.name, agreed: Boolean(l.agreed) }))}
         />
       )}
 
@@ -332,7 +355,7 @@ async function renderFlowPage({ params }: { params: Promise<{ id: string }> }) {
             centers={centerRows}
           fields={ruleOptions.fields}
           optionsByField={ruleOptions.optionsByField}
-          lists={[...listRows].filter((l) => Boolean(l.agreed)).map((l) => ({ id: l.id, name: l.name }))}
+          lists={listRows.filter((l) => Boolean(l.agreed)).map((l) => ({ id: l.id, name: l.name }))}
         />
       </section>
 
