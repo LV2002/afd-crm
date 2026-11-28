@@ -9280,6 +9280,12 @@ Settings → Health showed "Failed query: select … from whatsapp_numbers" with
 - The "Only for these leads" condition builder is no longer rendered (hidden) for database automations.
 - Could not reproduce the crash locally against any flow shape; the hardening is a guard, not a confirmed root-cause fix.
 
+## Automation page hanging / frequent cron timing out (2026-11-28)
+- Evidence from Vercel logs: `/whatsapp/flows/<id>` "Task timed out after 60 seconds", `/api/cron/frequent` "timed out after 300 seconds" every run, Health shows "Connection closed" and a 57014 statement timeout on a trivial `business_hours` select — i.e. the database/connection pool is starved, the page is not throwing.
+- Every Meta Graph call now has a 20 s deadline (`whatsapp/client.ts`, `meta/graph-client.ts`); previously a call Meta never answered held the whole cron run for 300 s.
+- `advanceRuns` stops starting people after 40 s; the rest are picked up next sweep.
+- Migration 0154: indexes on `whatsapp_flow_runs (flow_id, started_at desc)` and `(flow_id, contact_id)`.
+- Root cause on the live database NOT confirmed — needs `pg_stat_activity` output from production.
 ## Student form link preview (2026-11-28)
 - `/f/<token>` now has its own title ("Fill up your application details") and description, so the WhatsApp/SMS link preview no longer shows the app-wide "AFD India CRM — leads, admissions and fees" text. Organisation name comes from settings; no student name in the preview; noindex is inherited.
 - WhatsApp caches previews per link, so links already sent keep the old text; new links show the new one.

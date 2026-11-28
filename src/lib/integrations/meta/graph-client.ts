@@ -3,6 +3,12 @@ import type { MetaLeadgenResponse } from "./map-lead-fields";
 const GRAPH_API_VERSION = "v21.0";
 const GRAPH_BASE_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 
+// Every call to Meta gets a deadline. Without one, a request Meta never
+// answers holds the whole ten-minute automation job until Vercel kills it
+// (300 s), which starves the database connections the pages need.
+const fetch: typeof globalThis.fetch = (input, init) =>
+  globalThis.fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(20_000) });
+
 export class MetaGraphApiError extends Error {
   constructor(
     message: string,
