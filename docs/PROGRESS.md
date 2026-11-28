@@ -9279,3 +9279,7 @@ Settings → Health showed "Failed query: select … from whatsapp_numbers" with
 - `/whatsapp/flows/[id]`: cost rates, the template list, the database list and the auto-start panel are now loaded "soft" — if one fails the page still opens and the real reason is recorded under Settings → Health (`page:whatsapp/flows/[id]:<part>`).
 - The "Only for these leads" condition builder is no longer rendered (hidden) for database automations.
 - Could not reproduce the crash locally against any flow shape; the hardening is a guard, not a confirmed root-cause fix.
+
+## Student form link preview (2026-11-28)
+- `/f/<token>` now has its own title ("Fill up your application details") and description, so the WhatsApp/SMS link preview no longer shows the app-wide "AFD India CRM — leads, admissions and fees" text. Organisation name comes from settings; no student name in the preview; noindex is inherited.
+- WhatsApp caches previews per link, so links already sent keep the old text; new links show the new one.
