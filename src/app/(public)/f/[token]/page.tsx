@@ -1,7 +1,30 @@
+import type { Metadata } from "next";
+
 import { getPublicBrand, type PublicBrand } from "@/lib/brand/get-public-brand";
 import { getProfileFormByToken } from "@/lib/profile-form/get-form";
 
 import { ProfileFormFields } from "./profile-form-fields";
+
+/**
+ * What WhatsApp, SMS and email show when this link is pasted. Without it the
+ * link inherited the app-wide "AFD India CRM — leads, admissions and fees"
+ * line, which told a student nothing about why they were sent it.
+ *
+ * Deliberately generic: no student name, because a link preview is fetched and
+ * cached by the messaging platform's servers. The organisation's name comes
+ * from settings, not from here. `robots` (noindex) is inherited from the root
+ * layout, since metadata merges per key.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const brand = await getPublicBrand();
+  const title = "Fill up your application details";
+  const description = `${brand.name} — it takes a few minutes, and you can attach photos from your phone.`;
+  return {
+    title,
+    description,
+    openGraph: { title, description, siteName: brand.name, type: "website" },
+  };
+}
 
 /**
  * The student profile form, filled in by the student themselves.

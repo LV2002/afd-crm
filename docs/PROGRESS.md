@@ -9286,3 +9286,6 @@ Settings → Health showed "Failed query: select … from whatsapp_numbers" with
 - `advanceRuns` stops starting people after 40 s; the rest are picked up next sweep.
 - Migration 0154: indexes on `whatsapp_flow_runs (flow_id, started_at desc)` and `(flow_id, contact_id)`.
 - Root cause on the live database NOT confirmed — needs `pg_stat_activity` output from production.
+## Student form link preview (2026-11-28)
+- `/f/<token>` now has its own title ("Fill up your application details") and description, so the WhatsApp/SMS link preview no longer shows the app-wide "AFD India CRM — leads, admissions and fees" text. Organisation name comes from settings; no student name in the preview; noindex is inherited.
+- WhatsApp caches previews per link, so links already sent keep the old text; new links show the new one.
